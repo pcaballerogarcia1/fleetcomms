@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { db } from "./firebase";
+import {
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc,
+  doc, serverTimestamp, query, orderBy, setDoc
+} from "firebase/firestore";
 
 // ── DATOS ─────────────────────────────────────────────────────────
 const USUARIOS_INIT = [
@@ -17,11 +22,35 @@ const CATS = [
   {label:"Comunicado general",color:"#8b5cf6",icon:"📢"},
 ];
 const PC = {alta:"#ff4d6d",media:"#ff8c42",baja:"#10e88a"};
-const N = Date.now();
-const INC_DEMO = [
-  {id:"d1",usuarioId:"2",vehiculo:"VH-002 · Camión MAN",categoria:1,titulo:"Golpe en parachoques",descripcion:"Contacto leve en muelle de carga.",prioridad:"alta",estado:"abierta",fecha:N-3600000*2,comentarios:[]},
-  {id:"d2",usuarioId:"3",vehiculo:"VH-001 · Furgoneta Iveco",categoria:0,titulo:"Luz de motor encendida",descripcion:"Testigo activo desde hoy.",prioridad:"media",estado:"en revisión",fecha:N-3600000*5,comentarios:[]},
-];
+
+// ── FIREBASE HELPERS ──────────────────────────────────────────────
+// Hook genérico para escuchar una colección en tiempo real
+function useCollection(colName, orderField = "fecha") {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const q = query(collection(db, colName), orderBy(orderField, "desc"));
+    const unsub = onSnapshot(q, snap => {
+      setData(snap.docs.map(d => ({ ...d.data(), _id: d.id })));
+      setLoading(false);
+    }, err => { console.error(colName, err); setLoading(false); });
+    return () => unsub();
+  }, [colName]);
+  return { data, loading };
+}
+
+async function fbAdd(colName, data) {
+  return await addDoc(collection(db, colName), { ...data, fecha: serverTimestamp() });
+}
+async function fbSet(colName, id, data) {
+  return await setDoc(doc(db, colName, id), data, { merge: true });
+}
+async function fbUpdate(colName, id, data) {
+  return await updateDoc(doc(db, colName, id), data);
+}
+async function fbDelete(colName, id) {
+  return await deleteDoc(doc(db, colName, id));
+}
 
 // ── DESIGN SYSTEM — Industrial Premium ───────────────────────────
 // Tipografía: Space Grotesk (display) + JetBrains Mono (datos)
@@ -852,7 +881,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
 }
 
 // ── MÓDULO RUTAS POR TIPO ─────────────────────────────────────────
-function ModuloRutas({planes,setPlanes,sesion,usuarios}){
+function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [tipoActivo,setTipoActivo]   = useState(null); // null = portada
   const [planActivo,setPlanActivo]   = useState(null);
   const [showUpload,setShowUpload]   = useState(false);
@@ -871,8 +900,8 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
 
   // Si hay plan KML activo, mostrar detalle
   if(planActivo){
-    const live=planes.find(p=>p.id===planActivo.id)||planActivo;
-    return <DetallePlan plan={live} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={updated=>{setPlanes(prev=>prev.map(p=>p.id===updated.id?updated:p));setPlanActivo(updated);}}/>;
+    const live=planes.find(p=>p._id===planActivo._id)||planActivo;
+    return <DetallePlan plan={live} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={async(updated)=>{await updatePlan(updated);setPlanActivo(updated);}}/>;
   }
 
   const tipo = TIPOS_TRABAJO.find(t=>t.key===tipoActivo);
@@ -934,7 +963,7 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
               const dia=ubicaciones[0]?.dia||"";
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
-              setPlanes(prev=>[{id:String(Date.now()+Math.random()),tipo:tipoActivo,nombre:docName||file.name.replace(".kml",""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido,fechaSubida:Date.now()},...prev]);
+              addPlan({tipo:tipoActivo,nombre:docName||file.name.replace(".kml",""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido,fechaSubida:Date.now()});
               setShowUpload(false);setDebugInfo([]);
             }
           }catch(err){setErrorMsg("Error: "+err.message);}
@@ -986,7 +1015,7 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
             const tasa=tot?Math.round(real/tot*100):0,col=tasa===100?C.green:tasa>0?C.orange:C.dim;
             const totalQR=plan.ubicaciones.reduce((s,u)=>s+u.elementos.length,0);
             return(
-              <div key={plan.id} style={{...S.card,cursor:"pointer",borderLeft:`3px solid ${tasa===100?C.green:tipo.color}`}} onClick={()=>setPlanActivo(plan)} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=tasa===100?C.green:tipo.color}>
+              <div key={plan._id} style={{...S.card,cursor:"pointer",borderLeft:`3px solid ${tasa===100?C.green:tipo.color}`}} onClick={()=>setPlanActivo(plan)} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=tasa===100?C.green:tipo.color}>
                 <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:5}}>
@@ -999,7 +1028,7 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
                     <div style={{height:5,background:"#0f1117",borderRadius:3,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim}}><span>{real} de {tot} realizadas</span><span style={{color:col,fontWeight:700}}>{tasa}%</span></div>
                   </div>
-                  {esAdmin&&<button onClick={e=>{e.stopPropagation();setPlanes(prev=>prev.filter(p=>p.id!==plan.id));}} style={{background:"#2d1515",border:`1px solid ${C.red}`,color:"#f87171",padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}>✕</button>}
+                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:"#2d1515",border:`1px solid ${C.red}`,color:"#f87171",padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}>✕</button>}
                 </div>
               </div>
             );
@@ -1014,7 +1043,7 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
 
   function crearTarea(){
     if(!formTarea.titulo.trim())return;
-    setPlanes(prev=>[{id:String(Date.now()),tipo:"corr",titulo:formTarea.titulo,descripcion:formTarea.descripcion,vehiculo:formTarea.vehiculo,estado:"pendiente",creadoPor:sesion.id,fecha:Date.now(),comentarios:[]},...prev]);
+    addPlan({tipo:"corr",titulo:formTarea.titulo,descripcion:formTarea.descripcion,vehiculo:formTarea.vehiculo,estado:"pendiente",creadoPor:sesion.id});
     setFormTarea({titulo:"",descripcion:"",vehiculo:"",estado:"pendiente"});
     setShowNT(false);
   }
@@ -1055,17 +1084,17 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
         {tareasT.length===0&&!showNuevaTarea&&<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:40,marginBottom:12}}>{tipo.icon}</div><div style={{fontSize:14,color:C.dim}}>Sin tareas correctivas</div></div>}
         {/* Pendientes y en curso primero */}
         {tareasT.filter(t=>t.estado!=="cerrada").map(t=>(
-          <TarjetaCorrectivo key={t.id} tarea={t} sesion={sesion} usuarios={usuarios}
-            onUpdate={upd=>setPlanes(prev=>prev.map(p=>p.id===upd.id?upd:p))}
-            onDelete={()=>setPlanes(prev=>prev.filter(p=>p.id!==t.id))}/>
+          <TarjetaCorrectivo key={t._id||t.id} tarea={t} sesion={sesion} usuarios={usuarios}
+            onUpdate={upd=>updatePlan(upd)}
+            onDelete={()=>deletePlan(t._id)}/>
         ))}
         {tareasT.filter(t=>t.estado==="cerrada").length>0&&(
           <>
             <div style={{fontSize:9,color:C.green,letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10,paddingLeft:4}}>✓ CERRADAS ({tareasT.filter(t=>t.estado==="cerrada").length})</div>
             {tareasT.filter(t=>t.estado==="cerrada").map(t=>(
-              <TarjetaCorrectivo key={t.id} tarea={t} sesion={sesion} usuarios={usuarios}
-                onUpdate={upd=>setPlanes(prev=>prev.map(p=>p.id===upd.id?upd:p))}
-                onDelete={()=>setPlanes(prev=>prev.filter(p=>p.id!==t.id))}/>
+              <TarjetaCorrectivo key={t._id||t.id} tarea={t} sesion={sesion} usuarios={usuarios}
+                onUpdate={upd=>updatePlan(upd)}
+                onDelete={()=>deletePlan(t._id)}/>
             ))}
           </>
         )}
@@ -1075,8 +1104,8 @@ function ModuloRutas({planes,setPlanes,sesion,usuarios}){
 }
 
 // ── LISTA PLANES (alias para compatibilidad) ───────────────────────
-function ListaPlanes({planes,setPlanes,sesion,usuarios}){
-  return <ModuloRutas planes={planes} setPlanes={setPlanes} sesion={sesion} usuarios={usuarios}/>;
+function ListaPlanes({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
+  return <ModuloRutas planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>;
 }
 
 // ── ASISTENTE IA ──────────────────────────────────────────────────
@@ -1129,7 +1158,7 @@ function AsistenteIA({sesion}){
 
 // ── INCIDENCIAS ───────────────────────────────────────────────────
 function ModuloIncidencias({sesion,usuarios,setUsuarios}){
-  const [incidencias,setInc]=useState(INC_DEMO);
+  const {data:incidencias} = useCollection("incidencias");
   const [vista,setVista]=useState("feed");
   const [filtro,setFiltro]=useState("todas");
   const [selId,setSelId]=useState(null);
@@ -1140,10 +1169,23 @@ function ModuloIncidencias({sesion,usuarios,setUsuarios}){
   const esAdmin=sesion.rol==="admin";
   const getUser=id=>usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""};
   const incFilt=incidencias.filter(i=>filtro==="todas"?true:filtro==="mias"?i.usuarioId===sesion.id:filtro==="alta"?i.prioridad==="alta":i.estado===filtro);
-  const incActual=incidencias.find(i=>i.id===selId);
-  function crearInc(){if(!form.titulo.trim())return;setInc([{id:String(Date.now()),usuarioId:sesion.id,vehiculo:form.vehiculo||null,categoria:parseInt(form.categoria),titulo:form.titulo,descripcion:form.descripcion,prioridad:form.prioridad,estado:"abierta",fecha:Date.now(),comentarios:[]},...incidencias]);setForm({titulo:"",descripcion:"",vehiculo:"",categoria:0,prioridad:"media"});setVista("feed");}
-  function agregarCom(inc){if(!comentario.trim())return;setInc(incidencias.map(i=>i.id===inc.id?{...i,comentarios:[...(i.comentarios||[]),{usuarioId:sesion.id,texto:comentario,fecha:Date.now()}]}:i));setCom("");}
-  function cambiarEstado(inc,est){setInc(incidencias.map(i=>i.id===inc.id?{...i,estado:est}:i));}
+  const incActual=incidencias.find(i=>i._id===selId);
+
+  async function crearInc(){
+    if(!form.titulo.trim())return;
+    await fbAdd("incidencias",{usuarioId:sesion.id,vehiculo:form.vehiculo||null,categoria:parseInt(form.categoria),titulo:form.titulo,descripcion:form.descripcion,prioridad:form.prioridad,estado:"abierta",comentarios:[]});
+    setForm({titulo:"",descripcion:"",vehiculo:"",categoria:0,prioridad:"media"});
+    setVista("feed");
+  }
+  async function agregarCom(inc){
+    if(!comentario.trim())return;
+    const nuevos=[...(inc.comentarios||[]),{usuarioId:sesion.id,texto:comentario,fecha:Date.now()}];
+    await fbUpdate("incidencias",inc._id,{comentarios:nuevos});
+    setCom("");
+  }
+  async function cambiarEstado(inc,est){
+    await fbUpdate("incidencias",inc._id,{estado:est});
+  }
 
   if(showAdmin) return <PanelAdmin usuarios={usuarios} setUsuarios={setUsuarios} onClose={()=>setShowAdmin(false)}/>;
   if(showStats) return <PanelStats incidencias={incidencias} onClose={()=>setShowStats(false)}/>;
@@ -1178,7 +1220,7 @@ function ModuloIncidencias({sesion,usuarios,setUsuarios}){
           {incFilt.map(inc=>{
             const cat=CATS[inc.categoria]||CATS[0];const autor=getUser(inc.usuarioId);
             return(
-              <div key={inc.id} onClick={()=>{setSelId(inc.id);setVista("detalle");}} style={{...S.card,borderLeft:`3px solid ${cat.color}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=cat.color}>
+              <div key={inc._id} onClick={()=>{setSelId(inc._id);setVista("detalle");}} style={{...S.card,borderLeft:`3px solid ${cat.color}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=cat.color}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}><span>{cat.icon}</span><span style={{fontSize:10,color:cat.color,letterSpacing:1,textTransform:"uppercase"}}>{cat.label}</span></div>
                   <div style={{display:"flex",gap:5}}>
@@ -1310,9 +1352,9 @@ const PRODUCTOS_DEMO = [
 ];
 
 function ModuloInventario({sesion,usuarios}){
-  const [productos,setProductos]   = useState(PRODUCTOS_DEMO);
-  const [movimientos,setMovs]      = useState([]);
-  const [vista,setVista]           = useState("lista"); // lista | detalle | nuevo | movimiento
+  const {data:productos}   = useCollection("inventario","nombre");
+  const {data:movimientos} = useCollection("movimientos");
+  const [vista,setVista]           = useState("lista");
   const [selId,setSelId]           = useState(null);
   const [catFilter,setCatFilter]   = useState("");
   const [busqueda,setBusqueda]     = useState("");
@@ -1324,7 +1366,6 @@ function ModuloInventario({sesion,usuarios}){
 
   const getUser = id => usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""};
 
-  // Filtrado
   const prodFiltrados = productos.filter(p=>{
     if(soloAlertas && p.stock > p.stockMin) return false;
     if(catFilter && p.categoria !== catFilter) return false;
@@ -1334,8 +1375,8 @@ function ModuloInventario({sesion,usuarios}){
 
   const alertas = productos.filter(p=>p.stock <= p.stockMin).length;
   const agotados = productos.filter(p=>p.stock===0).length;
-  const prodActual = productos.find(p=>p.id===selId);
-  const movsProd = movimientos.filter(m=>m.productoId===selId).sort((a,b)=>b.fecha-a.fecha);
+  const prodActual = productos.find(p=>p._id===selId);
+  const movsProd = movimientos.filter(m=>m.productoId===selId);
 
   function stockColor(p){
     if(p.stock===0) return C.red;
@@ -1343,33 +1384,33 @@ function ModuloInventario({sesion,usuarios}){
     return C.green;
   }
 
-  function guardarProducto(){
+  async function guardarProducto(){
     if(!formProd.nombre.trim()||!formProd.referencia.trim()){setErrForm("Nombre y referencia son obligatorios");return;}
     if(productos.find(p=>p.referencia===formProd.referencia)){setErrForm("Esa referencia ya existe");return;}
-    setProductos([...productos,{...formProd,id:"p"+Date.now(),stock:parseInt(formProd.stock)||0,stockMin:parseInt(formProd.stockMin)||0}]);
+    await fbAdd("inventario",{...formProd,stock:parseInt(formProd.stock)||0,stockMin:parseInt(formProd.stockMin)||0});
     setFormProd({nombre:"",referencia:"",categoria:"Filtros",unidad:"ud",stock:0,stockMin:0,ubicacion:""});
     setErrForm(""); setVista("lista");
   }
 
-  function registrarMovimiento(){
+  async function registrarMovimiento(){
     const cant=parseInt(formMov.cantidad)||0;
     if(cant<=0){setErrForm("La cantidad debe ser mayor que 0");return;}
     if(formMov.tipo==="salida" && cant > prodActual.stock){setErrForm(`Stock insuficiente. Disponible: ${prodActual.stock} ${prodActual.unidad}`);return;}
     const nuevoStock = formMov.tipo==="entrada" ? prodActual.stock+cant : prodActual.stock-cant;
-    setProductos(productos.map(p=>p.id===selId?{...p,stock:nuevoStock}:p));
-    setMovs([{
-      id:"m"+Date.now(), productoId:selId,
+    await fbUpdate("inventario",selId,{stock:nuevoStock});
+    await fbAdd("movimientos",{
+      productoId:selId,
       tipo:formMov.tipo, cantidad:cant,
       vehiculo:formMov.vehiculo, motivo:formMov.motivo, nota:formMov.nota,
       stockAntes:prodActual.stock, stockDespues:nuevoStock,
-      usuarioId:sesion.id, fecha:Date.now(),
-    },...movimientos]);
+      usuarioId:sesion.id,
+    });
     setFormMov({tipo:"salida",cantidad:1,vehiculo:"",motivo:"",nota:""});
     setErrForm(""); setVista("detalle");
   }
 
-  function eliminarProducto(id){
-    setProductos(productos.filter(p=>p.id!==id));
+  async function eliminarProducto(id){
+    await fbDelete("inventario",id);
     setVista("lista"); setSelId(null);
   }
 
@@ -1407,7 +1448,7 @@ function ModuloInventario({sesion,usuarios}){
         {/* Lista productos */}
         {prodFiltrados.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.dim}}>Sin productos</div>}
         {prodFiltrados.map(p=>(
-          <div key={p.id} onClick={()=>{setSelId(p.id);setVista("detalle");}} style={{...S.card,cursor:"pointer",borderLeft:`3px solid ${stockColor(p)}`}}
+          <div key={p._id} onClick={()=>{setSelId(p._id);setVista("detalle");}} style={{...S.card,cursor:"pointer",borderLeft:`3px solid ${stockColor(p)}`}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText}
             onMouseLeave={e=>e.currentTarget.style.borderColor=stockColor(p)}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
@@ -1607,6 +1648,188 @@ function ModuloInventario({sesion,usuarios}){
   return null;
 }
 
+// ── PANEL ADMIN RUTAS ─────────────────────────────────────────────
+function PanelAdminRutas({planes, usuarios, deletePlan}){
+  const [tipoFiltro, setTipoFiltro] = useState("");
+  const [mesFiltro,  setMesFiltro]  = useState("");
+  const [expandId,   setExpandId]   = useState(null);
+
+  const TIPOS = TIPOS_TRABAJO;
+  const meses = [...new Set(planes.map(p=>p.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const filtrados = planes.filter(p =>
+    (!tipoFiltro || p.tipo === tipoFiltro) &&
+    (!mesFiltro  || p.mes  === mesFiltro)
+  );
+
+  // Estadísticas globales
+  const planesKML = planes.filter(p => p.tipo !== "corr");
+  const totalParadas = planesKML.reduce((s,p) => s + (p.ubicaciones?.length||0), 0);
+  const realizadas   = planesKML.reduce((s,p) => s + (p.ubicaciones?.filter(u=>u.realizado).length||0), 0);
+  const tasaGlobal   = totalParadas ? Math.round(realizadas/totalParadas*100) : 0;
+
+  function getUser(id){ return usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""}; }
+
+  function exportCSV(){
+    const rows = [["Tipo","Nombre","Turno","Fecha","Total Paradas","Realizadas","% Completado"]];
+    filtrados.forEach(p => {
+      const tot  = p.ubicaciones?.length || 0;
+      const real = p.ubicaciones?.filter(u=>u.realizado).length || 0;
+      rows.push([
+        TIPOS.find(t=>t.key===p.tipo)?.label||p.tipo,
+        p.nombre, p.turno||"", p.diaServicio||"",
+        tot, real, tot ? Math.round(real/tot*100)+"%" : "—"
+      ]);
+    });
+    const csv = rows.map(r=>r.join(";")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "fleetcomms-rutas.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{paddingBottom:90}}>
+      <div style={{padding:"12px 14px 0"}}>
+
+        {/* KPIs globales */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
+          {[
+            {l:"Planes",    v:planesKML.length,   c:C.cyanText},
+            {l:"Paradas",   v:totalParadas,        c:C.text},
+            {l:"Realizadas",v:realizadas,          c:C.green},
+            {l:"Global",    v:tasaGlobal+"%",      c:tasaGlobal===100?C.green:tasaGlobal>50?C.orange:C.red},
+          ].map(s=>(
+            <div key={s.l} style={{background:"#0a1020",border:"1px solid #1e2d45",borderRadius:9,padding:"10px 6px",textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
+              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Barra progreso global */}
+        <div style={{height:6,background:"#0a1020",borderRadius:3,overflow:"hidden",marginBottom:14}}>
+          <div style={{height:"100%",borderRadius:3,width:`${tasaGlobal}%`,transition:"width .4s",
+            background:`linear-gradient(90deg,${C.cyan},${C.green})`}}/>
+        </div>
+
+        {/* Filtros + exportar */}
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <select value={tipoFiltro} onChange={e=>setTipoFiltro(e.target.value)}
+            style={{...S.input,flex:1,minWidth:140,fontSize:11,padding:"7px 10px"}}>
+            <option value="">Todos los tipos</option>
+            {TIPOS.map(t=><option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+          </select>
+          <select value={mesFiltro} onChange={e=>setMesFiltro(e.target.value)}
+            style={{...S.input,flex:1,minWidth:120,fontSize:11,padding:"7px 10px"}}>
+            <option value="">Todos los meses</option>
+            {meses.map(m=><option key={m} value={m}>{fmtMes(m)}</option>)}
+          </select>
+          <button onClick={exportCSV} style={{...S.btnSm,background:"#012a1a",borderColor:C.green,color:C.green,whiteSpace:"nowrap"}}>
+            ⬇ CSV
+          </button>
+        </div>
+
+        {/* Lista planes */}
+        {filtrados.length === 0 && (
+          <div style={{textAlign:"center",padding:"40px 0",color:C.dim,fontSize:13}}>Sin planes para este filtro</div>
+        )}
+
+        {filtrados.map(plan => {
+          const tipo = TIPOS.find(t=>t.key===plan.tipo);
+          const ubs  = plan.ubicaciones||[];
+          const tot  = ubs.length;
+          const real = ubs.filter(u=>u.realizado).length;
+          const tasa = tot ? Math.round(real/tot*100) : 0;
+          const col  = tasa===100?C.green:tasa>50?C.orange:C.red;
+          const isExp = expandId === plan._id;
+          const totalQR = ubs.reduce((s,u)=>s+(u.elementos?.length||0),0);
+          const realizadosQR = ubs.reduce((s,u)=>s+(u.elementos?.filter(e=>e.realizado).length||0),0);
+
+          return (
+            <div key={plan._id} style={{...S.card,marginBottom:8,borderLeft:`3px solid ${tasa===100?C.green:(tipo?.color||C.cyan)}`}}>
+              {/* Cabecera */}
+              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setExpandId(isExp?null:plan._id)}>
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                    <span style={{fontSize:13}}>{tipo?.icon||"📁"}</span>
+                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:(tipo?.color||C.cyan)+"18",color:tipo?.color||C.cyan,border:`1px solid ${(tipo?.color||C.cyan)}33`}}>
+                      {tipo?.label||plan.tipo}
+                    </span>
+                    {plan.turno&&<span style={{fontSize:10,color:C.muted}}>{plan.turno}</span>}
+                    <span style={{fontSize:10,color:C.dim}}>{plan.diaServicio}</span>
+                    {tasa===100&&<span style={{fontSize:10,color:C.green}}>✓ Completado</span>}
+                  </div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {plan.nombre}
+                  </div>
+                  {/* Barra progreso */}
+                  <div style={{height:4,background:"#0a1020",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                    <div style={{height:"100%",background:col,borderRadius:2,width:`${tasa}%`,transition:"width .4s"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:16,fontSize:10,color:C.dim}}>
+                    <span>{real}/{tot} paradas <span style={{color:col,fontWeight:700}}>({tasa}%)</span></span>
+                    <span>{realizadosQR}/{totalQR} QRs</span>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={()=>setExpandId(isExp?null:plan._id)}
+                    style={{...S.btnGhost,fontSize:10,padding:"4px 8px"}}>
+                    {isExp?"▲":"▼"}
+                  </button>
+                  <button onClick={()=>{if(window.confirm("¿Eliminar este plan?"))deletePlan(plan._id);}}
+                    style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f87171",padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Detalle expandido — lista de paradas */}
+              {isExp && ubs.length > 0 && (
+                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e2d45"}}>
+                  <div style={{fontSize:9,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>
+                    Paradas ({ubs.length})
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>
+                    {[...ubs].sort((a,b)=>a.orden-b.orden).map((u,i)=>(
+                      <div key={u.id||i} style={{
+                        display:"flex",alignItems:"center",gap:10,
+                        background:u.realizado?"#012a1a":"#0a1020",
+                        border:`1px solid ${u.realizado?C.green+"44":"#1e2d45"}`,
+                        borderRadius:7,padding:"7px 10px",
+                      }}>
+                        <div style={{width:22,height:22,borderRadius:"50%",flexShrink:0,
+                          background:u.realizado?C.greenDim:C.cyanDim,
+                          border:`1px solid ${u.realizado?C.green:C.cyan}44`,
+                          display:"flex",alignItems:"center",justifyContent:"center",
+                          fontSize:9,fontWeight:700,color:u.realizado?C.green:C.cyanText}}>
+                          {u.orden}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:600,color:u.realizado?C.green:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {u.calle} {u.num}
+                          </div>
+                          <div style={{fontSize:9,color:C.muted}}>{u.barri} · {u.pa} · {u.elementos?.length||0} QRs</div>
+                        </div>
+                        <div style={{fontSize:10,color:u.realizado?C.green:C.dim,flexShrink:0}}>
+                          {u.realizado
+                            ? <span>✓ {u.realizadoEn ? timeAgo(u.realizadoEn) : ""}</span>
+                            : <span style={{color:C.dim}}>Pendiente</span>
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── LOGIN ─────────────────────────────────────────────────────────
 function Login({onLogin}){
   const [u,setU]=useState("");const [p,setP]=useState("");const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
@@ -1689,18 +1912,26 @@ function Login({onLogin}){
 export default function App(){
   const [sesion,setSesion]=useState(null);
   const [usuarios,setUsuarios]=useState(USUARIOS_INIT);
-  const [tab,setTab]=useState("rutas"); // rutas | incidencias | ia
-  const [planes,setPlanes]=useState([]);
+  const [tab,setTab]=useState("rutas");
+  const {data:planes} = useCollection("planes","fechaSubida");
+
+  // setPlanes wrapper que usa Firebase
+  async function addPlan(plan){ await fbAdd("planes", plan); }
+  async function updatePlan(plan){ await fbUpdate("planes", plan._id, plan); }
+  async function deletePlan(id){ await fbDelete("planes", id); }
 
   if(!sesion) return <Login onLogin={setSesion}/>;
+
+  const esAdmin = sesion.rol === "admin";
 
   const TABS=[
     {key:"rutas",      icon:"🗺️", label:"Rutas"},
     {key:"incidencias",icon:"📋", label:"Incidencias"},
     {key:"inventario", icon:"📦", label:"Inventario"},
     {key:"ia",         icon:"🔧", label:"Asistente"},
+    ...(esAdmin ? [{key:"admin", icon:"⚙️", label:"Admin"}] : []),
   ];
-  const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",ia:"Asistente mecánico"};
+  const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",ia:"Asistente mecánico",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
@@ -1710,24 +1941,25 @@ export default function App(){
           <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#003d4d,#004d5e)",border:"1px solid #00d4ff33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,boxShadow:"0 0 12px #00d4ff1a"}}>🚛</div>
           <div>
             <div style={{fontSize:9,color:C.muted,letterSpacing:3,textTransform:"uppercase",fontWeight:500}}>FleetComms</div>
-            <div style={{fontSize:15,fontWeight:700,color:C.text,letterSpacing:-.3}}>{TAB_TITLES[tab]}</div>
+            <div style={{fontSize:15,fontWeight:700,color:C.text,letterSpacing:-.3}}>{TAB_TITLES[tab]||tab}</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:11,color:C.text,fontWeight:600}}>{sesion.nombre}</div>
-            <div style={{fontSize:9,color:sesion.rol==="admin"?"#a78bfa":C.cyanText,letterSpacing:1,textTransform:"uppercase"}}>{sesion.rol}</div>
+            <div style={{fontSize:9,color:esAdmin?"#a78bfa":C.cyanText,letterSpacing:1,textTransform:"uppercase"}}>{sesion.rol}</div>
           </div>
-          <div onClick={()=>setSesion(null)} title="Cerrar sesión" style={{width:36,height:36,borderRadius:"50%",cursor:"pointer",background:sesion.rol==="admin"?"linear-gradient(135deg,#1a0d2e,#2d1f5e)":"linear-gradient(135deg,#002030,#003d4d)",border:`1px solid ${sesion.rol==="admin"?"#7c3aed55":"#00d4ff44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:sesion.rol==="admin"?"#a78bfa":C.cyanText}}>
+          <div onClick={()=>setSesion(null)} title="Cerrar sesión" style={{width:36,height:36,borderRadius:"50%",cursor:"pointer",background:esAdmin?"linear-gradient(135deg,#1a0d2e,#2d1f5e)":"linear-gradient(135deg,#002030,#003d4d)",border:`1px solid ${esAdmin?"#7c3aed55":"#00d4ff44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:esAdmin?"#a78bfa":C.cyanText}}>
             {avatarOf(sesion)}
           </div>
         </div>
       </div>
 
-      {tab==="rutas"&&<ListaPlanes planes={planes} setPlanes={setPlanes} sesion={sesion} usuarios={usuarios}/>}
+      {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
       {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios} setUsuarios={setUsuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
       {tab==="ia"&&<AsistenteIA sesion={sesion}/>}
+      {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan}/>}
 
       {/* ── BOTTOM NAV ── */}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"#06090f",borderTop:"1px solid #1e2d45",display:"flex",zIndex:200}}>
