@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { db } from "./firebase";
+import { db } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, query, orderBy, setDoc
@@ -21,7 +21,7 @@ const CATS = [
   {label:"Mantenimiento",color:"#3b82f6",icon:"🛠️"},
   {label:"Comunicado general",color:"#8b5cf6",icon:"📢"},
 ];
-const PC = {alta:"#ff4d6d",media:"#ff8c42",baja:"#10e88a"};
+const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
 // Hook genérico para escuchar una colección en tiempo real
@@ -52,60 +52,70 @@ async function fbDelete(colName, id) {
   return await deleteDoc(doc(db, colName, id));
 }
 
-// ── DESIGN SYSTEM — Industrial Premium ───────────────────────────
-// Tipografía: Space Grotesk (display) + JetBrains Mono (datos)
-// Paleta: Slate profundo, acentos cyan eléctrico, semáforo preciso
-// Estética: Fleet management profesional — Samsara / Fleetio level
+// ── BARRIO COLOR (misma paleta que scheduling) ────────────────────
+const BARRIO_PALETTE = [
+  "#4f8ef7","#34d399","#fb923c","#f87171",
+  "#a78bfa","#fbbf24","#f472b6","#22d3ee","#818cf8","#4ade80",
+];
+const _barrioCache = {};
+function barrioColor(b) {
+  if (!b) return "#8b95a5";
+  if (_barrioCache[b]) return _barrioCache[b];
+  let h = 0;
+  for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
+  return (_barrioCache[b] = BARRIO_PALETTE[h % BARRIO_PALETTE.length]);
+}
+
+// ── DESIGN SYSTEM ─────────────────────────────────────────────────
 
 const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 :root {
-  --bg:       #080c14;
-  --surface:  #0d1424;
-  --surface2: #121929;
-  --border:   #1e2d45;
-  --border2:  #253650;
-  --cyan:     #00d4ff;
-  --cyanDim:  #003d4d;
-  --cyanText: #67e8f9;
-  --green:    #10e88a;
-  --greenDim: #012a1a;
-  --orange:   #ff8c42;
-  --red:      #ff4d6d;
+  --bg:       #0f1117;
+  --surface:  #161b27;
+  --surface2: #1c2333;
+  --border:   rgba(255,255,255,0.08);
+  --border2:  rgba(255,255,255,0.13);
+  --blue:     #4f8ef7;
+  --blueDim:  #0d2248;
+  --blueText: #a3c4fc;
+  --cyan:     #4f8ef7;
+  --cyanDim:  #0d2248;
+  --cyanText: #a3c4fc;
+  --green:    #34d399;
+  --greenDim: #072015;
+  --orange:   #fb923c;
+  --red:      #f87171;
   --amber:    #fbbf24;
-  --text:     #e8edf5;
-  --muted:    #5a7090;
-  --dim:      #2d4060;
-  --font:     'Space Grotesk', system-ui, sans-serif;
+  --text:     #f0f4f8;
+  --muted:    #8b95a5;
+  --dim:      #3d4d63;
+  --font:     'Inter', system-ui, sans-serif;
   --mono:     'JetBrains Mono', 'Courier New', monospace;
-  --radius:   10px;
-  --shadow:   0 4px 24px rgba(0,0,0,.5);
+  --radius:   8px;
+  --shadow:   0 2px 16px rgba(0,0,0,.4);
 }
 
 body { background: var(--bg); color: var(--text); font-family: var(--font); margin: 0; }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
-/* Animaciones */
-@keyframes fadeUp   { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeUp   { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
 @keyframes slideIn  { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
-@keyframes pulse2   { 0%,100% { opacity:.3; transform:scale(.85); } 50% { opacity:1; transform:scale(1.15); } }
+@keyframes pulse2   { 0%,100% { opacity:.4; transform:scale(.9); } 50% { opacity:1; transform:scale(1.1); } }
 @keyframes shimmer  { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
-@keyframes glow     { 0%,100% { box-shadow:0 0 8px #00d4ff44; } 50% { box-shadow:0 0 20px #00d4ff88; } }
 
-.fade-up   { animation: fadeUp .25s ease both; }
-.fade-in   { animation: fadeIn .2s ease both; }
-.slide-in  { animation: slideIn .2s ease both; }
+.fade-up   { animation: fadeUp .2s ease both; }
+.fade-in   { animation: fadeIn .18s ease both; }
+.slide-in  { animation: slideIn .18s ease both; }
 
-/* Botones con hover fluido */
-button { transition: all .15s ease; }
+button { transition: all .12s ease; }
 button:active { transform: scale(.97); }
 `;
 
@@ -121,13 +131,13 @@ const mono = "var(--mono)";
 const font = "var(--font)";
 
 const C = {
-  bg:"#080c14", card:"#0d1424", surface2:"#121929",
-  border:"#1e2d45", border2:"#253650",
-  cyan:"#00d4ff", cyanDim:"#003d4d", cyanText:"#67e8f9",
-  green:"#10e88a", greenDim:"#012a1a",
-  orange:"#ff8c42", red:"#ff4d6d", amber:"#fbbf24",
-  text:"#e8edf5", muted:"#5a7090", dim:"#2d4060",
-  blue:"#00d4ff", blueDim:"#003d4d", blueText:"#67e8f9",
+  bg:"#0f1117", card:"#161b27", surface2:"#1c2333",
+  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.13)",
+  cyan:"#4f8ef7", cyanDim:"#0d2248", cyanText:"#a3c4fc",
+  green:"#34d399", greenDim:"#072015",
+  orange:"#fb923c", red:"#f87171", amber:"#fbbf24",
+  text:"#f0f4f8", muted:"#8b95a5", dim:"#3d4d63",
+  blue:"#4f8ef7", blueDim:"#0d2248", blueText:"#a3c4fc",
 };
 
 // Componente base de botón con hover
@@ -140,19 +150,19 @@ const Btn = ({children, onClick, style={}, variant="primary", size="md", disable
     opacity: disabled ? .45 : 1,
   };
   const sizes = {
-    xs: {padding:"4px 10px", fontSize:10, borderRadius:6},
-    sm: {padding:"6px 12px", fontSize:11, borderRadius:7},
-    md: {padding:"10px 18px", fontSize:13, borderRadius:9},
-    lg: {padding:"13px 24px", fontSize:14, borderRadius:10},
-    xl: {padding:"15px 32px", fontSize:15, borderRadius:11},
+    xs: {padding:"4px 10px", fontSize:10, borderRadius:5},
+    sm: {padding:"6px 12px", fontSize:11, borderRadius:6},
+    md: {padding:"10px 18px", fontSize:13, borderRadius:7},
+    lg: {padding:"12px 22px", fontSize:14, borderRadius:8},
+    xl: {padding:"14px 30px", fontSize:15, borderRadius:9},
   };
   const variants = {
-    primary:  { background: hov?"#00b8db":"#004d5e", color:"#00d4ff", boxShadow: hov?"0 0 20px #00d4ff33":"none", border:"1px solid #00d4ff66" },
-    success:  { background: hov?"#00c47a":"#01421f", color:"#10e88a", boxShadow: hov?"0 0 20px #10e88a33":"none", border:"1px solid #10e88a66" },
-    danger:   { background: hov?"#cc1a30":"#3d0011", color:"#ff4d6d", border:"1px solid #ff4d6d44" },
-    ghost:    { background: hov?"#1e2d45":"transparent", color: hov?C.text:C.muted, border:"1px solid #1e2d45" },
-    warning:  { background: hov?"#cc6a00":"#3d2000", color:"#ff8c42", border:"1px solid #ff8c4244" },
-    subtle:   { background: hov?"#1e2d45":"#121929", color:C.muted, border:"1px solid #1e2d45" },
+    primary:  { background: hov?"#1a3570":C.blueDim, color:C.blueText, border:`1px solid ${C.blue}44` },
+    success:  { background: hov?"rgba(52,211,153,0.15)":C.greenDim, color:C.green, border:`1px solid ${C.green}44` },
+    danger:   { background: hov?"rgba(248,113,113,0.15)":"rgba(248,113,113,0.06)", color:C.red, border:`1px solid ${C.red}44` },
+    ghost:    { background: hov?"rgba(255,255,255,0.06)":"transparent", color: hov?C.text:C.muted, border:`1px solid ${C.border}` },
+    warning:  { background: hov?"rgba(251,146,60,0.15)":"rgba(251,146,60,0.06)", color:C.orange, border:`1px solid ${C.orange}44` },
+    subtle:   { background: hov?"rgba(255,255,255,0.06)":C.surface2, color:C.muted, border:`1px solid ${C.border}` },
   };
   return (
     <button onClick={onClick} disabled={disabled} title={title}
@@ -165,22 +175,22 @@ const Btn = ({children, onClick, style={}, variant="primary", size="md", disable
 
 const S = {
   page:   {fontFamily:font, background:C.bg, minHeight:"100vh", maxWidth:520, margin:"0 auto", color:C.text},
-  input:  {width:"100%", background:"#0a1020", border:"1px solid #1e2d45", color:C.text, padding:"11px 14px", borderRadius:9, fontSize:13, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
-  label:  {fontSize:10, color:C.muted, letterSpacing:2.5, textTransform:"uppercase", display:"block", marginBottom:7, fontFamily:font, fontWeight:500},
-  btn:    {background:C.cyanDim, border:`1px solid ${C.cyan}66`, color:C.cyanText, padding:"10px 18px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s", letterSpacing:.3},
-  btnGhost:{background:"none", border:"1px solid #1e2d45", color:C.muted, padding:"7px 14px", borderRadius:9, fontSize:12, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnSm:  {background:C.cyanDim, border:`1px solid ${C.cyan}66`, color:C.cyanText, padding:"5px 11px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnOk:  {background:C.greenDim, border:`1px solid ${C.green}66`, color:C.green, padding:"5px 11px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  card:   {background:"#0d1424", border:"1px solid #1e2d45", borderRadius:12, padding:"14px 16px", marginBottom:8},
-  header: {background:"#0a1020", borderBottom:"1px solid #1e2d45", padding:"14px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(12px)"},
+  input:  {width:"100%", background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}`, color:C.text, padding:"10px 13px", borderRadius:7, fontSize:13, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
+  label:  {fontSize:10, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
+  btn:    {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"10px 18px", borderRadius:7, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnGhost:{background:"none", border:`1px solid ${C.border}`, color:C.muted, padding:"7px 14px", borderRadius:7, fontSize:12, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnSm:  {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"5px 11px", borderRadius:6, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnOk:  {background:C.greenDim, border:`1px solid ${C.green}44`, color:C.green, padding:"5px 11px", borderRadius:6, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 16px", marginBottom:8},
+  header: {background:"rgba(22,27,39,0.95)", borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
 };
 
 const CTip = ({active,payload,label}) => {
   if(!active||!payload?.length) return null;
   return (
-    <div style={{background:"#0d1424",border:"1px solid #1e2d45",borderRadius:9,padding:"10px 14px",fontSize:12,color:C.text,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}}>
-      {label&&<div style={{color:C.muted,marginBottom:5,fontSize:11,letterSpacing:1,textTransform:"uppercase"}}>{label}</div>}
-      {payload.map((p,i)=><div key={i} style={{color:p.color||C.cyanText,fontWeight:600}}>{p.name}: {p.value}</div>)}
+    <div style={{background:C.card,border:`1px solid ${C.border2}`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.text,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
+      {label&&<div style={{color:C.muted,marginBottom:5,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>{label}</div>}
+      {payload.map((p,i)=><div key={i} style={{color:p.color||C.blueText,fontWeight:600}}>{p.name}: {p.value}</div>)}
     </div>
   );
 };
@@ -357,11 +367,12 @@ function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     }
     pts.forEach((u,idx)=>{
       const isSel=selId===u.id;
-      const color=u.realizado?C.green:isSel?C.orange:C.blue;
+      const baseColor=barrioColor(u.barri);
+      const color=u.realizado?C.green:isSel?C.orange:baseColor;
       const size=isSel?32:26;
       const icon=L.divIcon({
         className:"",
-        html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:${isSel?12:9}px;font-weight:800;color:white;box-shadow:0 2px 8px #0008;font-family:${mono};">${u.orden}</div>`,
+        html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:3px solid ${u.realizado?"#fff":isSel?"#fff":baseColor+"88"};display:flex;align-items:center;justify-content:center;font-size:${isSel?12:9}px;font-weight:800;color:white;box-shadow:0 2px 8px #0008;font-family:${mono};">${u.orden}</div>`,
         iconSize:[size,size],iconAnchor:[size/2,size/2],
       });
       const m=L.marker([u.lat,u.lng],{icon}).addTo(map).on("click",()=>onSelect(u.id));
@@ -1108,54 +1119,6 @@ function ListaPlanes({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   return <ModuloRutas planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>;
 }
 
-// ── ASISTENTE IA ──────────────────────────────────────────────────
-const SUGS=["¿Qué significa la luz de motor?","El vehículo vibra al frenar","¿Cuándo cambiar el aceite?","Ruido al arrancar en frío","¿Cómo sé si falla la batería?","Los frenos chirrían, ¿es peligroso?"];
-function AsistenteIA({sesion}){
-  const [msgs,setMsgs]=useState([{rol:"assistant",texto:"Hola, soy tu asistente mecánico. ¿En qué puedo ayudarte?"}]);
-  const [input,setInput]=useState("");const [carg,setCarg]=useState(false);const [veh,setVeh]=useState("");
-  const endRef=useRef(null);
-  async function enviar(txt){
-    const q=txt||input.trim();if(!q||carg)return;setInput("");
-    const hist=[...msgs,{rol:"user",texto:q}];setMsgs(hist);setCarg(true);
-    setTimeout(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),50);
-    try{
-      const ctx=veh?`Consulta sobre: ${veh}. `:"";
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`Eres un mecánico experto de vehículos industriales y de flota. ${ctx}Ayuda a entender averías, diagnosticar síntomas y guiar en reparaciones básicas. Responde en español con emojis. ⚠️ si hay riesgo. Máximo 4 párrafos.`,messages:hist.map(m=>({role:m.rol==="assistant"?"assistant":"user",content:m.texto}))})});
-      const d=await res.json();
-      setMsgs([...hist,{rol:"assistant",texto:d.content?.[0]?.text||"Sin respuesta."}]);
-    }catch(e){setMsgs([...hist,{rol:"assistant",texto:"⚠️ Error al conectar. Inténtalo de nuevo."}]);}
-    setCarg(false);setTimeout(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),50);
-  }
-  return(
-    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 120px)"}}>
-      <div style={{background:C.bg,borderBottom:`1px solid #1e2535`,padding:"10px 16px",display:"flex",gap:8}}>
-        <select value={veh} onChange={e=>setVeh(e.target.value)} style={{...S.input,fontSize:11,padding:"7px 10px",color:veh?C.text:C.muted}}><option value="">🚛 Vehículo (opcional)</option>{VEHICULOS.map(v=><option key={v} value={v}>{v}</option>)}</select>
-        <button onClick={()=>setMsgs([{rol:"assistant",texto:"Hola, soy tu asistente mecánico. ¿En qué puedo ayudarte?"}])} style={{...S.btnGhost,fontSize:10,padding:"6px 10px",whiteSpace:"nowrap"}}>Nueva</button>
-      </div>
-      <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
-        {msgs.length===1&&<div style={{marginBottom:16}}><div style={{fontSize:10,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Consultas frecuentes</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{SUGS.map((s,i)=><button key={i} onClick={()=>enviar(s)} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,padding:"7px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:mono}}>{s}</button>)}</div></div>}
-        {msgs.map((m,i)=>(
-          <div key={i} style={{display:"flex",gap:10,flexDirection:m.rol==="user"?"row-reverse":"row",marginBottom:14,alignItems:"flex-start"}}>
-            <div style={{width:30,height:30,borderRadius:"50%",flexShrink:0,background:m.rol==="assistant"?"#1a2a1a":C.blueDim,border:`1px solid ${m.rol==="assistant"?"#22c55e44":"#3b82f644"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:m.rol==="assistant"?14:10,color:m.rol==="assistant"?C.green:C.blueText,fontWeight:700}}>{m.rol==="assistant"?"🔧":avatarOf(sesion)}</div>
-            <div style={{maxWidth:"80%",background:m.rol==="assistant"?C.card:C.blueDim,border:`1px solid ${m.rol==="assistant"?C.border:"#3b82f644"}`,borderRadius:m.rol==="assistant"?"4px 12px 12px 12px":"12px 4px 12px 12px",padding:"11px 13px"}}>
-              <div style={{fontSize:13,color:m.rol==="assistant"?"#cbd5e1":"#bfdbfe",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.texto}</div>
-            </div>
-          </div>
-        ))}
-        {carg&&<div style={{display:"flex",gap:10,marginBottom:14}}><div style={{width:30,height:30,borderRadius:"50%",background:"#1a2a1a",border:"1px solid #22c55e44",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🔧</div><div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"4px 12px 12px 12px",padding:"13px 16px",display:"flex",gap:6,alignItems:"center"}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:C.blue,animation:"pulse 1.2s ease-in-out infinite",animationDelay:`${i*0.2}s`}}/>)}<style>{`@keyframes pulse{0%,100%{opacity:.2;transform:scale(0.8)}50%{opacity:1;transform:scale(1.2)}}`}</style></div></div>}
-        <div ref={endRef}/>
-      </div>
-      <div style={{padding:"10px 16px 12px",borderTop:`1px solid #1e2535`,background:C.bg}}>
-        <div style={{display:"flex",gap:8}}>
-          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&enviar()} placeholder="Describe el problema del vehículo…" disabled={carg} style={{...S.input,flex:1,opacity:carg?.6:1}}/>
-          <button onClick={()=>enviar()} disabled={carg||!input.trim()} style={{...S.btn,padding:"10px 14px",background:"#1a2a1a",borderColor:C.green,color:C.green,opacity:(carg||!input.trim())?.4:1}}>↑</button>
-        </div>
-        <div style={{fontSize:10,color:"#1e2535",textAlign:"center",marginTop:6}}>Solo orientativo — consulta siempre a un mecánico profesional</div>
-      </div>
-    </div>
-  );
-}
-
 // ── INCIDENCIAS ───────────────────────────────────────────────────
 function ModuloIncidencias({sesion,usuarios,setUsuarios}){
   const {data:incidencias} = useCollection("incidencias");
@@ -1315,8 +1278,8 @@ function PanelAdmin({usuarios,setUsuarios,onClose}){
           <div key={u.id} style={{...S.card,opacity:u.activo?1:0.4}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:38,height:38,borderRadius:"50%",background:u.rol==="admin"?"#2d1f5e":C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:u.rol==="admin"?"#a78bfa":C.blueText}}>{avatarOf(u)}</div>
-                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>@{u.usuario} · <span style={{color:u.rol==="admin"?"#a78bfa":C.blueText}}>{u.rol}</span></div></div>
+                <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{avatarOf(u)}</div>
+                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>@{u.usuario} · <span style={{color:C.blueText}}>{u.rol}</span></div></div>
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>setUsuarios(usuarios.map(x=>x.id===u.id?{...x,activo:!x.activo}:x))} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
@@ -1330,7 +1293,7 @@ function PanelAdmin({usuarios,setUsuarios,onClose}){
             {[["Nombre *","nombre","text"],["Apellidos","apellidos","text"],["Usuario *","usuario","text"],["Contraseña *","password","password"]].map(([lbl,key,type])=>(
               <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input}/></div>
             ))}
-            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{[["conductor","🚛 Conductor"],["admin","👤 Supervisor"]].map(([v,l])=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:mono,background:form.rol===v?(v==="admin"?"#2d1f5e":C.blueDim):"none",border:`1px solid ${form.rol===v?(v==="admin"?"#7c3aed":C.blue):C.border}`,color:form.rol===v?(v==="admin"?"#a78bfa":C.blueText):C.muted}}>{l}</button>)}</div></div>
+            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{[["conductor","Conductor"],["admin","Supervisor"]].map(([v,l])=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{l}</button>)}</div></div>
             {err&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
             <button onClick={crear} style={{...S.btn,width:"100%"}}>CREAR USUARIO</button>
           </div>
@@ -1700,7 +1663,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
             {l:"Realizadas",v:realizadas,          c:C.green},
             {l:"Global",    v:tasaGlobal+"%",      c:tasaGlobal===100?C.green:tasaGlobal>50?C.orange:C.red},
           ].map(s=>(
-            <div key={s.l} style={{background:"#0a1020",border:"1px solid #1e2d45",borderRadius:9,padding:"10px 6px",textAlign:"center"}}>
+            <div key={s.l} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
               <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
               <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{s.l}</div>
             </div>
@@ -1708,7 +1671,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
         </div>
 
         {/* Barra progreso global */}
-        <div style={{height:6,background:"#0a1020",borderRadius:3,overflow:"hidden",marginBottom:14}}>
+        <div style={{height:5,background:C.surface2,borderRadius:3,overflow:"hidden",marginBottom:14}}>
           <div style={{height:"100%",borderRadius:3,width:`${tasaGlobal}%`,transition:"width .4s",
             background:`linear-gradient(90deg,${C.cyan},${C.green})`}}/>
         </div>
@@ -1725,7 +1688,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
             <option value="">Todos los meses</option>
             {meses.map(m=><option key={m} value={m}>{fmtMes(m)}</option>)}
           </select>
-          <button onClick={exportCSV} style={{...S.btnSm,background:"#012a1a",borderColor:C.green,color:C.green,whiteSpace:"nowrap"}}>
+          <button onClick={exportCSV} style={{...S.btnSm,background:C.greenDim,borderColor:`${C.green}44`,color:C.green,whiteSpace:"nowrap"}}>
             ⬇ CSV
           </button>
         </div>
@@ -1764,7 +1727,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
                     {plan.nombre}
                   </div>
                   {/* Barra progreso */}
-                  <div style={{height:4,background:"#0a1020",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:3,background:C.surface2,borderRadius:2,overflow:"hidden",marginBottom:4}}>
                     <div style={{height:"100%",background:col,borderRadius:2,width:`${tasa}%`,transition:"width .4s"}}/>
                   </div>
                   <div style={{display:"flex",gap:16,fontSize:10,color:C.dim}}>
@@ -1786,23 +1749,23 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
 
               {/* Detalle expandido — lista de paradas */}
               {isExp && ubs.length > 0 && (
-                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e2d45"}}>
-                  <div style={{fontSize:9,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>
+                <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:9,color:C.dim,letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>
                     Paradas ({ubs.length})
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>
                     {[...ubs].sort((a,b)=>a.orden-b.orden).map((u,i)=>(
                       <div key={u.id||i} style={{
                         display:"flex",alignItems:"center",gap:10,
-                        background:u.realizado?"#012a1a":"#0a1020",
-                        border:`1px solid ${u.realizado?C.green+"44":"#1e2d45"}`,
+                        background:u.realizado?C.greenDim:C.surface2,
+                        border:`1px solid ${u.realizado?C.green+"33":C.border}`,
                         borderRadius:7,padding:"7px 10px",
                       }}>
                         <div style={{width:22,height:22,borderRadius:"50%",flexShrink:0,
-                          background:u.realizado?C.greenDim:C.cyanDim,
-                          border:`1px solid ${u.realizado?C.green:C.cyan}44`,
+                          background:u.realizado?C.greenDim:C.blueDim,
+                          border:`1px solid ${u.realizado?C.green:C.blue}44`,
                           display:"flex",alignItems:"center",justifyContent:"center",
-                          fontSize:9,fontWeight:700,color:u.realizado?C.green:C.cyanText}}>
+                          fontSize:9,fontWeight:700,color:u.realizado?C.green:C.blueText}}>
                           {u.orden}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
@@ -1843,62 +1806,54 @@ function Login({onLogin}){
   return(
     <div style={{fontFamily:font,background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
       {/* Background grid */}
-      <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(#1e2d4508 1px,transparent 1px),linear-gradient(90deg,#1e2d4508 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none"}}/>
-      {/* Glow */}
-      <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,background:"radial-gradient(circle,#00d4ff0a 0%,transparent 70%)",pointerEvents:"none"}}/>
-
-      <div style={{width:"100%",maxWidth:380,position:"relative",animation:"fadeUp .4s ease both"}}>
+      <div style={{width:"100%",maxWidth:360,position:"relative",animation:"fadeUp .3s ease both"}}>
         {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:44}}>
-          <div style={{width:72,height:72,borderRadius:20,background:"linear-gradient(135deg,#003d4d,#004d5e)",border:"1px solid #00d4ff33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 18px",boxShadow:"0 0 40px #00d4ff1a,0 8px 32px rgba(0,0,0,.4)",animation:"glow 3s ease-in-out infinite"}}>🚛</div>
-          <div style={{fontSize:11,color:C.muted,letterSpacing:6,textTransform:"uppercase",marginBottom:6,fontWeight:500}}>Fleet Management</div>
-          <div style={{fontSize:28,fontWeight:700,color:C.text,letterSpacing:-1,lineHeight:1}}>FleetComms</div>
-          <div style={{width:40,height:2,background:"linear-gradient(90deg,transparent,#00d4ff,transparent)",margin:"12px auto 0"}}/>
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Fleet Management</div>
+          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>FleetComms</div>
         </div>
 
         {/* Form */}
-        <div style={{background:"#0a1020",border:"1px solid #1e2d45",borderRadius:16,padding:28,boxShadow:"0 24px 64px rgba(0,0,0,.5)"}}>
-          <div style={{marginBottom:16}}>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:24,boxShadow:"0 16px 48px rgba(0,0,0,.5)"}}>
+          <div style={{marginBottom:14}}>
             <label style={S.label}>Usuario</label>
             <input value={u} onChange={e=>setU(e.target.value)} placeholder="tu.usuario" onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input, borderColor: u?"#00d4ff44":"#1e2d45"}}
-              onFocus={e=>e.target.style.borderColor="#00d4ff88"}
-              onBlur={e=>e.target.style.borderColor=u?"#00d4ff44":"#1e2d45"}/>
+              style={{...S.input, borderColor: u?`${C.blue}44`:C.border}}
+              onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
+              onBlur={e=>e.target.style.borderColor=u?`${C.blue}44`:C.border}/>
           </div>
-          <div style={{marginBottom:22}}>
+          <div style={{marginBottom:20}}>
             <label style={S.label}>Contraseña</label>
             <input value={p} onChange={e=>setP(e.target.value)} type="password" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input, borderColor: p?"#00d4ff44":"#1e2d45"}}
-              onFocus={e=>e.target.style.borderColor="#00d4ff88"}
-              onBlur={e=>e.target.style.borderColor=p?"#00d4ff44":"#1e2d45"}/>
+              style={{...S.input, borderColor: p?`${C.blue}44`:C.border}}
+              onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
+              onBlur={e=>e.target.style.borderColor=p?`${C.blue}44`:C.border}/>
           </div>
           {err&&(
-            <div style={{background:"#1a0008",border:"1px solid #ff4d6d33",color:"#ff4d6d",borderRadius:8,padding:"10px 14px",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+            <div style={{background:"rgba(248,113,113,0.08)",border:`1px solid rgba(248,113,113,0.25)`,color:C.red,borderRadius:7,padding:"9px 13px",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
               <span>⚠</span> {err}
             </div>
           )}
-          <button onClick={go} disabled={loading} style={{...S.btn,width:"100%",padding:"13px",fontSize:14,fontWeight:700,
-            background:loading?"#002530":"linear-gradient(135deg,#004d5e,#003d4d)",
-            borderColor:"#00d4ff66",color:"#00d4ff",
-            boxShadow:loading?"none":"0 4px 20px #00d4ff22",
-            letterSpacing:.5,
+          <button onClick={go} disabled={loading} style={{...S.btn,width:"100%",padding:"12px",fontSize:13,fontWeight:600,
+            background:loading?C.blueDim:C.blue,
+            borderColor:"transparent",color:loading?C.blueText:"#fff",
           }}>
-            {loading ? <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><span style={{display:"inline-block",width:14,height:14,border:"2px solid #00d4ff33",borderTopColor:"#00d4ff",borderRadius:"50%",animation:"spin .6s linear infinite"}}/> Accediendo…</span> : "Acceder →"}
+            {loading ? <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><span style={{display:"inline-block",width:13,height:13,border:"2px solid rgba(163,196,252,0.3)",borderTopColor:C.blueText,borderRadius:"50%",animation:"spin .6s linear infinite"}}/> Accediendo…</span> : "Acceder"}
           </button>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
 
         {/* Demo users */}
-        <div style={{marginTop:16,background:"#0a1020",border:"1px solid #1e2d45",borderRadius:12,padding:"14px 18px"}}>
-          <div style={{fontSize:9,color:C.dim,letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:500}}>Accesos de prueba</div>
+        <div style={{marginTop:12,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px"}}>
+          <div style={{fontSize:9,color:C.dim,letterSpacing:1.5,marginBottom:8,textTransform:"uppercase",fontWeight:500}}>Accesos de prueba</div>
           {[["admin","admin123","Supervisor"],["cmartin","1234","Conductor"],["lsanchez","1234","Conductor"]].map(([usr,pwd,rol])=>(
-            <div key={usr} onClick={()=>{setU(usr);setP(pwd);}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1e2d45",cursor:"pointer",transition:"opacity .15s"}}
-              onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
+            <div key={usr} onClick={()=>{setU(usr);setP(pwd);}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer",transition:"opacity .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.opacity=".6"}
               onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-              <span style={{fontSize:12,color:C.cyanText,fontFamily:mono,fontWeight:500}}>{usr}</span>
+              <span style={{fontSize:12,color:C.muted,fontFamily:mono,fontWeight:500}}>{usr}</span>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:11,color:C.dim,fontFamily:mono}}>{pwd}</span>
-                <span style={{fontSize:9,padding:"2px 8px",borderRadius:10,background:rol==="Supervisor"?"#1a0d2e":"#001a30",color:rol==="Supervisor"?"#a78bfa":C.cyanText,border:`1px solid ${rol==="Supervisor"?"#7c3aed33":"#00d4ff22"}`,letterSpacing:.5}}>{rol}</span>
+                <span style={{fontSize:9,padding:"2px 8px",borderRadius:4,background:C.surface2,color:C.muted,letterSpacing:.5}}>{rol}</span>
               </div>
             </div>
           ))}
@@ -1928,28 +1883,27 @@ export default function App(){
     {key:"rutas",      icon:"🗺️", label:"Rutas"},
     {key:"incidencias",icon:"📋", label:"Incidencias"},
     {key:"inventario", icon:"📦", label:"Inventario"},
-    {key:"ia",         icon:"🔧", label:"Asistente"},
     ...(esAdmin ? [{key:"admin", icon:"⚙️", label:"Admin"}] : []),
   ];
-  const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",ia:"Asistente mecánico",admin:"Panel de administración"};
+  const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
       {/* ── HEADER ── */}
-      <div style={{...S.header,background:"#06090f",borderBottom:"1px solid #1e2d45"}}>
+      <div style={{...S.header,background:"rgba(22,27,39,0.96)",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#003d4d,#004d5e)",border:"1px solid #00d4ff33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,boxShadow:"0 0 12px #00d4ff1a"}}>🚛</div>
-          <div>
-            <div style={{fontSize:9,color:C.muted,letterSpacing:3,textTransform:"uppercase",fontWeight:500}}>FleetComms</div>
-            <div style={{fontSize:15,fontWeight:700,color:C.text,letterSpacing:-.3}}>{TAB_TITLES[tab]||tab}</div>
-          </div>
+          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>FleetComms</div>
+          <div style={{width:1,height:16,background:C.border2}}/>
+          <div style={{fontSize:14,fontWeight:600,color:C.text}}>{TAB_TITLES[tab]||tab}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:11,color:C.text,fontWeight:600}}>{sesion.nombre}</div>
-            <div style={{fontSize:9,color:esAdmin?"#a78bfa":C.cyanText,letterSpacing:1,textTransform:"uppercase"}}>{sesion.rol}</div>
+            <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
+            <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{sesion.rol}</div>
           </div>
-          <div onClick={()=>setSesion(null)} title="Cerrar sesión" style={{width:36,height:36,borderRadius:"50%",cursor:"pointer",background:esAdmin?"linear-gradient(135deg,#1a0d2e,#2d1f5e)":"linear-gradient(135deg,#002030,#003d4d)",border:`1px solid ${esAdmin?"#7c3aed55":"#00d4ff44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:esAdmin?"#a78bfa":C.cyanText}}>
+          <div onClick={()=>setSesion(null)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
             {avatarOf(sesion)}
           </div>
         </div>
@@ -1958,18 +1912,17 @@ export default function App(){
       {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
       {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios} setUsuarios={setUsuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
-      {tab==="ia"&&<AsistenteIA sesion={sesion}/>}
       {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan}/>}
 
       {/* ── BOTTOM NAV ── */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"#06090f",borderTop:"1px solid #1e2d45",display:"flex",zIndex:200}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(22,27,39,0.97)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)"}}>
         {TABS.map(t=>{
           const active=tab===t.key;
           return(
             <button key={t.key} onClick={()=>setTab(t.key)} style={{flex:1,padding:"10px 0 9px",background:"none",border:"none",cursor:"pointer",fontFamily:font,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",transition:"all .15s"}}>
-              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:2,background:"linear-gradient(90deg,transparent,#00d4ff,transparent)",borderRadius:1}}/>}
-              <span style={{fontSize:19,lineHeight:1,filter:active?"none":"grayscale(1) opacity(.45)",transition:"filter .15s"}}>{t.icon}</span>
-              <span style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",fontWeight:600,color:active?C.cyanText:C.dim,transition:"color .15s"}}>{t.label}</span>
+              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:24,height:2,background:C.blue,borderRadius:1}}/>}
+              <span style={{fontSize:19,lineHeight:1,filter:active?"none":"grayscale(1) opacity(.4)",transition:"filter .15s"}}>{t.icon}</span>
+              <span style={{fontSize:9,letterSpacing:.5,textTransform:"uppercase",fontWeight:600,color:active?C.blueText:C.dim,transition:"color .15s"}}>{t.label}</span>
             </button>
           );
         })}

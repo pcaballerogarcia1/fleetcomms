@@ -3,22 +3,58 @@ import * as XLSX from "xlsx";
 import { db } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
-// ── DESIGN SYSTEM (same tokens as App) ───────────────────────────
+// ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
-  bg:"#080c14", card:"#0d1424", surface2:"#121929",
-  border:"#1e2d45", border2:"#253650",
-  cyan:"#00d4ff", cyanDim:"#003d4d", cyanText:"#67e8f9",
-  green:"#10e88a", greenDim:"#012a1a",
-  orange:"#ff8c42", red:"#ff4d6d", amber:"#fbbf24",
-  text:"#e8edf5", muted:"#5a7090", dim:"#2d4060",
+  bg:      "#0f1117",
+  card:    "#161b27",
+  surface2:"#1c2333",
+  border:  "rgba(255,255,255,0.08)",
+  border2: "rgba(255,255,255,0.13)",
+  blue:    "#4f8ef7",
+  blueDim: "#0d2248",
+  blueText:"#a3c4fc",
+  cyan:    "#4f8ef7",
+  cyanDim: "#0d2248",
+  cyanText:"#a3c4fc",
+  green:   "#34d399",
+  greenDim:"#072015",
+  orange:  "#fb923c",
+  red:     "#f87171",
+  amber:   "#fbbf24",
+  text:    "#f0f4f8",
+  muted:   "#8b95a5",
+  dim:     "#3d4d63",
 };
-const font = "'Space Grotesk',system-ui,sans-serif";
+const font = "'Inter',system-ui,sans-serif";
 const mono = "'JetBrains Mono','Courier New',monospace";
 
 const LAYER_COLORS = [
-  "#00d4ff","#ff8c42","#10e88a","#ff4d6d",
-  "#a78bfa","#fbbf24","#f472b6","#34d399",
+  "#4f8ef7","#fb923c","#34d399","#f87171",
+  "#a78bfa","#fbbf24","#f472b6","#22d3ee",
 ];
+
+// Misma paleta y función que scheduling — colores deterministas por barrio
+const BARRIO_PALETTE = [
+  "#4f8ef7","#34d399","#fb923c","#f87171",
+  "#a78bfa","#fbbf24","#f472b6","#22d3ee","#818cf8","#4ade80",
+];
+const _barrioCache = {};
+function barrioColor(b) {
+  if (!b) return "#8b95a5";
+  if (_barrioCache[b]) return _barrioCache[b];
+  let h = 0;
+  for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
+  return (_barrioCache[b] = BARRIO_PALETTE[h % BARRIO_PALETTE.length]);
+}
+// Detecta el campo de barrio comparando en lowercase (independiente de capitalización)
+const BARRIO_KEYS = ["barri","barrio","barri_nom","sector","zona","zone","district",
+                     "districte","municipio","area","neighbourhood","neighborhood"];
+function getBarrio(m) {
+  for (const [k, v] of Object.entries(m)) {
+    if (BARRIO_KEYS.includes(k.toLowerCase().trim()) && v) return String(v);
+  }
+  return "";
+}
 
 const USUARIOS_INIT = [
   { id:"1", nombre:"Admin",  apellidos:"Sistema",  usuario:"admin",    password:"admin123", rol:"admin",     activo:true },
@@ -32,29 +68,29 @@ if (typeof document !== "undefined" && !document.getElementById("planning-styles
   const s = document.createElement("style");
   s.id = "planning-styles";
   s.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     *,*::before,*::after{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
-    body{margin:0;background:#080c14;color:#e8edf5;font-family:${font};}
+    body{margin:0;background:#0f1117;color:#f0f4f8;font-family:'Inter',system-ui,sans-serif;}
     ::-webkit-scrollbar{width:4px;height:4px;}
-    ::-webkit-scrollbar-track{background:#0d1424;}
-    ::-webkit-scrollbar-thumb{background:#253650;border-radius:2px;}
+    ::-webkit-scrollbar-track{background:#161b27;}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px;}
 
-    /* Leaflet popup dark theme */
     .planning-map .leaflet-popup-content-wrapper{
-      background:#0d1424;color:#e8edf5;border:1px solid #1e2d45;
-      border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.6);padding:0;
+      background:#161b27;color:#f0f4f8;
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);padding:0;
     }
     .planning-map .leaflet-popup-content{margin:0;}
-    .planning-map .leaflet-popup-tip{background:#0d1424;}
-    .planning-map .leaflet-popup-close-button{color:#5a7090!important;font-size:18px!important;top:6px!important;right:10px!important;}
-    .planning-map .leaflet-popup-close-button:hover{color:#e8edf5!important;}
+    .planning-map .leaflet-popup-tip{background:#161b27;}
+    .planning-map .leaflet-popup-close-button{color:#8b95a5!important;font-size:18px!important;top:6px!important;right:10px!important;}
+    .planning-map .leaflet-popup-close-button:hover{color:#f0f4f8!important;}
     .planning-map .leaflet-control-zoom a{
-      background:#0d1424!important;color:#e8edf5!important;border-color:#1e2d45!important;
+      background:#161b27!important;color:#f0f4f8!important;border-color:rgba(255,255,255,0.1)!important;
     }
-    .planning-map .leaflet-control-zoom a:hover{background:#1e2d45!important;}
-    .planning-map .leaflet-bar{border-color:#1e2d45!important;box-shadow:0 2px 12px rgba(0,0,0,.5)!important;}
+    .planning-map .leaflet-control-zoom a:hover{background:#1c2333!important;}
+    .planning-map .leaflet-bar{border-color:rgba(255,255,255,0.1)!important;box-shadow:0 2px 12px rgba(0,0,0,.4)!important;}
     @keyframes planning-spin{to{transform:rotate(360deg)}}
-    @keyframes planning-fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes planning-fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   `;
   document.head.appendChild(s);
 }
@@ -154,11 +190,9 @@ function parseKMLPlanning(rawText) {
     }
     function getAllData(block) {
       const fields = {};
-      // <SimpleData name="X">Y</SimpleData>
       const sdRe = /<SimpleData\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/SimpleData>/g;
       let m;
       while ((m = sdRe.exec(block)) !== null) fields[m[1]] = m[2].trim();
-      // <Data name="X"><value>Y</value></Data>
       const dRe = /<Data\s+name="([^"]+)"[^>]*>[\s\S]*?<value>([\s\S]*?)<\/value>/g;
       while ((m = dRe.exec(block)) !== null) fields[m[1]] = m[2].trim();
       return fields;
@@ -173,10 +207,8 @@ function parseKMLPlanning(rawText) {
       const block = text.slice(ps, pe + 12);
       pos = pe + 12;
 
-      // Skip LineString placemarks
       if (block.includes("<LineString>")) continue;
 
-      // Coordinates
       const cs = block.indexOf("<coordinates>"), ce = block.indexOf("</coordinates>");
       if (cs === -1 || ce === -1) continue;
       const parts = block.slice(cs + 13, ce).trim().split(",");
@@ -206,16 +238,16 @@ function makePopupHtml(marker, color) {
     .filter(([k]) => !["nombre","name"].includes(k.toLowerCase()))
     .map(([k,v]) => `
       <tr>
-        <td style="color:#5a7090;padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
-        <td style="color:#e8edf5;font-size:11px;word-break:break-word;">${v ?? "—"}</td>
+        <td style="color:#8b95a5;padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
+        <td style="color:#f0f4f8;font-size:11px;word-break:break-word;">${v ?? "—"}</td>
       </tr>`)
     .join("");
 
   return `
-    <div style="font-family:'Space Grotesk',sans-serif;min-width:180px;max-width:300px;padding:12px 14px;">
-      ${title ? `<div style="font-size:13px;font-weight:700;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1e2d45;">${title}</div>` : ""}
-      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<div style="color:#5a7090;font-size:12px;">Sin campos adicionales</div>'}
-      <div style="font-size:10px;color:#2d4060;margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
+    <div style="font-family:'Inter',sans-serif;min-width:180px;max-width:300px;padding:12px 14px;">
+      ${title ? `<div style="font-size:13px;font-weight:600;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.08);">${title}</div>` : ""}
+      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<div style="color:#8b95a5;font-size:12px;">Sin campos adicionales</div>'}
+      <div style="font-size:10px;color:#3d4d63;margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
     </div>`;
 }
 
@@ -234,14 +266,21 @@ function MapaPlanning({ layers }) {
     leafletLayersRef.current = [];
 
     const allPoints = [];
+    let firstMarkerLogged = false;
     layers.filter(l => l.visible).forEach(layer => {
       layer.markers.forEach(m => {
+        if (!firstMarkerLogged) {
+          console.log("[planning] campos del primer marcador:", Object.keys(m));
+          firstMarkerLogged = true;
+        }
         const size = 14;
+        const barrio = getBarrio(m);
+        const color = barrio ? barrioColor(barrio) : layer.color;
         const icon = L.divIcon({
           className: "",
           html: `<div style="
             width:${size}px;height:${size}px;border-radius:50%;
-            background:${layer.color};border:2px solid rgba(255,255,255,0.8);
+            background:${color};border:2px solid rgba(255,255,255,0.8);
             box-shadow:0 2px 8px rgba(0,0,0,0.5);
             cursor:pointer;transition:transform .15s;
           "></div>`,
@@ -251,7 +290,7 @@ function MapaPlanning({ layers }) {
         });
 
         const marker = L.marker([m.lat, m.lng], { icon })
-          .bindPopup(makePopupHtml(m, layer.color), {
+          .bindPopup(makePopupHtml(m, color), {
             maxWidth: 320,
             className: "",
           });
@@ -319,7 +358,7 @@ function MapaPlanning({ layers }) {
     <div
       ref={divRef}
       className="planning-map"
-      style={{ flex: 1, width: "100%", height: "100%", background: "#1a2535" }}
+      style={{ flex: 1, width: "100%", height: "100%", background: "#1c2333" }}
     />
   );
 }
@@ -339,14 +378,14 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
 
   return (
     <div style={{
-      width: 300, flexShrink: 0, background: C.card,
+      width: 280, flexShrink: 0, background: C.card,
       borderRight: `1px solid ${C.border}`,
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
       {/* Upload area */}
-      <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10, fontWeight: 500 }}>
+      <div style={{ padding: "16px 16px 14px", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10, fontWeight: 600 }}>
           Cargar capa
         </div>
         <input
@@ -361,49 +400,48 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
           style={{
-            width: "100%", padding: "10px 14px",
-            background: uploading ? C.surface2 : C.cyanDim,
-            border: `1px solid ${C.cyan}44`,
-            color: C.cyanText, borderRadius: 9, fontSize: 12,
+            width: "100%", padding: "9px 14px",
+            background: uploading ? C.surface2 : C.blueDim,
+            border: `1px solid ${C.blue}44`,
+            color: C.blueText, borderRadius: 8, fontSize: 12,
             fontWeight: 600, cursor: uploading ? "wait" : "pointer",
             fontFamily: font, transition: "all .15s",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
-          onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "#005a70"; }}
-          onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.cyanDim; }}
+          onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "#1a3570"; }}
+          onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
         >
           {uploading
-            ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid #00d4ff33", borderTopColor: C.cyan, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
-            : <><span style={{ fontSize: 15 }}>📂</span> Subir CSV / KML / Excel</>
+            ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
+            : "Subir CSV / KML / Excel"
           }
         </button>
-        <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.6 }}>
-          <div>CSV: columnas <span style={{ color: C.muted, fontFamily: mono }}>lat</span> y <span style={{ color: C.muted, fontFamily: mono }}>lon</span></div>
-          <div>Excel: columna <span style={{ color: C.muted, fontFamily: mono }}>coordenadas</span> (<span style={{ fontFamily: mono }}>lat,lng</span>)</div>
+        <div style={{ fontSize: 10, color: C.dim, marginTop: 8, lineHeight: 1.7 }}>
+          <div>CSV: columnas <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> y <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
+          <div>Excel: columna <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>coordenadas</code> (lat,lng)</div>
         </div>
       </div>
 
       {/* Stats */}
       {layers.length > 0 && (
-        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 16 }}>
+        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 20 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.cyan, lineHeight: 1 }}>{layers.length}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>capas</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1 }}>{layers.length}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>capas</div>
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.green, lineHeight: 1 }}>{totalMarkers}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>activos</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1 }}>{totalMarkers}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>puntos</div>
           </div>
         </div>
       )}
 
       {/* Layers list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 8px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
         {layers.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🗂️</div>
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-              Sube un archivo CSV o KML para visualizar activos en el mapa
+          <div style={{ padding: "40px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.7 }}>
+              Sube un archivo para visualizar puntos en el mapa
             </div>
           </div>
         ) : (
@@ -411,39 +449,37 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
             <div key={layer.id} style={{
               background: C.surface2, border: `1px solid ${C.border}`,
               borderLeft: `3px solid ${layer.visible ? layer.color : C.dim}`,
-              borderRadius: 9, padding: "10px 12px", marginBottom: 6,
-              opacity: layer.visible ? 1 : 0.55,
+              borderRadius: 8, padding: "9px 12px", marginBottom: 5,
+              opacity: layer.visible ? 1 : 0.5,
               animation: "planning-fadein .2s ease both",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                {/* Visibility toggle */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                 <button
                   onClick={() => toggleLayer(layer.id)}
                   title={layer.visible ? "Ocultar" : "Mostrar"}
                   style={{
                     background: "none", border: "none", cursor: "pointer",
-                    fontSize: 15, padding: 0, lineHeight: 1, opacity: layer.visible ? 1 : 0.4,
+                    padding: 0, lineHeight: 1, flexShrink: 0,
+                    width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >
-                  {layer.visible ? "👁" : "🚫"}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={layer.visible ? C.muted : C.dim} strokeWidth="2">
+                    {layer.visible
+                      ? <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>
+                      : <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>
+                    }
+                  </svg>
                 </button>
 
-                {/* Color swatch */}
-                <div style={{
-                  width: 10, height: 10, borderRadius: "50%",
-                  background: layer.color, flexShrink: 0,
-                  border: "2px solid rgba(255,255,255,0.3)",
-                }} />
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: layer.color, flexShrink: 0 }} />
 
-                {/* Name */}
                 <div style={{
-                  flex: 1, fontSize: 12, fontWeight: 600, color: C.text,
+                  flex: 1, fontSize: 12, fontWeight: 500, color: C.text,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {layer.name}
                 </div>
 
-                {/* Delete */}
                 <button
                   onClick={() => removeLayer(layer.id)}
                   title="Eliminar capa"
@@ -455,21 +491,18 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
                   onMouseEnter={e => e.currentTarget.style.color = C.red}
                   onMouseLeave={e => e.currentTarget.style.color = C.dim}
                 >
-                  ✕
+                  ×
                 </button>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 24 }}>
                 <span style={{
-                  fontSize: 9, padding: "2px 7px", borderRadius: 10,
-                  background: layer.type === "csv" ? "#001a30" : layer.type === "xlsx" ? "#012a1a" : "#1a0d2e",
-                  color: layer.type === "csv" ? C.cyanText : layer.type === "xlsx" ? C.green : "#a78bfa",
-                  border: `1px solid ${layer.type === "csv" ? "#00d4ff22" : layer.type === "xlsx" ? "#10e88a22" : "#7c3aed22"}`,
-                  letterSpacing: .5, textTransform: "uppercase", fontWeight: 600,
+                  fontSize: 9, fontFamily: mono, color: C.dim,
+                  textTransform: "uppercase", letterSpacing: .5,
                 }}>
                   {layer.type}
                 </span>
-                <span style={{ fontSize: 11, color: C.muted }}>
+                <span style={{ fontSize: 11, color: C.dim }}>
                   {layer.markers.length} punto{layer.markers.length !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -478,6 +511,34 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
         )}
       </div>
 
+      {/* Barrio legend */}
+      {(() => {
+        const barrios = [...new Set(
+          layers.filter(l => l.visible)
+            .flatMap(l => l.markers.map(m => getBarrio(m)))
+            .filter(Boolean)
+        )].sort();
+        if (barrios.length === 0) return null;
+        return (
+          <div style={{ borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <div style={{ padding: "8px 12px 4px", fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+              Barrios ({barrios.length})
+            </div>
+            <div style={{ maxHeight: 220, overflowY: "auto", padding: "2px 12px 8px" }}>
+              {barrios.map(b => (
+                <div key={b} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: 2, flexShrink: 0,
+                    background: barrioColor(b),
+                  }} />
+                  <span style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Bottom: clear all */}
       {layers.length > 0 && (
         <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}` }}>
@@ -485,14 +546,14 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
             onClick={() => setLayers([])}
             style={{
               width: "100%", padding: "8px", background: "none",
-              border: `1px solid ${C.border}`, color: C.muted,
-              borderRadius: 8, fontSize: 11, cursor: "pointer",
+              border: `1px solid ${C.border}`, color: C.dim,
+              borderRadius: 7, fontSize: 11, cursor: "pointer",
               fontFamily: font, transition: "all .15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
           >
-            Eliminar todas las capas
+            Limpiar todas las capas
           </button>
         </div>
       )}
@@ -506,6 +567,7 @@ function timeToMin(t) {
   const [h, m] = t.split(":").map(Number);
   return isNaN(h) ? null : h * 60 + (m || 0);
 }
+
 // ── TIMETABLE ROW ─────────────────────────────────────────────────
 function TimetableRow({ entry, onUpdate, onDelete }) {
   const [localStart, setLocalStart] = useState(entry.horaInicio || "");
@@ -520,42 +582,50 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
   return (
     <tr style={{ borderBottom: `1px solid ${C.border}`, animation: "planning-fadein .15s ease both" }}>
       {/* Punto */}
-      <td style={{ padding: "9px 14px", verticalAlign: "top" }}>
-        <div style={{ fontWeight: 600, fontSize: 12, color: C.text, marginBottom: 1 }}>
-          {entry.nombre || `${entry.lat?.toFixed(4)}, ${entry.lng?.toFixed(4)}`}
+      <td style={{ padding: "10px 14px", verticalAlign: "top" }}>
+        <div style={{ fontWeight: 500, fontSize: 12, color: C.text, marginBottom: 2 }}>
+          {entry.nombre
+            || Object.entries(entry.campos || {}).find(([k]) => ["pa","idsap","id_sap","codigopoint","codigo"].includes(k.toLowerCase()))?.[1]
+            || Object.entries(entry.campos || {}).find(([k]) => k.toLowerCase() === "calle")?.[1]
+            || `${entry.lat?.toFixed(4)}, ${entry.lng?.toFixed(4)}`}
         </div>
-        <div style={{ fontSize: 10, color: C.muted, fontFamily: mono, marginBottom: 2 }}>
-          {entry.lat?.toFixed(5)}, {entry.lng?.toFixed(5)}
+        <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>
+          {(() => {
+            const calle = Object.entries(entry.campos || {}).find(([k]) => k.toLowerCase() === "calle")?.[1];
+            const num   = Object.entries(entry.campos || {}).find(([k]) => ["num","num.","número","numero"].includes(k.toLowerCase()))?.[1];
+            if (calle) return num ? `${calle} ${num}` : calle;
+            return <span style={{ fontFamily: mono }}>{entry.lat?.toFixed(5)}, {entry.lng?.toFixed(5)}</span>;
+          })()}
         </div>
         {camposRows.slice(0, 3).map(([k, v]) => (
-          <div key={k} style={{ fontSize: 10, color: C.dim, lineHeight: 1.4 }}>
+          <div key={k} style={{ fontSize: 10, color: C.dim, lineHeight: 1.5 }}>
             <span style={{ color: C.muted }}>{k}:</span> {v}
           </div>
         ))}
         {camposRows.length > 3 && (
-          <div style={{ fontSize: 9, color: C.dim, marginTop: 2 }}>+{camposRows.length - 3} más</div>
+          <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>+{camposRows.length - 3} más</div>
         )}
       </td>
 
       {/* Hora inicio */}
-      <td style={{ padding: "9px 8px", verticalAlign: "middle", width: 116 }}>
+      <td style={{ padding: "10px 8px", verticalAlign: "middle", width: 116 }}>
         <input
           type="time"
           value={localStart}
           onChange={e => setLocalStart(e.target.value)}
           onBlur={e => onUpdate({ horaInicio: e.target.value || null })}
           style={{
-            width: "100%", background: "#0a1020",
-            border: `1px solid ${localStart ? C.cyan + "55" : C.border}`,
-            color: localStart ? C.cyanText : C.muted,
-            padding: "6px 8px", borderRadius: 7, fontSize: 12,
+            width: "100%", background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${localStart ? C.blue + "55" : C.border}`,
+            color: localStart ? C.blueText : C.muted,
+            padding: "6px 8px", borderRadius: 6, fontSize: 12,
             fontFamily: mono, outline: "none", cursor: "pointer",
           }}
         />
       </td>
 
       {/* Duración */}
-      <td style={{ padding: "9px 8px", verticalAlign: "middle", width: 106 }}>
+      <td style={{ padding: "10px 8px", verticalAlign: "middle", width: 106 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <input
             type="number" min="1" max="1440"
@@ -567,10 +637,10 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
             }}
             placeholder="—"
             style={{
-              width: 56, background: "#0a1020",
+              width: 56, background: "rgba(255,255,255,0.04)",
               border: `1px solid ${localDur ? C.amber + "55" : C.border}`,
               color: localDur ? C.amber : C.muted,
-              padding: "6px 8px", borderRadius: 7, fontSize: 12,
+              padding: "6px 8px", borderRadius: 6, fontSize: 12,
               fontFamily: mono, outline: "none", textAlign: "right",
             }}
           />
@@ -579,17 +649,17 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
       </td>
 
       {/* Acciones */}
-      <td style={{ padding: "9px 12px 9px 4px", verticalAlign: "middle", width: 36 }}>
+      <td style={{ padding: "10px 12px 10px 4px", verticalAlign: "middle", width: 36 }}>
         <button onClick={onDelete} title="Eliminar" style={{
-          width: 26, height: 26, borderRadius: 7,
+          width: 26, height: 26, borderRadius: 6,
           background: "none", border: `1px solid ${C.border}`,
-          color: C.dim, cursor: "pointer", fontSize: 13,
+          color: C.dim, cursor: "pointer", fontSize: 14,
           display: "flex", alignItems: "center", justifyContent: "center",
           transition: "all .15s", fontFamily: font,
         }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-        >✕</button>
+        >×</button>
       </td>
     </tr>
   );
@@ -597,9 +667,9 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
 
 // ── TIMETABLE TAB ─────────────────────────────────────────────────
 function TabTimetable({ layers }) {
-  const [entries,     setEntries]     = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [barrioFiltro, setBarrioFiltro] = useState(null); // null = todos
+  const [entries,      setEntries]     = useState([]);
+  const [loading,      setLoading]     = useState(true);
+  const [barrioFiltro, setBarrioFiltro] = useState(null);
 
   // Real-time listener
   useEffect(() => {
@@ -617,7 +687,10 @@ function TabTimetable({ layers }) {
     if (allMarkers.length === 0) return;
     allMarkers.forEach(m => {
       const { lat, lng, layerColor, nombre: _n, name: _nm, ...campos } = m;
-      const nombre  = m.nombre || m.name || m.id || m.pa || "";
+      const nombre  = m.nombre || m.name || m.id || m.pa
+        || Object.entries(campos).find(([k]) => ["pa","idsap","id_sap","codigopoint","codigo"].includes(k.toLowerCase()))?.[1]
+        || Object.entries(campos).find(([k]) => k.toLowerCase() === "calle")?.[1]
+        || "";
       const barrio  = Object.entries(campos).find(([k]) => k.toLowerCase() === "barrio")?.[1] || "";
       const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
       setDoc(
@@ -651,7 +724,7 @@ function TabTimetable({ layers }) {
     barrios.map(b => [b, entries.filter(e => (e.barrio || "Sin barrio") === b).sort(sortFn)])
   );
 
-  // Which barrios to render (after chip filter)
+  // Which barrios to render (after filter)
   const renderBarrios = barrioFiltro ? [barrioFiltro] : barrios;
 
   const withTime = entries.filter(e => e.horaInicio);
@@ -667,7 +740,6 @@ function TabTimetable({ layers }) {
       return sortFn(a, b);
     });
 
-    // Collect all unique campo keys (excluding barrio — already a top-level column)
     const campoKeys = [...new Set(
       sorted.flatMap(e => Object.keys(e.campos || {}).filter(k => k.toLowerCase() !== "barrio"))
     )];
@@ -686,7 +758,6 @@ function TabTimetable({ layers }) {
 
     const ws = XLSX.utils.json_to_sheet(rows);
 
-    // Auto column widths
     const colWidths = Object.keys(rows[0] || {}).map(k => ({
       wch: Math.max(k.length, ...rows.map(r => String(r[k] ?? "").length), 8),
     }));
@@ -698,15 +769,15 @@ function TabTimetable({ layers }) {
   }
 
   const thS = {
-    padding: "9px 14px", fontSize: 9, color: C.muted, fontWeight: 600,
-    letterSpacing: 1.5, textTransform: "uppercase",
+    padding: "8px 14px", fontSize: 10, color: C.dim, fontWeight: 600,
+    letterSpacing: 1, textTransform: "uppercase",
     borderBottom: `1px solid ${C.border}`, textAlign: "left",
-    background: "#06090f", position: "sticky", top: 0, zIndex: 5,
+    background: C.card, position: "sticky", top: 0, zIndex: 5,
   };
 
   if (loading) return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <span style={{ color: C.muted, fontSize: 13 }}>Cargando…</span>
+      <span style={{ color: C.dim, fontSize: 13 }}>Cargando…</span>
     </div>
   );
 
@@ -715,69 +786,86 @@ function TabTimetable({ layers }) {
 
       {/* Stats bar */}
       <div style={{
-        padding: "8px 20px", borderBottom: `1px solid ${C.border}`,
+        padding: "10px 20px", borderBottom: `1px solid ${C.border}`,
         background: C.card, flexShrink: 0,
-        display: "flex", alignItems: "center", gap: 24,
+        display: "flex", alignItems: "center", gap: 28,
       }}>
-        <div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: C.cyan }}>{entries.length}</span>
-          <span style={{ fontSize: 10, color: C.muted, marginLeft: 5 }}>puntos</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{entries.length}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>puntos</span>
         </div>
-        <div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: C.green }}>{withTime.length}</span>
-          <span style={{ fontSize: 10, color: C.muted, marginLeft: 5 }}>programados</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{withTime.length}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>programados</span>
         </div>
-        <div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: C.amber }}>{entries.length - withTime.length}</span>
-          <span style={{ fontSize: 10, color: C.muted, marginLeft: 5 }}>sin hora</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{entries.length - withTime.length}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>sin hora</span>
         </div>
         {barrios.length > 0 && (
-          <div>
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#a78bfa" }}>{barrios.length}</span>
-            <span style={{ fontSize: 10, color: C.muted, marginLeft: 5 }}>barrios</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{barrios.length}</span>
+            <span style={{ fontSize: 11, color: C.muted }}>barrios</span>
           </div>
         )}
         {entries.length === 0 && (
           <span style={{ fontSize: 11, color: C.dim }}>
-            Ve a Mapa → sube un Excel para añadir puntos
+            Ve a Mapa y sube un Excel para añadir puntos
           </span>
         )}
 
         {entries.length > 0 && (
-          <button
-            onClick={exportToExcel}
-            title={barrioFiltro ? `Exportar barrio "${barrioFiltro}"` : "Exportar todo el timetable"}
-            style={{
-              marginLeft: "auto",
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "7px 14px", borderRadius: 8, cursor: "pointer",
-              background: C.greenDim, border: `1px solid ${C.green}44`,
-              color: C.green, fontSize: 12, fontWeight: 600,
-              fontFamily: font, transition: "all .15s",
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button
+              onClick={exportToExcel}
+              title={barrioFiltro ? `Exportar barrio "${barrioFiltro}"` : "Exportar todo el timetable"}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                background: "rgba(52,211,153,0.08)", border: `1px solid rgba(52,211,153,0.25)`,
+                color: C.green, fontSize: 12, fontWeight: 500,
+                fontFamily: font, transition: "all .15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(52,211,153,0.14)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(52,211,153,0.08)"; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Excel
+            </button>
+            <a href="/scheduling" style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+              background: C.blueDim, border: `1px solid ${C.blue}44`,
+              color: C.blueText, fontSize: 12, fontWeight: 500,
+              fontFamily: font, transition: "all .15s", textDecoration: "none",
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#024d30"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = C.greenDim; }}
-          >
-            <span style={{ fontSize: 14 }}>⬇</span>
-            Exportar{barrioFiltro ? ` "${barrioFiltro}"` : ""}
-          </button>
+              onMouseEnter={e => { e.currentTarget.style.background = "#1a3570"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = C.blueDim; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              Scheduling
+            </a>
+          </div>
         )}
       </div>
 
       {/* Body: sidebar + table */}
       {entries.length === 0 ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-          <div style={{ fontSize: 44 }}>📋</div>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
           <div style={{ fontSize: 13, color: C.muted }}>No hay puntos en el timetable</div>
           <div style={{ fontSize: 11, color: C.dim }}>Sube un Excel con columna "coordenadas" en la pestaña Mapa</div>
         </div>
       ) : (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-          {/* ── Barrio sidebar ── */}
+          {/* Barrio sidebar */}
           {barrios.length > 0 && (
             <div style={{
-              width: 200, flexShrink: 0,
+              width: 192, flexShrink: 0,
               borderRight: `1px solid ${C.border}`,
               background: C.card,
               display: "flex", flexDirection: "column",
@@ -785,7 +873,7 @@ function TabTimetable({ layers }) {
             }}>
               <div style={{
                 padding: "10px 14px 6px",
-                fontSize: 9, color: C.dim, letterSpacing: 2,
+                fontSize: 9, color: C.dim, letterSpacing: 1.5,
                 textTransform: "uppercase", fontWeight: 600, flexShrink: 0,
               }}>
                 Barrios
@@ -794,29 +882,29 @@ function TabTimetable({ layers }) {
               {/* "Todos" item */}
               <button onClick={() => setBarrioFiltro(null)} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "8px 14px", background: barrioFiltro === null ? C.cyanDim : "none",
-                border: "none", borderLeft: `3px solid ${barrioFiltro === null ? C.cyan : "transparent"}`,
-                color: barrioFiltro === null ? C.cyanText : C.muted,
-                cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 600,
-                textAlign: "left", width: "100%", transition: "all .15s",
+                padding: "7px 14px",
+                background: barrioFiltro === null ? C.blueDim : "none",
+                border: "none", borderLeft: `2px solid ${barrioFiltro === null ? C.blue : "transparent"}`,
+                color: barrioFiltro === null ? C.blueText : C.muted,
+                cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 500,
+                textAlign: "left", width: "100%", transition: "all .12s",
               }}
                 onMouseEnter={e => { if (barrioFiltro !== null) e.currentTarget.style.background = C.surface2; }}
                 onMouseLeave={e => { if (barrioFiltro !== null) e.currentTarget.style.background = "none"; }}
               >
                 <span>Todos</span>
                 <span style={{
-                  fontSize: 10, fontWeight: 700, fontFamily: mono,
-                  background: barrioFiltro === null ? "#004d5e" : C.surface2,
-                  color: barrioFiltro === null ? C.cyan : C.muted,
-                  padding: "1px 6px", borderRadius: 8,
+                  fontSize: 10, fontWeight: 600, fontFamily: mono,
+                  background: barrioFiltro === null ? "rgba(79,142,247,0.15)" : C.surface2,
+                  color: barrioFiltro === null ? C.blueText : C.dim,
+                  padding: "1px 6px", borderRadius: 4,
                 }}>
                   {entries.length}
                 </span>
               </button>
 
-              <div style={{ height: 1, background: C.border, margin: "4px 14px" }} />
+              <div style={{ height: 1, background: C.border, margin: "3px 14px" }} />
 
-              {/* One item per barrio */}
               {barrios.map(b => {
                 const active = barrioFiltro === b;
                 const count  = grouped[b]?.length ?? 0;
@@ -824,11 +912,12 @@ function TabTimetable({ layers }) {
                 return (
                   <button key={b} onClick={() => setBarrioFiltro(active ? null : b)} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "7px 14px", background: active ? "#1a0d2e" : "none",
-                    border: "none", borderLeft: `3px solid ${active ? "#a78bfa" : "transparent"}`,
-                    color: active ? "#a78bfa" : C.muted,
-                    cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: active ? 600 : 400,
-                    textAlign: "left", width: "100%", transition: "all .15s",
+                    padding: "7px 14px",
+                    background: active ? C.blueDim : "none",
+                    border: "none", borderLeft: `2px solid ${active ? C.blue : "transparent"}`,
+                    color: active ? C.blueText : C.muted,
+                    cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: active ? 500 : 400,
+                    textAlign: "left", width: "100%", transition: "all .12s",
                   }}
                     onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.surface2; }}
                     onMouseLeave={e => { if (!active) e.currentTarget.style.background = "none"; }}
@@ -837,10 +926,10 @@ function TabTimetable({ layers }) {
                       {b}
                     </span>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, fontFamily: mono, flexShrink: 0,
-                      background: active ? "#2d1f5e" : C.surface2,
-                      color: active ? "#a78bfa" : C.muted,
-                      padding: "1px 6px", borderRadius: 8,
+                      fontSize: 10, fontWeight: 600, fontFamily: mono, flexShrink: 0,
+                      background: active ? "rgba(79,142,247,0.15)" : C.surface2,
+                      color: active ? C.blueText : C.dim,
+                      padding: "1px 6px", borderRadius: 4,
                     }}>
                       {prog}/{count}
                     </span>
@@ -850,7 +939,7 @@ function TabTimetable({ layers }) {
             </div>
           )}
 
-          {/* ── Table ── */}
+          {/* Table */}
           <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -864,20 +953,19 @@ function TabTimetable({ layers }) {
               <tbody>
                 {renderBarrios.map(barrio => (
                   <Fragment key={barrio}>
-                    {/* Group header — only shown when "Todos" is active */}
                     {barrioFiltro === null && (
                       <tr>
                         <td colSpan={4} style={{
-                          padding: "10px 16px 7px",
+                          padding: "8px 14px 7px",
                           background: C.surface2,
-                          borderTop: `2px solid ${C.border}`,
-                          borderBottom: `1px solid ${C.border2}`,
+                          borderTop: `1px solid ${C.border2}`,
+                          borderBottom: `1px solid ${C.border}`,
                         }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#a78bfa", flexShrink: 0, display: "inline-block" }} />
-                            <span style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: .5 }}>{barrio}</span>
+                            <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.muted, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{barrio}</span>
                             <span style={{ fontSize: 10, color: C.dim }}>
-                              — {grouped[barrio]?.length ?? 0} punto{(grouped[barrio]?.length ?? 0) !== 1 ? "s" : ""}
+                              {grouped[barrio]?.length ?? 0} punto{(grouped[barrio]?.length ?? 0) !== 1 ? "s" : ""}
                               {" · "}{grouped[barrio]?.filter(e => e.horaInicio).length ?? 0} programados
                             </span>
                           </div>
@@ -957,74 +1045,73 @@ function PlanningPage({ sesion, onLogout }) {
     setUploading(false);
   }
 
+  const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
       {/* Header */}
       <div style={{
-        height: 56, flexShrink: 0,
-        background: "#06090f", borderBottom: `1px solid ${C.border}`,
+        height: 52, flexShrink: 0,
+        background: C.card, borderBottom: `1px solid ${C.border}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 20px", zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "linear-gradient(135deg,#003d4d,#004d5e)",
-            border: "1px solid #00d4ff33",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+            fontSize: 11, fontWeight: 700, color: C.muted,
+            letterSpacing: 2, textTransform: "uppercase",
           }}>
-            🗺️
+            FleetComms
           </div>
-          <div>
-            <div style={{ fontSize: 8, color: C.muted, letterSpacing: 3, textTransform: "uppercase" }}>FleetComms</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.3 }}>Planning</div>
-          </div>
-          <div style={{
-            marginLeft: 8, fontSize: 9, padding: "3px 10px", borderRadius: 10,
-            background: "#1a0d2e", color: "#a78bfa",
-            border: "1px solid #7c3aed33", letterSpacing: .5, textTransform: "uppercase", fontWeight: 600,
-          }}>
-            Admin
-          </div>
+          <div style={{ width: 1, height: 16, background: C.border2 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planning</div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{sesion.nombre}</div>
-            <div style={{ fontSize: 9, color: "#a78bfa", letterSpacing: 1, textTransform: "uppercase" }}>{sesion.rol}</div>
+            <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion.nombre}</div>
+            <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion.rol}</div>
           </div>
           <button
             onClick={onLogout}
             title="Cerrar sesión"
             style={{
-              width: 36, height: 36, borderRadius: "50%",
-              background: "linear-gradient(135deg,#1a0d2e,#2d1f5e)",
-              border: "1px solid #7c3aed55",
-              color: "#a78bfa", fontSize: 12, fontWeight: 700,
+              width: 32, height: 32, borderRadius: "50%",
+              background: C.surface2,
+              border: `1px solid ${C.border}`,
+              color: C.muted, fontSize: 11, fontWeight: 600,
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all .15s",
             }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
           >
-            {((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase()}
+            {initials}
           </button>
         </div>
       </div>
 
       {/* Error toasts */}
       {errors.length > 0 && (
-        <div style={{ position: "absolute", top: 64, right: 16, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ position: "absolute", top: 60, right: 16, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
           {errors.map((err, i) => (
             <div key={i} style={{
-              background: "#1a0008", border: "1px solid #ff4d6d44",
-              color: C.red, borderRadius: 9, padding: "10px 14px",
+              background: C.card, border: `1px solid rgba(248,113,113,0.3)`,
+              color: C.red, borderRadius: 8, padding: "10px 14px",
               fontSize: 12, display: "flex", alignItems: "center", gap: 8,
-              maxWidth: 380, boxShadow: "0 4px 20px rgba(0,0,0,.5)",
+              maxWidth: 380, boxShadow: "0 4px 20px rgba(0,0,0,.4)",
               animation: "planning-fadein .2s ease both",
             }}>
-              <span>⚠</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
               <span style={{ flex: 1 }}>{err}</span>
               <button onClick={() => setErrors(prev => prev.filter((_, j) => j !== i))}
-                style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>
-                ✕
+                style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1, transition: "color .12s" }}
+                onMouseEnter={e => e.currentTarget.style.color = C.red}
+                onMouseLeave={e => e.currentTarget.style.color = C.dim}
+              >
+                ×
               </button>
             </div>
           ))}
@@ -1033,25 +1120,26 @@ function PlanningPage({ sesion, onLogout }) {
 
       {/* Tab bar */}
       <div style={{
-        height: 44, flexShrink: 0,
-        background: "#06090f", borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "stretch", padding: "0 20px", gap: 4,
+        height: 40, flexShrink: 0,
+        background: C.card, borderBottom: `1px solid ${C.border}`,
+        display: "flex", alignItems: "stretch", padding: "0 20px", gap: 2,
         zIndex: 5,
       }}>
         {[
-          { key: "mapa",      label: "Mapa",      icon: "🗺️" },
-          { key: "timetable", label: "Timetable", icon: "🕐" },
+          { key: "mapa",      label: "Mapa" },
+          { key: "timetable", label: "Timetable" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             background: "none", border: "none", cursor: "pointer",
             padding: "0 14px", fontFamily: font,
-            fontSize: 12, fontWeight: 600,
-            color: tab === t.key ? C.cyan : C.muted,
-            borderBottom: `2px solid ${tab === t.key ? C.cyan : "transparent"}`,
+            fontSize: 13, fontWeight: tab === t.key ? 600 : 400,
+            color: tab === t.key ? C.text : C.muted,
+            borderBottom: `2px solid ${tab === t.key ? C.blue : "transparent"}`,
+            marginBottom: -1,
             display: "flex", alignItems: "center", gap: 6,
-            transition: "color .15s",
+            transition: "color .12s",
           }}>
-            <span style={{ fontSize: 13 }}>{t.icon}</span>{t.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -1087,7 +1175,6 @@ function LoginPlanning({ onLogin }) {
     if (!usuario || !password) { setErr("Introduce usuario y contraseña."); return; }
     setLoading(true); setErr("");
 
-    // Check Firestore first
     let found = null;
     try {
       await new Promise((resolve, reject) => {
@@ -1102,7 +1189,6 @@ function LoginPlanning({ onLogin }) {
       });
     } catch {}
 
-    // Fallback to hardcoded
     if (!found) {
       found = USUARIOS_INIT.find(u => u.usuario === usuario && u.password === password);
     }
@@ -1114,35 +1200,34 @@ function LoginPlanning({ onLogin }) {
     setLoading(false);
   }
 
+  const inputStyle = {
+    width: "100%", background: "rgba(255,255,255,0.04)",
+    border: `1px solid ${C.border}`, color: C.text,
+    padding: "11px 14px", borderRadius: 7, fontSize: 13,
+    boxSizing: "border-box", fontFamily: font, outline: "none",
+    transition: "border-color .15s",
+  };
+
   return (
     <div style={{
       minHeight: "100vh", background: C.bg, display: "flex",
       alignItems: "center", justifyContent: "center", fontFamily: font,
     }}>
       <div style={{
-        width: 380, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 16,
-        padding: "36px 32px",
-        boxShadow: "0 24px 80px rgba(0,0,0,.6)",
+        width: 360, background: C.card,
+        border: `1px solid ${C.border}`, borderRadius: 12,
+        padding: "32px 28px",
+        boxShadow: "0 16px 48px rgba(0,0,0,.5)",
         animation: "planning-fadein .3s ease both",
       }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 14,
-            background: "linear-gradient(135deg,#1a0d2e,#2d1f5e)",
-            border: "1px solid #7c3aed44",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 26, margin: "0 auto 14px",
-          }}>
-            🗺️
-          </div>
-          <div style={{ fontSize: 9, color: C.muted, letterSpacing: 3, textTransform: "uppercase" }}>FleetComms</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginTop: 4 }}>Planning</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Acceso exclusivo para administradores</div>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>FleetComms</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 2.5, textTransform: "uppercase", display: "block", marginBottom: 7, fontWeight: 500 }}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>
             Usuario
           </label>
           <input
@@ -1150,15 +1235,16 @@ function LoginPlanning({ onLogin }) {
             placeholder="usuario" autoComplete="username"
             onKeyDown={e => e.key === "Enter" && go()}
             style={{
-              width: "100%", background: "#0a1020", border: `1px solid ${usuario ? "#7c3aed44" : C.border}`,
-              color: C.text, padding: "11px 14px", borderRadius: 9, fontSize: 13,
-              boxSizing: "border-box", fontFamily: font, outline: "none", transition: "border-color .15s",
+              ...inputStyle,
+              borderColor: usuario ? "rgba(79,142,247,0.35)" : C.border,
             }}
+            onFocus={e => e.target.style.borderColor = "rgba(79,142,247,0.5)"}
+            onBlur={e => e.target.style.borderColor = usuario ? "rgba(79,142,247,0.35)" : C.border}
           />
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 2.5, textTransform: "uppercase", display: "block", marginBottom: 7, fontWeight: 500 }}>
+          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>
             Contraseña
           </label>
           <input
@@ -1166,50 +1252,55 @@ function LoginPlanning({ onLogin }) {
             type="password" placeholder="••••••••" autoComplete="current-password"
             onKeyDown={e => e.key === "Enter" && go()}
             style={{
-              width: "100%", background: "#0a1020", border: `1px solid ${password ? "#7c3aed44" : C.border}`,
-              color: C.text, padding: "11px 14px", borderRadius: 9, fontSize: 13,
-              boxSizing: "border-box", fontFamily: font, outline: "none", transition: "border-color .15s",
+              ...inputStyle,
+              borderColor: password ? "rgba(79,142,247,0.35)" : C.border,
             }}
+            onFocus={e => e.target.style.borderColor = "rgba(79,142,247,0.5)"}
+            onBlur={e => e.target.style.borderColor = password ? "rgba(79,142,247,0.35)" : C.border}
           />
         </div>
 
         {err && (
           <div style={{
-            background: "#1a0008", border: "1px solid #ff4d6d33",
-            color: C.red, borderRadius: 8, padding: "10px 14px",
+            background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)",
+            color: C.red, borderRadius: 7, padding: "9px 13px",
             fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8,
           }}>
-            <span>⚠</span> {err}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {err}
           </div>
         )}
 
         <button
           onClick={go} disabled={loading}
           style={{
-            width: "100%", padding: 13, fontSize: 14, fontWeight: 700,
-            background: loading ? "#1a0d2e" : "linear-gradient(135deg,#2d1f5e,#1a0d2e)",
-            border: "1px solid #7c3aed66", color: "#a78bfa",
-            borderRadius: 9, cursor: loading ? "wait" : "pointer",
-            fontFamily: font, letterSpacing: .5, transition: "all .15s",
-            boxShadow: loading ? "none" : "0 4px 20px #7c3aed22",
+            width: "100%", padding: "11px", fontSize: 13, fontWeight: 600,
+            background: loading ? C.blueDim : C.blue,
+            border: "none", color: loading ? C.blueText : "#fff",
+            borderRadius: 8, cursor: loading ? "wait" : "pointer",
+            fontFamily: font, transition: "all .15s",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
+          onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#3a7ef5"; }}
+          onMouseLeave={e => { if (!loading) e.currentTarget.style.background = C.blue; }}
         >
           {loading
-            ? <><span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #7c3aed33", borderTopColor: "#a78bfa", borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Accediendo…</>
-            : "Acceder →"
+            ? <><span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(163,196,252,0.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Accediendo…</>
+            : "Acceder"
           }
         </button>
 
-        <div style={{ marginTop: 20, background: "#0a1020", border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px" }}>
-          <div style={{ fontSize: 9, color: C.dim, letterSpacing: 3, marginBottom: 8, textTransform: "uppercase", fontWeight: 500 }}>Acceso de prueba</div>
+        <div style={{ marginTop: 20, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, marginBottom: 8, textTransform: "uppercase", fontWeight: 500 }}>Acceso de prueba</div>
           <div
             onClick={() => { setUsuario("admin"); setPassword("admin123"); }}
             style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "4px 0", transition: "opacity .15s" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = ".7"}
+            onMouseEnter={e => e.currentTarget.style.opacity = ".6"}
             onMouseLeave={e => e.currentTarget.style.opacity = "1"}
           >
-            <span style={{ fontSize: 12, color: "#a78bfa", fontFamily: mono }}>admin</span>
+            <span style={{ fontSize: 12, color: C.muted, fontFamily: mono }}>admin</span>
             <span style={{ fontSize: 11, color: C.dim, fontFamily: mono }}>admin123</span>
           </div>
         </div>

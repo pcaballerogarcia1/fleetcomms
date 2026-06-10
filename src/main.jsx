@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import PlanningApp from './planning.jsx'
+import SchedulingApp from './scheduling.jsx'
 
-const isPlanning = window.location.pathname.startsWith('/planning')
+const path = window.location.pathname
+const isPlanning   = path.startsWith('/planning')
+const isScheduling = path.startsWith('/scheduling')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isPlanning ? <PlanningApp /> : <App />}
+    {isScheduling ? <SchedulingApp /> : isPlanning ? <PlanningApp /> : <App />}
   </StrictMode>,
 )
