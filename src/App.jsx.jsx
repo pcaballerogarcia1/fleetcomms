@@ -357,7 +357,8 @@ function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     layersRef.current=[];
 
     if(recorrido&&recorrido.length>1){
-      const l=L.polyline(recorrido,{color:"#1e3a5f",weight:2,opacity:0.6,dashArray:"6,4"}).addTo(map);
+      const latlngs=recorrido.map(p=>Array.isArray(p)?p:[p.lat,p.lng]);
+      const l=L.polyline(latlngs,{color:"#1e3a5f",weight:2,opacity:0.6,dashArray:"6,4"}).addTo(map);
       layersRef.current.push(l);
     }
     const pts=ubicaciones.filter(u=>u.lat&&u.lng);

@@ -1097,10 +1097,10 @@ function TabPlanificacion({ vehicles, workers }) {
         const stops = row.assignments.filter(a => !a._break && !a._travel);
         if (stops.length === 0) continue;
         const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
-        // Build a simple polyline from stop coords for the map
+        // Firestore doesn't support nested arrays — store as objects
         const recorrido = stops
           .filter(a => hasCoords(a.lat, a.lng))
-          .map(a => [+a.lat, +a.lng]);
+          .map(a => ({ lat: +a.lat, lng: +a.lng }));
         const vehicleLabel = row.nombre || row.matricula || "Vehículo";
         await addDoc(collection(db, "planes"), {
           tipo,
