@@ -39,12 +39,15 @@ const BARRIO_PALETTE = [
   "#a78bfa","#fbbf24","#f472b6","#22d3ee","#818cf8","#4ade80",
 ];
 const _barrioCache = {};
-function barrioColor(b) {
+function barrioColorDefault(b) {
   if (!b) return "#8b95a5";
   if (_barrioCache[b]) return _barrioCache[b];
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
   return (_barrioCache[b] = BARRIO_PALETTE[h % BARRIO_PALETTE.length]);
+}
+function barrioColor(b, overrides = {}) {
+  return overrides[b] || barrioColorDefault(b);
 }
 // Detecta el campo de barrio comparando en lowercase (independiente de capitalización)
 const BARRIO_KEYS = ["barri","barrio","barri_nom","sector","zona","zone","district",
@@ -252,10 +255,64 @@ function makePopupHtml(marker, color) {
 }
 
 // ── MAPA PLANNING ─────────────────────────────────────────────────
-function MapaPlanning({ layers }) {
-  const divRef = useRef(null);
-  const mapRef = useRef(null);
+// Haversine distance in km between two lat/lng points
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function routeStats(pts) {
+  let km = 0;
+  for (let i = 1; i < pts.length; i++)
+    km += haversineKm(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+  return { km, minAt30: Math.round(km / 30 * 60) };
+}
+
+function MapaPlanning({ layers, depots = [], barrioColors = {} }) {
+  const divRef    = useRef(null);
+  const mapRef    = useRef(null);
   const leafletLayersRef = useRef([]);
+  const depotLayersRef   = useRef([]);
+  const selPolyRef    = useRef(null);
+  const selPinsRef    = useRef([]);
+
+  const [selMode,      setSelMode]      = useState(false);
+  const [selected,     setSelected]     = useState([]);  // [{lat,lng,nombre}]
+  const [routeData,    setRouteData]    = useState(null); // {km, minutes, geometry}
+  const [routeLoading, setRouteLoading] = useState(false);
+
+  // Refs so Leaflet click handlers always see current values
+  const selModeRef  = useRef(false);
+  const selectedRef = useRef([]);
+  useEffect(() => { selModeRef.current  = selMode;   }, [selMode]);
+  useEffect(() => { selectedRef.current = selected;  }, [selected]);
+
+  // Fetch road route via OSRM when selection has ≥2 points
+  useEffect(() => {
+    if (selected.length < 2) { setRouteData(null); return; }
+    const ctrl = new AbortController();
+    const coords = selected.map(p => `${p.lng},${p.lat}`).join(";");
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    setRouteLoading(true);
+    fetch(url, { signal: ctrl.signal })
+      .then(r => r.json())
+      .then(data => {
+        if (data.code === "Ok" && data.routes?.[0]) {
+          const r = data.routes[0];
+          setRouteData({ km: r.distance / 1000, minutes: Math.round(r.duration / 60), geometry: r.geometry });
+        } else {
+          setRouteData(null);
+        }
+        setRouteLoading(false);
+      })
+      .catch(e => { if (e.name !== "AbortError") { setRouteData(null); setRouteLoading(false); } });
+    return () => ctrl.abort();
+  }, [selected]);
 
   const drawLayers = useCallback(() => {
     const L = window.L;
@@ -266,59 +323,136 @@ function MapaPlanning({ layers }) {
     leafletLayersRef.current = [];
 
     const allPoints = [];
-    let firstMarkerLogged = false;
     layers.filter(l => l.visible).forEach(layer => {
       layer.markers.forEach(m => {
-        if (!firstMarkerLogged) {
-          console.log("[planning] campos del primer marcador:", Object.keys(m));
-          firstMarkerLogged = true;
-        }
         const size = 14;
         const barrio = getBarrio(m);
-        const color = barrio ? barrioColor(barrio) : layer.color;
-        const icon = L.divIcon({
+        const color  = barrio ? barrioColor(barrio, barrioColors) : layer.color;
+        const icon   = L.divIcon({
           className: "",
-          html: `<div style="
-            width:${size}px;height:${size}px;border-radius:50%;
-            background:${color};border:2px solid rgba(255,255,255,0.8);
-            box-shadow:0 2px 8px rgba(0,0,0,0.5);
-            cursor:pointer;transition:transform .15s;
-          "></div>`,
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size / 2],
-          popupAnchor: [0, -size / 2],
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;transition:transform .15s;"></div>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2],
         });
 
         const marker = L.marker([m.lat, m.lng], { icon })
-          .bindPopup(makePopupHtml(m, color), {
-            maxWidth: 320,
-            className: "",
-          });
+          .bindPopup(makePopupHtml(m, color), { maxWidth: 320, className: "" });
+
+        marker.on("click", e => {
+          if (!selModeRef.current) return;
+          L.DomEvent.stopPropagation(e);
+          marker.closePopup();
+          const prev = selectedRef.current;
+          const idx  = prev.findIndex(s => s.lat === m.lat && s.lng === m.lng);
+          setSelected(idx >= 0
+            ? prev.filter((_, i) => i !== idx)
+            : [...prev, { lat: m.lat, lng: m.lng, nombre: m.nombre || m.name || getBarrio(m) || `${m.lat.toFixed(4)},${m.lng.toFixed(4)}` }]
+          );
+        });
+
         marker.addTo(map);
         leafletLayersRef.current.push(marker);
         allPoints.push([m.lat, m.lng]);
       });
     });
 
+    // Render depots (orange house markers, above stops)
+    depotLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
+    depotLayersRef.current = [];
+    depots.forEach((d, i) => {
+      const dIcon = L.divIcon({
+        className: "",
+        html: `<div title="${d.nombre}" style="
+          width:36px;height:36px;border-radius:8px;
+          background:#fb923c;border:2.5px solid rgba(255,255,255,0.95);
+          box-shadow:0 3px 14px rgba(251,146,60,0.7);
+          display:flex;align-items:center;justify-content:center;
+          cursor:pointer;
+        "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>`,
+        iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -20],
+      });
+      const fields = Object.entries(d.fields || {}).map(([k, v]) =>
+        `<tr><td style="color:#8b95a5;padding:2px 10px 2px 0;font-size:11px;">${k}</td><td style="color:#f0f4f8;font-size:11px;">${v}</td></tr>`
+      ).join("");
+      const popupHtml = `<div style="font-family:'Inter',sans-serif;min-width:160px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;color:#fb923c;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Depot ${i + 1}</div>
+        <div style="font-size:13px;font-weight:600;color:#f0f4f8;margin-bottom:6px;">${d.nombre}</div>
+        ${fields ? `<table style="width:100%;border-collapse:collapse;">${fields}</table>` : ""}
+        <div style="font-size:10px;color:#3d4d63;margin-top:6px;font-family:monospace;">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
+      </div>`;
+      const dm = L.marker([d.lat, d.lng], { icon: dIcon, zIndexOffset: 500 })
+        .bindPopup(popupHtml, { maxWidth: 280 });
+      dm.on("click", e => {
+        if (!selModeRef.current) return;
+        L.DomEvent.stopPropagation(e);
+        dm.closePopup();
+        const prev = selectedRef.current;
+        const idx  = prev.findIndex(s => s.lat === d.lat && s.lng === d.lng);
+        setSelected(idx >= 0
+          ? prev.filter((_, i) => i !== idx)
+          : [...prev, { lat: d.lat, lng: d.lng, nombre: `🏠 ${d.nombre}` }]
+        );
+      });
+      dm.addTo(map);
+      depotLayersRef.current.push(dm);
+      allPoints.push([d.lat, d.lng]);
+    });
+
     if (allPoints.length > 0) {
       map.invalidateSize();
       map.fitBounds(allPoints, { padding: [40, 40], maxZoom: 16 });
     }
-  }, [layers]);
+  }, [layers, depots, barrioColors]);
+
+  // Draw / update selection polyline and numbered pins
+  useEffect(() => {
+    const L = window.L;
+    if (!L || !mapRef.current) return;
+    const map = mapRef.current;
+
+    // Remove old
+    if (selPolyRef.current) { map.removeLayer(selPolyRef.current); selPolyRef.current = null; }
+    selPinsRef.current.forEach(p => { try { map.removeLayer(p); } catch {} });
+    selPinsRef.current = [];
+
+    if (selected.length < 1) return;
+
+    // Numbered pins
+    selected.forEach((pt, i) => {
+      const pin = L.marker([pt.lat, pt.lng], {
+        icon: L.divIcon({
+          className: "",
+          html: `<div style="width:22px;height:22px;border-radius:50%;background:#4f8ef7;border:2px solid #fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);">${i + 1}</div>`,
+          iconSize: [22, 22], iconAnchor: [11, 11],
+        }),
+        zIndexOffset: 1000,
+      }).addTo(map);
+      selPinsRef.current.push(pin);
+    });
+
+    // Polyline: real road geometry from OSRM, or straight dashed fallback
+    if (selected.length > 1) {
+      if (routeData?.geometry) {
+        selPolyRef.current = L.geoJSON(routeData.geometry, {
+          style: { color: "#4f8ef7", weight: 3.5, opacity: 0.9 },
+        }).addTo(map);
+      } else {
+        selPolyRef.current = L.polyline(
+          selected.map(p => [p.lat, p.lng]),
+          { color: "#4f8ef7", weight: 2, dashArray: "6 4", opacity: 0.5 }
+        ).addTo(map);
+      }
+    }
+  }, [selected, routeData]);
 
   const initMap = useCallback(() => {
     if (!divRef.current || mapRef.current) return;
     const L = window.L;
     if (!L) return;
-    const map = L.map(divRef.current, {
-      zoomControl: true,
-      attributionControl: true,
-    }).setView([40.416, -3.703], 6);
-
+    const map = L.map(divRef.current, { zoomControl: true, attributionControl: true })
+      .setView([40.416, -3.703], 6);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
     }).addTo(map);
-
     mapRef.current = map;
     drawLayers();
   }, [drawLayers]);
@@ -338,9 +472,7 @@ function MapaPlanning({ layers }) {
     } else {
       initMap();
     }
-    return () => {
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
-    };
+    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []);
 
   useEffect(() => {
@@ -354,30 +486,161 @@ function MapaPlanning({ layers }) {
     }
   }, [layers, drawLayers]);
 
-  // Call invalidateSize whenever the container is resized (handles tab show/hide)
   useEffect(() => {
     if (!divRef.current) return;
     const ro = new ResizeObserver(() => {
-      if (mapRef.current && divRef.current?.offsetWidth > 0) {
-        mapRef.current.invalidateSize();
-      }
+      if (mapRef.current && divRef.current?.offsetWidth > 0) mapRef.current.invalidateSize();
     });
     ro.observe(divRef.current);
     return () => ro.disconnect();
   }, []);
 
+  // routeData from OSRM; haversine only as fallback label
+  const haversineStats = selected.length > 1 ? routeStats(selected) : null;
+
   return (
-    <div
-      ref={divRef}
-      className="planning-map"
-      style={{ flex: 1, width: "100%", height: "100%", background: "#1c2333" }}
-    />
+    <div style={{ flex: 1, position: "relative", height: "100%" }}>
+      {/* Map container */}
+      <div ref={divRef} className="planning-map" style={{ width: "100%", height: "100%", background: "#1c2333" }} />
+
+      {/* Selection mode toggle */}
+      <button
+        onClick={() => { setSelMode(m => !m); if (selMode) setSelected([]); }}
+        title={selMode ? "Salir de selección" : "Medir distancia entre puntos"}
+        style={{
+          position: "absolute", top: 10, right: 10, zIndex: 900,
+          padding: "7px 13px", borderRadius: 8, fontFamily: font, fontSize: 12, fontWeight: 600,
+          background: selMode ? C.blue : C.card,
+          color: selMode ? "#fff" : C.muted,
+          border: `1px solid ${selMode ? C.blue : C.border}`,
+          cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+          boxShadow: "0 2px 8px rgba(0,0,0,.4)", transition: "all .15s",
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 3l7.5 7.5M21 3l-7.5 7.5M3 21l7.5-7.5M21 21l-7.5-7.5"/>
+          <circle cx="12" cy="12" r="2"/>
+        </svg>
+        {selMode ? "Salir de medición" : "Medir distancia"}
+      </button>
+
+      {/* Selection instructions */}
+      {selMode && selected.length === 0 && (
+        <div style={{
+          position: "absolute", bottom: 30, left: "50%", transform: "translateX(-50%)",
+          zIndex: 900, background: "rgba(15,17,23,0.88)", border: `1px solid ${C.border}`,
+          borderRadius: 8, padding: "8px 16px", fontSize: 12, color: C.muted,
+          backdropFilter: "blur(4px)", whiteSpace: "nowrap",
+        }}>
+          Haz clic en los puntos del mapa para seleccionarlos en orden
+        </div>
+      )}
+
+      {/* Results panel */}
+      {selMode && selected.length > 0 && (
+        <div style={{
+          position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+          zIndex: 900, background: "rgba(22,27,39,0.95)", border: `1px solid ${C.border}`,
+          borderRadius: 10, padding: "12px 16px", minWidth: 280,
+          boxShadow: "0 4px 24px rgba(0,0,0,.5)", backdropFilter: "blur(6px)",
+        }}>
+          {/* Selected points list */}
+          <div style={{ marginBottom: 10, maxHeight: 120, overflowY: "auto" }}>
+            {selected.map((pt, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0" }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: "50%", background: C.blue,
+                  color: "#fff", fontSize: 10, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>{i + 1}</div>
+                <span style={{ fontSize: 11, color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {pt.nombre}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats — road route from OSRM */}
+          {selected.length > 1 && (
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+              {routeLoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.muted, fontSize: 12 }}>
+                  <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(79,142,247,0.2)", borderTopColor: C.blue, borderRadius: "50%", animation: "planning-spin .6s linear infinite", flexShrink: 0 }} />
+                  Calculando ruta por carretera…
+                </div>
+              ) : routeData ? (
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Por carretera</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{routeData.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
+                  </div>
+                  <div style={{ width: 1, height: 36, background: C.border }} />
+                  <div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Tiempo estimado</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>
+                      {routeData.minutes >= 60
+                        ? `${Math.floor(routeData.minutes / 60)}h ${routeData.minutes % 60}min`
+                        : `${routeData.minutes} min`}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => setSelected([])} style={{
+                    background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+                    color: C.dim, cursor: "pointer", fontSize: 11, padding: "4px 10px",
+                    fontFamily: font, transition: "all .12s",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+                  >Limpiar</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Línea recta (aprox.)</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{haversineStats.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
+                  </div>
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => setSelected([])} style={{
+                    background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+                    color: C.dim, cursor: "pointer", fontSize: 11, padding: "4px 10px",
+                    fontFamily: font, transition: "all .12s",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+                  >Limpiar</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selected.length === 1 && (
+            <div style={{ fontSize: 11, color: C.dim, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+              Selecciona otro punto para calcular la distancia
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────
-function Sidebar({ layers, setLayers, onUpload, uploading }) {
-  const fileRef = useRef(null);
+function DepotIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  );
+}
+
+function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll }) {
+  const fileRef      = useRef(null);
+  const depotFileRef = useRef(null);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [showManual, setShowManual] = useState(false);
 
   function removeLayer(id) {
     setLayers(prev => prev.filter(l => l.id !== id));
@@ -395,6 +658,50 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
+      {/* Search bar */}
+      <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ position: "relative" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={searchQuery ? C.blue : C.dim} strokeWidth="2"
+            style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "stroke .15s" }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar por palabra clave…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              background: searchQuery ? `${C.blue}14` : C.surface2,
+              border: `1px solid ${searchQuery ? C.blue + "55" : C.border}`,
+              color: C.text, borderRadius: 7, padding: "7px 28px 7px 28px",
+              fontSize: 12, fontFamily: font, outline: "none", transition: "all .15s",
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = C.blue + "88"; }}
+            onBlur={e => { e.currentTarget.style.borderColor = searchQuery ? C.blue + "55" : C.border; }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              style={{
+                position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", color: C.dim, cursor: "pointer",
+                fontSize: 15, lineHeight: 1, padding: 2, transition: "color .12s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.dim}
+            >×</button>
+          )}
+        </div>
+        {searchQuery && (
+          <div style={{ fontSize: 10, color: totalFiltered > 0 ? C.blue : C.red, marginTop: 5, fontWeight: 500 }}>
+            {totalFiltered > 0
+              ? `${totalFiltered} de ${totalAll} punto${totalAll !== 1 ? "s" : ""}`
+              : "Sin resultados"}
+          </div>
+        )}
+      </div>
+
       {/* Upload area */}
       <div style={{ padding: "16px 16px 14px", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10, fontWeight: 600 }}>
@@ -523,7 +830,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
         )}
       </div>
 
-      {/* Barrio legend */}
+      {/* Barrio legend — color pickers */}
       {(() => {
         const barrios = [...new Set(
           layers.filter(l => l.visible)
@@ -531,21 +838,75 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
             .filter(Boolean)
         )].sort();
         if (barrios.length === 0) return null;
+        const hasOverrides = barrios.some(b => barrioColors[b]);
         return (
           <div style={{ borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <div style={{ padding: "8px 12px 4px", fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
-              Barrios ({barrios.length})
+            <div style={{ padding: "8px 12px 4px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+                Barrios ({barrios.length})
+              </span>
+              {hasOverrides && (
+                <button
+                  onClick={() => setBarrioColors({})}
+                  title="Resetear colores"
+                  style={{
+                    background: "none", border: "none", fontSize: 10, color: C.dim,
+                    cursor: "pointer", padding: 0, fontFamily: font,
+                    transition: "color .12s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = C.red}
+                  onMouseLeave={e => e.currentTarget.style.color = C.dim}
+                >resetear</button>
+              )}
             </div>
             <div style={{ maxHeight: 220, overflowY: "auto", padding: "2px 12px 8px" }}>
-              {barrios.map(b => (
-                <div key={b} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-                  <div style={{
-                    width: 10, height: 10, borderRadius: 2, flexShrink: 0,
-                    background: barrioColor(b),
-                  }} />
-                  <span style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b}</span>
-                </div>
-              ))}
+              {barrios.map(b => {
+                const color = barrioColor(b, barrioColors);
+                const isCustom = !!barrioColors[b];
+                return (
+                  <div key={b} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                    <label
+                      title={isCustom ? `Color personalizado: ${color}\nHaz clic para cambiar` : "Haz clic para personalizar el color"}
+                      style={{ position: "relative", flexShrink: 0, cursor: "pointer" }}
+                    >
+                      <div style={{
+                        width: 16, height: 16, borderRadius: 3,
+                        background: color,
+                        border: isCustom ? `2px solid rgba(255,255,255,0.6)` : `1px solid rgba(255,255,255,0.2)`,
+                        boxShadow: isCustom ? `0 0 0 1px ${color}` : "none",
+                        transition: "transform .12s",
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.transform = "scale(1.2)"}
+                        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                      />
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={e => setBarrioColors(prev => ({ ...prev, [b]: e.target.value }))}
+                        style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+                        tabIndex={-1}
+                      />
+                    </label>
+                    <span style={{
+                      fontSize: 11, color: isCustom ? C.text : C.muted,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      flex: 1,
+                    }}>{b}</span>
+                    {isCustom && (
+                      <button
+                        onClick={() => setBarrioColors(prev => { const n = { ...prev }; delete n[b]; return n; })}
+                        title="Restaurar color original"
+                        style={{
+                          background: "none", border: "none", color: C.dim, cursor: "pointer",
+                          fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0, transition: "color .12s",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = C.red}
+                        onMouseLeave={e => e.currentTarget.style.color = C.dim}
+                      >×</button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -569,6 +930,154 @@ function Sidebar({ layers, setLayers, onUpload, uploading }) {
           </button>
         </div>
       )}
+
+      {/* ── DEPOTS SECTION ────────────────────────────────────────── */}
+      <div style={{ borderTop: `2px solid ${C.border}`, flexShrink: 0 }}>
+        {/* Header */}
+        <div style={{
+          padding: "10px 16px 8px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ color: "#fb923c" }}><DepotIcon size={13} /></span>
+            <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+              Depots {depots.length > 0 && `(${depots.length})`}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowManual(s => !s)}
+            title="Añadir depot manualmente"
+            style={{
+              background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
+              color: C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
+              width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all .12s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = "#fb923c"; e.currentTarget.style.borderColor = "#fb923c55"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border; }}
+          >+</button>
+        </div>
+
+        {/* Import button */}
+        <div style={{ padding: "0 12px 8px" }}>
+          <input
+            ref={depotFileRef}
+            type="file"
+            accept=".csv,.kml,.xlsx"
+            multiple
+            style={{ display: "none" }}
+            onChange={e => { onDepotImport(Array.from(e.target.files)); e.target.value = ""; }}
+          />
+          <button
+            onClick={() => depotFileRef.current?.click()}
+            disabled={depotUploading}
+            style={{
+              width: "100%", padding: "7px 10px",
+              background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.3)",
+              color: "#fb923c", borderRadius: 7, fontSize: 11, fontWeight: 600,
+              cursor: depotUploading ? "wait" : "pointer", fontFamily: font,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              transition: "all .15s",
+            }}
+            onMouseEnter={e => { if (!depotUploading) e.currentTarget.style.background = "rgba(251,146,60,0.18)"; }}
+            onMouseLeave={e => { if (!depotUploading) e.currentTarget.style.background = "rgba(251,146,60,0.1)"; }}
+          >
+            {depotUploading
+              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(251,146,60,0.2)", borderTopColor: "#fb923c", borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
+              : <><DepotIcon size={11} /> Importar CSV / KML / Excel</>
+            }
+          </button>
+        </div>
+
+        {/* Manual add form */}
+        {showManual && (
+          <div style={{ padding: "0 12px 10px", borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input
+                placeholder="Lat"
+                value={manualLat}
+                onChange={e => setManualLat(e.target.value)}
+                style={{
+                  flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
+                  color: C.text, borderRadius: 5, padding: "5px 8px", fontSize: 11,
+                  fontFamily: mono, outline: "none",
+                }}
+              />
+              <input
+                placeholder="Lng"
+                value={manualLng}
+                onChange={e => setManualLng(e.target.value)}
+                style={{
+                  flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
+                  color: C.text, borderRadius: 5, padding: "5px 8px", fontSize: 11,
+                  fontFamily: mono, outline: "none",
+                }}
+              />
+            </div>
+            <input
+              placeholder="Nombre (opcional)"
+              value={manualName}
+              onChange={e => setManualName(e.target.value)}
+              style={{
+                width: "100%", background: C.surface2, border: `1px solid ${C.border}`,
+                color: C.text, borderRadius: 5, padding: "5px 8px", fontSize: 11,
+                fontFamily: font, outline: "none", marginBottom: 6, boxSizing: "border-box",
+              }}
+            />
+            <button
+              onClick={() => {
+                const lat = parseFloat(manualLat), lng = parseFloat(manualLng);
+                if (isNaN(lat) || isNaN(lng)) return;
+                setDepots(prev => [...prev, {
+                  id: Date.now() + Math.random(),
+                  lat, lng,
+                  nombre: manualName.trim() || `Depot ${prev.length + 1}`,
+                  fields: {},
+                }]);
+                setManualLat(""); setManualLng(""); setManualName(""); setShowManual(false);
+              }}
+              style={{
+                width: "100%", padding: "6px", background: "rgba(251,146,60,0.12)",
+                border: "1px solid rgba(251,146,60,0.35)", color: "#fb923c",
+                borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                fontFamily: font,
+              }}
+            >Añadir depot</button>
+          </div>
+        )}
+
+        {/* Depot list */}
+        {depots.length > 0 && (
+          <div style={{ maxHeight: 160, overflowY: "auto", padding: "0 8px 8px" }}>
+            {depots.map((d, i) => (
+              <div key={d.id} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: C.surface2, border: "1px solid rgba(251,146,60,0.2)",
+                borderLeft: "3px solid #fb923c",
+                borderRadius: 7, padding: "7px 10px", marginBottom: 4,
+              }}>
+                <span style={{ fontSize: 9, color: "#fb923c", fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
+                  <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
+                </div>
+                <button
+                  onClick={() => setDepots(prev => prev.filter(x => x.id !== d.id))}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, fontSize: 14, padding: 0, lineHeight: 1, transition: "color .12s", flexShrink: 0 }}
+                  onMouseEnter={e => e.currentTarget.style.color = C.red}
+                  onMouseLeave={e => e.currentTarget.style.color = C.dim}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {depots.length === 0 && !showManual && (
+          <div style={{ padding: "4px 16px 12px", fontSize: 10, color: C.dim, lineHeight: 1.6 }}>
+            Importa o añade las coordenadas de los depots (base de salida de vehículos)
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1011,15 +1520,27 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
-  const lsKey = projectId ? `fc_layers_${projectId}` : null;
+  const lsKey         = projectId ? `fc_layers_${projectId}`        : null;
+  const lsKeyDepots   = projectId ? `fc_depots_${projectId}`        : null;
+  const lsKeyColors   = projectId ? `fc_barrio_colors_${projectId}` : null;
 
   const [layers, setLayers] = useState(() => {
     if (!lsKey) return [];
     try { return JSON.parse(localStorage.getItem(lsKey)) ?? []; } catch { return []; }
   });
-  const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState([]);
-  const [tab, setTab] = useState("mapa");
+  const [depots, setDepots] = useState(() => {
+    if (!lsKeyDepots) return [];
+    try { return JSON.parse(localStorage.getItem(lsKeyDepots)) ?? []; } catch { return []; }
+  });
+  const [barrioColors, setBarrioColors] = useState(() => {
+    if (!lsKeyColors) return {};
+    try { return JSON.parse(localStorage.getItem(lsKeyColors)) ?? {}; } catch { return {}; }
+  });
+  const [uploading, setUploading]           = useState(false);
+  const [depotUploading, setDepotUploading] = useState(false);
+  const [errors, setErrors]                 = useState([]);
+  const [tab, setTab]                       = useState("mapa");
+  const [searchQuery, setSearchQuery]       = useState("");
 
   const timetableCol = projectId
     ? collection(db, "scheduling_projects", projectId, "timetable")
@@ -1030,6 +1551,45 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
     if (!lsKey) return;
     try { localStorage.setItem(lsKey, JSON.stringify(layers)); } catch {}
   }, [layers, lsKey]);
+
+  // Persist depots to localStorage whenever they change
+  useEffect(() => {
+    if (!lsKeyDepots) return;
+    try { localStorage.setItem(lsKeyDepots, JSON.stringify(depots)); } catch {}
+  }, [depots, lsKeyDepots]);
+
+  // Persist barrio color overrides
+  useEffect(() => {
+    if (!lsKeyColors) return;
+    try { localStorage.setItem(lsKeyColors, JSON.stringify(barrioColors)); } catch {}
+  }, [barrioColors, lsKeyColors]);
+
+  async function handleDepotImport(files) {
+    setDepotUploading(true);
+    const newErrors = [];
+    for (const file of files) {
+      const ext = file.name.split(".").pop().toLowerCase();
+      let result;
+      try {
+        if (ext === "csv")       result = parseCSV(await file.text());
+        else if (ext === "kml")  result = parseKMLPlanning(await file.text());
+        else if (ext === "xlsx") result = await parseXLSX(file);
+        else { newErrors.push(`${file.name}: formato no soportado`); continue; }
+      } catch (e) { newErrors.push(`${file.name}: ${e.message}`); continue; }
+      if (result.error) { newErrors.push(`${file.name}: ${result.error}`); continue; }
+      const newDepots = result.markers.map(m => ({
+        id: Date.now() + Math.random(),
+        lat: m.lat, lng: m.lng,
+        nombre: m.nombre || m.name || m.id || `Depot ${m.lat?.toFixed(4)},${m.lng?.toFixed(4)}`,
+        fields: Object.fromEntries(
+          Object.entries(m).filter(([k]) => !["lat","lng","nombre","name"].includes(k.toLowerCase()))
+        ),
+      }));
+      setDepots(prev => [...prev, ...newDepots]);
+    }
+    if (newErrors.length) setErrors(prev => [...prev, ...newErrors]);
+    setDepotUploading(false);
+  }
 
   async function handleUpload(files) {
     setUploading(true);
@@ -1078,6 +1638,18 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   }
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
+
+  const filteredLayers = searchQuery.trim()
+    ? layers.map(l => ({
+        ...l,
+        markers: l.markers.filter(m =>
+          Object.values(m).some(v => String(v ?? "").toLowerCase().includes(searchQuery.toLowerCase()))
+        ),
+      }))
+    : layers;
+
+  const totalFiltered = filteredLayers.reduce((s, l) => s + l.markers.length, 0);
+  const totalAll      = layers.reduce((s, l) => s + l.markers.length, 0);
 
   const inner = (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: embedded ? "100%" : "100vh", background: C.bg, fontFamily: font }}>
@@ -1185,8 +1757,18 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               setLayers={setLayers}
               onUpload={handleUpload}
               uploading={uploading}
+              depots={depots}
+              setDepots={setDepots}
+              onDepotImport={handleDepotImport}
+              depotUploading={depotUploading}
+              barrioColors={barrioColors}
+              setBarrioColors={setBarrioColors}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              totalFiltered={totalFiltered}
+              totalAll={totalAll}
             />
-            <MapaPlanning layers={layers} />
+            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} />
           </>
         ) : (
           <TabTimetable layers={layers} projectId={projectId} />
