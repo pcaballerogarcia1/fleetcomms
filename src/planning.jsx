@@ -354,6 +354,18 @@ function MapaPlanning({ layers }) {
     }
   }, [layers, drawLayers]);
 
+  // Call invalidateSize whenever the container is resized (handles tab show/hide)
+  useEffect(() => {
+    if (!divRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (mapRef.current && divRef.current?.offsetWidth > 0) {
+        mapRef.current.invalidateSize();
+      }
+    });
+    ro.observe(divRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div
       ref={divRef}
@@ -666,20 +678,25 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
 }
 
 // ── TIMETABLE TAB ─────────────────────────────────────────────────
-function TabTimetable({ layers }) {
+function TabTimetable({ layers, projectId: ttProjectId }) {
   const [entries,      setEntries]     = useState([]);
   const [loading,      setLoading]     = useState(true);
   const [barrioFiltro, setBarrioFiltro] = useState(null);
 
+  const timetableCol = ttProjectId
+    ? collection(db, "scheduling_projects", ttProjectId, "timetable")
+    : collection(db, "planning_timetable");
+
   // Real-time listener
   useEffect(() => {
     const unsub = onSnapshot(
-      collection(db, "planning_timetable"),
+      timetableCol,
       snap => { setEntries(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoading(false); },
       () => setLoading(false)
     );
     return () => unsub();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ttProjectId]);
 
   // Sync newly uploaded layers → Firebase (merge preserves horaInicio/duracion)
   useEffect(() => {
@@ -694,7 +711,7 @@ function TabTimetable({ layers }) {
       const barrio  = Object.entries(campos).find(([k]) => k.toLowerCase() === "barrio")?.[1] || "";
       const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
       setDoc(
-        doc(db, "planning_timetable", puntoKey),
+        doc(timetableCol, puntoKey),
         { puntoKey, lat, lng, campos, nombre, barrio, layerColor, updatedAt: serverTimestamp() },
         { merge: true }
       );
@@ -702,10 +719,10 @@ function TabTimetable({ layers }) {
   }, [layers]);
 
   async function updateEntry(id, changes) {
-    await updateDoc(doc(db, "planning_timetable", id), { ...changes, updatedAt: serverTimestamp() });
+    await updateDoc(doc(timetableCol, id), { ...changes, updatedAt: serverTimestamp() });
   }
   async function deleteEntry(id) {
-    await deleteDoc(doc(db, "planning_timetable", id));
+    await deleteDoc(doc(timetableCol, id));
   }
 
   // Unique sorted barrios
@@ -993,11 +1010,15 @@ function TabTimetable({ layers }) {
 }
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
-function PlanningPage({ sesion, onLogout }) {
+export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
   const [layers, setLayers] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [tab, setTab] = useState("mapa");
+
+  const timetableCol = projectId
+    ? collection(db, "scheduling_projects", projectId, "timetable")
+    : collection(db, "planning_timetable");
 
   async function handleUpload(files) {
     setUploading(true);
@@ -1047,10 +1068,10 @@ function PlanningPage({ sesion, onLogout }) {
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
-      {/* Header */}
-      <div style={{
+  const inner = (
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: embedded ? "100%" : "100vh", background: C.bg, fontFamily: font }}>
+      {/* Header — only when standalone */}
+      {!embedded && <div style={{
         height: 52, flexShrink: 0,
         background: C.card, borderBottom: `1px solid ${C.border}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1089,7 +1110,7 @@ function PlanningPage({ sesion, onLogout }) {
             {initials}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Error toasts */}
       {errors.length > 0 && (
@@ -1157,11 +1178,13 @@ function PlanningPage({ sesion, onLogout }) {
             <MapaPlanning layers={layers} />
           </>
         ) : (
-          <TabTimetable layers={layers} />
+          <TabTimetable layers={layers} projectId={projectId} />
         )}
       </div>
     </div>
   );
+
+  return inner;
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────
@@ -1313,23 +1336,20 @@ function LoginPlanning({ onLogin }) {
 export default function PlanningApp() {
   const [sesion, setSesion] = useState(() => {
     try {
-      const s = localStorage.getItem("fc_planning_session");
+      const s = localStorage.getItem("fc_session");
       return s ? JSON.parse(s) : null;
     } catch { return null; }
   });
 
-  function handleLogin(user) {
-    setSesion(user);
-    localStorage.setItem("fc_planning_session", JSON.stringify(user));
-  }
-
   function handleLogout() {
     setSesion(null);
-    localStorage.removeItem("fc_planning_session");
+    localStorage.removeItem("fc_session");
+    window.location.href = "/scheduling";
   }
 
   if (!sesion || sesion.rol !== "admin") {
-    return <LoginPlanning onLogin={handleLogin} />;
+    window.location.href = "/scheduling";
+    return null;
   }
 
   return <PlanningPage sesion={sesion} onLogout={handleLogout} />;

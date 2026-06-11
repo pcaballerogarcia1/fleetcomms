@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { db } from "./firebase.js";
+import { PlanningPage } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
   doc, serverTimestamp, query, orderBy,
@@ -844,7 +845,7 @@ function ConstraintsPanel({ c, onChange }) {
 }
 
 // ── VEHICLES TAB ──────────────────────────────────────────────────
-function TabVehiculos({ vehicles, loading }) {
+export function TabVehiculos({ vehicles, loading }) {
   const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa" };
   const [form,   setForm]   = useState(empty);
   const [adding, setAdding] = useState(false);
@@ -1000,7 +1001,7 @@ function TabVehiculos({ vehicles, loading }) {
 }
 
 // ── WORKERS TAB ───────────────────────────────────────────────────
-function TabTrabajadores({ workers, vehicles, loading }) {
+export function TabTrabajadores({ workers, vehicles, loading }) {
   const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "" };
   const [form,     setForm]     = useState(empty);
   const [adding,   setAdding]   = useState(false);
@@ -1185,100 +1186,60 @@ function TabTrabajadores({ workers, vehicles, loading }) {
 }
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
-function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded }) {
-  const [tasks,       setTasks]       = useState([]);
-  const [importing,   setImporting]   = useState(false);
-  const [imported,    setImported]    = useState(false);
-  const [mode,        setMode]        = useState("vehicles");
-  const [showC,       setShowC]       = useState(false);
-  const [constraints, setConstraints] = useState({
-    maxShiftMin: 0,    // 0 = sin límite (el turno ya define la ventana)
-    maxStops:    0,
-    breakAfter:  240,
-    breakDur:    30,
-    startMin:    360,
-    endMin:      1320,
-    days:        1,
+export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate }) {
+  const tasks = activeProject?.planning?.tasks || [];
+
+  const [importing,    setImporting]   = useState(false);
+  const [mode,         setMode]        = useState("vehicles");
+  const [showC,        setShowC]       = useState(false);
+  const [constraints,  setConstraints] = useState({
+    maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
+    startMin: 360, endMin: 1320, days: 1,
   });
-  // Separate scenario per mode — switching tabs preserves each scenario
-  const [schedules,   setSchedules]   = useState({ vehicles: null, workers: null });
-  const [unassigneds, setUnassigneds] = useState({ vehicles: [], workers: [] });
-  const [generating,  setGenerating]  = useState(false);
-  const [genError,    setGenError]    = useState(null);
-  const [publishModal, setPublishModal] = useState(null); // null | { tipo, mes }
-  const [publishing,   setPublishing]   = useState(false);
-  const [saveModal,    setSaveModal]    = useState(null); // null | { nombre: "" }
-  const [saving,       setSaving]       = useState(false);
+  const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
+  const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
+  const [generating,   setGenerating]  = useState(false);
+  const [genError,     setGenError]    = useState(null);
+  const [publishModal, setPublishModal] = useState(null);
+  const [publishing,   setPublishing]  = useState(false);
 
   const schedule   = schedules[mode];
   const unassigned = unassigneds[mode];
 
+  // When active project changes, restore its scheduling state
+  useEffect(() => {
+    if (!activeProject) {
+      setSchedules({ vehicles: null, workers: null });
+      return;
+    }
+    const sc = activeProject.scheduling;
+    if (sc) {
+      setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
+      setConstraints(prev => ({ ...prev, ...(sc.constraints || {}), days: sc.daysUsed || 1 }));
+    } else {
+      setSchedules({ vehicles: null, workers: null });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?._id]);
+
   function importFromPlanning() {
+    if (!activeProject) return;
     setImporting(true);
     const unsub = onSnapshot(collection(db, "planning_timetable"), snap => {
       unsub();
-      const all = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-      setTasks(all);
-      setImported(true);
+      const allTasks = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      const uniqueBarrios = [...new Set(allTasks.map(t => t.barrio).filter(Boolean))];
+      onProjectUpdate({
+        planning: {
+          tasks: allTasks,
+          importedAt: new Date().toISOString(),
+          tasksCount: allTasks.length,
+          uniqueBarrios: uniqueBarrios.slice(0, 30),
+        },
+        status: "con_planning",
+      });
       setImporting(false);
     }, () => setImporting(false));
-  }
-
-  useEffect(() => { importFromPlanning(); }, []);
-
-  // Apply scenario loaded from TabEscenarios
-  useEffect(() => {
-    if (!loadedScenario) return;
-    setSchedules({
-      vehicles: loadedScenario.vehicleSchedule || [],
-      workers:  loadedScenario.workerSchedule  || [],
-    });
-    if (loadedScenario.constraints) {
-      setConstraints(prev => ({ ...prev, ...loadedScenario.constraints, days: loadedScenario.daysUsed || 1 }));
-    }
-    setImported(true);
-    onScenarioLoaded?.();
-  }, [loadedScenario]);
-
-  async function saveScenario(nombre) {
-    if (!schedules.vehicles) return;
-    setSaving(true);
-    try {
-      const totalStops = schedules.vehicles.reduce((s, v) =>
-        s + v.assignments.filter(a => !a._break && !a._travel).length, 0);
-      const totalKm = schedules.vehicles.reduce((s, v) => s + (v.totalKm || 0), 0);
-      const uniqueBarrios = [...new Set(tasks.map(t => t.barrio).filter(Boolean))];
-      await addDoc(collection(db, "scheduling_scenarios"), {
-        nombre,
-        createdAt:   serverTimestamp(),
-        daysUsed:    constraints.days || 1,
-        totalKm,
-        totalStops,
-        tasksCount:  tasks.length,
-        constraints: { ...constraints, days: undefined },
-        vehicleSchedule: schedules.vehicles.map(v => ({
-          _id: v._id, nombre: v.nombre, matricula: v.matricula,
-          turno: v.turno, totalKm: v.totalKm,
-          shiftStart: v.shiftStart, shiftEnd: v.shiftEnd,
-          assignments: v.assignments,
-        })),
-        workerSchedule: schedules.workers?.map(w => ({
-          _id: w._id, nombre: w.nombre, apellidos: w.apellidos,
-          vehiculoId: w.vehiculoId, turno: w.turno,
-          totalKm: w.totalKm, _tw: w._tw, assignments: w.assignments,
-        })) || [],
-        planningSource: {
-          uniqueBarrios: uniqueBarrios.slice(0, 20),
-          tasksCount:    tasks.length,
-          taskIds:       tasks.map(t => t._id || t.id).filter(Boolean),
-          sampleTasks:   tasks.slice(0, 5).map(t => ({ nombre: t.nombre, barrio: t.barrio })),
-        },
-      });
-      setSaveModal(null);
-    } catch (e) {
-      alert("Error al guardar: " + (e.message || e));
-    }
-    setSaving(false);
   }
 
   async function runGenerate() {
@@ -1359,7 +1320,43 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
 
       setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
       setUnassigneds({ vehicles: vr.unassigned, workers: [] });
-      setConstraints(prev => ({ ...prev, days: vr.daysUsed }));
+      const newDays = vr.daysUsed;
+      setConstraints(prev => ({ ...prev, days: newDays }));
+
+      // Auto-save scheduling result to active project
+      if (activeProject && onProjectUpdate) {
+        const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
+        const totalStops = vehicleSchedule.reduce((s, v) =>
+          s + v.assignments.filter(a => !a._break && !a._travel).length, 0);
+        await onProjectUpdate({
+          scheduling: {
+            vehicleSchedule: vehicleSchedule.map(v => ({
+              _id: v._id, nombre: v.nombre, matricula: v.matricula,
+              turno: v.turno, totalKm: v.totalKm,
+              shiftStart: v.shiftStart, shiftEnd: v.shiftEnd,
+              assignments: v.assignments.map(a => ({
+                _start: a._start, _end: a._end, duracion: a.duracion,
+                nombre: a.nombre, barrio: a.barrio, lat: a.lat, lng: a.lng,
+                _break: a._break || undefined, _travel: a._travel || undefined, km: a.km,
+              })).filter(a => a._start != null),
+            })),
+            workerSchedule: workerRows.map(w => ({
+              _id: w._id, nombre: w.nombre, apellidos: w.apellidos,
+              vehiculoId: w.vehiculoId, turno: w.turno,
+              totalKm: w.totalKm, _tw: w._tw,
+              assignments: w.assignments.map(a => ({
+                _start: a._start, _end: a._end, duracion: a.duracion,
+                nombre: a.nombre, barrio: a.barrio, lat: a.lat, lng: a.lng,
+                _break: a._break || undefined, _travel: a._travel || undefined, km: a.km,
+              })).filter(a => a._start != null),
+            })),
+            constraints: { ...constraints, days: newDays },
+            daysUsed: newDays, totalKm, totalStops,
+            generatedAt: new Date().toISOString(),
+          },
+          status: "schedulado",
+        });
+      }
 
     } catch (e) {
       console.error("generateScenario error:", e);
@@ -1467,6 +1464,16 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
     setPublishing(false);
   }
 
+  if (!activeProject) {
+    return (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: C.dim }}>
+        <div style={{ fontSize: 32 }}>📋</div>
+        <div style={{ fontSize: 14, color: C.muted, fontWeight: 600 }}>Ningún proyecto activo</div>
+        <div style={{ fontSize: 12, color: C.dim }}>Abre o crea un proyecto desde la pestaña Proyectos</div>
+      </div>
+    );
+  }
+
   const canGenerate  = (vehicles.length > 0 || workers.length > 0) && tasks.length > 0 && !generating;
   const totalAssigned = schedule ? schedule.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel).length, 0) : 0;
   const totalKm       = schedule ? schedule.reduce((s, r) => s + (r.totalKm || 0), 0) : 0;
@@ -1490,15 +1497,15 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
       }}>
         {/* Import */}
         <button onClick={importFromPlanning} disabled={importing} style={{
-          padding: "7px 13px", background: importing ? C.surface2 : imported ? C.greenDim : C.surface2,
-          border: `1px solid ${imported ? C.green + "44" : C.border}`,
-          color: imported ? C.green : C.muted,
+          padding: "7px 13px", background: importing ? C.surface2 : !!tasks.length ? C.greenDim : C.surface2,
+          border: `1px solid ${!!tasks.length ? C.green + "44" : C.border}`,
+          color: !!tasks.length ? C.green : C.muted,
           borderRadius: 7, fontSize: 12, fontWeight: 500, cursor: importing ? "wait" : "pointer",
           fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 7,
         }}>
           {importing
             ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(52,211,153,.2)", borderTopColor: C.green, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Importando…</>
-            : imported
+            : !!tasks.length
               ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {tasks.length} paradas importadas</>
               : "Importar desde Planning"
           }
@@ -1556,7 +1563,7 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
       </div>
 
       {/* Warnings */}
-      {imported && vehicles.length === 0 && workers.length === 0 && (
+      {!!tasks.length && vehicles.length === 0 && workers.length === 0 && (
         <div style={{ padding: "8px 20px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 12, color: C.orange, flexShrink: 0 }}>
           No hay vehículos ni trabajadores registrados. Añade recursos en las pestañas correspondientes.
         </div>
@@ -1618,17 +1625,12 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
               {minToTime(constraints.startMin)} – {minToTime(constraints.endMin)}
             </div>
             {schedules.vehicles && (<>
-              <button
-                onClick={() => setSaveModal({ nombre: "" })}
-                style={{
-                  padding: "5px 12px", background: C.blueDim, border: `1px solid ${C.blue}44`,
-                  color: C.blueText, borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                Guardar escenario
-              </button>
+              {activeProject && (
+                <div style={{ fontSize: 10, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Guardado en proyecto
+                </div>
+              )}
               <button
                 onClick={() => {
                   const now = new Date();
@@ -1672,7 +1674,7 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
       {/* Main content */}
       {!schedule ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: C.dim }}>
-          {!imported
+          {!!!tasks.length
             ? <>
                 <div style={{ fontSize: 13, color: C.muted }}>Importa los datos desde Planning para empezar</div>
                 <div style={{ fontSize: 11 }}>Planning → Timetable → Exportar a Scheduling</div>
@@ -1733,57 +1735,6 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
             </div>
           )}
         </>
-      )}
-
-      {/* Save scenario modal */}
-      {saveModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
-          onClick={() => setSaveModal(null)}>
-          <div style={{
-            background: C.card, borderRadius: 12, padding: "28px 28px 24px",
-            width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
-            border: `1px solid ${C.border}`,
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Guardar escenario</div>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 20 }}>
-              Se guardará la asignación actual de vehículos y trabajadores con el planning de origen.
-            </div>
-            <input
-              autoFocus
-              type="text" placeholder="Nombre del escenario…"
-              value={saveModal.nombre}
-              onChange={e => setSaveModal({ nombre: e.target.value })}
-              onKeyDown={e => e.key === "Enter" && saveModal.nombre.trim() && saveScenario(saveModal.nombre.trim())}
-              style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: font, outline: "none", marginBottom: 16 }}
-            />
-            {/* Stats preview */}
-            <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
-              {[
-                [`${constraints.days || 1} día${(constraints.days||1) !== 1 ? "s" : ""}`, "Duración"],
-                [`${schedules.vehicles?.reduce((s,v)=>s+v.assignments.filter(a=>!a._break&&!a._travel).length,0)||0}`, "Paradas"],
-                [`${(schedules.vehicles?.reduce((s,v)=>s+(v.totalKm||0),0)||0).toFixed(1)} km`, "Km total"],
-                [`${tasks.length}`, "Tareas planning"],
-              ].map(([val, lbl]) => (
-                <div key={lbl}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{val}</div>
-                  <div style={{ fontSize: 10, color: C.dim }}>{lbl}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setSaveModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>
-                Cancelar
-              </button>
-              <button
-                onClick={() => saveModal.nombre.trim() && saveScenario(saveModal.nombre.trim())}
-                disabled={saving || !saveModal.nombre.trim()}
-                style={{ flex: 2, padding: "9px 0", background: C.blue, border: "none", color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: font, opacity: !saveModal.nombre.trim() ? .5 : 1 }}
-              >
-                {saving ? "Guardando…" : "Guardar"}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Publish modal */}
@@ -1860,135 +1811,211 @@ function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded 
   );
 }
 
-// ── TAB ESCENARIOS ────────────────────────────────────────────────
-function TabEscenarios({ onLoadScenario }) {
-  const [scenarios, setScenarios] = useState([]);
-  const [loading,   setLoading]   = useState(true);
+// ── TAB PROYECTOS ─────────────────────────────────────────────────
+const PROJECT_STATUS = {
+  nuevo:        { label: "Nuevo",       color: C.muted },
+  con_planning: { label: "Planning",    color: C.blue  },
+  schedulado:   { label: "Schedulado",  color: C.green },
+  publicado:    { label: "Publicado",   color: C.amber },
+};
+
+export function TabProyectos({ activeProject, onOpenProject }) {
+  const [projects,   setProjects]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [newModal,   setNewModal]   = useState(null); // { nombre:"", descripcion:"", mes:"" }
+  const [creating,   setCreating]   = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, "scheduling_scenarios"), orderBy("createdAt", "desc")),
-      snap => { setScenarios(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoading(false); },
+      query(collection(db, "scheduling_projects"), orderBy("updatedAt", "desc")),
+      snap => { setProjects(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoading(false); },
       () => setLoading(false)
     );
     return () => unsub();
   }, []);
 
-  async function remove(id) {
-    if (!window.confirm("¿Eliminar este escenario?")) return;
-    await deleteDoc(doc(db, "scheduling_scenarios", id));
+  async function createProject() {
+    if (!newModal?.nombre?.trim()) return;
+    setCreating(true);
+    const now = serverTimestamp();
+    const ref = await addDoc(collection(db, "scheduling_projects"), {
+      nombre:      newModal.nombre.trim(),
+      descripcion: newModal.descripcion?.trim() || "",
+      mes:         newModal.mes || new Date().toISOString().slice(0, 7),
+      status:      "nuevo",
+      planning:    null,
+      scheduling:  null,
+      createdAt:   now,
+      updatedAt:   now,
+    });
+    setNewModal(null);
+    setCreating(false);
+    // Auto-open after creating
+    onOpenProject({ _id: ref.id, nombre: newModal.nombre.trim(), status: "nuevo", planning: null, scheduling: null });
   }
 
-  const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, animation: "sched-fadein .15s ease both" };
-  const chip = (val, lbl, color) => (
-    <div key={lbl} style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color || C.text }}>{val}</div>
-      <div style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>{lbl}</div>
-    </div>
-  );
+  async function removeProject(id) {
+    if (!window.confirm("¿Eliminar este proyecto y todos sus datos?")) return;
+    await deleteDoc(doc(db, "scheduling_projects", id));
+  }
+
+  const inpStyle = { width: "100%", background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "9px 12px", fontSize: 13, fontFamily: font, outline: "none", marginBottom: 10 };
 
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 860 }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 3 }}>Escenarios guardados</div>
-      <div style={{ fontSize: 11, color: C.muted, marginBottom: 22 }}>
-        Instantáneas de scheduling con su planning de origen. Carga uno para restaurar la asignación completa en Planificación.
+    <div style={{ flex: 1, overflow: "auto", padding: 28 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Proyectos</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+            Cada proyecto contiene su propio planning (paradas) y scheduling (asignación VRP).
+          </div>
+        </div>
+        <button onClick={() => setNewModal({ nombre: "", descripcion: "", mes: new Date().toISOString().slice(0, 7) })} style={{
+          padding: "8px 16px", background: C.blue, border: "none", color: "#fff",
+          borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font,
+          display: "flex", alignItems: "center", gap: 7,
+        }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Nuevo proyecto
+        </button>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 48, color: C.dim }}>Cargando…</div>
-      ) : scenarios.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, color: C.dim, fontSize: 13 }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-          Ningún escenario guardado todavía.<br />
-          <span style={{ fontSize: 11 }}>Genera un schedule y usa «Guardar escenario» para crearlo.</span>
+        <div style={{ textAlign: "center", padding: 60, color: C.dim }}>Cargando…</div>
+      ) : projects.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 80, color: C.dim }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📁</div>
+          <div style={{ fontSize: 14, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Sin proyectos todavía</div>
+          <div style={{ fontSize: 12 }}>Crea tu primer proyecto para empezar.</div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {scenarios.map(sc => {
-            const dateStr = sc.createdAt?.toDate?.().toLocaleString("es-ES", {
-              day: "2-digit", month: "2-digit", year: "numeric",
-              hour: "2-digit", minute: "2-digit",
-            }) || "—";
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 14 }}>
+          {projects.map(p => {
+            const st = PROJECT_STATUS[p.status] || PROJECT_STATUS.nuevo;
+            const isActive = activeProject?._id === p._id;
+            const dateStr = p.updatedAt?.toDate?.().toLocaleDateString("es-ES", { day:"2-digit", month:"short", year:"numeric" }) || "—";
             return (
-              <div key={sc._id} style={card}>
-                {/* Row 1: title + actions */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+              <div key={p._id} style={{
+                background: C.card,
+                border: `1px solid ${isActive ? C.blue : C.border}`,
+                borderRadius: 12, padding: 20,
+                boxShadow: isActive ? `0 0 0 1px ${C.blue}` : "none",
+                display: "flex", flexDirection: "column", gap: 14,
+                animation: "sched-fadein .15s ease both",
+              }}>
+                {/* Title row */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sc.nombre}</div>
-                    <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{dateStr}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p.nombre}</span>
+                      {isActive && <span style={{ fontSize: 9, background: C.blueDim, color: C.blueText, borderRadius: 4, padding: "2px 6px", fontWeight: 600 }}>ABIERTO</span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.dim }}>{p.mes} · {dateStr}</div>
+                    {p.descripcion && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.descripcion}</div>}
                   </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "22", borderRadius: 5, padding: "3px 8px", border: `1px solid ${st.color}44`, flexShrink: 0 }}>
+                    {st.label}
+                  </span>
+                </div>
+
+                {/* Planning section */}
+                <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.3, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planning</div>
+                  {p.planning ? (
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                        {p.planning.tasksCount} paradas
+                      </div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {(p.planning.uniqueBarrios || []).slice(0, 8).map(b => (
+                          <span key={b} style={{ fontSize: 9, background: barrioColor(b) + "28", border: `1px solid ${barrioColor(b)}55`, color: barrioColor(b), borderRadius: 4, padding: "1px 6px" }}>{b}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin planning — importa desde Planning</div>
+                  )}
+                </div>
+
+                {/* Scheduling section */}
+                <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.3, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Scheduling</div>
+                  {p.scheduling ? (
+                    <div style={{ display: "flex", gap: 20 }}>
+                      {[
+                        [p.scheduling.daysUsed || 1, "días"],
+                        [p.scheduling.totalStops || 0, "paradas"],
+                        [`${(p.scheduling.totalKm || 0).toFixed(0)} km`, ""],
+                        [p.scheduling.vehicleSchedule?.length || 0, "vehículos"],
+                      ].map(([v, l]) => (
+                        <div key={l}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{v}</div>
+                          <div style={{ fontSize: 9, color: C.dim }}>{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin schedule — genera el VRP</div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
-                    onClick={() => onLoadScenario(sc)}
-                    style={{ padding: "6px 14px", background: C.blueDim, border: `1px solid ${C.blue}55`, color: C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}
-                    onMouseEnter={e => { e.currentTarget.style.background = C.blue; e.currentTarget.style.color = "#fff"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = C.blueDim; e.currentTarget.style.color = C.blueText; }}
-                  >Cargar</button>
+                    onClick={() => onOpenProject(p)}
+                    style={{
+                      flex: 1, padding: "8px 0",
+                      background: isActive ? C.blueDim : C.blue,
+                      border: `1px solid ${C.blue}`,
+                      color: isActive ? C.blueText : "#fff",
+                      borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
+                      transition: "all .12s",
+                    }}
+                    onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = "#3a7de0"; } }}
+                    onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = C.blue; } }}
+                  >{isActive ? "Ya abierto" : "Abrir proyecto"}</button>
                   <button
-                    onClick={() => remove(sc._id)}
-                    style={{ width: 28, height: 28, background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={() => removeProject(p._id)}
+                    style={{ width: 34, height: 34, background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
                   >×</button>
                 </div>
-
-                {/* Row 2: stats */}
-                <div style={{ display: "flex", gap: 28, marginBottom: 14, flexWrap: "wrap" }}>
-                  {chip(`${sc.daysUsed || 1}d`, "Días", C.text)}
-                  {chip(`${sc.totalStops || 0}`, "Paradas", C.green)}
-                  {chip(`${(sc.totalKm || 0).toFixed(1)} km`, "Km", C.blueText)}
-                  {chip(`${sc.tasksCount || 0}`, "Tareas planning", C.muted)}
-                  {chip(`${sc.vehicleSchedule?.length || 0}`, "Vehículos", C.amber)}
-                  {chip(`${sc.workerSchedule?.length || 0}`, "Trabajadores", C.muted)}
-                </div>
-
-                {/* Row 3: planning origin */}
-                {sc.planningSource && (
-                  <div style={{ background: C.surface2, borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
-                    <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Origen planning</div>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                      {(sc.planningSource.uniqueBarrios || []).map(b => (
-                        <span key={b} style={{ fontSize: 9, background: barrioColor(b) + "28", border: `1px solid ${barrioColor(b)}55`, color: barrioColor(b), borderRadius: 4, padding: "2px 7px" }}>{b}</span>
-                      ))}
-                      {!sc.planningSource.uniqueBarrios?.length && (
-                        <span style={{ fontSize: 10, color: C.dim }}>{sc.planningSource.tasksCount || 0} tareas</span>
-                      )}
-                    </div>
-                    {sc.planningSource.sampleTasks?.length > 0 && (
-                      <div style={{ fontSize: 10, color: C.dim, marginTop: 5 }}>
-                        Muestra: {sc.planningSource.sampleTasks.map(t => t.nombre || t.barrio).filter(Boolean).join(", ")}…
-                      </div>
-                    )}
-                    {sc.planningSource.taskIds?.length > 0 && (
-                      <div style={{ fontSize: 9, color: C.dim, marginTop: 2, fontFamily: mono }}>
-                        {sc.planningSource.taskIds.length} tarea{sc.planningSource.taskIds.length !== 1 ? "s" : ""} vinculadas al planning
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Row 4: vehicles + workers chips */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {(sc.vehicleSchedule || []).map(v => {
-                    const stops = (v.assignments || []).filter(a => !a._break && !a._travel).length;
-                    return (
-                      <div key={v._id} style={{ display: "flex", alignItems: "center", gap: 5, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", fontSize: 10, color: C.muted }}>
-                        <span style={{ color: C.dim }}>🚛</span>
-                        <span style={{ color: C.text, fontWeight: 600 }}>{v.nombre || v.matricula || "?"}</span>
-                        <span style={{ color: C.dim }}>{stops}p</span>
-                        {v.turno && <span style={{ color: C.dim, borderLeft: `1px solid ${C.border}`, paddingLeft: 5 }}>{v.turno.split("(")[0].trim()}</span>}
-                      </div>
-                    );
-                  })}
-                  {(sc.workerSchedule || []).map(w => (
-                    <div key={w._id} style={{ display: "flex", alignItems: "center", gap: 5, background: C.greenDim, border: `1px solid ${C.green}33`, borderRadius: 6, padding: "3px 8px", fontSize: 10, color: C.green }}>
-                      <span>{w.nombre} {w.apellidos || ""}</span>
-                      <span style={{ color: C.dim, borderLeft: `1px solid ${C.green}33`, paddingLeft: 5 }}>{(w.turno || "").split("(")[0].trim()}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* New project modal */}
+      {newModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
+          onClick={() => setNewModal(null)}>
+          <div style={{ background: C.card, borderRadius: 14, padding: "28px 28px 22px", width: 400, boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: `1px solid ${C.border}` }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 18 }}>Nuevo proyecto</div>
+            <input autoFocus placeholder="Nombre del proyecto *" value={newModal.nombre}
+              onChange={e => setNewModal(p => ({ ...p, nombre: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && createProject()}
+              style={inpStyle} />
+            <input placeholder="Descripción (opcional)" value={newModal.descripcion}
+              onChange={e => setNewModal(p => ({ ...p, descripcion: e.target.value }))}
+              style={inpStyle} />
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Mes de servicio</label>
+              <input type="month" value={newModal.mes}
+                onChange={e => setNewModal(p => ({ ...p, mes: e.target.value }))}
+                style={{ ...inpStyle, marginBottom: 0, width: "auto", colorScheme: "dark" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+              <button onClick={() => setNewModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
+              <button onClick={createProject} disabled={creating || !newModal.nombre.trim()} style={{
+                flex: 2, padding: "9px 0", background: C.blue, border: "none", color: "#fff",
+                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: creating ? "wait" : "pointer",
+                fontFamily: font, opacity: !newModal.nombre.trim() ? .5 : 1,
+              }}>{creating ? "Creando…" : "Crear proyecto"}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1996,13 +2023,54 @@ function TabEscenarios({ onLoadScenario }) {
 }
 
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
+export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate }) {
+  const [subTab, setSubTab] = useState("vrp");
+  const SUB_TABS = [
+    { key: "vrp",          label: "VRP / Gantt" },
+    { key: "vehiculos",    label: `Vehículos${vehicles.length ? ` (${vehicles.length})` : ""}` },
+    { key: "trabajadores", label: `Trabajadores${workers.length ? ` (${workers.length})` : ""}` },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+      <div style={{
+        height: 38, flexShrink: 0,
+        background: C.card, borderBottom: `1px solid ${C.border}`,
+        display: "flex", alignItems: "stretch", padding: "0 20px", gap: 2,
+      }}>
+        {SUB_TABS.map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)} style={{
+            background: "none", border: "none", cursor: "pointer",
+            padding: "0 14px", fontFamily: font,
+            fontSize: 12, fontWeight: subTab === t.key ? 600 : 400,
+            color: subTab === t.key ? C.text : C.muted,
+            borderBottom: `2px solid ${subTab === t.key ? C.blue : "transparent"}`,
+            marginBottom: -1, transition: "color .12s",
+          }}>{t.label}</button>
+        ))}
+      </div>
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: subTab === "vrp" ? "flex" : "none", overflow: "hidden" }}>
+          <TabPlanificacion
+            vehicles={vehicles} workers={workers}
+            activeProject={activeProject}
+            onProjectUpdate={onProjectUpdate}
+          />
+        </div>
+        {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} />}
+        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} />}
+      </div>
+    </div>
+  );
+}
+
 function SchedulingPage({ sesion, onLogout }) {
-  const [tab,            setTab]            = useState("planificacion");
-  const [vehicles,       setVehicles]       = useState([]);
-  const [workers,        setWorkers]        = useState([]);
-  const [loadingV,       setLoadingV]       = useState(true);
-  const [loadingW,       setLoadingW]       = useState(true);
-  const [loadedScenario, setLoadedScenario] = useState(null);
+  const [tab,              setTab]              = useState("proyectos");
+  const [vehicles,         setVehicles]         = useState([]);
+  const [workers,          setWorkers]          = useState([]);
+  const [loadingV,         setLoadingV]         = useState(true);
+  const [loadingW,         setLoadingW]         = useState(true);
+  const [activeProject,    setActiveProject]    = useState(null);
+  const [planningEverOpen, setPlanningEverOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "scheduling_vehicles"), snap => {
@@ -2022,85 +2090,198 @@ function SchedulingPage({ sesion, onLogout }) {
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
 
-  const TABS = [
-    { key: "planificacion", label: "Planificación" },
+  async function handleProjectUpdate(updates) {
+    if (!activeProject) return;
+    const ref = doc(db, "scheduling_projects", activeProject._id);
+    await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
+    setActiveProject(prev => ({ ...prev, ...updates }));
+  }
+
+  function openProject(p) {
+    setActiveProject(p);
+    setPlanningEverOpen(false);
+    setTab("planificacion");
+  }
+
+  function closeProject() {
+    setActiveProject(null);
+    setPlanningEverOpen(false);
+    setTab("planificacion");
+  }
+
+  function goToTab(key) {
+    if (key === "planning") setPlanningEverOpen(true);
+    setTab(key);
+  }
+
+  const PROJECT_TABS = [
+    { key: "planning",      label: "Planning" },
+    { key: "planificacion", label: "Scheduling" },
     { key: "vehiculos",     label: `Vehículos${vehicles.length ? ` (${vehicles.length})` : ""}` },
     { key: "trabajadores",  label: `Trabajadores${workers.length ? ` (${workers.length})` : ""}` },
-    { key: "escenarios",    label: "Escenarios" },
   ];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
-      {/* Header */}
-      <div style={{
-        height: 52, flexShrink: 0, background: C.card,
-        borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px", zIndex: 10,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
-            onMouseEnter={e => e.currentTarget.style.color = C.muted}
-            onMouseLeave={e => e.currentTarget.style.color = C.dim}>
-            FleetComms
-          </a>
-          <div style={{ width: 1, height: 16, background: C.border2 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Scheduling</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion.nombre}</div>
-            <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion.rol}</div>
+  const UserAvatar = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion.nombre}</div>
+        <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion.rol}</div>
+      </div>
+      <button onClick={onLogout} title="Cerrar sesión" style={{
+        width: 32, height: 32, borderRadius: "50%", background: C.surface2,
+        border: `1px solid ${C.border}`, color: C.muted, fontSize: 11, fontWeight: 600,
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "all .15s",
+      }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+      >{initials}</button>
+    </div>
+  );
+
+  /* ── PROJECTS LANDING (no active project) ─────────────────────── */
+  if (!activeProject) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
+        <div style={{
+          height: 52, flexShrink: 0, background: C.card,
+          borderBottom: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 20px", zIndex: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
+              onMouseEnter={e => e.currentTarget.style.color = C.muted}
+              onMouseLeave={e => e.currentTarget.style.color = C.dim}>
+              FleetComms
+            </a>
+            <div style={{ width: 1, height: 16, background: C.border2 }} />
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Proyectos</div>
           </div>
-          <button onClick={onLogout} title="Cerrar sesión" style={{
-            width: 32, height: 32, borderRadius: "50%", background: C.surface2,
-            border: `1px solid ${C.border}`, color: C.muted, fontSize: 11, fontWeight: 600,
-            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all .15s",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >{initials}</button>
-        </div>
-      </div>
-
-      {/* Tab bar */}
-      <div style={{
-        height: 40, flexShrink: 0, background: C.card,
-        borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "stretch", padding: "0 20px", gap: 2, zIndex: 5,
-      }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            background: "none", border: "none", cursor: "pointer",
-            padding: "0 14px", fontFamily: font,
-            fontSize: 13, fontWeight: tab === t.key ? 600 : 400,
-            color: tab === t.key ? C.text : C.muted,
-            borderBottom: `2px solid ${tab === t.key ? C.blue : "transparent"}`,
-            marginBottom: -1, transition: "color .12s",
-          }}>{t.label}</button>
-        ))}
-      </div>
-
-      {/* Body — TabPlanificacion stays mounted to preserve state */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <div style={{ flex: 1, display: tab === "planificacion" ? "flex" : "none", overflow: "hidden" }}>
-          <TabPlanificacion
-            vehicles={vehicles} workers={workers}
-            loadedScenario={loadedScenario}
-            onScenarioLoaded={() => setLoadedScenario(null)}
-          />
-        </div>
-        {tab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} />}
-        {tab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} />}
-        {tab === "escenarios"   && (
-          <TabEscenarios
-            onLoadScenario={sc => {
-              setLoadedScenario(sc);
-              setTab("planificacion");
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <a href="/planning" style={{
+              fontSize: 12, color: C.muted, fontFamily: font, textDecoration: "none",
+              padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.border}`,
+              transition: "all .15s", display: "flex", alignItems: "center", gap: 6,
             }}
-          />
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 3 9 21"/></svg>
+              Planning
+            </a>
+            {UserAvatar}
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: "auto" }}>
+          <TabProyectos activeProject={null} onOpenProject={openProject} />
+        </div>
+      </div>
+    );
+  }
+
+  /* ── PROJECT WORKSPACE (active project) ────────────────────────── */
+  const STATUS_COLORS = { nuevo: C.dim, con_planning: C.blue, schedulado: C.green, publicado: "#f59e0b" };
+  const STATUS_LABELS = { nuevo: "Nuevo", con_planning: "Con planning", schedulado: "Schedulado", publicado: "Publicado" };
+
+  const IconPlanning = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
+  const IconSchedule = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+
+  function RailBtn({ navKey, icon, label }) {
+    const active = tab === navKey;
+    return (
+      <div style={{ position: "relative", display: "flex", justifyContent: "center" }} className="rail-item">
+        <button onClick={() => goToTab(navKey)} title={label} style={{
+          width: 44, height: 44, borderRadius: 10,
+          background: active ? `${C.blue}22` : "none",
+          border: `1px solid ${active ? `${C.blue}55` : "transparent"}`,
+          color: active ? C.blue : C.dim,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all .15s",
+        }}
+          onMouseEnter={e => { if (!active) { e.currentTarget.style.background = C.surface2; e.currentTarget.style.color = C.muted; } }}
+          onMouseLeave={e => { if (!active) { e.currentTarget.style.background = active ? `${C.blue}22` : "none"; e.currentTarget.style.color = active ? C.blue : C.dim; } }}
+        >
+          {icon}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", height: "100vh", background: C.bg, fontFamily: font }}>
+
+      {/* ── ICON RAIL (48px) ───────────────────────────────────────── */}
+      <div style={{
+        width: 56, flexShrink: 0,
+        background: C.card, borderRight: `1px solid ${C.border}`,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        paddingTop: 10, paddingBottom: 10, gap: 4, zIndex: 20,
+      }}>
+        {/* Back to projects */}
+        <button onClick={closeProject} title="Todos los proyectos" style={{
+          width: 44, height: 36, borderRadius: 8, background: "none",
+          border: "none", color: C.dim, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all .15s", marginBottom: 6,
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = C.surface2; e.currentTarget.style.color = C.muted; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = C.dim; }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
+        {/* Project initial */}
+        <div title={activeProject.nombre} style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: `${C.blue}22`, border: `1px solid ${C.blue}44`,
+          color: C.blue, fontSize: 12, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 8, cursor: "default",
+        }}>
+          {(activeProject.nombre?.[0] ?? "P").toUpperCase()}
+        </div>
+
+        {/* Nav icons */}
+        <RailBtn navKey="planning"      icon={IconPlanning} label="Planning"   />
+        <RailBtn navKey="planificacion" icon={IconSchedule} label="Scheduling" />
+
+        {/* User at bottom */}
+        <div style={{ flex: 1 }} />
+        <button onClick={onLogout} title={`${sesion.nombre} — Cerrar sesión`} style={{
+          width: 32, height: 32, borderRadius: "50%", background: C.surface2,
+          border: `1px solid ${C.border}`, color: C.muted, fontSize: 10, fontWeight: 700,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all .15s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+        >{initials}</button>
+      </div>
+
+      {/* ── CONTENT AREA — position:relative so tabs stack with absolute inset ── */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        {/* Planning: always mounted once opened, visibility:hidden preserves
+            Leaflet dimensions so tiles render correctly when tab is inactive */}
+        {planningEverOpen && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", overflow: "hidden",
+            visibility: tab === "planning" ? "visible" : "hidden",
+            pointerEvents: tab === "planning" ? "auto" : "none",
+          }}>
+            <PlanningPage sesion={sesion} onLogout={() => {}} projectId={activeProject._id} embedded />
+          </div>
         )}
+        {/* Scheduling — standard display toggle, no Leaflet inside */}
+        <div style={{
+          position: "absolute", inset: 0, display: tab === "planificacion" ? "flex" : "none",
+          flexDirection: "column", overflow: "hidden",
+        }}>
+          <SchedulingModuleWrapper
+            vehicles={vehicles} workers={workers} loadingV={loadingV} loadingW={loadingW}
+            activeProject={activeProject} onProjectUpdate={handleProjectUpdate}
+          />
+        </div>
       </div>
     </div>
   );
@@ -2111,7 +2292,7 @@ const USUARIOS_INIT = [
   { id:"1", nombre:"Admin", apellidos:"Sistema", usuario:"admin", password:"admin123", rol:"admin", activo:true },
 ];
 
-function LoginScheduling({ onLogin }) {
+export function LoginScheduling({ onLogin }) {
   const [usuario,  setUsuario]  = useState("");
   const [password, setPassword] = useState("");
   const [err,      setErr]      = useState("");
@@ -2151,7 +2332,7 @@ function LoginScheduling({ onLogin }) {
       <div style={{ width: 360, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px", boxShadow: "0 16px 48px rgba(0,0,0,.5)", animation: "sched-fadein .3s ease both" }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>FleetComms</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Scheduling</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning & Scheduling</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
         </div>
         <div style={{ marginBottom: 14 }}>
@@ -2201,11 +2382,11 @@ function LoginScheduling({ onLogin }) {
 // ── ROOT ──────────────────────────────────────────────────────────
 export default function SchedulingApp() {
   const [sesion, setSesion] = useState(() => {
-    try { const s = localStorage.getItem("fc_scheduling_session"); return s ? JSON.parse(s) : null; }
+    try { const s = localStorage.getItem("fc_session"); return s ? JSON.parse(s) : null; }
     catch { return null; }
   });
-  function handleLogin(u)  { setSesion(u); localStorage.setItem("fc_scheduling_session", JSON.stringify(u)); }
-  function handleLogout()  { setSesion(null); localStorage.removeItem("fc_scheduling_session"); }
+  function handleLogin(u)  { setSesion(u); localStorage.setItem("fc_session", JSON.stringify(u)); }
+  function handleLogout()  { setSesion(null); localStorage.removeItem("fc_session"); }
   if (!sesion || sesion.rol !== "admin") return <LoginScheduling onLogin={handleLogin} />;
   return <SchedulingPage sesion={sesion} onLogout={handleLogout} />;
 }
