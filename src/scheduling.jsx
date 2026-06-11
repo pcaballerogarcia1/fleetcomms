@@ -972,6 +972,8 @@ function TabPlanificacion({ vehicles, workers }) {
   const [unassigneds, setUnassigneds] = useState({ vehicles: [], workers: [] });
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
+  const [publishModal, setPublishModal] = useState(null); // null | { tipo, mes }
+  const [publishing,   setPublishing]   = useState(false);
 
   const schedule   = schedules[mode];
   const unassigned = unassigneds[mode];
@@ -1054,6 +1056,71 @@ function TabPlanificacion({ vehicles, workers }) {
       setGenError(e.message || "Error al generar el escenario");
     }
     setGenerating(false);
+  }
+
+  function taskToUbicacion(task, idx) {
+    const campos = task.campos || {};
+    const field = (...keys) => {
+      for (const k of keys) {
+        const e = Object.entries(campos).find(([fk]) => fk.toLowerCase().trim() === k);
+        if (e?.[1] != null && String(e[1]).trim()) return String(e[1]).trim();
+      }
+      return "";
+    };
+    return {
+      id: "u" + idx,
+      pa: task.nombre || field("pa","idsap","id_sap","codigopoint","codigo","codi") || ("PA-" + (idx + 1)),
+      orden: idx + 1,
+      calle: field("calle","carrer","street","via"),
+      num: field("num","num.","número","numero"),
+      comentari: field("comentari","comentario","comment"),
+      barri: task.barrio || field("barri","barrio","neighbourhood","neighborhood","sector","zona"),
+      districte: field("districte","distrito","district"),
+      turno: field("turno","turn","shift"),
+      dia: field("día","dia","day"),
+      lat: +task.lat || 0,
+      lng: +task.lng || 0,
+      elementos: [],
+      realizado: false,
+      realizadoPor: null,
+      realizadoEn: null,
+      nota: "",
+    };
+  }
+
+  async function publishToRoutes(tipo, mes) {
+    const vehicleSchedule = schedules.vehicles;
+    if (!vehicleSchedule) return;
+    setPublishing(true);
+    try {
+      for (const row of vehicleSchedule) {
+        const stops = row.assignments.filter(a => !a._break && !a._travel);
+        if (stops.length === 0) continue;
+        const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
+        // Build a simple polyline from stop coords for the map
+        const recorrido = stops
+          .filter(a => hasCoords(a.lat, a.lng))
+          .map(a => [+a.lat, +a.lng]);
+        const vehicleLabel = row.nombre || row.matricula || "Vehículo";
+        await addDoc(collection(db, "planes"), {
+          tipo,
+          nombre: `${vehicleLabel} · ${mes}`,
+          archivo: "vrp-generado",
+          turno: row.turno || "",
+          mes,
+          diaServicio: "",
+          ubicaciones,
+          recorrido,
+          fechaSubida: Date.now(),
+          origenVRP: true,
+        });
+      }
+      setPublishModal(null);
+    } catch (e) {
+      console.error("publishToRoutes error:", e);
+      alert("Error al publicar: " + (e.message || e));
+    }
+    setPublishing(false);
   }
 
   const canGenerate  = (vehicles.length > 0 || workers.length > 0) && tasks.length > 0 && !generating;
@@ -1191,8 +1258,27 @@ function TabPlanificacion({ vehicles, workers }) {
               <span style={{ fontSize: 11, color: C.muted }}>km vacío</span>
             </div>
           )}
-          <div style={{ marginLeft: "auto", fontSize: 10, color: C.dim, fontFamily: mono }}>
-            {minToTime(constraints.startMin)} – {minToTime(constraints.endMin)}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>
+              {minToTime(constraints.startMin)} – {minToTime(constraints.endMin)}
+            </div>
+            {schedules.vehicles && (
+              <button
+                onClick={() => {
+                  const now = new Date();
+                  const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+                  setPublishModal({ tipo: "prev", mes });
+                }}
+                style={{
+                  padding: "5px 12px", background: C.greenDim, border: `1px solid ${C.green}44`,
+                  color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Publicar en Rutas
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1269,6 +1355,77 @@ function TabPlanificacion({ vehicles, workers }) {
             </div>
           )}
         </>
+      )}
+
+      {/* Publish modal */}
+      {publishModal && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
+        }} onClick={() => !publishing && setPublishModal(null)}>
+          <div style={{
+            background: C.card, borderRadius: 12, padding: "28px 28px 24px",
+            width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+            border: `1px solid ${C.border}`,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Publicar en Rutas</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 20 }}>
+              Se creará un plan por cada vehículo con sus paradas asignadas.
+            </div>
+
+            {/* Tipo */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 6 }}>Tipo de plan</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[["prev","Prev. Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
+                  <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k }))} style={{
+                    flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${publishModal.tipo === k ? C.blue : C.border}`,
+                    background: publishModal.tipo === k ? C.blueDim : "none",
+                    color: publishModal.tipo === k ? C.blueText : C.muted,
+                    fontSize: 10, fontWeight: publishModal.tipo === k ? 700 : 400,
+                    cursor: "pointer", fontFamily: font, textAlign: "center",
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mes */}
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 6 }}>Mes</div>
+              <input
+                type="month"
+                value={publishModal.mes}
+                onChange={e => setPublishModal(m => ({ ...m, mes: e.target.value }))}
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  padding: "8px 10px", borderRadius: 7,
+                  border: `1px solid ${C.border}`, background: C.surface2,
+                  color: C.text, fontSize: 12, fontFamily: font,
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setPublishModal(null)} disabled={publishing} style={{
+                flex: 1, padding: "9px 0", borderRadius: 7, border: `1px solid ${C.border}`,
+                background: "none", color: C.muted, fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: font,
+              }}>Cancelar</button>
+              <button onClick={() => publishToRoutes(publishModal.tipo, publishModal.mes)} disabled={publishing} style={{
+                flex: 2, padding: "9px 0", borderRadius: 7, border: "none",
+                background: publishing ? C.blueDim : C.blue,
+                color: publishing ? C.blueText : "#fff",
+                fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer",
+                fontFamily: font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}>
+                {publishing
+                  ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Publicando…</>
+                  : "Publicar planes"
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
