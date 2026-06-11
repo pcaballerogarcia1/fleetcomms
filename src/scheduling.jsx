@@ -694,25 +694,35 @@ function ConstraintsPanel({ c, onChange }) {
 // ── VEHICLES TAB ──────────────────────────────────────────────────
 function TabVehiculos({ vehicles, loading }) {
   const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa" };
-  const [form, setForm] = useState(empty);
+  const [form,   setForm]   = useState(empty);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+
+  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
+  const inpStyle = { ...selStyle };
 
   async function create() {
     if (!form.nombre.trim()) return;
     setSaving(true);
     await addDoc(collection(db, "scheduling_vehicles"), {
-      nombre: form.nombre.trim(),
-      matricula: form.matricula.trim(),
-      tipo: form.tipo,
-      turno: form.turno,
+      nombre: form.nombre.trim(), matricula: form.matricula.trim(),
+      tipo: form.tipo, turno: form.turno,
       capacidad: parseInt(form.capacidad) || 0,
-      activo: true,
-      createdAt: serverTimestamp(),
+      activo: true, createdAt: serverTimestamp(),
     });
-    setForm(empty);
-    setAdding(false);
-    setSaving(false);
+    setForm(empty); setAdding(false); setSaving(false);
+  }
+
+  async function save(id) {
+    setSaving(true);
+    await updateDoc(doc(db, "scheduling_vehicles", id), {
+      nombre: editForm.nombre.trim(), matricula: editForm.matricula.trim(),
+      tipo: editForm.tipo, turno: editForm.turno,
+      capacidad: parseInt(editForm.capacidad) || 0,
+    });
+    setEditId(null); setSaving(false);
   }
 
   async function remove(id) {
@@ -720,13 +730,24 @@ function TabVehiculos({ vehicles, loading }) {
     await deleteDoc(doc(db, "scheduling_vehicles", id));
   }
 
+  function startEdit(v) {
+    setEditId(v._id);
+    setEditForm({ nombre: v.nombre || "", matricula: v.matricula || "", tipo: v.tipo || "Camión lateral", turno: v.turno || "Jornada completa", capacidad: v.capacidad || "" });
+    setAdding(false);
+  }
+
   const inp = (key, placeholder, type = "text") => (
-    <input
-      type={type} placeholder={placeholder} value={form[key]}
+    <input type={type} placeholder={placeholder} value={form[key]}
       onChange={e => setForm({ ...form, [key]: e.target.value })}
       onKeyDown={e => e.key === "Enter" && create()}
-      style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}
-    />
+      style={inpStyle} />
+  );
+
+  const eInp = (key, placeholder, type = "text") => (
+    <input type={type} placeholder={placeholder} value={editForm[key] ?? ""}
+      onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
+      onKeyDown={e => e.key === "Enter" && save(editId)}
+      style={inpStyle} />
   );
 
   return (
@@ -736,13 +757,11 @@ function TabVehiculos({ vehicles, loading }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Vehículos</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{vehicles.length} registrado{vehicles.length !== 1 ? "s" : ""}</div>
         </div>
-        <button onClick={() => setAdding(!adding)} style={{
+        <button onClick={() => { setAdding(!adding); setEditId(null); }} style={{
           padding: "7px 14px", background: adding ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
           color: adding ? C.muted : C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600,
           cursor: "pointer", fontFamily: font, transition: "all .12s",
-        }}>
-          {adding ? "Cancelar" : "+ Añadir vehículo"}
-        </button>
+        }}>{adding ? "Cancelar" : "+ Añadir vehículo"}</button>
       </div>
 
       {adding && (
@@ -753,21 +772,17 @@ function TabVehiculos({ vehicles, loading }) {
             {inp("capacidad", "Capacidad (m³)", "number")}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}
-              style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}>
+            <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={selStyle}>
               {VEHICLE_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
-            <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })}
-              style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}>
+            <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })} style={selStyle}>
               {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <button onClick={create} disabled={saving || !form.nombre.trim()} style={{
               padding: "8px 18px", background: C.blue, border: "none", color: "#fff",
-              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: font,
-              opacity: !form.nombre.trim() ? .5 : 1, transition: "opacity .12s",
-            }}>
-              {saving ? "Guardando…" : "Guardar"}
-            </button>
+              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer",
+              fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
+            }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
         </div>
       )}
@@ -775,17 +790,33 @@ function TabVehiculos({ vehicles, loading }) {
       {loading ? (
         <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>Cargando…</div>
       ) : vehicles.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>
-          No hay vehículos. Añade uno para empezar.
-        </div>
+        <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>No hay vehículos. Añade uno para empezar.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {vehicles.map(v => (
-            <div key={v._id} style={{
-              background: C.card, border: `1px solid ${C.border}`, borderRadius: 9,
-              padding: "11px 16px", display: "flex", alignItems: "center", gap: 14,
-              animation: "sched-fadein .15s ease both",
-            }}>
+          {vehicles.map(v => editId === v._id ? (
+            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 14, animation: "sched-fadein .12s ease both" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {eInp("nombre", "Nombre")}
+                {eInp("matricula", "Matrícula")}
+                {eInp("capacidad", "Capacidad (m³)", "number")}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select value={editForm.tipo} onChange={e => setEditForm({ ...editForm, tipo: e.target.value })} style={selStyle}>
+                  {VEHICLE_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+                <select value={editForm.turno} onChange={e => setEditForm({ ...editForm, turno: e.target.value })} style={selStyle}>
+                  {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+                <button onClick={() => save(v._id)} disabled={saving} style={{ padding: "8px 16px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+                  {saving ? "…" : "Guardar"}
+                </button>
+                <button onClick={() => setEditId(null)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.blueText, flexShrink: 0 }}>
                 {v.nombre[0].toUpperCase()}
               </div>
@@ -798,14 +829,16 @@ function TabVehiculos({ vehicles, loading }) {
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
                 </div>
               </div>
-              <button onClick={() => remove(v._id)} style={{
-                background: "none", border: `1px solid ${C.border}`, color: C.dim,
-                width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14,
-                display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s",
-              }}
+              <button onClick={() => startEdit(v)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                ✎
+              </button>
+              <button onClick={() => remove(v._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-              >×</button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                ×
+              </button>
             </div>
           ))}
         </div>
@@ -817,25 +850,34 @@ function TabVehiculos({ vehicles, loading }) {
 // ── WORKERS TAB ───────────────────────────────────────────────────
 function TabTrabajadores({ workers, vehicles, loading }) {
   const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "" };
-  const [form, setForm] = useState(empty);
-  const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [form,     setForm]     = useState(empty);
+  const [adding,   setAdding]   = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [editForm, setEditForm] = useState({});
+
+  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
 
   async function create() {
     if (!form.nombre.trim()) return;
     setSaving(true);
     await addDoc(collection(db, "scheduling_workers"), {
-      nombre: form.nombre.trim(),
-      apellidos: form.apellidos.trim(),
-      turno: form.turno,
-      rol: form.rol,
+      nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
+      turno: form.turno, rol: form.rol,
       vehiculoId: form.vehiculoId || "",
-      activo: true,
-      createdAt: serverTimestamp(),
+      activo: true, createdAt: serverTimestamp(),
     });
-    setForm(empty);
-    setAdding(false);
-    setSaving(false);
+    setForm(empty); setAdding(false); setSaving(false);
+  }
+
+  async function save(id) {
+    setSaving(true);
+    await updateDoc(doc(db, "scheduling_workers", id), {
+      nombre: editForm.nombre.trim(), apellidos: (editForm.apellidos || "").trim(),
+      turno: editForm.turno, rol: editForm.rol,
+      vehiculoId: editForm.vehiculoId || "",
+    });
+    setEditId(null); setSaving(false);
   }
 
   async function remove(id) {
@@ -843,13 +885,32 @@ function TabTrabajadores({ workers, vehicles, loading }) {
     await deleteDoc(doc(db, "scheduling_workers", id));
   }
 
+  function startEdit(w) {
+    setEditId(w._id);
+    setEditForm({ nombre: w.nombre || "", apellidos: w.apellidos || "", turno: w.turno || "Mañana (06-14)", rol: w.rol || "conductor", vehiculoId: w.vehiculoId || "" });
+    setAdding(false);
+  }
+
   const inp = (key, placeholder) => (
-    <input
-      type="text" placeholder={placeholder} value={form[key]}
+    <input type="text" placeholder={placeholder} value={form[key]}
       onChange={e => setForm({ ...form, [key]: e.target.value })}
       onKeyDown={e => e.key === "Enter" && create()}
-      style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}
-    />
+      style={selStyle} />
+  );
+
+  const eInp = (key, placeholder) => (
+    <input type="text" placeholder={placeholder} value={editForm[key] ?? ""}
+      onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
+      onKeyDown={e => e.key === "Enter" && save(editId)}
+      style={selStyle} />
+  );
+
+  const VehicleSelect = ({ value, onChange }) => (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ ...selStyle, color: value ? C.text : C.dim }}>
+      <option value="">Sin vehículo asignado</option>
+      {(vehicles || []).map(v => <option key={v._id} value={v._id}>{v.nombre || v.matricula}{v.matricula && v.nombre ? ` (${v.matricula})` : ""}</option>)}
+    </select>
   );
 
   return (
@@ -859,13 +920,11 @@ function TabTrabajadores({ workers, vehicles, loading }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Trabajadores</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{workers.length} registrado{workers.length !== 1 ? "s" : ""}</div>
         </div>
-        <button onClick={() => setAdding(!adding)} style={{
+        <button onClick={() => { setAdding(!adding); setEditId(null); }} style={{
           padding: "7px 14px", background: adding ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
           color: adding ? C.muted : C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600,
           cursor: "pointer", fontFamily: font, transition: "all .12s",
-        }}>
-          {adding ? "Cancelar" : "+ Añadir trabajador"}
-        </button>
+        }}>{adding ? "Cancelar" : "+ Añadir trabajador"}</button>
       </div>
 
       {adding && (
@@ -875,8 +934,7 @@ function TabTrabajadores({ workers, vehicles, loading }) {
             {inp("apellidos", "Apellidos")}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-            <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })}
-              style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}>
+            <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })} style={selStyle}>
               {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 6, padding: 3 }}>
@@ -891,18 +949,12 @@ function TabTrabajadores({ workers, vehicles, loading }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select value={form.vehiculoId} onChange={e => setForm({ ...form, vehiculoId: e.target.value })}
-              style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: form.vehiculoId ? C.text : C.dim, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" }}>
-              <option value="">Sin vehículo asignado</option>
-              {(vehicles || []).map(v => <option key={v._id} value={v._id}>{v.nombre || v.matricula} {v.matricula && v.nombre ? `(${v.matricula})` : ""}</option>)}
-            </select>
+            <VehicleSelect value={form.vehiculoId} onChange={v => setForm({ ...form, vehiculoId: v })} />
             <button onClick={create} disabled={saving || !form.nombre.trim()} style={{
               padding: "8px 18px", background: C.blue, border: "none", color: "#fff",
               borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer",
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
-            }}>
-              {saving ? "Guardando…" : "Guardar"}
-            </button>
+            }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
         </div>
       )}
@@ -910,17 +962,42 @@ function TabTrabajadores({ workers, vehicles, loading }) {
       {loading ? (
         <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>Cargando…</div>
       ) : workers.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>
-          No hay trabajadores. Añade uno para empezar.
-        </div>
+        <div style={{ textAlign: "center", padding: 48, color: C.dim, fontSize: 13 }}>No hay trabajadores. Añade uno para empezar.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {workers.map(w => (
-            <div key={w._id} style={{
-              background: C.card, border: `1px solid ${C.border}`, borderRadius: 9,
-              padding: "11px 16px", display: "flex", alignItems: "center", gap: 14,
-              animation: "sched-fadein .15s ease both",
-            }}>
+          {workers.map(w => editId === w._id ? (
+            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 14, animation: "sched-fadein .12s ease both" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                {eInp("nombre", "Nombre")}
+                {eInp("apellidos", "Apellidos")}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <select value={editForm.turno} onChange={e => setEditForm({ ...editForm, turno: e.target.value })} style={selStyle}>
+                  {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+                <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 6, padding: 3 }}>
+                  {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
+                    <button key={v} onClick={() => setEditForm({ ...editForm, rol: v })} style={{
+                      padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
+                      background: editForm.rol === v ? C.blue : "none",
+                      color: editForm.rol === v ? "#fff" : C.muted,
+                      fontSize: 11, fontFamily: font, transition: "all .12s",
+                    }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <VehicleSelect value={editForm.vehiculoId} onChange={v => setEditForm({ ...editForm, vehiculoId: v })} />
+                <button onClick={() => save(w._id)} disabled={saving} style={{ padding: "8px 16px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+                  {saving ? "…" : "Guardar"}
+                </button>
+                <button onClick={() => setEditId(null)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.greenDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.green, flexShrink: 0, fontWeight: 700 }}>
                 {w.nombre[0].toUpperCase()}
               </div>
@@ -929,20 +1006,24 @@ function TabTrabajadores({ workers, vehicles, loading }) {
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <span>{w.turno}</span>
                   <span style={{ color: w.rol === "supervisor" ? C.amber : C.dim }}>{w.rol}</span>
-                  {w.vehiculoId && (() => {
+                  {(() => {
                     const v = (vehicles || []).find(v => v._id === w.vehiculoId);
-                    return v ? <span style={{ color: C.blue, background: C.blueDim, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}>🚛 {v.nombre || v.matricula}</span> : null;
+                    return v
+                      ? <span style={{ color: C.blue, background: C.blueDim, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}>🚛 {v.nombre || v.matricula}</span>
+                      : <span style={{ color: C.red, fontSize: 10 }}>Sin vehículo</span>;
                   })()}
                 </div>
               </div>
-              <button onClick={() => remove(w._id)} style={{
-                background: "none", border: `1px solid ${C.border}`, color: C.dim,
-                width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14,
-                display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s",
-              }}
+              <button onClick={() => startEdit(w)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                ✎
+              </button>
+              <button onClick={() => remove(w._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-              >×</button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                ×
+              </button>
             </div>
           ))}
         </div>
