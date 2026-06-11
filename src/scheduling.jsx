@@ -1013,70 +1013,60 @@ function TabPlanificacion({ vehicles, workers }) {
       }));
 
       // ── Step 2: Worker schedule ──────────────────────────────────
-      // Linked workers (vehiculoId set): time-slice view of their vehicle's route.
-      //   Multiple workers can share one vehicle covering different shifts.
-      // Unlinked workers (no vehiculoId): independent VRP over all tasks.
-      const linkedWorkers   = workers.filter(w => w.vehiculoId && vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
-      const unlinkedWorkers = workers.filter(w => !w.vehiculoId || !vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
+      // Routes come ONLY from vehicles. Workers are human assignments
+      // on top of a vehicle route — they never generate routes on their own.
+      //
+      // Each worker must be linked to a vehicle via vehiculoId.
+      // Multiple workers can share one vehicle (e.g. morning + afternoon driver).
+      // Each assignment belongs to EXACTLY ONE worker: the linked worker whose
+      // turno window covers that time slot (earliest-start wins on overlap).
+      // Workers without a valid vehiculoId appear with empty assignments.
 
-      // Pre-compute each linked worker's turno window and group by vehicle.
-      // For each vehicle's assignment, only ONE worker "owns" it:
-      // the one whose window covers the assignment's within-day time,
-      // resolved by earliest window start → latest → alphabetical (stable).
-      const linkedWithTw = linkedWorkers.map(w => ({
+      // Pre-compute turno window for every worker
+      const workersWithTw = workers.map(w => ({
         ...w,
         _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
       }));
 
-      // Per-vehicle sorted list (earliest turno first, then alphabetical)
+      // Group workers by vehiculoId so we can resolve ownership per vehicle
       const vehicleWorkerMap = {};
-      for (const w of linkedWithTw) {
-        if (!vehicleWorkerMap[w.vehiculoId]) vehicleWorkerMap[w.vehiculoId] = [];
-        vehicleWorkerMap[w.vehiculoId].push(w);
+      for (const w of workersWithTw) {
+        const vid = w.vehiculoId;
+        if (!vid) continue;
+        if (!vehicleWorkerMap[vid]) vehicleWorkerMap[vid] = [];
+        vehicleWorkerMap[vid].push(w);
       }
-      for (const key of Object.keys(vehicleWorkerMap)) {
-        vehicleWorkerMap[key].sort((a, b) =>
+      // Sort each vehicle's workers by turno start (earliest first → first-match wins)
+      for (const list of Object.values(vehicleWorkerMap)) {
+        list.sort((a, b) =>
           a._tw.start !== b._tw.start
             ? a._tw.start - b._tw.start
             : (a.nombre || "").localeCompare(b.nombre || "")
         );
       }
 
-      const linkedRows = linkedWithTw.map(w => {
+      const workerRows = workersWithTw.map(w => {
         const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === w.vehiculoId);
-        const peersForVehicle = vehicleWorkerMap[w.vehiculoId];
-        const wId = w._id || w.id;
+        if (!vehicleRow) return { ...w, assignments: [], totalKm: 0 };
 
-        const workerAssignments = vehicleRow.assignments.filter(a => {
+        const peers = vehicleWorkerMap[w.vehiculoId] || [];
+        const wId   = w._id || w.id;
+
+        const myAssignments = vehicleRow.assignments.filter(a => {
+          // Normalize _start to within-day minutes (repeats each day)
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
-          const withinDay = a._start - dayOffset;
-          // Find the first peer whose window covers this time slot.
-          // This guarantees each assignment belongs to exactly one worker.
-          const owner = peersForVehicle.find(
-            p => withinDay >= p._tw.start && withinDay < p._tw.end
-          );
+          const t = a._start - dayOffset;
+          // Owner = first peer whose window contains this time slot
+          const owner = peers.find(p => t >= p._tw.start && t < p._tw.end);
           return owner && (owner._id || owner.id) === wId;
         });
 
-        const workerKm = workerAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
-        return { ...w, assignments: workerAssignments, totalKm: workerKm };
+        const myKm = myAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
+        return { ...w, assignments: myAssignments, totalKm: myKm };
       });
 
-      let unlinkedRows = [];
-      let workerUnassigned = [];
-      if (unlinkedWorkers.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const wr = await generateScenario(tasks, unlinkedWorkers, constraints);
-        unlinkedRows = unlinkedWorkers.map((w, i) => ({
-          ...w,
-          assignments: wr.schedule[i]?.assignments || [],
-          totalKm:     wr.schedule[i]?.totalKm     || 0,
-        }));
-        workerUnassigned = wr.unassigned;
-      }
-
-      setSchedules({ vehicles: vehicleSchedule, workers: [...linkedRows, ...unlinkedRows] });
-      setUnassigneds({ vehicles: vr.unassigned, workers: workerUnassigned });
+      setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
+      setUnassigneds({ vehicles: vr.unassigned, workers: [] });
       setConstraints(prev => ({ ...prev, days: vr.daysUsed }));
 
     } catch (e) {
@@ -1266,12 +1256,11 @@ function TabPlanificacion({ vehicles, workers }) {
       {mode === "workers" && schedules.workers && (() => {
         const sinVehiculo = workers.filter(w => !w.vehiculoId || !vehicles.some(v => (v._id || v.id) === w.vehiculoId));
         if (!sinVehiculo.length) return null;
+        const nombres = sinVehiculo.map(w => w.nombre).join(", ");
         return (
-          <div style={{ padding: "6px 20px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 11, color: C.amber, flexShrink: 0 }}>
-            {sinVehiculo.length === 1
-              ? `${sinVehiculo[0].nombre} no tiene vehículo asignado — se ha calculado ruta independiente.`
-              : `${sinVehiculo.length} trabajadores sin vehículo asignado — se ha calculado ruta independiente para cada uno.`}
-            {" "}Asigna vehículo en la pestaña Trabajadores para ver la ruta derivada del turno del vehículo.
+          <div style={{ padding: "6px 20px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, fontSize: 11, color: C.red, flexShrink: 0 }}>
+            <strong>Sin vehículo asignado (sin paradas):</strong> {nombres}.
+            {" "}Ve a la pestaña Trabajadores y asigna un vehículo a cada uno.
           </div>
         );
       })()}
