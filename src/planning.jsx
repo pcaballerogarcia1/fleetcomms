@@ -1011,7 +1011,12 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
-  const [layers, setLayers] = useState([]);
+  const lsKey = projectId ? `fc_layers_${projectId}` : null;
+
+  const [layers, setLayers] = useState(() => {
+    if (!lsKey) return [];
+    try { return JSON.parse(localStorage.getItem(lsKey)) ?? []; } catch { return []; }
+  });
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [tab, setTab] = useState("mapa");
@@ -1019,6 +1024,12 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   const timetableCol = projectId
     ? collection(db, "scheduling_projects", projectId, "timetable")
     : collection(db, "planning_timetable");
+
+  // Persist layers to localStorage whenever they change
+  useEffect(() => {
+    if (!lsKey) return;
+    try { localStorage.setItem(lsKey, JSON.stringify(layers)); } catch {}
+  }, [layers, lsKey]);
 
   async function handleUpload(files) {
     setUploading(true);
@@ -1082,7 +1093,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
             fontSize: 11, fontWeight: 700, color: C.muted,
             letterSpacing: 2, textTransform: "uppercase",
           }}>
-            FleetComms
+            Operantia
           </div>
           <div style={{ width: 1, height: 16, background: C.border2 }} />
           <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planning</div>
@@ -1244,7 +1255,7 @@ function LoginPlanning({ onLogin }) {
         animation: "planning-fadein .3s ease both",
       }}>
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>FleetComms</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operantia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
         </div>

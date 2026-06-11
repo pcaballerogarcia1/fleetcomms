@@ -2153,7 +2153,7 @@ function SchedulingPage({ sesion, onLogout }) {
             <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
               onMouseEnter={e => e.currentTarget.style.color = C.muted}
               onMouseLeave={e => e.currentTarget.style.color = C.dim}>
-              FleetComms
+              Operantia
             </a>
             <div style={{ width: 1, height: 16, background: C.border2 }} />
             <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Proyectos</div>
@@ -2331,7 +2331,7 @@ export function LoginScheduling({ onLogin }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
       <div style={{ width: 360, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px", boxShadow: "0 16px 48px rgba(0,0,0,.5)", animation: "sched-fadein .3s ease both" }}>
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>FleetComms</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operantia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning & Scheduling</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
         </div>

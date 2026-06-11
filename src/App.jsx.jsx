@@ -1648,7 +1648,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
     const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8"});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = "fleetcomms-rutas.csv"; a.click();
+    a.href = url; a.download = "operantia-rutas.csv"; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -1811,7 +1811,7 @@ function Login({onLogin}){
         {/* Logo */}
         <div style={{marginBottom:32}}>
           <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Fleet Management</div>
-          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>FleetComms</div>
+          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>Operantia</div>
         </div>
 
         {/* Form */}
@@ -1893,7 +1893,7 @@ export default function App(){
       {/* ── HEADER ── */}
       <div style={{...S.header,background:"rgba(22,27,39,0.96)",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>FleetComms</div>
+          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>Operantia</div>
           <div style={{width:1,height:16,background:C.border2}}/>
           <div style={{fontSize:14,fontWeight:600,color:C.text}}>{TAB_TITLES[tab]||tab}</div>
         </div>

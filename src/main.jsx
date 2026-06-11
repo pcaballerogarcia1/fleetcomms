@@ -51,7 +51,7 @@ function TopBar({ sesion, activeProject, path, onLogout }) {
       padding: "0 16px", fontFamily: font, gap: 6,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>FleetComms</span>
+        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Operantia</span>
         <span style={{ color: C.dim, margin: "0 4px" }}>/</span>
         {crumb("Proyectos", "/projects", path === "/projects")}
         {activeProject && <>
@@ -105,8 +105,6 @@ function WorkspaceRouter() {
   const [workers,       setWorkers]       = useState([]);
   const [loadingV,      setLoadingV]      = useState(true);
   const [loadingW,      setLoadingW]      = useState(true);
-  // Track if planning was ever opened (lazy mount for Leaflet)
-  const [planningMounted, setPlanningMounted] = useState(false);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -123,14 +121,6 @@ function WorkspaceRouter() {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
-
-  // Mount planning lazily so Leaflet always sees a visible container
-  useEffect(() => {
-    if (path === "/planning") setPlanningMounted(true);
-  }, [path]);
-
-  // Clear planningMounted when project changes
-  useEffect(() => { setPlanningMounted(false); }, [activeProject?._id]);
 
   // Firestore: vehicles + workers
   useEffect(() => {
@@ -166,46 +156,50 @@ function WorkspaceRouter() {
 
   if (path === "/login" || !sesion) return <LoginScheduling onLogin={login} />;
 
-  const Shell = ({ children, scroll = false }) => (
+  // Single shell — all pages coexist so PlanningPage stays mounted (preserves
+  // uploaded layers state across navigation within the same project)
+  return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
       <TopBar sesion={sesion} activeProject={activeProject} path={path} onLogout={logout} />
-      <div style={{ flex: 1, overflow: scroll ? "auto" : "hidden", position: "relative" }}>
-        {children}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+
+        {/* /projects — unmounts when leaving (no heavy state to preserve) */}
+        {path === "/projects" && (
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
+            <TabProyectos activeProject={activeProject} onOpenProject={openProject} />
+          </div>
+        )}
+
+        {/* /planning — always mounted while project is active.
+            visibility:hidden (not display:none) keeps Leaflet dimensions
+            correct and layers state alive regardless of navigation */}
+        {activeProject && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex",
+            visibility: path === "/planning" ? "visible" : "hidden",
+            pointerEvents: path === "/planning" ? "auto" : "none",
+          }}>
+            <PlanningPage
+              sesion={sesion} onLogout={logout}
+              projectId={activeProject._id} embedded
+            />
+          </div>
+        )}
+
+        {/* /scheduling — remounts on project change, no map state to preserve */}
+        {activeProject && path === "/scheduling" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+            <SchedulingModuleWrapper
+              vehicles={vehicles} workers={workers}
+              loadingV={loadingV} loadingW={loadingW}
+              activeProject={activeProject} onProjectUpdate={updateProject}
+            />
+          </div>
+        )}
+
       </div>
     </div>
   );
-
-  if (path === "/projects") return (
-    <Shell scroll>
-      <TabProyectos activeProject={activeProject} onOpenProject={openProject} />
-    </Shell>
-  );
-
-  if (activeProject) {
-    if (path === "/planning") return (
-      <Shell>
-        {planningMounted && (
-          <div style={{ position: "absolute", inset: 0, display: "flex" }}>
-            <PlanningPage sesion={sesion} onLogout={logout} projectId={activeProject._id} embedded />
-          </div>
-        )}
-      </Shell>
-    );
-
-    if (path === "/scheduling") return (
-      <Shell>
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-          <SchedulingModuleWrapper
-            vehicles={vehicles} workers={workers}
-            loadingV={loadingV} loadingW={loadingW}
-            activeProject={activeProject} onProjectUpdate={updateProject}
-          />
-        </div>
-      </Shell>
-    );
-  }
-
-  return null;
 }
 
 // ── Entry ─────────────────────────────────────────────────────────
