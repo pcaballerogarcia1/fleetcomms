@@ -307,34 +307,44 @@ const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8];
 
 const DAY_OPTIONS = [1, 2, 3, 5, 7, 14];
 
-function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [] }) {
+function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange }) {
   const [tooltip,      setTooltip]      = useState(null);
   const [pxPerMin,     setPxPerMin]     = useState(2);
   const [legendOpen,   setLegendOpen]   = useState(false);
   const [selectedDay,  setSelectedDay]  = useState(0);
+  const [dragging,     setDragging]     = useState(null); // { task, fromRowId }
+  const [dropRowId,    setDropRowId]    = useState(null);
+  const [stackPanel,   setStackPanel]   = useState(null); // { task, row }
 
-  // Always show full 24h per day
-  const chartW = 1440 * pxPerMin;
+  // Night-shift support: extend chart width beyond 24h if any row has shiftEnd > 1440
+  const maxShiftEnd = Math.max(1440, ...rows.map(r => r.shiftEnd ?? 1440));
+  const hasNightShift = maxShiftEnd > 1440;
+  const chartW = maxShiftEnd * pxPerMin;
 
-  // Hour ticks — density adapts to zoom
+  // Hour ticks — density adapts to zoom, go up to maxShiftEnd
   const ticks = [];
   const tickStep = pxPerMin < 0.75 ? 2 : 1;
-  for (let h = 0; h <= 24; h += tickStep) {
+  const maxH = Math.ceil(maxShiftEnd / 60);
+  for (let h = 0; h <= maxH; h += tickStep) {
     ticks.push({ h, x: h * 60 * pxPerMin });
   }
 
   // Sub-hour ticks
   const subTicks = [];
   const subMin = pxPerMin >= 4 ? 15 : 30;
-  for (let m = 0; m < 1440; m += subMin) {
+  for (let m = 0; m < maxShiftEnd; m += subMin) {
     if (m % 60 === 0) continue;
     subTicks.push({ x: m * pxPerMin, quarter: m % 60 === 15 || m % 60 === 45 });
   }
 
-  // Inactive-hour bands (outside the shift window) within the 24h view
+  // Inactive-hour bands: left = before first shift, right = after all shifts (none if night-aware)
+  const minShiftStart = rows.length > 0
+    ? Math.min(...rows.map(r => r.shiftStart ?? startMin))
+    : startMin;
   const inactiveBands = [
-    startMin > 0   ? { x: 0,                  w: startMin * pxPerMin }         : null,
-    endMin   < 1440 ? { x: endMin * pxPerMin,  w: (1440 - endMin) * pxPerMin } : null,
+    minShiftStart > 0 ? { x: 0, w: minShiftStart * pxPerMin } : null,
+    // Right inactive: only when no night shifts (night extends past midnight)
+    !hasNightShift && endMin < 1440 ? { x: endMin * pxPerMin, w: (1440 - endMin) * pxPerMin } : null,
   ].filter(Boolean);
 
   // Collect unique barrios for legend
@@ -392,7 +402,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       </div>
 
       {/* ── Scrollable Gantt ── */}
-      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }}>
+      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={() => setStackPanel(null)}>
         <div style={{ display: "inline-block", minWidth: LABEL_W + chartW, minHeight: "100%" }}>
 
           {/* Time axis header */}
@@ -461,22 +471,52 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               </div>
 
               {/* Timeline */}
-              <div style={{ position: "relative", width: chartW, flexShrink: 0, background: ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
+              <div
+                style={{
+                  position: "relative", width: chartW, flexShrink: 0,
+                  background: dropRowId === (row._id || row.id) && dragging
+                    ? `${C.blue}18`
+                    : ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
+                  transition: "background .1s",
+                }}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropRowId(row._id || row.id); }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropRowId(null); }}
+                onDrop={e => {
+                  e.preventDefault(); setDropRowId(null);
+                  if (!dragging || !onScheduleChange) return;
+                  const toRowId = row._id || row.id;
+                  if (dragging.fromRowId === toRowId) return;
+                  onScheduleChange({ task: dragging.task, fromRowId: dragging.fromRowId, toRowId });
+                  setDragging(null);
+                }}
+              >
                 {ticks.map(({ h, x }) => (
                   <div key={h} style={{ position: "absolute", left: x, top: 0, bottom: 0, width: 1, background: C.border, opacity: .5 }} />
                 ))}
                 {subTicks.map(({ x }, i) => (
                   <div key={i} style={{ position: "absolute", left: x, top: 0, bottom: 0, width: 1, background: C.border, opacity: .15 }} />
                 ))}
+                {/* Midnight marker for night shifts */}
+                {hasNightShift && (
+                  <div style={{ position: "absolute", left: (1440 - selectedDay * 1440 < 0 ? 0 : (1440 - selectedDay * 1440)) * pxPerMin, top: 0, bottom: 0, width: 2, background: `${C.blue}55`, pointerEvents: "none", zIndex: 2 }} />
+                )}
 
-                {/* Inactive-hours shading per row */}
-                {inactiveBands.map(({ x, w: bw }, i) => (
-                  <div key={i} style={{ position: "absolute", left: x, top: 0, width: bw, height: "100%", background: "rgba(0,0,0,0.18)", pointerEvents: "none", zIndex: 1 }} />
-                ))}
+                {/* Inactive-hours shading per row (based on row's own shift window if available) */}
+                {(() => {
+                  const rs = row.shiftStart ?? minShiftStart;
+                  const re = row.shiftEnd   ?? (hasNightShift ? maxShiftEnd : endMin);
+                  const bands = [
+                    rs > 0           ? { x: 0,               w: rs * pxPerMin }               : null,
+                    re < maxShiftEnd ? { x: re * pxPerMin,   w: (maxShiftEnd - re) * pxPerMin } : null,
+                  ].filter(Boolean);
+                  return bands.map(({ x, w: bw }, i) => (
+                    <div key={i} style={{ position: "absolute", left: x, top: 0, width: bw, height: "100%", background: "rgba(0,0,0,0.18)", pointerEvents: "none", zIndex: 1 }} />
+                  ));
+                })()}
 
               {(row.assignments || []).filter(task => {
                   const dayOffset = selectedDay * 1440;
-                  return task._start >= dayOffset && task._start < dayOffset + 1440;
+                  return task._start >= dayOffset && task._start < dayOffset + maxShiftEnd;
                 }).map((task, ti) => {
                   const left = (task._start - selectedDay * 1440) * pxPerMin;
                   const dur  = task.duracion || 15;
@@ -486,7 +526,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   // Break block
                   if (task._break) return (
                     <div key={`b${ti}`} title={`Pausa · ${dur} min`} style={{
-                      position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4,
+                      position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
                       background: "repeating-linear-gradient(45deg,rgba(251,146,60,0.15) 0,rgba(251,146,60,0.15) 4px,transparent 4px,transparent 8px)",
                       border: "1px dashed rgba(251,146,60,0.4)", borderRadius: 3,
                     }} />
@@ -496,7 +536,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   if (task._travel) return (
                     <div key={`tr${ti}`}
                       title={`Km en vacío: ${task.km?.toFixed(2)} km · ${dur} min`}
-                      style={{ position: "absolute", left, top: ROW_H * 0.43, width: Math.max(w, 3), height: ROW_H * 0.14, background: "rgba(139,149,165,0.3)", borderRadius: 2, display: "flex", alignItems: "center", overflow: "hidden" }}
+                      style={{ position: "absolute", left, top: ROW_H * 0.43, width: Math.max(w, 3), height: ROW_H * 0.14, background: "rgba(139,149,165,0.3)", borderRadius: 2, display: "flex", alignItems: "center", overflow: "hidden", zIndex: 3 }}
                     >
                       {w > 30 && <span style={{ fontSize: 8, color: C.muted, paddingLeft: 3, whiteSpace: "nowrap" }}>{task.km?.toFixed(1)} km</span>}
                     </div>
@@ -510,22 +550,33 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                        )?.[1]
                     || "";
                   const label = paCode || task.barrio || "";
+                  const isActive = stackPanel?.task === task;
                   return (
                     <div key={ti} className="sched-block"
-                      onMouseEnter={e => setTooltip({ task, row, x: e.clientX, y: e.clientY })}
-                      onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                      draggable
+                      onDragStart={e => {
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragging({ task, fromRowId: row._id || row.id });
+                        setTooltip(null);
+                      }}
+                      onDragEnd={() => setDragging(null)}
+                      onClick={e => { e.stopPropagation(); setStackPanel(p => p?.task === task ? null : { task, row }); setTooltip(null); }}
+                      onMouseEnter={e => !dragging && setTooltip({ task, row, x: e.clientX, y: e.clientY })}
+                      onMouseMove={e => !dragging && setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
                       onMouseLeave={() => setTooltip(null)}
                       style={{
-                        position: "absolute", left, top: 5, height: ROW_H - 10, width: w,
-                        background: color + "d0",
+                        position: "absolute", left, top: 5, height: ROW_H - 10, width: w, zIndex: 4,
+                        background: isActive ? color : color + "d0",
                         border: `1px solid ${color}`,
-                        borderRadius: 4, overflow: "hidden", cursor: "default",
+                        boxShadow: isActive ? `0 0 0 2px ${color}, 0 4px 12px rgba(0,0,0,.5)` : "none",
+                        borderRadius: 4, overflow: "hidden", cursor: "grab",
                         display: "flex", alignItems: "center", gap: 3, padding: "0 4px",
+                        opacity: dragging?.task === task ? 0.4 : 1,
+                        transition: "box-shadow .1s, opacity .1s",
                       }}
                     >
                       {w >= 14 && (
                         <>
-                          {/* Barrio color stripe on left edge */}
                           <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
                           {w >= 22 && (
                             <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
@@ -546,8 +597,8 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           )}
         </div>
 
-        {/* Tooltip */}
-        {tooltip && (
+        {/* Hover Tooltip */}
+        {tooltip && !dragging && !stackPanel && (
           <div style={{
             position: "fixed",
             left: Math.min(tooltip.x + 14, window.innerWidth - 270),
@@ -579,7 +630,6 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               const num    = Object.entries(campos).find(([k]) => ["num","num.","número","numero"].includes(k.toLowerCase()))?.[1];
               return calle ? <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{calle}{num ? ` ${num}` : ""}</div> : null;
             })()}
-            {/* Linked worker (vehicle mode) or linked vehicle (worker mode) */}
             {(() => {
               const row = tooltip.row;
               if (!row) return null;
@@ -614,6 +664,108 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               }
               return null;
             })()}
+          </div>
+        )}
+
+        {/* Stack panel — click-open detail + reassign */}
+        {stackPanel && (
+          <div style={{
+            position: "fixed", right: 0, top: 0, bottom: 0, width: 300,
+            background: C.card, borderLeft: `1px solid ${C.border2}`,
+            zIndex: 3000, overflowY: "auto",
+            boxShadow: "-8px 0 40px rgba(0,0,0,.55)",
+            animation: "sched-fadein .15s ease both",
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {stackPanel.task.barrio && (
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: barrioColor(stackPanel.task.barrio), flexShrink: 0, marginTop: 2 }} />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>
+                  {stackPanel.task.nombre
+                    || Object.entries(stackPanel.task.campos || {}).find(([k]) => ["pa","idsap","id_sap","codigopoint","codigo"].includes(k.toLowerCase()))?.[1]
+                    || stackPanel.task.barrio || "Parada"}
+                </div>
+                {stackPanel.task.barrio && <div style={{ fontSize: 10, color: C.muted }}>{stackPanel.task.barrio}</div>}
+              </div>
+              <button onClick={() => setStackPanel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Time + assigned resource */}
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 11, color: C.muted, fontFamily: mono }}>
+                {minToTime(stackPanel.task._start % 1440)} → {minToTime(stackPanel.task._end % 1440)}
+                <span style={{ color: C.dim }}> · {stackPanel.task.duracion || 15} min</span>
+              </div>
+              {stackPanel.task._start >= 1440 && (
+                <div style={{ fontSize: 10, color: C.amber, marginTop: 3 }}>⏱ Turno de noche (continúa desde noche anterior)</div>
+              )}
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 7 }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.blueText, fontWeight: 700, flexShrink: 0 }}>
+                  {(stackPanel.row.nombre || "?")[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: C.dim }}>Asignado a</div>
+                  <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>
+                    {[stackPanel.row.nombre, stackPanel.row.apellidos].filter(Boolean).join(" ") || stackPanel.row.matricula || "?"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Reasignar */}
+            {onScheduleChange && rows.length > 1 && (
+              <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Mover a</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {rows.filter(r => (r._id || r.id) !== (stackPanel.row._id || stackPanel.row.id)).map(r => (
+                    <button key={r._id || r.id} onClick={() => {
+                      onScheduleChange({ task: stackPanel.task, fromRowId: stackPanel.row._id || stackPanel.row.id, toRowId: r._id || r.id });
+                      setStackPanel(null);
+                    }} style={{
+                      display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+                      background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7,
+                      cursor: "pointer", textAlign: "left", transition: "border-color .1s",
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+                    >
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.surface2, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                        {(r.nombre || "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>
+                          {[r.nombre, r.apellidos].filter(Boolean).join(" ") || r.matricula || "?"}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.dim }}>{r.turno || r.matricula || ""}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* All campos */}
+            {Object.keys(stackPanel.task.campos || {}).length > 0 && (
+              <div style={{ padding: "10px 16px" }}>
+                <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Datos</div>
+                {Object.entries(stackPanel.task.campos).filter(([, v]) => v != null && String(v).trim()).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", gap: 8, marginBottom: 5, fontSize: 11 }}>
+                    <span style={{ color: C.dim, minWidth: 80, flexShrink: 0, textOverflow: "ellipsis", overflow: "hidden" }}>{k}</span>
+                    <span style={{ color: C.text, fontWeight: 500, wordBreak: "break-all" }}>{String(v)}</span>
+                  </div>
+                ))}
+                {stackPanel.task.lat && stackPanel.task.lng && (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 5, fontSize: 11 }}>
+                    <span style={{ color: C.dim, minWidth: 80 }}>Coords</span>
+                    <span style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>{(+stackPanel.task.lat).toFixed(5)}, {(+stackPanel.task.lng).toFixed(5)}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1091,6 +1243,8 @@ function TabPlanificacion({ vehicles, workers }) {
         ...v,
         assignments: vr.schedule[i]?.assignments || [],
         totalKm:     vr.schedule[i]?.totalKm     || 0,
+        shiftStart:  vr.schedule[i]?.shiftStart,
+        shiftEnd:    vr.schedule[i]?.shiftEnd,
       }));
 
       // ── Step 2: Worker schedule ──────────────────────────────────
@@ -1459,6 +1613,18 @@ function TabPlanificacion({ vehicles, workers }) {
             mode={mode}
             allWorkers={workers}
             allVehicles={vehicles}
+            onScheduleChange={({ task, fromRowId, toRowId }) => {
+              setSchedules(prev => {
+                const key = mode === "vehicles" ? "vehicles" : "workers";
+                const rows = (prev[key] || []).map(r => {
+                  const rid = r._id || r.id;
+                  if (rid === fromRowId) return { ...r, assignments: r.assignments.filter(a => a !== task) };
+                  if (rid === toRowId)   return { ...r, assignments: [...r.assignments, task] };
+                  return r;
+                });
+                return { ...prev, [key]: rows };
+              });
+            }}
           />
 
           {/* Unassigned section */}
