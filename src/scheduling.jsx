@@ -1092,28 +1092,46 @@ function TabPlanificacion({ vehicles, workers }) {
     const vehicleSchedule = schedules.vehicles;
     if (!vehicleSchedule) return;
     setPublishing(true);
+    const startMin = constraints.startMin;
     try {
       for (const row of vehicleSchedule) {
-        const stops = row.assignments.filter(a => !a._break && !a._travel);
-        if (stops.length === 0) continue;
-        const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
-        // Firestore doesn't support nested arrays — store as objects
-        const recorrido = stops
-          .filter(a => hasCoords(a.lat, a.lng))
-          .map(a => ({ lat: +a.lat, lng: +a.lng }));
+        const allStops = row.assignments.filter(a => !a._break && !a._travel);
+        if (allStops.length === 0) continue;
+
+        // Group stops by day (same formula as Gantt)
+        const byDay = {};
+        for (const a of allStops) {
+          const d = Math.floor((a._start - startMin) / 1440);
+          if (!byDay[d]) byDay[d] = [];
+          byDay[d].push(a);
+        }
+
         const vehicleLabel = row.nombre || row.matricula || "Vehículo";
-        await addDoc(collection(db, "planes"), {
-          tipo,
-          nombre: `${vehicleLabel} · ${mes}`,
-          archivo: "vrp-generado",
-          turno: row.turno || "",
-          mes,
-          diaServicio: "",
-          ubicaciones,
-          recorrido,
-          fechaSubida: Date.now(),
-          origenVRP: true,
-        });
+        const days = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+        const totalDays = days.length;
+
+        for (const d of days) {
+          const stops = byDay[d];
+          const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
+          const recorrido = stops
+            .filter(a => hasCoords(a.lat, a.lng))
+            .map(a => ({ lat: +a.lat, lng: +a.lng }));
+          const nombre = totalDays > 1
+            ? `${vehicleLabel} · Día ${d + 1} · ${mes}`
+            : `${vehicleLabel} · ${mes}`;
+          await addDoc(collection(db, "planes"), {
+            tipo,
+            nombre,
+            archivo: "vrp-generado",
+            turno: row.turno || "",
+            mes,
+            diaServicio: `Día ${d + 1}`,
+            ubicaciones,
+            recorrido,
+            fechaSubida: Date.now(),
+            origenVRP: true,
+          });
+        }
       }
       setPublishModal(null);
     } catch (e) {
