@@ -1013,42 +1013,34 @@ function TabPlanificacion({ vehicles, workers }) {
       }));
 
       // ── Step 2: Worker schedule ──────────────────────────────────
-      // Linked workers: copy their vehicle's route exactly (same km, same timing).
-      //   vehiculoId on the worker must equal the vehicle's _id.
-      // Unlinked workers: independent VRP over ALL tasks
-      //   (they have no vehicle so they need a full independent route).
-      const linkedWorkerIds = new Set();
+      // Workers are a time-slice view of their vehicle's route.
+      // A vehicle can have multiple workers covering different shifts
+      // (e.g. vehicle 06-22: worker A 06-14, worker B 14-22).
+      // Each worker sees only the assignments whose _start falls within
+      // their turno window — normalized per-day to handle multi-day schedules.
+      const workerRows = workers.map(w => {
+        const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === w.vehiculoId);
+        if (!vehicleRow) return { ...w, assignments: [], totalKm: 0 };
 
-      const linkedWorkerRows = vehicleSchedule
-        .map((vRow, i) => {
-          const v = vehicles[i];
-          const w = workers.find(wr => wr.vehiculoId === (v._id || v.id));
-          if (!w) return null;
-          linkedWorkerIds.add(w._id || w.id);
-          return { ...w, assignments: [...vRow.assignments], totalKm: vRow.totalKm };
-        })
-        .filter(Boolean);
+        const tw = turnoWindow(w.turno, constraints.startMin, constraints.endMin);
 
-      const unlinkedWorkers = workers.filter(w => !linkedWorkerIds.has(w._id || w.id));
-      let unlinkedWorkerRows = [];
-      let workerUnassigned   = vr.unassigned;
+        const workerAssignments = vehicleRow.assignments.filter(a => {
+          // Normalize _start to within-day minutes so the turno window
+          // (which is day-relative, e.g. 360–840) applies on every day.
+          const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
+          const withinDay = a._start - dayOffset;
+          return withinDay >= tw.start && withinDay < tw.end;
+        });
 
-      if (unlinkedWorkers.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const wr = await generateScenario(tasks, unlinkedWorkers, constraints);
-        unlinkedWorkerRows = unlinkedWorkers.map((w, i) => ({
-          ...w,
-          assignments: wr.schedule[i]?.assignments || [],
-          totalKm:     wr.schedule[i]?.totalKm     || 0,
-        }));
-        workerUnassigned = wr.unassigned;
-      }
+        const workerKm = workerAssignments
+          .filter(a => a._travel)
+          .reduce((s, a) => s + (a.km || 0), 0);
 
-      setSchedules({
-        vehicles: vehicleSchedule,
-        workers:  [...linkedWorkerRows, ...unlinkedWorkerRows],
+        return { ...w, assignments: workerAssignments, totalKm: workerKm };
       });
-      setUnassigneds({ vehicles: vr.unassigned, workers: workerUnassigned });
+
+      setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
+      setUnassigneds({ vehicles: vr.unassigned, workers: [] });
       setConstraints(prev => ({ ...prev, days: vr.daysUsed }));
 
     } catch (e) {
