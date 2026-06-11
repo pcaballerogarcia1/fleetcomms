@@ -1013,34 +1013,41 @@ function TabPlanificacion({ vehicles, workers }) {
       }));
 
       // ── Step 2: Worker schedule ──────────────────────────────────
-      // Workers are a time-slice view of their vehicle's route.
-      // A vehicle can have multiple workers covering different shifts
-      // (e.g. vehicle 06-22: worker A 06-14, worker B 14-22).
-      // Each worker sees only the assignments whose _start falls within
-      // their turno window — normalized per-day to handle multi-day schedules.
-      const workerRows = workers.map(w => {
+      // Linked workers (vehiculoId set): time-slice view of their vehicle's route.
+      //   Multiple workers can share one vehicle covering different shifts.
+      // Unlinked workers (no vehiculoId): independent VRP over all tasks.
+      const linkedWorkers   = workers.filter(w => w.vehiculoId && vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
+      const unlinkedWorkers = workers.filter(w => !w.vehiculoId || !vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
+
+      const linkedRows = linkedWorkers.map(w => {
         const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === w.vehiculoId);
-        if (!vehicleRow) return { ...w, assignments: [], totalKm: 0 };
-
         const tw = turnoWindow(w.turno, constraints.startMin, constraints.endMin);
-
         const workerAssignments = vehicleRow.assignments.filter(a => {
           // Normalize _start to within-day minutes so the turno window
-          // (which is day-relative, e.g. 360–840) applies on every day.
+          // (e.g. 360–840 for Mañana) applies correctly on every day.
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
           const withinDay = a._start - dayOffset;
           return withinDay >= tw.start && withinDay < tw.end;
         });
-
-        const workerKm = workerAssignments
-          .filter(a => a._travel)
-          .reduce((s, a) => s + (a.km || 0), 0);
-
+        const workerKm = workerAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
         return { ...w, assignments: workerAssignments, totalKm: workerKm };
       });
 
-      setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
-      setUnassigneds({ vehicles: vr.unassigned, workers: [] });
+      let unlinkedRows = [];
+      let workerUnassigned = [];
+      if (unlinkedWorkers.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const wr = await generateScenario(tasks, unlinkedWorkers, constraints);
+        unlinkedRows = unlinkedWorkers.map((w, i) => ({
+          ...w,
+          assignments: wr.schedule[i]?.assignments || [],
+          totalKm:     wr.schedule[i]?.totalKm     || 0,
+        }));
+        workerUnassigned = wr.unassigned;
+      }
+
+      setSchedules({ vehicles: vehicleSchedule, workers: [...linkedRows, ...unlinkedRows] });
+      setUnassigneds({ vehicles: vr.unassigned, workers: workerUnassigned });
       setConstraints(prev => ({ ...prev, days: vr.daysUsed }));
 
     } catch (e) {
@@ -1227,6 +1234,18 @@ function TabPlanificacion({ vehicles, workers }) {
           No hay vehículos ni trabajadores registrados. Añade recursos en las pestañas correspondientes.
         </div>
       )}
+      {mode === "workers" && schedules.workers && (() => {
+        const sinVehiculo = workers.filter(w => !w.vehiculoId || !vehicles.some(v => (v._id || v.id) === w.vehiculoId));
+        if (!sinVehiculo.length) return null;
+        return (
+          <div style={{ padding: "6px 20px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 11, color: C.amber, flexShrink: 0 }}>
+            {sinVehiculo.length === 1
+              ? `${sinVehiculo[0].nombre} no tiene vehículo asignado — se ha calculado ruta independiente.`
+              : `${sinVehiculo.length} trabajadores sin vehículo asignado — se ha calculado ruta independiente para cada uno.`}
+            {" "}Asigna vehículo en la pestaña Trabajadores para ver la ruta derivada del turno del vehículo.
+          </div>
+        );
+      })()}
 
       {/* Constraints panel */}
       {showC && <ConstraintsPanel c={constraints} onChange={setConstraints} />}
