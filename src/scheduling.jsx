@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { db } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
-  doc, serverTimestamp,
+  doc, serverTimestamp, query, orderBy,
 } from "firebase/firestore";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
@@ -1185,7 +1185,7 @@ function TabTrabajadores({ workers, vehicles, loading }) {
 }
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
-function TabPlanificacion({ vehicles, workers }) {
+function TabPlanificacion({ vehicles, workers, loadedScenario, onScenarioLoaded }) {
   const [tasks,       setTasks]       = useState([]);
   const [importing,   setImporting]   = useState(false);
   const [imported,    setImported]    = useState(false);
@@ -1207,6 +1207,8 @@ function TabPlanificacion({ vehicles, workers }) {
   const [genError,    setGenError]    = useState(null);
   const [publishModal, setPublishModal] = useState(null); // null | { tipo, mes }
   const [publishing,   setPublishing]   = useState(false);
+  const [saveModal,    setSaveModal]    = useState(null); // null | { nombre: "" }
+  const [saving,       setSaving]       = useState(false);
 
   const schedule   = schedules[mode];
   const unassigned = unassigneds[mode];
@@ -1223,6 +1225,61 @@ function TabPlanificacion({ vehicles, workers }) {
   }
 
   useEffect(() => { importFromPlanning(); }, []);
+
+  // Apply scenario loaded from TabEscenarios
+  useEffect(() => {
+    if (!loadedScenario) return;
+    setSchedules({
+      vehicles: loadedScenario.vehicleSchedule || [],
+      workers:  loadedScenario.workerSchedule  || [],
+    });
+    if (loadedScenario.constraints) {
+      setConstraints(prev => ({ ...prev, ...loadedScenario.constraints, days: loadedScenario.daysUsed || 1 }));
+    }
+    setImported(true);
+    onScenarioLoaded?.();
+  }, [loadedScenario]);
+
+  async function saveScenario(nombre) {
+    if (!schedules.vehicles) return;
+    setSaving(true);
+    try {
+      const totalStops = schedules.vehicles.reduce((s, v) =>
+        s + v.assignments.filter(a => !a._break && !a._travel).length, 0);
+      const totalKm = schedules.vehicles.reduce((s, v) => s + (v.totalKm || 0), 0);
+      const uniqueBarrios = [...new Set(tasks.map(t => t.barrio).filter(Boolean))];
+      await addDoc(collection(db, "scheduling_scenarios"), {
+        nombre,
+        createdAt:   serverTimestamp(),
+        daysUsed:    constraints.days || 1,
+        totalKm,
+        totalStops,
+        tasksCount:  tasks.length,
+        constraints: { ...constraints, days: undefined },
+        vehicleSchedule: schedules.vehicles.map(v => ({
+          _id: v._id, nombre: v.nombre, matricula: v.matricula,
+          turno: v.turno, totalKm: v.totalKm,
+          shiftStart: v.shiftStart, shiftEnd: v.shiftEnd,
+          assignments: v.assignments,
+        })),
+        workerSchedule: schedules.workers?.map(w => ({
+          _id: w._id, nombre: w.nombre, apellidos: w.apellidos,
+          vehiculoId: w.vehiculoId, turno: w.turno,
+          totalKm: w.totalKm, _tw: w._tw, assignments: w.assignments,
+        })) || [],
+        planningSource: {
+          uniqueBarrios: uniqueBarrios.slice(0, 20),
+          tasksCount:    tasks.length,
+          taskIds:       tasks.map(t => t._id || t.id).filter(Boolean),
+          sampleTasks:   tasks.slice(0, 5).map(t => ({ nombre: t.nombre, barrio: t.barrio })),
+        },
+      });
+      setSaveModal(null);
+    } catch (e) {
+      alert("Error al guardar: " + (e.message || e));
+    }
+    setSaving(false);
+  }
 
   async function runGenerate() {
     if (!tasks.length) return;
@@ -1359,26 +1416,42 @@ function TabPlanificacion({ vehicles, workers }) {
           byDay[d].push(a);
         }
 
-        const vehicleLabel = row.nombre || row.matricula || "Vehículo";
-        const days = Object.keys(byDay).map(Number).sort((a, b) => a - b);
-        const totalDays = days.length;
+        // Primary conductor: earliest-shift worker linked to this vehicle
+        const linkedWorkers = workers
+          .filter(w => w.vehiculoId === (row._id || row.id))
+          .sort((a, b) => {
+            const ta = turnoWindow(a.turno, constraints.startMin, constraints.endMin);
+            const tb = turnoWindow(b.turno, constraints.startMin, constraints.endMin);
+            return ta.start - tb.start;
+          });
+        const conductor = linkedWorkers[0];
+        const conductorLabel = conductor
+          ? [conductor.nombre, conductor.apellidos].filter(Boolean).join(" ")
+          : (row.nombre || row.matricula || "Vehículo");
 
-        for (const d of days) {
+        const daysList = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+        const totalDays = daysList.length;
+
+        for (const d of daysList) {
           const stops = byDay[d];
           const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
           const recorrido = stops
             .filter(a => hasCoords(a.lat, a.lng))
             .map(a => ({ lat: +a.lat, lng: +a.lng }));
+          // Zero-pad day so alphabetical sort = chronological sort
+          const dayLabel = `Día ${String(d + 1).padStart(2, "0")}`;
           const nombre = totalDays > 1
-            ? `${vehicleLabel} · Día ${d + 1} · ${mes}`
-            : `${vehicleLabel} · ${mes}`;
+            ? `${conductorLabel} · ${dayLabel} · ${mes}`
+            : `${conductorLabel} · ${mes}`;
           await addDoc(collection(db, "planes"), {
             tipo,
             nombre,
             archivo: "vrp-generado",
             turno: row.turno || "",
+            conductorNombre: conductorLabel,
+            vehiculoNombre: row.nombre || row.matricula || "",
             mes,
-            diaServicio: `Día ${d + 1}`,
+            diaServicio: dayLabel,
             ubicaciones,
             recorrido,
             fechaSubida: Date.now(),
@@ -1544,7 +1617,18 @@ function TabPlanificacion({ vehicles, workers }) {
             <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>
               {minToTime(constraints.startMin)} – {minToTime(constraints.endMin)}
             </div>
-            {schedules.vehicles && (
+            {schedules.vehicles && (<>
+              <button
+                onClick={() => setSaveModal({ nombre: "" })}
+                style={{
+                  padding: "5px 12px", background: C.blueDim, border: `1px solid ${C.blue}44`,
+                  color: C.blueText, borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar escenario
+              </button>
               <button
                 onClick={() => {
                   const now = new Date();
@@ -1560,7 +1644,7 @@ function TabPlanificacion({ vehicles, workers }) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Publicar en Rutas
               </button>
-            )}
+            </>)}
           </div>
         </div>
       )}
@@ -1651,6 +1735,57 @@ function TabPlanificacion({ vehicles, workers }) {
         </>
       )}
 
+      {/* Save scenario modal */}
+      {saveModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
+          onClick={() => setSaveModal(null)}>
+          <div style={{
+            background: C.card, borderRadius: 12, padding: "28px 28px 24px",
+            width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+            border: `1px solid ${C.border}`,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Guardar escenario</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 20 }}>
+              Se guardará la asignación actual de vehículos y trabajadores con el planning de origen.
+            </div>
+            <input
+              autoFocus
+              type="text" placeholder="Nombre del escenario…"
+              value={saveModal.nombre}
+              onChange={e => setSaveModal({ nombre: e.target.value })}
+              onKeyDown={e => e.key === "Enter" && saveModal.nombre.trim() && saveScenario(saveModal.nombre.trim())}
+              style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: font, outline: "none", marginBottom: 16 }}
+            />
+            {/* Stats preview */}
+            <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+              {[
+                [`${constraints.days || 1} día${(constraints.days||1) !== 1 ? "s" : ""}`, "Duración"],
+                [`${schedules.vehicles?.reduce((s,v)=>s+v.assignments.filter(a=>!a._break&&!a._travel).length,0)||0}`, "Paradas"],
+                [`${(schedules.vehicles?.reduce((s,v)=>s+(v.totalKm||0),0)||0).toFixed(1)} km`, "Km total"],
+                [`${tasks.length}`, "Tareas planning"],
+              ].map(([val, lbl]) => (
+                <div key={lbl}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{val}</div>
+                  <div style={{ fontSize: 10, color: C.dim }}>{lbl}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setSaveModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => saveModal.nombre.trim() && saveScenario(saveModal.nombre.trim())}
+                disabled={saving || !saveModal.nombre.trim()}
+                style={{ flex: 2, padding: "9px 0", background: C.blue, border: "none", color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: font, opacity: !saveModal.nombre.trim() ? .5 : 1 }}
+              >
+                {saving ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Publish modal */}
       {publishModal && (
         <div style={{
@@ -1725,13 +1860,149 @@ function TabPlanificacion({ vehicles, workers }) {
   );
 }
 
+// ── TAB ESCENARIOS ────────────────────────────────────────────────
+function TabEscenarios({ onLoadScenario }) {
+  const [scenarios, setScenarios] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, "scheduling_scenarios"), orderBy("createdAt", "desc")),
+      snap => { setScenarios(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoading(false); },
+      () => setLoading(false)
+    );
+    return () => unsub();
+  }, []);
+
+  async function remove(id) {
+    if (!window.confirm("¿Eliminar este escenario?")) return;
+    await deleteDoc(doc(db, "scheduling_scenarios", id));
+  }
+
+  const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, animation: "sched-fadein .15s ease both" };
+  const chip = (val, lbl, color) => (
+    <div key={lbl} style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: color || C.text }}>{val}</div>
+      <div style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>{lbl}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 860 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 3 }}>Escenarios guardados</div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 22 }}>
+        Instantáneas de scheduling con su planning de origen. Carga uno para restaurar la asignación completa en Planificación.
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 48, color: C.dim }}>Cargando…</div>
+      ) : scenarios.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.dim, fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+          Ningún escenario guardado todavía.<br />
+          <span style={{ fontSize: 11 }}>Genera un schedule y usa «Guardar escenario» para crearlo.</span>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {scenarios.map(sc => {
+            const dateStr = sc.createdAt?.toDate?.().toLocaleString("es-ES", {
+              day: "2-digit", month: "2-digit", year: "numeric",
+              hour: "2-digit", minute: "2-digit",
+            }) || "—";
+            return (
+              <div key={sc._id} style={card}>
+                {/* Row 1: title + actions */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sc.nombre}</div>
+                    <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{dateStr}</div>
+                  </div>
+                  <button
+                    onClick={() => onLoadScenario(sc)}
+                    style={{ padding: "6px 14px", background: C.blueDim, border: `1px solid ${C.blue}55`, color: C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.blue; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = C.blueDim; e.currentTarget.style.color = C.blueText; }}
+                  >Cargar</button>
+                  <button
+                    onClick={() => remove(sc._id)}
+                    style={{ width: 28, height: 28, background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+                  >×</button>
+                </div>
+
+                {/* Row 2: stats */}
+                <div style={{ display: "flex", gap: 28, marginBottom: 14, flexWrap: "wrap" }}>
+                  {chip(`${sc.daysUsed || 1}d`, "Días", C.text)}
+                  {chip(`${sc.totalStops || 0}`, "Paradas", C.green)}
+                  {chip(`${(sc.totalKm || 0).toFixed(1)} km`, "Km", C.blueText)}
+                  {chip(`${sc.tasksCount || 0}`, "Tareas planning", C.muted)}
+                  {chip(`${sc.vehicleSchedule?.length || 0}`, "Vehículos", C.amber)}
+                  {chip(`${sc.workerSchedule?.length || 0}`, "Trabajadores", C.muted)}
+                </div>
+
+                {/* Row 3: planning origin */}
+                {sc.planningSource && (
+                  <div style={{ background: C.surface2, borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Origen planning</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                      {(sc.planningSource.uniqueBarrios || []).map(b => (
+                        <span key={b} style={{ fontSize: 9, background: barrioColor(b) + "28", border: `1px solid ${barrioColor(b)}55`, color: barrioColor(b), borderRadius: 4, padding: "2px 7px" }}>{b}</span>
+                      ))}
+                      {!sc.planningSource.uniqueBarrios?.length && (
+                        <span style={{ fontSize: 10, color: C.dim }}>{sc.planningSource.tasksCount || 0} tareas</span>
+                      )}
+                    </div>
+                    {sc.planningSource.sampleTasks?.length > 0 && (
+                      <div style={{ fontSize: 10, color: C.dim, marginTop: 5 }}>
+                        Muestra: {sc.planningSource.sampleTasks.map(t => t.nombre || t.barrio).filter(Boolean).join(", ")}…
+                      </div>
+                    )}
+                    {sc.planningSource.taskIds?.length > 0 && (
+                      <div style={{ fontSize: 9, color: C.dim, marginTop: 2, fontFamily: mono }}>
+                        {sc.planningSource.taskIds.length} tarea{sc.planningSource.taskIds.length !== 1 ? "s" : ""} vinculadas al planning
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Row 4: vehicles + workers chips */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {(sc.vehicleSchedule || []).map(v => {
+                    const stops = (v.assignments || []).filter(a => !a._break && !a._travel).length;
+                    return (
+                      <div key={v._id} style={{ display: "flex", alignItems: "center", gap: 5, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", fontSize: 10, color: C.muted }}>
+                        <span style={{ color: C.dim }}>🚛</span>
+                        <span style={{ color: C.text, fontWeight: 600 }}>{v.nombre || v.matricula || "?"}</span>
+                        <span style={{ color: C.dim }}>{stops}p</span>
+                        {v.turno && <span style={{ color: C.dim, borderLeft: `1px solid ${C.border}`, paddingLeft: 5 }}>{v.turno.split("(")[0].trim()}</span>}
+                      </div>
+                    );
+                  })}
+                  {(sc.workerSchedule || []).map(w => (
+                    <div key={w._id} style={{ display: "flex", alignItems: "center", gap: 5, background: C.greenDim, border: `1px solid ${C.green}33`, borderRadius: 6, padding: "3px 8px", fontSize: 10, color: C.green }}>
+                      <span>{w.nombre} {w.apellidos || ""}</span>
+                      <span style={{ color: C.dim, borderLeft: `1px solid ${C.green}33`, paddingLeft: 5 }}>{(w.turno || "").split("(")[0].trim()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
 function SchedulingPage({ sesion, onLogout }) {
-  const [tab,      setTab]      = useState("planificacion");
-  const [vehicles, setVehicles] = useState([]);
-  const [workers,  setWorkers]  = useState([]);
-  const [loadingV, setLoadingV] = useState(true);
-  const [loadingW, setLoadingW] = useState(true);
+  const [tab,            setTab]            = useState("planificacion");
+  const [vehicles,       setVehicles]       = useState([]);
+  const [workers,        setWorkers]        = useState([]);
+  const [loadingV,       setLoadingV]       = useState(true);
+  const [loadingW,       setLoadingW]       = useState(true);
+  const [loadedScenario, setLoadedScenario] = useState(null);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "scheduling_vehicles"), snap => {
@@ -1755,6 +2026,7 @@ function SchedulingPage({ sesion, onLogout }) {
     { key: "planificacion", label: "Planificación" },
     { key: "vehiculos",     label: `Vehículos${vehicles.length ? ` (${vehicles.length})` : ""}` },
     { key: "trabajadores",  label: `Trabajadores${workers.length ? ` (${workers.length})` : ""}` },
+    { key: "escenarios",    label: "Escenarios" },
   ];
 
   return (
@@ -1810,13 +2082,25 @@ function SchedulingPage({ sesion, onLogout }) {
         ))}
       </div>
 
-      {/* Body — TabPlanificacion stays mounted to preserve scenario state */}
+      {/* Body — TabPlanificacion stays mounted to preserve state */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         <div style={{ flex: 1, display: tab === "planificacion" ? "flex" : "none", overflow: "hidden" }}>
-          <TabPlanificacion vehicles={vehicles} workers={workers} />
+          <TabPlanificacion
+            vehicles={vehicles} workers={workers}
+            loadedScenario={loadedScenario}
+            onScenarioLoaded={() => setLoadedScenario(null)}
+          />
         </div>
         {tab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} />}
         {tab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} />}
+        {tab === "escenarios"   && (
+          <TabEscenarios
+            onLoadScenario={sc => {
+              setLoadedScenario(sc);
+              setTab("planificacion");
+            }}
+          />
+        )}
       </div>
     </div>
   );
