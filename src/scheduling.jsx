@@ -1019,16 +1019,45 @@ function TabPlanificacion({ vehicles, workers }) {
       const linkedWorkers   = workers.filter(w => w.vehiculoId && vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
       const unlinkedWorkers = workers.filter(w => !w.vehiculoId || !vehicleSchedule.some(v => (v._id || v.id) === w.vehiculoId));
 
-      const linkedRows = linkedWorkers.map(w => {
+      // Pre-compute each linked worker's turno window and group by vehicle.
+      // For each vehicle's assignment, only ONE worker "owns" it:
+      // the one whose window covers the assignment's within-day time,
+      // resolved by earliest window start → latest → alphabetical (stable).
+      const linkedWithTw = linkedWorkers.map(w => ({
+        ...w,
+        _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
+      }));
+
+      // Per-vehicle sorted list (earliest turno first, then alphabetical)
+      const vehicleWorkerMap = {};
+      for (const w of linkedWithTw) {
+        if (!vehicleWorkerMap[w.vehiculoId]) vehicleWorkerMap[w.vehiculoId] = [];
+        vehicleWorkerMap[w.vehiculoId].push(w);
+      }
+      for (const key of Object.keys(vehicleWorkerMap)) {
+        vehicleWorkerMap[key].sort((a, b) =>
+          a._tw.start !== b._tw.start
+            ? a._tw.start - b._tw.start
+            : (a.nombre || "").localeCompare(b.nombre || "")
+        );
+      }
+
+      const linkedRows = linkedWithTw.map(w => {
         const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === w.vehiculoId);
-        const tw = turnoWindow(w.turno, constraints.startMin, constraints.endMin);
+        const peersForVehicle = vehicleWorkerMap[w.vehiculoId];
+        const wId = w._id || w.id;
+
         const workerAssignments = vehicleRow.assignments.filter(a => {
-          // Normalize _start to within-day minutes so the turno window
-          // (e.g. 360–840 for Mañana) applies correctly on every day.
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
           const withinDay = a._start - dayOffset;
-          return withinDay >= tw.start && withinDay < tw.end;
+          // Find the first peer whose window covers this time slot.
+          // This guarantees each assignment belongs to exactly one worker.
+          const owner = peersForVehicle.find(
+            p => withinDay >= p._tw.start && withinDay < p._tw.end
+          );
+          return owner && (owner._id || owner.id) === wId;
         });
+
         const workerKm = workerAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
         return { ...w, assignments: workerAssignments, totalKm: workerKm };
       });
