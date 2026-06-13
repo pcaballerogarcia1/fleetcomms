@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App.jsx";
 import { PlanningPage } from "./planning.jsx";
 import { LoginScheduling, TabProyectos, SchedulingModuleWrapper } from "./scheduling.jsx";
+import { RosteringPage } from "./rostering.jsx";
 import { db, auth } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -63,6 +64,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           <span style={{ color: C.dim, fontSize: 12 }}>/</span>
           {crumb("Planning",    "/planning",    path === "/planning")}
           {crumb("Scheduling",  "/scheduling",  path === "/scheduling")}
+          {crumb("Rostering",   "/rostering",   path === "/rostering")}
         </>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -70,7 +72,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion?.rol}</div>
         </div>
-        {(path === "/planning" || path === "/scheduling") && (
+        {(path === "/planning" || path === "/scheduling" || path === "/rostering") && (
           <button onClick={onFullscreen} title="Pantalla completa" style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -153,7 +155,7 @@ function WorkspaceRouter() {
     if (!sesion && path !== "/login")  { go("/login"); return; }
     if (sesion  && path === "/login")  { go("/projects"); return; }
     if (sesion  && path === "/")       { go("/projects"); return; }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling")) {
+    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering")) {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
@@ -246,6 +248,13 @@ function WorkspaceRouter() {
               activeProject={activeProject} onProjectUpdate={updateProject}
               orgId={sesion?.org_id}
             />
+          </div>
+        )}
+
+        {/* /rostering — monthly availability grid */}
+        {activeProject && path === "/rostering" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+            <RosteringPage sesion={sesion} embedded />
           </div>
         )}
 

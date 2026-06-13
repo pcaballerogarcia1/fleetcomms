@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { db, auth, secondaryAuth } from "./firebase.js";
+import { useRostering, workerCodeOnDay, isUnavailable, SHIFT_META } from "./rostering.jsx";
 import { PlanningPage } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
@@ -356,11 +357,17 @@ async function generateScenario(tasks, resources, constraints) {
           }
         }
 
-        // Reserve time to return to depot after this stop (if depot set)
+        // Reserve time to return to depot after this stop (if depot set).
+        // If task has no coords, use lastLat/lastLng (the actual position
+        // from which the depot return will be computed after the loop).
         let retBuffer = 0;
-        if (depot && hasCoords(task.lat, task.lng)) {
-          const retKmEst = haversineKm(task.lat, task.lng, depot.lat, depot.lng);
-          if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+        if (depot) {
+          const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
+          const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
+          if (hasCoords(refLat, refLng)) {
+            const retKmEst = haversineKm(refLat, refLng, depot.lat, depot.lng);
+            if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+          }
         }
 
         const workSoFar = cursor - (res.shiftStart + dayOffset);
@@ -560,11 +567,26 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   const dayAssignments = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
                   const stopCount = dayAssignments.filter(a => !a._break && !a._travel).length;
                   const dayKm = dayAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
-                  // Compact shift label: "06–14" or "Jornada" from turno string
+
+                  // Actual shift times from real assignments
+                  const hasWork = dayAssignments.length > 0;
+                  const actStart = hasWork ? Math.min(...dayAssignments.map(a => a._start)) : null;
+                  const actEnd   = hasWork ? Math.max(...dayAssignments.map(a => a._end))   : null;
+                  const durMin   = hasWork ? actEnd - actStart : 0;
+                  const durH     = Math.floor(durMin / 60);
+                  const durM     = durMin % 60;
+                  const durLabel = durMin > 0
+                    ? `${durH}h${durM > 0 ? String(durM).padStart(2, "0") : ""}`
+                    : null;
+
+                  // Fallback: theoretical turno window
                   const tw = row.turno ? turnoWindow(row.turno, startMin, endMin) : null;
-                  const shiftLabel = tw
-                    ? `${String(Math.floor(tw.start / 60)).padStart(2,"0")}–${String(Math.floor((tw.end % 1440) / 60)).padStart(2,"0")}h`
-                    : (row.matricula || "");
+                  const timeLabel = hasWork
+                    ? `${minToTime(actStart % 1440)}–${minToTime(actEnd % 1440)}`
+                    : tw
+                      ? `${String(Math.floor(tw.start / 60)).padStart(2,"0")}–${String(Math.floor((tw.end % 1440) / 60)).padStart(2,"0")}h`
+                      : (row.matricula || "");
+
                   return (
                     <>
                       <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.blueText }}>
@@ -575,7 +597,8 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                           {fullName}
                         </div>
                         <div style={{ fontSize: 10, color: C.dim, fontFamily: mono, display: "flex", gap: 5, alignItems: "center", marginTop: 1, overflow: "hidden" }}>
-                          <span style={{ color: C.blueText, flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{shiftLabel}</span>
+                          <span style={{ color: C.blueText, flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{timeLabel}</span>
+                          {durLabel && <span style={{ color: "#34d399", flexShrink: 0, fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
                           {stopCount > 0 && <span style={{ color: C.muted, flexShrink: 0, whiteSpace: "nowrap" }}>{stopCount}p</span>}
                           {dayKm > 0 && <span style={{ color: "#fb923c", flexShrink: 0, fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
                           {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}>🏠</span>}
@@ -1013,13 +1036,26 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
   const [planningDepots, setPlanningDepots] = useState([]);
   const [showDepotPicker, setShowDepotPicker] = useState(null); // vehicleId | "new"
 
-  // Load depots from Planning localStorage when project is active
+  // Load depots from Firestore planning_depots (migrated from localStorage)
   useEffect(() => {
     if (!activeProject?._id) return;
-    try {
-      const raw = localStorage.getItem(`fc_depots_${activeProject._id}`);
-      if (raw) setPlanningDepots(JSON.parse(raw) ?? []);
-    } catch { /* ignore */ }
+    const projectId = activeProject._id;
+    return onSnapshot(doc(db, "planning_depots", projectId), snap => {
+      if (snap.exists()) {
+        setPlanningDepots(snap.data().depots ?? []);
+      } else {
+        // Fallback: legacy localStorage data
+        try {
+          const raw = localStorage.getItem(`fc_depots_${projectId}`);
+          if (raw) setPlanningDepots(JSON.parse(raw) ?? []);
+        } catch { /* ignore */ }
+      }
+    }, () => {
+      try {
+        const raw = localStorage.getItem(`fc_depots_${activeProject._id}`);
+        if (raw) setPlanningDepots(JSON.parse(raw) ?? []);
+      } catch { /* ignore */ }
+    });
   }, [activeProject?._id]);
 
   const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
@@ -1441,6 +1477,40 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [publishModal, setPublishModal] = useState(null);
   const [publishing,   setPublishing]  = useState(false);
 
+  // ── Rostering integration ────────────────────────────────────
+  const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
+  const { grid: rosterGrid } = useRostering(orgId, schedYear || null, schedMonth || null);
+
+  // Compute worker-day conflicts after VRP (L/B days assigned to routes)
+  const rosterConflicts = (() => {
+    if (!schedules.vehicles || !rosterGrid) return [];
+    const conflicts = [];
+    for (const row of schedules.vehicles) {
+      const linked = workers.filter(w => w.vehiculoId === (row._id || row.id));
+      if (!linked.length) continue;
+      const byDay = {};
+      for (const a of row.assignments) {
+        if (a._break || a._travel) continue;
+        const d = Math.floor((a._start - constraints.startMin) / 1440) + 1;
+        byDay[d] = true;
+      }
+      for (const w of linked) {
+        for (const day of Object.keys(byDay).map(Number)) {
+          const code = workerCodeOnDay(rosterGrid, w._id, day);
+          if (isUnavailable(code)) {
+            conflicts.push({
+              name: [w.nombre, w.apellidos].filter(Boolean).join(" "),
+              day,
+              code,
+              label: SHIFT_META[code]?.label ?? code,
+            });
+          }
+        }
+      }
+    }
+    return conflicts;
+  })();
+
   const schedule   = schedules[mode];
   const unassigned = unassigneds[mode];
 
@@ -1700,6 +1770,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const totalDays = daysList.length;
 
         for (const d of daysList) {
+          // Skip days where the primary conductor is L or B in rostering
+          if (conductor) {
+            const code = workerCodeOnDay(rosterGrid, conductor._id ?? conductor.id ?? "", d);
+            if (isUnavailable(code)) continue;
+          }
+
           const stops = byDay[d];
           const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
           const recorrido = stops
@@ -1861,6 +1937,21 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         <div style={{ padding: "8px 20px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 12, color: C.red }}>Error al generar: {genError}</span>
           <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+        </div>
+      )}
+
+      {/* Rostering conflict banner */}
+      {rosterConflicts.length > 0 && (
+        <div style={{ padding: "7px 20px", background: "rgba(251,191,36,0.07)", borderBottom: `1px solid rgba(251,191,36,0.2)`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style={{ fontSize: 12, color: "#fbbf24", fontWeight: 600 }}>Conflictos de disponibilidad:</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {rosterConflicts.map((c, i) => (
+              <span key={i} style={{ fontSize: 11, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 4, padding: "1px 7px" }}>
+                {c.name} — día {c.day} ({c.label})
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
