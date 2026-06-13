@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { db } from "./firebase.js";
+import { db, auth, secondaryAuth } from "./firebase.js";
 import { PlanningPage } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
-  doc, serverTimestamp, query, orderBy,
+  doc, serverTimestamp, query, where, getDoc, setDoc, getDocs, limit,
 } from "firebase/firestore";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -143,11 +144,22 @@ function kMeansCluster(pts, k, maxIter = 15) {
   return asgn;
 }
 
-// Nearest-neighbor TSP
-function nnTSP(stops) {
-  if (stops.length <= 2) return [...stops];
+// Nearest-neighbor TSP — optionally start from a depot point
+function nnTSP(stops, depotPt = null) {
+  if (stops.length === 0) return [];
+  if (stops.length === 1) return [...stops];
   const rem = [...stops];
-  const route = [rem.splice(0, 1)[0]];
+  // Pick the first stop: nearest to depot if provided, otherwise first element
+  let firstIdx = 0;
+  if (depotPt && hasCoords(depotPt.lat, depotPt.lng)) {
+    let bd = Infinity;
+    rem.forEach((s, i) => {
+      if (!hasCoords(s.lat, s.lng)) return;
+      const d = haversineKm(depotPt.lat, depotPt.lng, s.lat, s.lng);
+      if (d < bd) { bd = d; firstIdx = i; }
+    });
+  }
+  const route = [rem.splice(firstIdx, 1)[0]];
   while (rem.length) {
     const last = route[route.length - 1];
     let bi = 0, bd = Infinity;
@@ -187,6 +199,67 @@ function twoOpt(route) {
   return best;
 }
 
+// ── OSRM ROAD ENRICHMENT ──────────────────────────────────────────
+// After VRP generation (which uses fast Haversine), replace travel block km
+// with real road distances from OSRM. Time layout stays unchanged.
+async function enrichWithOSRM(schedule) {
+  return Promise.all(schedule.map(async (row) => {
+    const depot = (row.depotLat && row.depotLng)
+      ? { lat: +row.depotLat, lng: +row.depotLng } : null;
+
+    // Build ordered waypoints: [depot?] + stops + [depot?]
+    const waypoints = []; // {lng, lat, assignmentIdx | null}
+    if (depot) waypoints.push({ lng: depot.lng, lat: depot.lat, idx: null, isDepot: true });
+    row.assignments.forEach((a, i) => {
+      if (!a._travel && !a._break && hasCoords(a.lat, a.lng))
+        waypoints.push({ lng: +a.lng, lat: +a.lat, idx: i, isDepot: false });
+    });
+    if (depot) waypoints.push({ lng: depot.lng, lat: depot.lat, idx: null, isDepot: true, isReturn: true });
+
+    if (waypoints.filter(w => !w.isDepot).length < 1) return row;
+    if (waypoints.length < 2) return row;
+
+    const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
+    try {
+      const resp = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      const data = await resp.json();
+      if (data.code !== 'Ok' || !data.routes?.[0]?.legs) return row;
+
+      const legs = data.routes[0].legs;
+      const newAssignments = [...row.assignments];
+
+      // Each leg[i] = waypoints[i] → waypoints[i+1]
+      // Find travel blocks between consecutive waypoints and update their km
+      for (let i = 0; i < waypoints.length - 1 && i < legs.length; i++) {
+        const roadKm = legs[i].distance / 1000;
+        const fromIdx = waypoints[i].idx;     // null = depot
+        const toIdx   = waypoints[i + 1].idx; // null = depot
+
+        // Find the travel block between fromIdx and toIdx in assignments array
+        const searchFrom = fromIdx !== null ? fromIdx + 1 : 0;
+        const searchTo   = toIdx   !== null ? toIdx       : newAssignments.length;
+        for (let j = searchFrom; j < searchTo; j++) {
+          if (newAssignments[j]?._travel) {
+            newAssignments[j] = { ...newAssignments[j], km: +roadKm.toFixed(3) };
+            break;
+          }
+        }
+      }
+
+      const totalKm = newAssignments
+        .filter(a => a._travel)
+        .reduce((s, a) => s + (a.km || 0), 0);
+
+      return { ...row, assignments: newAssignments, totalKm: +totalKm.toFixed(2) };
+    } catch {
+      return row;
+    }
+  }));
+}
+
 // ── SCENARIO GENERATION ───────────────────────────────────────────
 // Phase 1 — k-means geographic clustering (one compact zone per resource)
 // Phase 2 — nearest-neighbor TSP + 2-opt per zone (minimize route km)
@@ -210,7 +283,9 @@ async function generateScenario(tasks, resources, constraints) {
   // Persistent per-resource state (accumulates assignments across all days)
   const state = resources.map(r => {
     const tw = turnoWindow(r.turno, winStart, winEnd);
-    return { ...r, assignments: [], shiftStart: tw.start, shiftEnd: tw.end, totalKm: 0 };
+    const shiftStart = r._effectiveStart ?? tw.start;
+    const shiftEnd   = r._effectiveEnd   ?? tw.end;
+    return { ...r, assignments: [], shiftStart, shiftEnd, totalKm: 0 };
   });
 
   let remaining = [...tasks];
@@ -237,21 +312,28 @@ async function generateScenario(tasks, resources, constraints) {
     }
     noCoords.forEach((t, i) => clusterForRes[resOrder[i % k]].push(t));
 
-    // ── Phase 2: TSP + 2-opt per cluster ─────────────────────────
-    const routes = clusterForRes.map(cluster => {
+    // ── Phase 2: TSP + 2-opt per cluster (start nearest to depot) ──
+    const routes = clusterForRes.map((cluster, i) => {
+      const depot = (state[i].depotLat && state[i].depotLng)
+        ? { lat: +state[i].depotLat, lng: +state[i].depotLng } : null;
       const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
       const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
-      return [...twoOpt(nnTSP(withC)), ...noC];
+      return [...twoOpt(nnTSP(withC, depot)), ...noC];
     });
 
     // ── Phase 3: assign within today's shift window ───────────────
     const dayUnassigned = [];
     for (let i = 0; i < k; i++) {
       const res = state[i];
+      const depot = (res.depotLat && res.depotLng)
+        ? { lat: +res.depotLat, lng: +res.depotLng } : null;
       let cursor     = res.shiftStart + dayOffset;
       const dayEnd   = res.shiftEnd   + dayOffset;
       let sinceBreak = 0;
-      let lastLat = null, lastLng = null;
+      // Start position is the depot (if set), so first travel block is depot→stop1
+      let lastLat = depot ? depot.lat : null;
+      let lastLng = depot ? depot.lng : null;
+      let fromDepot = !!depot; // next travel block is a depot exit
 
       for (const task of routes[i]) {
         const dur = task.duracion || 15;
@@ -269,23 +351,47 @@ async function generateScenario(tasks, resources, constraints) {
         let travelMin = 0, travelKm = 0;
         if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
           travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-          if (travelKm >= 0.05) { // ignore < 50m (GPS noise / same-block stops)
+          if (travelKm >= 0.05) {
             travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
           }
         }
 
+        // Reserve time to return to depot after this stop (if depot set)
+        let retBuffer = 0;
+        if (depot && hasCoords(task.lat, task.lng)) {
+          const retKmEst = haversineKm(task.lat, task.lng, depot.lat, depot.lng);
+          if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+        }
+
         const workSoFar = cursor - (res.shiftStart + dayOffset);
-        if (maxShiftMin > 0 && workSoFar + travelMin + dur > maxShiftMin) { dayUnassigned.push(task); continue; }
-        if (cursor + travelMin + dur > dayEnd) { dayUnassigned.push(task); continue; }
+        if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) { dayUnassigned.push(task); continue; }
+        if (cursor + travelMin + dur + retBuffer > dayEnd) { dayUnassigned.push(task); continue; }
 
         if (travelMin > 0) {
-          res.assignments.push({ _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) });
+          const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
+          if (fromDepot) block._depot_exit = true;
+          res.assignments.push(block);
           cursor += travelMin; res.totalKm += travelKm;
         }
+        fromDepot = false;
 
         res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
         cursor += dur; sinceBreak += dur;
         if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
+      }
+
+      // Return to depot — always fits because retBuffer was reserved per stop
+      if (depot && hasCoords(lastLat, lastLng) && (lastLat !== depot.lat || lastLng !== depot.lng)) {
+        const retKm  = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
+        if (retKm >= 0.05) {
+          const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+          res.assignments.push({
+            _travel: true, _depot_return: true,
+            _start: cursor, _end: cursor + retMin,
+            duracion: retMin, km: +retKm.toFixed(3),
+          });
+          res.totalKm += retKm;
+        }
       }
     }
 
@@ -451,7 +557,14 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 {(() => {
                   const fullName = [row.nombre, row.apellidos].filter(Boolean).join(" ") || row.name || "?";
                   const letter = fullName[0].toUpperCase();
-                  const stopCount = row.assignments?.filter(a => !a._break && !a._travel).length ?? 0;
+                  const dayAssignments = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
+                  const stopCount = dayAssignments.filter(a => !a._break && !a._travel).length;
+                  const dayKm = dayAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
+                  // Compact shift label: "06–14" or "Jornada" from turno string
+                  const tw = row.turno ? turnoWindow(row.turno, startMin, endMin) : null;
+                  const shiftLabel = tw
+                    ? `${String(Math.floor(tw.start / 60)).padStart(2,"0")}–${String(Math.floor((tw.end % 1440) / 60)).padStart(2,"0")}h`
+                    : (row.matricula || "");
                   return (
                     <>
                       <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.blueText }}>
@@ -461,9 +574,11 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                         <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {fullName}
                         </div>
-                        <div style={{ fontSize: 10, color: C.dim, fontFamily: mono, display: "flex", gap: 6, alignItems: "center", marginTop: 1 }}>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.turno || row.matricula || ""}</span>
-                          {stopCount > 0 && <span style={{ color: C.muted, flexShrink: 0 }}>{stopCount}p</span>}
+                        <div style={{ fontSize: 10, color: C.dim, fontFamily: mono, display: "flex", gap: 5, alignItems: "center", marginTop: 1, overflow: "hidden" }}>
+                          <span style={{ color: C.blueText, flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{shiftLabel}</span>
+                          {stopCount > 0 && <span style={{ color: C.muted, flexShrink: 0, whiteSpace: "nowrap" }}>{stopCount}p</span>}
+                          {dayKm > 0 && <span style={{ color: "#fb923c", flexShrink: 0, fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
+                          {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}>🏠</span>}
                         </div>
                       </div>
                     </>
@@ -502,16 +617,18 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   <div style={{ position: "absolute", left: (1440 - selectedDay * 1440 < 0 ? 0 : (1440 - selectedDay * 1440)) * pxPerMin, top: 0, bottom: 0, width: 2, background: `${C.blue}55`, pointerEvents: "none", zIndex: 2 }} />
                 )}
 
-                {/* Inactive-hours shading per row (based on row's own shift window if available) */}
+                {/* Inactive-hours shading per row */}
                 {(() => {
-                  const rs = row.shiftStart ?? minShiftStart;
-                  const re = row.shiftEnd   ?? (hasNightShift ? maxShiftEnd : endMin);
+                  const rs = row._tw?.start ?? row.shiftStart ?? minShiftStart;
+                  const re = row._tw?.end   ?? row.shiftEnd   ?? (hasNightShift ? maxShiftEnd : endMin);
+                  // re may exceed 1440 for night shifts (22-06 → end=1800); cap display at maxShiftEnd
+                  const reNorm = Math.min(re, maxShiftEnd);
                   const bands = [
-                    rs > 0           ? { x: 0,               w: rs * pxPerMin }               : null,
-                    re < maxShiftEnd ? { x: re * pxPerMin,   w: (maxShiftEnd - re) * pxPerMin } : null,
+                    rs > 0               ? { x: 0,                 w: rs * pxPerMin }                     : null,
+                    reNorm < maxShiftEnd ? { x: reNorm * pxPerMin, w: (maxShiftEnd - reNorm) * pxPerMin } : null,
                   ].filter(Boolean);
                   return bands.map(({ x, w: bw }, i) => (
-                    <div key={i} style={{ position: "absolute", left: x, top: 0, width: bw, height: "100%", background: "rgba(0,0,0,0.18)", pointerEvents: "none", zIndex: 1 }} />
+                    <div key={i} style={{ position: "absolute", left: x, top: 0, width: bw, height: "100%", background: "rgba(0,0,0,0.25)", pointerEvents: "none", zIndex: 1 }} />
                   ));
                 })()}
 
@@ -534,14 +651,55 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   );
 
                   // Travel block
-                  if (task._travel) return (
-                    <div key={`tr${ti}`}
-                      title={`Km en vacío: ${task.km?.toFixed(2)} km · ${dur} min`}
-                      style={{ position: "absolute", left, top: ROW_H * 0.43, width: Math.max(w, 3), height: ROW_H * 0.14, background: "rgba(139,149,165,0.3)", borderRadius: 2, display: "flex", alignItems: "center", overflow: "hidden", zIndex: 3 }}
-                    >
-                      {w > 30 && <span style={{ fontSize: 8, color: C.muted, paddingLeft: 3, whiteSpace: "nowrap" }}>{task.km?.toFixed(1)} km</span>}
-                    </div>
-                  );
+                  if (task._travel) {
+                    const tH = ROW_H * 0.38;
+                    const tTop = (ROW_H - tH) / 2;
+                    const kmLabel = task.km != null ? `${task.km.toFixed(2)} km` : "";
+                    const minLabel = `${dur} min`;
+                    const isDepotMove = task._depot_exit || task._depot_return;
+                    const depotLabel = task._depot_exit ? "Salida depot" : "Vuelta depot";
+                    const bg = isDepotMove
+                      ? "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c99 6px, #fb923c99 12px)"
+                      : "repeating-linear-gradient(135deg, #111 0px, #111 6px, #c0000099 6px, #c0000099 12px)";
+                    const borderColor = isDepotMove ? "#fb923cbb" : "#c00000bb";
+                    return (
+                      <div key={`tr${ti}`}
+                        title={isDepotMove ? `${depotLabel}: ${kmLabel} · ${minLabel}` : `Km en vacío: ${kmLabel} · ${minLabel}`}
+                        style={{
+                          position: "absolute", left, top: tTop,
+                          width: Math.max(w, 4), height: tH,
+                          background: bg,
+                          border: `1px solid ${borderColor}`,
+                          borderRadius: 3,
+                          display: "flex", alignItems: "center", gap: 3,
+                          overflow: "hidden", zIndex: 3, boxSizing: "border-box",
+                          paddingLeft: 4,
+                        }}
+                      >
+                        {w > 14 && (
+                          isDepotMove ? (
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="#fb923c" stroke="none" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
+                              <path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/>
+                            </svg>
+                          ) : (
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
+                              <path d="M5 12h14M13 6l6 6-6 6"/>
+                            </svg>
+                          )
+                        )}
+                        {w > 36 && kmLabel && (
+                          <span style={{ fontSize: 9, color: "#fff", whiteSpace: "nowrap", fontWeight: 700, fontFamily: "monospace", textShadow: "0 0 4px #000, 0 0 4px #000" }}>
+                            {kmLabel}
+                          </span>
+                        )}
+                        {w > 72 && (
+                          <span style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", textShadow: "0 0 3px #000" }}>
+                            · {isDepotMove ? depotLabel : minLabel}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
 
                   // PA stop block — derive label: prefer nombre/IdSAP over barrio
                   const color = barrioColor(task.barrio);
@@ -845,13 +1003,24 @@ function ConstraintsPanel({ c, onChange }) {
 }
 
 // ── VEHICLES TAB ──────────────────────────────────────────────────
-export function TabVehiculos({ vehicles, loading }) {
-  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa" };
+export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
+  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa", depotLat: "", depotLng: "" };
   const [form,   setForm]   = useState(empty);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [planningDepots, setPlanningDepots] = useState([]);
+  const [showDepotPicker, setShowDepotPicker] = useState(null); // vehicleId | "new"
+
+  // Load depots from Planning localStorage when project is active
+  useEffect(() => {
+    if (!activeProject?._id) return;
+    try {
+      const raw = localStorage.getItem(`fc_depots_${activeProject._id}`);
+      if (raw) setPlanningDepots(JSON.parse(raw) ?? []);
+    } catch { /* ignore */ }
+  }, [activeProject?._id]);
 
   const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
   const inpStyle = { ...selStyle };
@@ -863,7 +1032,9 @@ export function TabVehiculos({ vehicles, loading }) {
       nombre: form.nombre.trim(), matricula: form.matricula.trim(),
       tipo: form.tipo, turno: form.turno,
       capacidad: parseInt(form.capacidad) || 0,
-      activo: true, createdAt: serverTimestamp(),
+      depotLat: form.depotLat ? +form.depotLat : null,
+      depotLng: form.depotLng ? +form.depotLng : null,
+      activo: true, org_id: orgId, createdAt: serverTimestamp(),
     });
     setForm(empty); setAdding(false); setSaving(false);
   }
@@ -874,6 +1045,8 @@ export function TabVehiculos({ vehicles, loading }) {
       nombre: editForm.nombre.trim(), matricula: editForm.matricula.trim(),
       tipo: editForm.tipo, turno: editForm.turno,
       capacidad: parseInt(editForm.capacidad) || 0,
+      depotLat: editForm.depotLat ? +editForm.depotLat : null,
+      depotLng: editForm.depotLng ? +editForm.depotLng : null,
     });
     setEditId(null); setSaving(false);
   }
@@ -885,7 +1058,7 @@ export function TabVehiculos({ vehicles, loading }) {
 
   function startEdit(v) {
     setEditId(v._id);
-    setEditForm({ nombre: v.nombre || "", matricula: v.matricula || "", tipo: v.tipo || "Camión lateral", turno: v.turno || "Jornada completa", capacidad: v.capacidad || "" });
+    setEditForm({ nombre: v.nombre || "", matricula: v.matricula || "", tipo: v.tipo || "Camión lateral", turno: v.turno || "Jornada completa", capacidad: v.capacidad || "", depotLat: v.depotLat ?? "", depotLng: v.depotLng ?? "" });
     setAdding(false);
   }
 
@@ -901,6 +1074,63 @@ export function TabVehiculos({ vehicles, loading }) {
       onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
       onKeyDown={e => e.key === "Enter" && save(editId)}
       style={inpStyle} />
+  );
+
+  function DepotPicker({ onPick }) {
+    if (planningDepots.length === 0) return (
+      <div style={{ padding: "8px 12px", fontSize: 11, color: C.muted }}>No hay depots en Planning para este proyecto.</div>
+    );
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {planningDepots.map(d => (
+          <button key={d.id} onClick={() => onPick(d)} style={{
+            background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.text, fontSize: 12, padding: "6px 10px", cursor: "pointer",
+            fontFamily: font, textAlign: "left", transition: "border-color .12s",
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
+            onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+          >
+            <span style={{ marginRight: 6 }}>🏠</span>
+            <b>{d.nombre}</b>
+            <span style={{ color: C.dim, marginLeft: 8, fontSize: 10, fontFamily: mono }}>{(+d.lat).toFixed(5)}, {(+d.lng).toFixed(5)}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  const depotSection = (formObj, setFormObj, pickerKey) => (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: .5 }}>DEPOT (inicio/fin de turno)</span>
+        {planningDepots.length > 0 && (
+          <button onClick={() => setShowDepotPicker(showDepotPicker === pickerKey ? null : pickerKey)} style={{
+            fontSize: 10, padding: "3px 8px", background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
+            color: C.blueText, cursor: "pointer", fontFamily: font,
+          }}>Importar desde Planning</button>
+        )}
+      </div>
+      {showDepotPicker === pickerKey && (
+        <div style={{ marginBottom: 8 }}>
+          <DepotPicker onPick={d => { setFormObj({ ...formObj, depotLat: String(d.lat), depotLng: String(d.lng) }); setShowDepotPicker(null); }} />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input type="number" placeholder="Lat (ej: 41.3851)" value={formObj.depotLat ?? ""}
+          onChange={e => setFormObj({ ...formObj, depotLat: e.target.value })}
+          step="0.00001" style={{ ...inpStyle, flex: 1, minWidth: 0 }} />
+        <input type="number" placeholder="Lng (ej: 2.1734)" value={formObj.depotLng ?? ""}
+          onChange={e => setFormObj({ ...formObj, depotLng: e.target.value })}
+          step="0.00001" style={{ ...inpStyle, flex: 1, minWidth: 0 }} />
+        {(formObj.depotLat || formObj.depotLng) && (
+          <button onClick={() => setFormObj({ ...formObj, depotLat: "", depotLng: "" })} title="Quitar depot"
+            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}>
+            ×
+          </button>
+        )}
+      </div>
+    </div>
   );
 
   return (
@@ -937,6 +1167,7 @@ export function TabVehiculos({ vehicles, loading }) {
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
             }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
+          {depotSection(form, setForm, "new")}
         </div>
       )}
 
@@ -967,6 +1198,7 @@ export function TabVehiculos({ vehicles, loading }) {
                   Cancelar
                 </button>
               </div>
+              {depotSection(editForm, setEditForm, v._id)}
             </div>
           ) : (
             <div key={v._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
@@ -975,11 +1207,16 @@ export function TabVehiculos({ vehicles, loading }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{v.nombre}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", gap: 10 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {v.matricula && <span style={{ fontFamily: mono }}>{v.matricula}</span>}
                   <span>{v.tipo}</span>
                   {v.capacidad > 0 && <span>{v.capacidad} m³</span>}
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
+                  {v.depotLat && v.depotLng && (
+                    <span style={{ color: "#fb923c", display: "flex", alignItems: "center", gap: 3 }}>
+                      🏠 {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
+                    </span>
+                  )}
                 </div>
               </div>
               <button onClick={() => startEdit(v)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
@@ -1001,7 +1238,7 @@ export function TabVehiculos({ vehicles, loading }) {
 }
 
 // ── WORKERS TAB ───────────────────────────────────────────────────
-export function TabTrabajadores({ workers, vehicles, loading }) {
+export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
   const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "" };
   const [form,     setForm]     = useState(empty);
   const [adding,   setAdding]   = useState(false);
@@ -1018,7 +1255,7 @@ export function TabTrabajadores({ workers, vehicles, loading }) {
       nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
       turno: form.turno, rol: form.rol,
       vehiculoId: form.vehiculoId || "",
-      activo: true, createdAt: serverTimestamp(),
+      activo: true, org_id: orgId, createdAt: serverTimestamp(),
     });
     setForm(empty); setAdding(false); setSaving(false);
   }
@@ -1186,7 +1423,7 @@ export function TabTrabajadores({ workers, vehicles, loading }) {
 }
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
-export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate }) {
+export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId }) {
   const tasks = activeProject?.planning?.tasks || [];
 
   const [importing,    setImporting]   = useState(false);
@@ -1199,6 +1436,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
   const [generating,   setGenerating]  = useState(false);
+  const [osrmRunning,  setOsrmRunning] = useState(false);
   const [genError,     setGenError]    = useState(null);
   const [publishModal, setPublishModal] = useState(null);
   const [publishing,   setPublishing]  = useState(false);
@@ -1250,20 +1488,51 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     await new Promise(resolve => setTimeout(resolve, 0));
 
     try {
+      // Read Planning depots from localStorage as fallback depot for vehicles
+      let planningDepot = null;
+      try {
+        const raw = localStorage.getItem(`fc_depots_${activeProject?._id}`);
+        const depots = raw ? JSON.parse(raw) : [];
+        if (depots.length > 0) planningDepot = { lat: +depots[0].lat, lng: +depots[0].lng };
+      } catch { /* ignore */ }
+
+      // Inject planning depot into vehicles that have no depot set
+      const vehiclesWithDepot = vehicles.map(v => {
+        if (v.depotLat && v.depotLng) return v;
+        if (!planningDepot) return v;
+        return { ...v, depotLat: planningDepot.lat, depotLng: planningDepot.lng };
+      });
+
+      // Compute each vehicle's effective shift from its linked workers' union.
+      // A vehicle with only a morning worker works 06–14; morning+afternoon → 06–22.
+      // Vehicles with no linked workers keep their own turno.
+      const vehiclesForVRP = vehiclesWithDepot.map(v => {
+        const linked = workers.filter(w => w.vehiculoId === (v._id || v.id));
+        if (!linked.length) return v;
+        const wins = linked.map(w => turnoWindow(w.turno, constraints.startMin, constraints.endMin));
+        const effStart = Math.min(...wins.map(w => w.start));
+        const effEnd   = Math.max(...wins.map(w => w.end));
+        return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd };
+      });
+
       // ── Step 1: Vehicle VRP ──────────────────────────────────────
-      // Vehicles always use their OWN turno — no override.
-      // generateScenario preserves resource order: vr.schedule[i] ↔ vehicles[i]
+      // generateScenario preserves resource order: vr.schedule[i] ↔ vehiclesForVRP[i]
       let vr = { schedule: [], unassigned: [...tasks], daysUsed: 1 };
-      if (vehicles.length > 0) {
-        vr = await generateScenario(tasks, vehicles, constraints);
+      if (vehiclesForVRP.length > 0) {
+        vr = await generateScenario(tasks, vehiclesForVRP, constraints);
       }
-      const vehicleSchedule = vehicles.map((v, i) => ({
+      const vehicleScheduleRaw = vehiclesForVRP.map((v, i) => ({
         ...v,
         assignments: vr.schedule[i]?.assignments || [],
         totalKm:     vr.schedule[i]?.totalKm     || 0,
         shiftStart:  vr.schedule[i]?.shiftStart,
         shiftEnd:    vr.schedule[i]?.shiftEnd,
       }));
+
+      // Enrich travel block km with real road distances via OSRM
+      setOsrmRunning(true);
+      const vehicleSchedule = await enrichWithOSRM(vehicleScheduleRaw);
+      setOsrmRunning(false);
 
       // ── Step 2: Worker schedule ──────────────────────────────────
       // Routes come ONLY from vehicles. Workers are human assignments
@@ -1306,11 +1575,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const wId   = w._id || w.id;
 
         const myAssignments = vehicleRow.assignments.filter(a => {
-          // Normalize _start to within-day minutes (repeats each day)
+          // Depot return belongs to the vehicle, not to any individual worker
+          if (a._depot_return) return false;
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
-          const t = a._start - dayOffset;
-          // Owner = first peer whose window contains this time slot
-          const owner = peers.find(p => t >= p._tw.start && t < p._tw.end);
+          const tStart = a._start - dayOffset;
+          // Owner = first peer whose window contains the start of this slot
+          const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
           return owner && (owner._id || owner.id) === wId;
         });
 
@@ -1453,6 +1723,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             recorrido,
             fechaSubida: Date.now(),
             origenVRP: true,
+            ...(orgId ? { org_id: orgId } : {}),
           });
         }
       }
@@ -1555,7 +1826,9 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 7,
           opacity: canGenerate ? 1 : .6,
         }}>
-          {generating
+          {osrmRunning
+            ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Calculando km por carretera…</>
+            : generating
             ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Generando…</>
             : "Generar escenario"
           }
@@ -1819,20 +2092,30 @@ const PROJECT_STATUS = {
   publicado:    { label: "Publicado",   color: C.amber },
 };
 
-export function TabProyectos({ activeProject, onOpenProject }) {
+export function TabProyectos({ activeProject, onOpenProject, orgId }) {
   const [projects,   setProjects]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [newModal,   setNewModal]   = useState(null); // { nombre:"", descripcion:"", mes:"" }
   const [creating,   setCreating]   = useState(false);
 
   useEffect(() => {
+    const constraints = orgId ? [where("org_id", "==", orgId)] : [];
     const unsub = onSnapshot(
-      query(collection(db, "scheduling_projects"), orderBy("updatedAt", "desc")),
-      snap => { setProjects(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoading(false); },
+      query(collection(db, "scheduling_projects"), ...constraints),
+      snap => {
+        const docs = snap.docs
+          .map(d => ({ _id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const am = a.updatedAt?.toMillis?.() ?? 0;
+            const bm = b.updatedAt?.toMillis?.() ?? 0;
+            return bm - am;
+          });
+        setProjects(docs); setLoading(false);
+      },
       () => setLoading(false)
     );
     return () => unsub();
-  }, []);
+  }, [orgId]);
 
   async function createProject() {
     if (!newModal?.nombre?.trim()) return;
@@ -1847,6 +2130,7 @@ export function TabProyectos({ activeProject, onOpenProject }) {
       scheduling:  null,
       createdAt:   now,
       updatedAt:   now,
+      ...(orgId ? { org_id: orgId } : {}),
     });
     setNewModal(null);
     setCreating(false);
@@ -2023,7 +2307,7 @@ export function TabProyectos({ activeProject, onOpenProject }) {
 }
 
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
-export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate }) {
+export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate, orgId }) {
   const [subTab, setSubTab] = useState("vrp");
   const SUB_TABS = [
     { key: "vrp",          label: "VRP / Gantt" },
@@ -2054,10 +2338,11 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
             vehicles={vehicles} workers={workers}
             activeProject={activeProject}
             onProjectUpdate={onProjectUpdate}
+            orgId={orgId}
           />
         </div>
-        {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} />}
-        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} />}
+        {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}
+        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} orgId={orgId} />}
       </div>
     </div>
   );
@@ -2073,20 +2358,24 @@ function SchedulingPage({ sesion, onLogout }) {
   const [planningEverOpen, setPlanningEverOpen] = useState(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "scheduling_vehicles"), snap => {
-      setVehicles(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
-      setLoadingV(false);
-    }, () => setLoadingV(false));
+    if (!sesion?.org_id) return;
+    const unsub = onSnapshot(
+      query(collection(db, "scheduling_vehicles"), where("org_id", "==", sesion.org_id)),
+      snap => { setVehicles(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoadingV(false); },
+      () => setLoadingV(false)
+    );
     return () => unsub();
-  }, []);
+  }, [sesion?.org_id]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "scheduling_workers"), snap => {
-      setWorkers(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
-      setLoadingW(false);
-    }, () => setLoadingW(false));
+    if (!sesion?.org_id) return;
+    const unsub = onSnapshot(
+      query(collection(db, "scheduling_workers"), where("org_id", "==", sesion.org_id)),
+      snap => { setWorkers(snap.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoadingW(false); },
+      () => setLoadingW(false)
+    );
     return () => unsub();
-  }, []);
+  }, [sesion?.org_id]);
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
 
@@ -2174,7 +2463,7 @@ function SchedulingPage({ sesion, onLogout }) {
           </div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
-          <TabProyectos activeProject={null} onOpenProject={openProject} />
+          <TabProyectos activeProject={null} onOpenProject={openProject} orgId={sesion?.org_id} />
         </div>
       </div>
     );
@@ -2280,6 +2569,7 @@ function SchedulingPage({ sesion, onLogout }) {
           <SchedulingModuleWrapper
             vehicles={vehicles} workers={workers} loadingV={loadingV} loadingW={loadingW}
             activeProject={activeProject} onProjectUpdate={handleProjectUpdate}
+            orgId={sesion?.org_id}
           />
         </div>
       </div>
@@ -2288,35 +2578,61 @@ function SchedulingPage({ sesion, onLogout }) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────
-const USUARIOS_INIT = [
-  { id:"1", nombre:"Admin", apellidos:"Sistema", usuario:"admin", password:"admin123", rol:"admin", activo:true },
-];
-
 export function LoginScheduling({ onLogin }) {
-  const [usuario,  setUsuario]  = useState("");
-  const [password, setPassword] = useState("");
-  const [err,      setErr]      = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [nombre,    setNombre]    = useState("");
+  const [orgId,     setOrgId]     = useState("default");
+  const [err,       setErr]       = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [mode,      setMode]      = useState("checking"); // checking | login | setup
 
-  async function go() {
-    if (!usuario || !password) { setErr("Introduce usuario y contraseña."); return; }
+  // Detecta si hay algún admin en Firestore; si no, muestra setup
+  useEffect(() => {
+    getDocs(query(collection(db, "usuarios"), where("rol", "==", "admin"), limit(1)))
+      .then(snap => setMode(snap.empty ? "setup" : "login"))
+      .catch(() => setMode("login"));
+  }, []);
+
+  async function login() {
+    if (!email || !password) { setErr("Introduce email y contraseña."); return; }
     setLoading(true); setErr("");
-    let found = null;
     try {
-      await new Promise((resolve, reject) => {
-        const unsub = onSnapshot(collection(db, "usuarios"), snap => {
-          unsub();
-          const u = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
-            .find(u => u.usuario === usuario && u.password === password && u.activo !== false);
-          if (u) found = u;
-          resolve();
-        }, reject);
-      });
-    } catch {}
-    if (!found) found = USUARIOS_INIT.find(u => u.usuario === usuario && u.password === password);
-    if (!found) { setErr("Credenciales incorrectas."); setLoading(false); return; }
-    if (found.rol !== "admin") { setErr("Acceso restringido a administradores."); setLoading(false); return; }
-    onLogin(found);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, "usuarios", cred.user.uid));
+      if (!snap.exists() || snap.data().activo === false) {
+        await signOut(auth); setErr("Usuario inactivo o sin perfil."); setLoading(false); return;
+      }
+      const profile = { uid: cred.user.uid, ...snap.data() };
+      if (profile.rol !== "admin") {
+        await signOut(auth); setErr("Acceso restringido a administradores."); setLoading(false); return;
+      }
+      onLogin(profile);
+    } catch (e) {
+      setErr(e.code === "auth/invalid-credential" ? "Credenciales incorrectas." : (e.message || "Error de autenticación."));
+    }
+    setLoading(false);
+  }
+
+  async function setup() {
+    if (!email || !password || !nombre) { setErr("Rellena todos los campos."); return; }
+    if (password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres."); return; }
+    setLoading(true); setErr("");
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const profile = {
+        nombre: nombre.trim(), apellidos: "", email,
+        rol: "admin", org_id: orgId.trim() || "default",
+        activo: true, createdAt: serverTimestamp(),
+      };
+      await setDoc(doc(db, "usuarios", cred.user.uid), profile);
+      await secondaryAuth.signOut();
+      // Now sign in as the new user
+      const cred2 = await signInWithEmailAndPassword(auth, email, password);
+      onLogin({ uid: cred2.user.uid, ...profile });
+    } catch (e) {
+      setErr(e.message || "Error al crear el administrador.");
+    }
     setLoading(false);
   }
 
@@ -2327,39 +2643,72 @@ export function LoginScheduling({ onLogin }) {
     boxSizing: "border-box", fontFamily: font, outline: "none",
   };
 
+  if (mode === "checking") return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: C.muted, fontFamily: font, fontSize: 13 }}>Cargando…</div>
+    </div>
+  );
+
+  const onEnter = e => e.key === "Enter" && (mode === "setup" ? setup() : login());
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
-      <div style={{ width: 360, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px", boxShadow: "0 16px 48px rgba(0,0,0,.5)", animation: "sched-fadein .3s ease both" }}>
-        <div style={{ marginBottom: 28 }}>
+      <div style={{ width: 380, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px", boxShadow: "0 16px 48px rgba(0,0,0,.5)", animation: "sched-fadein .3s ease both" }}>
+        <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operantia</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning & Scheduling</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
+            {mode === "setup" ? "Configuración inicial" : "Planning & Scheduling"}
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+            {mode === "setup" ? "No hay administradores. Crea el primero." : "Acceso para administradores"}
+          </div>
         </div>
+
+        {mode === "setup" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Nombre</label>
+            <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" autoComplete="name" onKeyDown={onEnter}
+              style={{ ...iStyle, borderColor: nombre ? `${C.blue}44` : C.border }}
+              onFocus={e => e.target.style.borderColor = `${C.blue}66`}
+              onBlur={e  => e.target.style.borderColor = nombre ? `${C.blue}44` : C.border}
+            />
+          </div>
+        )}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Usuario</label>
-          <input value={usuario} onChange={e => setUsuario(e.target.value)} placeholder="usuario" autoComplete="username"
-            onKeyDown={e => e.key === "Enter" && go()}
-            style={{ ...iStyle, borderColor: usuario ? `${C.blue}44` : C.border }}
+          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Email</label>
+          <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="admin@empresa.com" autoComplete="email" onKeyDown={onEnter}
+            style={{ ...iStyle, borderColor: email ? `${C.blue}44` : C.border }}
             onFocus={e => e.target.style.borderColor = `${C.blue}66`}
-            onBlur={e  => e.target.style.borderColor = usuario ? `${C.blue}44` : C.border}
+            onBlur={e  => e.target.style.borderColor = email ? `${C.blue}44` : C.border}
           />
         </div>
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: mode === "setup" ? 14 : 20 }}>
           <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Contraseña</label>
           <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="••••••••"
-            onKeyDown={e => e.key === "Enter" && go()}
+            autoComplete={mode === "setup" ? "new-password" : "current-password"} onKeyDown={onEnter}
             style={{ ...iStyle, borderColor: password ? `${C.blue}44` : C.border }}
             onFocus={e => e.target.style.borderColor = `${C.blue}66`}
             onBlur={e  => e.target.style.borderColor = password ? `${C.blue}44` : C.border}
           />
         </div>
+        {mode === "setup" && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>ID de organización</label>
+            <input value={orgId} onChange={e => setOrgId(e.target.value)} placeholder="default" autoComplete="off" onKeyDown={onEnter}
+              style={{ ...iStyle, borderColor: orgId ? `${C.blue}44` : C.border }}
+              onFocus={e => e.target.style.borderColor = `${C.blue}66`}
+              onBlur={e  => e.target.style.borderColor = orgId ? `${C.blue}44` : C.border}
+            />
+          </div>
+        )}
+
         {err && (
           <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {err}
           </div>
         )}
-        <button onClick={go} disabled={loading} style={{
+        <button onClick={mode === "setup" ? setup : login} disabled={loading} style={{
           width: "100%", padding: "11px", fontSize: 13, fontWeight: 600,
           background: loading ? C.blueDim : C.blue, border: "none",
           color: loading ? C.blueText : "#fff",
@@ -2370,10 +2719,19 @@ export function LoginScheduling({ onLogin }) {
           onMouseLeave={e => { if (!loading) e.currentTarget.style.background = C.blue; }}
         >
           {loading
-            ? <><span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(163,196,252,.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Accediendo…</>
-            : "Acceder"
+            ? <><span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(163,196,252,.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {mode === "setup" ? "Creando…" : "Accediendo…"}</>
+            : (mode === "setup" ? "Crear administrador" : "Acceder")
           }
         </button>
+
+        {mode === "login" && (
+          <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: C.dim }}>
+            ¿Sin acceso?{" "}
+            <button onClick={() => { setMode("setup"); setErr(""); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 11, fontFamily: font, textDecoration: "underline" }}>
+              Crear primer admin
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2381,12 +2739,29 @@ export function LoginScheduling({ onLogin }) {
 
 // ── ROOT ──────────────────────────────────────────────────────────
 export default function SchedulingApp() {
-  const [sesion, setSesion] = useState(() => {
-    try { const s = localStorage.getItem("fc_session"); return s ? JSON.parse(s) : null; }
-    catch { return null; }
-  });
-  function handleLogin(u)  { setSesion(u); localStorage.setItem("fc_session", JSON.stringify(u)); }
-  function handleLogout()  { setSesion(null); localStorage.removeItem("fc_session"); }
+  const [sesion, setSesion] = useState(undefined); // undefined=cargando
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, async user => {
+      if (user) {
+        try {
+          const snap = await getDoc(doc(db, "usuarios", user.uid));
+          if (snap.exists() && snap.data().activo !== false) {
+            setSesion({ uid: user.uid, ...snap.data() });
+          } else { await signOut(auth); setSesion(null); }
+        } catch { setSesion(null); }
+      } else { setSesion(null); }
+    });
+  }, []);
+
+  async function handleLogin(profile) { setSesion(profile); }
+  async function handleLogout() { await signOut(auth); setSesion(null); }
+
+  if (sesion === undefined) return (
+    <div style={{ display:"flex", height:"100vh", alignItems:"center", justifyContent:"center", background:C.bg, fontFamily:font }}>
+      <div style={{ color:C.muted, fontSize:13 }}>Cargando…</div>
+    </div>
+  );
   if (!sesion || sesion.rol !== "admin") return <LoginScheduling onLogin={handleLogin} />;
   return <SchedulingPage sesion={sesion} onLogout={handleLogout} />;
 }

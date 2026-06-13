@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { db } from "./firebase.js";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "./firebase.js";
+import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc } from "firebase/firestore";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -254,6 +255,26 @@ function makePopupHtml(marker, color) {
     </div>`;
 }
 
+// ── MAP STYLES ────────────────────────────────────────────────────
+const MAP_STYLES = [
+  {
+    key: "dark", label: "Oscuro", preview: "#1a2035",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  },
+  {
+    key: "light", label: "Claro", preview: "#f5f5f0",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  },
+  {
+    key: "satellite", label: "Satélite", preview: "#2d4a2d",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  },
+  {
+    key: "osm", label: "Calles", preview: "#e8d5b0",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  },
+];
+
 // ── MAPA PLANNING ─────────────────────────────────────────────────
 // Haversine distance in km between two lat/lng points
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -273,13 +294,16 @@ function routeStats(pts) {
   return { km, minAt30: Math.round(km / 30 * 60) };
 }
 
-function MapaPlanning({ layers, depots = [], barrioColors = {} }) {
+function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle }) {
   const divRef    = useRef(null);
   const mapRef    = useRef(null);
+  const tileRef          = useRef(null);
   const leafletLayersRef = useRef([]);
   const depotLayersRef   = useRef([]);
   const selPolyRef    = useRef(null);
   const selPinsRef    = useRef([]);
+  const [showStylePicker, setShowStylePicker] = useState(false);
+  const currentStyle = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
 
   const [selMode,      setSelMode]      = useState(false);
   const [selected,     setSelected]     = useState([]);  // [{lat,lng,nombre}]
@@ -448,14 +472,23 @@ function MapaPlanning({ layers, depots = [], barrioColors = {} }) {
     if (!divRef.current || mapRef.current) return;
     const L = window.L;
     if (!L) return;
-    const map = L.map(divRef.current, { zoomControl: true, attributionControl: true })
+    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false })
       .setView([40.416, -3.703], 6);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-    }).addTo(map);
+    const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
+    tileRef.current = L.tileLayer(style.url).addTo(map);
     mapRef.current = map;
     drawLayers();
-  }, [drawLayers]);
+  }, [drawLayers, mapStyle]);
+
+  // Swap tile layer when style changes (map already initialized)
+  useEffect(() => {
+    const L = window.L;
+    if (!L || !mapRef.current) return;
+    const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
+    if (tileRef.current) mapRef.current.removeLayer(tileRef.current);
+    tileRef.current = L.tileLayer(style.url).addTo(mapRef.current);
+    tileRef.current.bringToBack();
+  }, [mapStyle]);
 
   useEffect(() => {
     if (!document.getElementById("leaflet-css")) {
@@ -523,6 +556,63 @@ function MapaPlanning({ layers, depots = [], barrioColors = {} }) {
         </svg>
         {selMode ? "Salir de medición" : "Medir distancia"}
       </button>
+
+      {/* Map style picker */}
+      <div style={{ position: "absolute", top: 50, right: 10, zIndex: 900 }}>
+        <button
+          onClick={() => setShowStylePicker(s => !s)}
+          title="Cambiar estilo del mapa"
+          style={{
+            display: "flex", alignItems: "center", gap: 7,
+            padding: "6px 12px", borderRadius: 8, fontFamily: font, fontSize: 12, fontWeight: 600,
+            background: showStylePicker ? C.surface2 : C.card,
+            color: C.muted, border: `1px solid ${C.border}`,
+            cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.4)", transition: "all .15s",
+          }}
+        >
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: currentStyle.preview, border: "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
+          {currentStyle.label}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ opacity: 0.5 }}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        {showStylePicker && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0,
+            background: C.card, border: `1px solid ${C.border}`,
+            borderRadius: 9, overflow: "hidden",
+            boxShadow: "0 6px 24px rgba(0,0,0,.5)", minWidth: 150,
+          }}>
+            {MAP_STYLES.map(s => (
+              <button
+                key={s.key}
+                onClick={() => {
+                  setMapStyle(s.key); setShowStylePicker(false);
+                  if (projectId) setDoc(doc(db, "planning_settings", projectId), { mapStyle: s.key, updatedAt: serverTimestamp() }, { merge: true });
+                }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "9px 14px", background: s.key === mapStyle ? C.surface2 : "none",
+                  border: "none", borderBottom: `1px solid ${C.border}`,
+                  color: s.key === mapStyle ? C.text : C.muted,
+                  cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: s.key === mapStyle ? 600 : 400,
+                  textAlign: "left", transition: "background .1s",
+                }}
+                onMouseEnter={e => { if (s.key !== mapStyle) e.currentTarget.style.background = C.surface2; }}
+                onMouseLeave={e => { if (s.key !== mapStyle) e.currentTarget.style.background = "none"; }}
+              >
+                <div style={{ width: 14, height: 14, borderRadius: 3, background: s.preview, border: `1px solid rgba(255,255,255,0.15)`, flexShrink: 0 }} />
+                {s.label}
+                {s.key === mapStyle && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{ marginLeft: "auto" }}>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Selection instructions */}
       {selMode && selected.length === 0 && (
@@ -641,12 +731,45 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
   const [manualLng, setManualLng] = useState("");
   const [manualName, setManualName] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [openUpload,  setOpenUpload]  = useState(true);
+  const [openLayers,  setOpenLayers]  = useState(true);
+  const [openBarrios, setOpenBarrios] = useState(true);
+  const [openDepots,  setOpenDepots]  = useState(true);
+
+  const Chevron = ({ open }) => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+  const SecBtn = ({ label, badge, open, onToggle, extra }) => (
+    <button onClick={onToggle} style={{
+      width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+      background: "none", border: "none", cursor: "pointer", padding: "8px 12px 6px",
+      color: C.dim, fontFamily: font,
+    }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Chevron open={open} />
+        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+          {label}{badge != null ? ` (${badge})` : ""}
+        </span>
+      </span>
+      {extra}
+    </button>
+  );
 
   function removeLayer(id) {
-    setLayers(prev => prev.filter(l => l.id !== id));
+    if (projectId) deleteDoc(doc(db, "planning_layers", `${projectId}_${id}`));
+    else setLayers(prev => prev.filter(l => l.id !== id));
   }
   function toggleLayer(id) {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+    const layer = layers.find(l => l.id === id);
+    if (!layer) return;
+    if (projectId) {
+      updateDoc(doc(db, "planning_layers", `${projectId}_${id}`), { visible: !layer.visible });
+    } else {
+      setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+    }
   }
 
   const totalMarkers = layers.reduce((s, l) => s + l.markers.length, 0);
@@ -703,60 +826,45 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
       </div>
 
       {/* Upload area */}
-      <div style={{ padding: "16px 16px 14px", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10, fontWeight: 600 }}>
-          Cargar capa
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.kml,.xlsx"
-          multiple
-          style={{ display: "none" }}
-          onChange={e => onUpload(Array.from(e.target.files))}
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          style={{
-            width: "100%", padding: "9px 14px",
-            background: uploading ? C.surface2 : C.blueDim,
-            border: `1px solid ${C.blue}44`,
-            color: C.blueText, borderRadius: 8, fontSize: 12,
-            fontWeight: 600, cursor: uploading ? "wait" : "pointer",
-            fontFamily: font, transition: "all .15s",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          }}
-          onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "#1a3570"; }}
-          onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
-        >
-          {uploading
-            ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
-            : "Subir CSV / KML / Excel"
-          }
-        </button>
-        <div style={{ fontSize: 10, color: C.dim, marginTop: 8, lineHeight: 1.7 }}>
-          <div>CSV: columnas <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> y <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
-          <div>Excel: columna <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>coordenadas</code> (lat,lng)</div>
-        </div>
+      <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <SecBtn label="Cargar capa" open={openUpload} onToggle={() => setOpenUpload(o => !o)} />
+        {openUpload && (
+          <div style={{ padding: "4px 16px 14px" }}>
+            <input ref={fileRef} type="file" accept=".csv,.kml,.xlsx" multiple style={{ display: "none" }}
+              onChange={e => onUpload(Array.from(e.target.files))} />
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{
+              width: "100%", padding: "9px 14px",
+              background: uploading ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
+              color: C.blueText, borderRadius: 8, fontSize: 12, fontWeight: 600,
+              cursor: uploading ? "wait" : "pointer", fontFamily: font, transition: "all .15s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+              onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "#1a3570"; }}
+              onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
+            >
+              {uploading
+                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
+                : "Subir CSV / KML / Excel"}
+            </button>
+            <div style={{ fontSize: 10, color: C.dim, marginTop: 8, lineHeight: 1.7 }}>
+              <div>CSV: columnas <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> y <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
+              <div>Excel: columna <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>coordenadas</code> (lat,lng)</div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Stats */}
-      {layers.length > 0 && (
-        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 20 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1 }}>{layers.length}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>capas</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1 }}>{totalMarkers}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>puntos</div>
-          </div>
-        </div>
-      )}
-
-      {/* Layers list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+      {/* Layers section */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <SecBtn label="Capas" badge={layers.length || null}
+          open={openLayers} onToggle={() => setOpenLayers(o => !o)}
+          extra={layers.length > 0 && (
+            <span style={{ fontSize: 10, color: C.dim }}>
+              {totalMarkers} pts
+            </span>
+          )} />
+        {openLayers && (
+          <div style={{ overflowY: "auto", padding: "0 8px 8px" }}>
         {layers.length === 0 ? (
           <div style={{ padding: "40px 16px", textAlign: "center" }}>
             <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.7 }}>
@@ -828,9 +936,11 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
             </div>
           ))
         )}
+          </div>
+        )}
       </div>
 
-      {/* Barrio legend — color pickers */}
+      {/* Barrios section */}
       {(() => {
         const barrios = [...new Set(
           layers.filter(l => l.visible)
@@ -840,14 +950,12 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
         if (barrios.length === 0) return null;
         const hasOverrides = barrios.some(b => barrioColors[b]);
         return (
-          <div style={{ borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <div style={{ padding: "8px 12px 4px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
-                Barrios ({barrios.length})
-              </span>
-              {hasOverrides && (
+          <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <SecBtn label="Barrios" badge={barrios.length} open={openBarrios}
+              onToggle={() => setOpenBarrios(o => !o)}
+              extra={hasOverrides && (
                 <button
-                  onClick={() => setBarrioColors({})}
+                  onClick={() => { setBarrioColors({}); saveBarrioColors({}); }}
                   title="Resetear colores"
                   style={{
                     background: "none", border: "none", fontSize: 10, color: C.dim,
@@ -857,8 +965,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                   onMouseEnter={e => e.currentTarget.style.color = C.red}
                   onMouseLeave={e => e.currentTarget.style.color = C.dim}
                 >resetear</button>
-              )}
-            </div>
+              )} />
+            {openBarrios && (
             <div style={{ maxHeight: 220, overflowY: "auto", padding: "2px 12px 8px" }}>
               {barrios.map(b => {
                 const color = barrioColor(b, barrioColors);
@@ -882,7 +990,10 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                       <input
                         type="color"
                         value={color}
-                        onChange={e => setBarrioColors(prev => ({ ...prev, [b]: e.target.value }))}
+                        onChange={e => {
+                          const nc = { ...barrioColors, [b]: e.target.value };
+                          setBarrioColors(nc); saveBarrioColors(nc);
+                        }}
                         style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
                         tabIndex={-1}
                       />
@@ -894,7 +1005,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                     }}>{b}</span>
                     {isCustom && (
                       <button
-                        onClick={() => setBarrioColors(prev => { const n = { ...prev }; delete n[b]; return n; })}
+                        onClick={() => { const nc = { ...barrioColors }; delete nc[b]; setBarrioColors(nc); saveBarrioColors(nc); }}
                         title="Restaurar color original"
                         style={{
                           background: "none", border: "none", color: C.dim, cursor: "pointer",
@@ -908,15 +1019,22 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                 );
               })}
             </div>
+            )}
           </div>
         );
       })()}
 
-      {/* Bottom: clear all */}
+      {/* Limpiar todas las capas */}
       {layers.length > 0 && (
-        <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}` }}>
+        <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}` }}>
           <button
-            onClick={() => setLayers([])}
+            onClick={() => {
+              if (projectId) {
+                for (const l of layers) deleteDoc(doc(db, "planning_layers", `${projectId}_${l.id}`));
+              } else {
+                setLayers([]);
+              }
+            }}
             style={{
               width: "100%", padding: "8px", background: "none",
               border: `1px solid ${C.border}`, color: C.dim,
@@ -932,32 +1050,25 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
       )}
 
       {/* ── DEPOTS SECTION ────────────────────────────────────────── */}
-      <div style={{ borderTop: `2px solid ${C.border}`, flexShrink: 0 }}>
-        {/* Header */}
-        <div style={{
-          padding: "10px 16px 8px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <span style={{ color: "#fb923c" }}><DepotIcon size={13} /></span>
-            <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
-              Depots {depots.length > 0 && `(${depots.length})`}
-            </span>
-          </div>
-          <button
-            onClick={() => setShowManual(s => !s)}
-            title="Añadir depot manualmente"
-            style={{
-              background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
-              color: C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
-              width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all .12s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = "#fb923c"; e.currentTarget.style.borderColor = "#fb923c55"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border; }}
-          >+</button>
-        </div>
-
+      <div style={{ flexShrink: 0 }}>
+        <SecBtn label="Depots" badge={depots.length || null} open={openDepots}
+          onToggle={() => setOpenDepots(o => !o)}
+          extra={
+            <button
+              onClick={() => setShowManual(s => !s)}
+              title="Añadir depot manualmente"
+              style={{
+                background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
+                color: C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
+                width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all .12s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = "#fb923c"; e.currentTarget.style.borderColor = "#fb923c55"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border; }}
+            >+</button>
+          } />
+        {openDepots && (
+        <>
         {/* Import button */}
         <div style={{ padding: "0 12px 8px" }}>
           <input
@@ -1028,12 +1139,13 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
               onClick={() => {
                 const lat = parseFloat(manualLat), lng = parseFloat(manualLng);
                 if (isNaN(lat) || isNaN(lng)) return;
-                setDepots(prev => [...prev, {
-                  id: Date.now() + Math.random(),
-                  lat, lng,
-                  nombre: manualName.trim() || `Depot ${prev.length + 1}`,
-                  fields: {},
-                }]);
+                const newDepot = { id: Date.now() + Math.random(), lat, lng, nombre: manualName.trim() || `Depot ${depots.length + 1}`, fields: {} };
+                if (projectId) {
+                  const merged = [...depots, newDepot];
+                  setDoc(doc(db, "planning_depots", projectId), { depots: merged, projectId, orgId, updatedAt: serverTimestamp() });
+                } else {
+                  setDepots(prev => [...prev, newDepot]);
+                }
                 setManualLat(""); setManualLng(""); setManualName(""); setShowManual(false);
               }}
               style={{
@@ -1062,7 +1174,14 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
                 </div>
                 <button
-                  onClick={() => setDepots(prev => prev.filter(x => x.id !== d.id))}
+                  onClick={() => {
+                    if (projectId) {
+                      const filtered = depots.filter(x => x.id !== d.id);
+                      setDoc(doc(db, "planning_depots", projectId), { depots: filtered, projectId, orgId, updatedAt: serverTimestamp() });
+                    } else {
+                      setDepots(prev => prev.filter(x => x.id !== d.id));
+                    }
+                  }}
                   style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, fontSize: 14, padding: 0, lineHeight: 1, transition: "color .12s", flexShrink: 0 }}
                   onMouseEnter={e => e.currentTarget.style.color = C.red}
                   onMouseLeave={e => e.currentTarget.style.color = C.dim}
@@ -1076,6 +1195,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
           <div style={{ padding: "4px 16px 12px", fontSize: 10, color: C.dim, lineHeight: 1.6 }}>
             Importa o añade las coordenadas de los depots (base de salida de vehículos)
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
@@ -1520,22 +1641,114 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
-  const lsKey         = projectId ? `fc_layers_${projectId}`        : null;
-  const lsKeyDepots   = projectId ? `fc_depots_${projectId}`        : null;
-  const lsKeyColors   = projectId ? `fc_barrio_colors_${projectId}` : null;
+  const orgId = sesion?.org_id ?? null;
 
-  const [layers, setLayers] = useState(() => {
-    if (!lsKey) return [];
-    try { return JSON.parse(localStorage.getItem(lsKey)) ?? []; } catch { return []; }
-  });
-  const [depots, setDepots] = useState(() => {
-    if (!lsKeyDepots) return [];
-    try { return JSON.parse(localStorage.getItem(lsKeyDepots)) ?? []; } catch { return []; }
-  });
-  const [barrioColors, setBarrioColors] = useState(() => {
-    if (!lsKeyColors) return {};
-    try { return JSON.parse(localStorage.getItem(lsKeyColors)) ?? {}; } catch { return {}; }
-  });
+  const [layers,       setLayers]       = useState([]);
+  const [depots,       setDepots]       = useState([]);
+  const [barrioColors, setBarrioColors] = useState({});
+  const [mapStyle,     setMapStyle]     = useState("dark");
+
+  const layersMigratedRef  = useRef(false);
+  const depotsMigratedRef  = useRef(false);
+  const colorDebounceRef   = useRef(null);
+
+  // ── Layers: Firestore subscription + one-time localStorage migration ──
+  useEffect(() => {
+    if (!projectId) return;
+    const q = query(collection(db, "planning_layers"), where("projectId", "==", projectId));
+    const unsub = onSnapshot(q, snap => {
+      const docs = snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
+      setLayers(docs);
+      if (!layersMigratedRef.current) {
+        layersMigratedRef.current = true;
+        if (snap.empty) {
+          const migKey = `fc_migrated_layers_v1_${projectId}`;
+          if (!localStorage.getItem(migKey)) {
+            try {
+              const old = JSON.parse(localStorage.getItem(`fc_layers_${projectId}`)) ?? [];
+              for (const l of old) {
+                setDoc(doc(db, "planning_layers", `${projectId}_${l.id}`), {
+                  ...l, projectId, orgId, createdAt: serverTimestamp(),
+                });
+              }
+              if (old.length > 0) localStorage.removeItem(`fc_layers_${projectId}`);
+            } catch {}
+            localStorage.setItem(migKey, "1");
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, [projectId]);
+
+  // ── Depots: Firestore subscription + one-time localStorage migration ──
+  useEffect(() => {
+    if (!projectId) return;
+    const unsub = onSnapshot(doc(db, "planning_depots", projectId), snap => {
+      const list = snap.exists() ? (snap.data().depots ?? []) : [];
+      setDepots(list);
+      if (!depotsMigratedRef.current) {
+        depotsMigratedRef.current = true;
+        if (!snap.exists()) {
+          const migKey = `fc_migrated_depots_v1_${projectId}`;
+          if (!localStorage.getItem(migKey)) {
+            try {
+              const old = JSON.parse(localStorage.getItem(`fc_depots_${projectId}`)) ?? [];
+              if (old.length > 0) {
+                setDoc(doc(db, "planning_depots", projectId), {
+                  depots: old, projectId, orgId, updatedAt: serverTimestamp(),
+                });
+                localStorage.removeItem(`fc_depots_${projectId}`);
+              }
+            } catch {}
+            localStorage.setItem(migKey, "1");
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, [projectId]);
+
+  // ── Settings: read once on mount, migrate from localStorage if needed ──
+  useEffect(() => {
+    if (!projectId) return;
+    getDoc(doc(db, "planning_settings", projectId)).then(snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setBarrioColors(data.barrioColors ?? {});
+        setMapStyle(data.mapStyle ?? "dark");
+      } else {
+        const migKey = `fc_migrated_settings_v1_${projectId}`;
+        if (!localStorage.getItem(migKey)) {
+          try {
+            const oldColors = JSON.parse(localStorage.getItem(`fc_barrio_colors_${projectId}`)) ?? {};
+            const oldStyle  = localStorage.getItem(`fc_map_style_${projectId}`) ?? "dark";
+            setBarrioColors(oldColors);
+            setMapStyle(oldStyle);
+            setDoc(doc(db, "planning_settings", projectId), {
+              barrioColors: oldColors, mapStyle: oldStyle,
+              projectId, orgId, updatedAt: serverTimestamp(),
+            });
+            if (Object.keys(oldColors).length > 0) localStorage.removeItem(`fc_barrio_colors_${projectId}`);
+            localStorage.removeItem(`fc_map_style_${projectId}`);
+          } catch {}
+          localStorage.setItem(migKey, "1");
+        }
+      }
+    });
+  }, [projectId]);
+
+  // Debounced helper for barrio color writes
+  function saveBarrioColors(newColors) {
+    if (!projectId) return;
+    clearTimeout(colorDebounceRef.current);
+    colorDebounceRef.current = setTimeout(() => {
+      setDoc(doc(db, "planning_settings", projectId), {
+        barrioColors: newColors, updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }, 800);
+  }
+
   const [uploading, setUploading]           = useState(false);
   const [depotUploading, setDepotUploading] = useState(false);
   const [errors, setErrors]                 = useState([]);
@@ -1545,24 +1758,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   const timetableCol = projectId
     ? collection(db, "scheduling_projects", projectId, "timetable")
     : collection(db, "planning_timetable");
-
-  // Persist layers to localStorage whenever they change
-  useEffect(() => {
-    if (!lsKey) return;
-    try { localStorage.setItem(lsKey, JSON.stringify(layers)); } catch {}
-  }, [layers, lsKey]);
-
-  // Persist depots to localStorage whenever they change
-  useEffect(() => {
-    if (!lsKeyDepots) return;
-    try { localStorage.setItem(lsKeyDepots, JSON.stringify(depots)); } catch {}
-  }, [depots, lsKeyDepots]);
-
-  // Persist barrio color overrides
-  useEffect(() => {
-    if (!lsKeyColors) return;
-    try { localStorage.setItem(lsKeyColors, JSON.stringify(barrioColors)); } catch {}
-  }, [barrioColors, lsKeyColors]);
 
   async function handleDepotImport(files) {
     setDepotUploading(true);
@@ -1585,7 +1780,14 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
           Object.entries(m).filter(([k]) => !["lat","lng","nombre","name"].includes(k.toLowerCase()))
         ),
       }));
-      setDepots(prev => [...prev, ...newDepots]);
+      if (projectId) {
+        const merged = [...depots, ...newDepots];
+        setDoc(doc(db, "planning_depots", projectId), {
+          depots: merged, projectId, orgId, updatedAt: serverTimestamp(),
+        });
+      } else {
+        setDepots(prev => [...prev, ...newDepots]);
+      }
     }
     if (newErrors.length) setErrors(prev => [...prev, ...newErrors]);
     setDepotUploading(false);
@@ -1623,14 +1825,18 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         continue;
       }
 
-      setLayers(prev => [...prev, {
+      const newLayer = {
         id: Date.now() + Math.random(),
-        name,
-        type: ext,
-        color,
-        markers: result.markers,
-        visible: true,
-      }]);
+        name, type: ext, color,
+        markers: result.markers, visible: true,
+      };
+      if (projectId) {
+        setDoc(doc(db, "planning_layers", `${projectId}_${newLayer.id}`), {
+          ...newLayer, projectId, orgId, createdAt: serverTimestamp(),
+        });
+      } else {
+        setLayers(prev => [...prev, newLayer]);
+      }
     }
 
     if (newErrors.length) setErrors(newErrors);
@@ -1768,7 +1974,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               totalFiltered={totalFiltered}
               totalAll={totalAll}
             />
-            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} />
+            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} />
           </>
         ) : (
           <TabTimetable layers={layers} projectId={projectId} />
@@ -1927,19 +2133,28 @@ function LoginPlanning({ onLogin }) {
 
 // ── PLANNING APP (root) ───────────────────────────────────────────
 export default function PlanningApp() {
-  const [sesion, setSesion] = useState(() => {
-    try {
-      const s = localStorage.getItem("fc_session");
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
-  });
+  const [sesion, setSesion] = useState(undefined);
 
-  function handleLogout() {
+  useEffect(() => {
+    return onAuthStateChanged(auth, async user => {
+      if (user) {
+        try {
+          const snap = await getDoc(doc(db, "usuarios", user.uid));
+          if (snap.exists() && snap.data().activo !== false) {
+            setSesion({ uid: user.uid, ...snap.data() });
+          } else { await signOut(auth); setSesion(null); }
+        } catch { setSesion(null); }
+      } else { setSesion(null); }
+    });
+  }, []);
+
+  async function handleLogout() {
+    await signOut(auth);
     setSesion(null);
-    localStorage.removeItem("fc_session");
     window.location.href = "/scheduling";
   }
 
+  if (sesion === undefined) return null;
   if (!sesion || sesion.rol !== "admin") {
     window.location.href = "/scheduling";
     return null;

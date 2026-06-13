@@ -1,5 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from "firebase/firestore";
+import {
+  getFirestore, collection, onSnapshot, addDoc, updateDoc,
+  deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc,
+} from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDqzT7OqBTlNApkB_ERriA6Eag7MQLMQcM",
@@ -11,41 +15,56 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db  = getFirestore(app);
+export const auth = getAuth(app);
+
+// Secondary app for admin user-creation (avoids signing out current session)
+const secondaryApp = initializeApp(firebaseConfig, "secondary");
+export const secondaryAuth = getAuth(secondaryApp);
 
 // ── COLECCIONES ───────────────────────────────────────────────────
 export const COL = {
-  incidencias: "incidencias",
-  planes:      "planes",
-  inventario:  "inventario",
-  movimientos: "movimientos",
-  usuarios:    "usuarios",
+  incidencias:      "incidencias",
+  planes:           "planes",
+  inventario:       "inventario",
+  movimientos:      "movimientos",
+  usuarios:         "usuarios",
+  planningLayers:   "planning_layers",
+  planningDepots:   "planning_depots",
+  planningSettings: "planning_settings",
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────
 
-// Escuchar cambios en tiempo real
-export function listenCol(colName, callback, orderField = "fecha") {
-  const q = query(collection(db, colName), orderBy(orderField, "desc"));
+// Escuchar colección filtrada por org_id (sin orderBy → no requiere índice compuesto)
+export function listenCol(colName, callback, orderField = "fecha", orgId = null) {
+  const constraints = orgId ? [where("org_id", "==", orgId)] : [];
+  const q = query(collection(db, colName), ...constraints);
   return onSnapshot(q, snap => {
-    callback(snap.docs.map(d => ({ ...d.data(), _id: d.id })));
+    const docs = snap.docs
+      .map(d => ({ ...d.data(), _id: d.id }))
+      .sort((a, b) => {
+        const av = a[orderField], bv = b[orderField];
+        if (!av && !bv) return 0;
+        if (!av) return 1;
+        if (!bv) return -1;
+        const am = av?.toMillis ? av.toMillis() : (typeof av === "number" ? av : 0);
+        const bm = bv?.toMillis ? bv.toMillis() : (typeof bv === "number" ? bv : 0);
+        return bm - am; // desc
+      });
+    callback(docs);
   });
 }
 
-// Añadir documento
 export async function addItem(colName, data) {
-  return await addDoc(collection(db, colName), {
-    ...data,
-    fecha: serverTimestamp(),
-  });
+  return await addDoc(collection(db, colName), { ...data, fecha: serverTimestamp() });
 }
-
-// Actualizar documento
 export async function updateItem(colName, id, data) {
   return await updateDoc(doc(db, colName, id), data);
 }
-
-// Eliminar documento
 export async function deleteItem(colName, id) {
   return await deleteDoc(doc(db, colName, id));
+}
+export async function setItem(colName, id, data) {
+  return await setDoc(doc(db, colName, id), data, { merge: true });
 }

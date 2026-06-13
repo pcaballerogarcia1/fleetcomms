@@ -1,18 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { db } from "./firebase.js";
+import { db, auth, secondaryAuth } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, query, orderBy, setDoc
+  doc, serverTimestamp, query, where, setDoc, getDoc,
 } from "firebase/firestore";
-
-// ── DATOS ─────────────────────────────────────────────────────────
-const USUARIOS_INIT = [
-  { id:"1", nombre:"Admin",  apellidos:"Sistema",  usuario:"admin",    password:"admin123", rol:"admin",     activo:true },
-  { id:"2", nombre:"Carlos", apellidos:"Martín",   usuario:"cmartin",  password:"1234",     rol:"conductor", activo:true },
-  { id:"3", nombre:"Laura",  apellidos:"Sánchez",  usuario:"lsanchez", password:"1234",     rol:"conductor", activo:true },
-  { id:"4", nombre:"Pedro",  apellidos:"Ruiz",     usuario:"pruiz",    password:"1234",     rol:"conductor", activo:true },
-];
+import {
+  onAuthStateChanged, signInWithEmailAndPassword, signOut,
+  createUserWithEmailAndPassword,
+} from "firebase/auth";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -24,18 +20,26 @@ const CATS = [
 const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
-// Hook genérico para escuchar una colección en tiempo real
-function useCollection(colName, orderField = "fecha") {
+function useCollection(colName, orderField = "fecha", orgId = null) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const q = query(collection(db, colName), orderBy(orderField, "desc"));
+    if (!orgId) { setData([]); setLoading(false); return; }
+    const q = query(collection(db, colName), where("org_id", "==", orgId));
     const unsub = onSnapshot(q, snap => {
-      setData(snap.docs.map(d => ({ ...d.data(), _id: d.id })));
-      setLoading(false);
+      const docs = snap.docs
+        .map(d => ({ ...d.data(), _id: d.id }))
+        .sort((a, b) => {
+          const av = a[orderField], bv = b[orderField];
+          if (!av && !bv) return 0; if (!av) return 1; if (!bv) return -1;
+          const am = av?.toMillis ? av.toMillis() : (typeof av === "number" ? av : 0);
+          const bm = bv?.toMillis ? bv.toMillis() : (typeof bv === "number" ? bv : 0);
+          return bm - am;
+        });
+      setData(docs); setLoading(false);
     }, err => { console.error(colName, err); setLoading(false); });
     return () => unsub();
-  }, [colName]);
+  }, [colName, orgId]);
   return { data, loading };
 }
 
@@ -1121,8 +1125,8 @@ function ListaPlanes({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 }
 
 // ── INCIDENCIAS ───────────────────────────────────────────────────
-function ModuloIncidencias({sesion,usuarios,setUsuarios}){
-  const {data:incidencias} = useCollection("incidencias");
+function ModuloIncidencias({sesion,usuarios}){
+  const {data:incidencias} = useCollection("incidencias","fecha",sesion.org_id);
   const [vista,setVista]=useState("feed");
   const [filtro,setFiltro]=useState("todas");
   const [selId,setSelId]=useState(null);
@@ -1131,19 +1135,19 @@ function ModuloIncidencias({sesion,usuarios,setUsuarios}){
   const [showAdmin,setShowAdmin]=useState(false);
   const [showStats,setShowStats]=useState(false);
   const esAdmin=sesion.rol==="admin";
-  const getUser=id=>usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""};
-  const incFilt=incidencias.filter(i=>filtro==="todas"?true:filtro==="mias"?i.usuarioId===sesion.id:filtro==="alta"?i.prioridad==="alta":i.estado===filtro);
+  const getUser=id=>usuarios.find(u=>u._id===id||u.id===id)||{nombre:"?",apellidos:""};
+  const incFilt=incidencias.filter(i=>filtro==="todas"?true:filtro==="mias"?i.usuarioId===sesion.uid:filtro==="alta"?i.prioridad==="alta":i.estado===filtro);
   const incActual=incidencias.find(i=>i._id===selId);
 
   async function crearInc(){
     if(!form.titulo.trim())return;
-    await fbAdd("incidencias",{usuarioId:sesion.id,vehiculo:form.vehiculo||null,categoria:parseInt(form.categoria),titulo:form.titulo,descripcion:form.descripcion,prioridad:form.prioridad,estado:"abierta",comentarios:[]});
+    await fbAdd("incidencias",{usuarioId:sesion.uid,vehiculo:form.vehiculo||null,categoria:parseInt(form.categoria),titulo:form.titulo,descripcion:form.descripcion,prioridad:form.prioridad,estado:"abierta",comentarios:[],org_id:sesion.org_id});
     setForm({titulo:"",descripcion:"",vehiculo:"",categoria:0,prioridad:"media"});
     setVista("feed");
   }
   async function agregarCom(inc){
     if(!comentario.trim())return;
-    const nuevos=[...(inc.comentarios||[]),{usuarioId:sesion.id,texto:comentario,fecha:Date.now()}];
+    const nuevos=[...(inc.comentarios||[]),{usuarioId:sesion.uid,texto:comentario,fecha:Date.now()}];
     await fbUpdate("incidencias",inc._id,{comentarios:nuevos});
     setCom("");
   }
@@ -1151,7 +1155,7 @@ function ModuloIncidencias({sesion,usuarios,setUsuarios}){
     await fbUpdate("incidencias",inc._id,{estado:est});
   }
 
-  if(showAdmin) return <PanelAdmin usuarios={usuarios} setUsuarios={setUsuarios} onClose={()=>setShowAdmin(false)}/>;
+  if(showAdmin) return <PanelAdmin usuarios={usuarios} orgId={sesion.org_id} onClose={()=>setShowAdmin(false)}/>;
   if(showStats) return <PanelStats incidencias={incidencias} onClose={()=>setShowStats(false)}/>;
 
   return(
@@ -1267,36 +1271,61 @@ function PanelStats({incidencias,onClose}){
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────────
-function PanelAdmin({usuarios,setUsuarios,onClose}){
-  const [tab,setTab]=useState("lista");const [form,setForm]=useState({nombre:"",apellidos:"",usuario:"",password:"",rol:"conductor"});const [err,setErr]=useState("");
-  function crear(){if(!form.nombre||!form.usuario||!form.password){setErr("Rellena todos los campos");return;}if(usuarios.find(u=>u.usuario===form.usuario)){setErr("Ese usuario ya existe");return;}setUsuarios([...usuarios,{id:String(Date.now()),...form,activo:true}]);setForm({nombre:"",apellidos:"",usuario:"",password:"",rol:"conductor"});setErr("");setTab("lista");}
+function PanelAdmin({usuarios,orgId,onClose}){
+  const [tab,setTab]=useState("lista");
+  const [form,setForm]=useState({nombre:"",apellidos:"",email:"",password:"",rol:"conductor"});
+  const [err,setErr]=useState("");
+  const [saving,setSaving]=useState(false);
+
+  async function crear(){
+    if(!form.nombre||!form.email||!form.password){setErr("Nombre, email y contraseña son obligatorios");return;}
+    if(form.password.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
+    setSaving(true);setErr("");
+    try{
+      const cred=await createUserWithEmailAndPassword(secondaryAuth,form.email.trim().toLowerCase(),form.password);
+      await setDoc(doc(db,"usuarios",cred.user.uid),{
+        nombre:form.nombre.trim(),apellidos:form.apellidos.trim(),
+        email:form.email.trim().toLowerCase(),rol:form.rol,
+        org_id:orgId,activo:true,createdAt:serverTimestamp(),
+      });
+      await secondaryAuth.signOut();
+      setForm({nombre:"",apellidos:"",email:"",password:"",rol:"conductor"});
+      setErr("");setTab("lista");
+    }catch(e){
+      const msgs={"auth/email-already-in-use":"Ese email ya está en uso","auth/invalid-email":"Email inválido","auth/weak-password":"Contraseña demasiado débil"};
+      setErr(msgs[e.code]||"Error al crear usuario: "+e.message);
+    }
+    setSaving(false);
+  }
+
+  async function toggleActivo(u){
+    await updateDoc(doc(db,"usuarios",u._id),{activo:!u.activo});
+  }
+
   return(
     <div style={S.page}>
       <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing:3,textTransform:"uppercase"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
       <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>{[["lista","Usuarios"],["nuevo","+ Nuevo"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...S.btnGhost,borderColor:tab===k?C.blue:C.border,color:tab===k?C.blueText:C.muted,background:tab===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
         {tab==="lista"&&usuarios.map(u=>(
-          <div key={u.id} style={{...S.card,opacity:u.activo?1:0.4}}>
+          <div key={u._id} style={{...S.card,opacity:u.activo?1:0.4}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{avatarOf(u)}</div>
-                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>@{u.usuario} · <span style={{color:C.blueText}}>{u.rol}</span></div></div>
+                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{u.rol}</span></div></div>
               </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>setUsuarios(usuarios.map(x=>x.id===u.id?{...x,activo:!x.activo}:x))} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
-                {u.rol!=="admin"&&<button onClick={()=>setUsuarios(usuarios.filter(x=>x.id!==u.id))} style={{background:"#2d1515",border:`1px solid ${C.red}`,color:"#f87171",padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono}}>✕</button>}
-              </div>
+              <button onClick={()=>toggleActivo(u)} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
             </div>
           </div>
         ))}
         {tab==="nuevo"&&(
           <div style={S.card}>
-            {[["Nombre *","nombre","text"],["Apellidos","apellidos","text"],["Usuario *","usuario","text"],["Contraseña *","password","password"]].map(([lbl,key,type])=>(
-              <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input}/></div>
+            {[["Nombre *","nombre","text"],["Apellidos","apellidos","text"],["Email *","email","email"],["Contraseña *","password","password"]].map(([lbl,key,type])=>(
+              <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input} autoComplete={type==="password"?"new-password":"off"}/></div>
             ))}
             <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{[["conductor","Conductor"],["admin","Supervisor"]].map(([v,l])=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{l}</button>)}</div></div>
             {err&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
-            <button onClick={crear} style={{...S.btn,width:"100%"}}>CREAR USUARIO</button>
+            <button onClick={crear} disabled={saving} style={{...S.btn,width:"100%",opacity:saving?0.6:1}}>{saving?"Creando…":"CREAR USUARIO"}</button>
           </div>
         )}
       </div>
@@ -1316,8 +1345,8 @@ const PRODUCTOS_DEMO = [
 ];
 
 function ModuloInventario({sesion,usuarios}){
-  const {data:productos}   = useCollection("inventario","nombre");
-  const {data:movimientos} = useCollection("movimientos");
+  const {data:productos}   = useCollection("inventario","nombre",sesion.org_id);
+  const {data:movimientos} = useCollection("movimientos","fecha",sesion.org_id);
   const [vista,setVista]           = useState("lista");
   const [selId,setSelId]           = useState(null);
   const [catFilter,setCatFilter]   = useState("");
@@ -1328,7 +1357,7 @@ function ModuloInventario({sesion,usuarios}){
   const [errForm,setErrForm]       = useState("");
   const esAdmin = sesion.rol==="admin";
 
-  const getUser = id => usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""};
+  const getUser = id => usuarios.find(u=>u._id===id||u.id===id)||{nombre:"?",apellidos:""};
 
   const prodFiltrados = productos.filter(p=>{
     if(soloAlertas && p.stock > p.stockMin) return false;
@@ -1351,7 +1380,7 @@ function ModuloInventario({sesion,usuarios}){
   async function guardarProducto(){
     if(!formProd.nombre.trim()||!formProd.referencia.trim()){setErrForm("Nombre y referencia son obligatorios");return;}
     if(productos.find(p=>p.referencia===formProd.referencia)){setErrForm("Esa referencia ya existe");return;}
-    await fbAdd("inventario",{...formProd,stock:parseInt(formProd.stock)||0,stockMin:parseInt(formProd.stockMin)||0});
+    await fbAdd("inventario",{...formProd,stock:parseInt(formProd.stock)||0,stockMin:parseInt(formProd.stockMin)||0,org_id:sesion.org_id});
     setFormProd({nombre:"",referencia:"",categoria:"Filtros",unidad:"ud",stock:0,stockMin:0,ubicacion:""});
     setErrForm(""); setVista("lista");
   }
@@ -1367,7 +1396,7 @@ function ModuloInventario({sesion,usuarios}){
       tipo:formMov.tipo, cantidad:cant,
       vehiculo:formMov.vehiculo, motivo:formMov.motivo, nota:formMov.nota,
       stockAntes:prodActual.stock, stockDespues:nuevoStock,
-      usuarioId:sesion.id,
+      usuarioId:sesion.uid, org_id:sesion.org_id,
     });
     setFormMov({tipo:"salida",cantidad:1,vehiculo:"",motivo:"",nota:""});
     setErrForm(""); setVista("detalle");
@@ -1795,69 +1824,51 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────
-function Login({onLogin}){
-  const [u,setU]=useState("");const [p,setP]=useState("");const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
-  const go=()=>{
-    setLoading(true);
-    setTimeout(()=>{
-      const f=USUARIOS_INIT.find(x=>x.usuario===u.trim()&&x.password===p&&x.activo);
-      if(f){setErr("");onLogin(f);}else{setErr("Credenciales incorrectas");setLoading(false);}
-    },400);
+const AUTH_ERRORS = {
+  "auth/invalid-credential":"Credenciales incorrectas",
+  "auth/user-disabled":"Cuenta desactivada",
+  "auth/too-many-requests":"Demasiados intentos, espera un momento",
+  "auth/invalid-email":"Email inválido",
+};
+
+function Login(){
+  const [email,setEmail]=useState("");const [pw,setPw]=useState("");
+  const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
+  const go=async()=>{
+    if(!email||!pw){setErr("Introduce email y contraseña");return;}
+    setLoading(true);setErr("");
+    try{ await signInWithEmailAndPassword(auth,email.trim().toLowerCase(),pw); }
+    catch(e){ setErr(AUTH_ERRORS[e.code]||"Error al iniciar sesión"); setLoading(false); }
   };
   return(
-    <div style={{fontFamily:font,background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,position:"relative",overflow:"hidden"}}>
-      {/* Background grid */}
-      <div style={{width:"100%",maxWidth:360,position:"relative",animation:"fadeUp .3s ease both"}}>
-        {/* Logo */}
+    <div style={{fontFamily:font,background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"hidden"}}>
+      <div style={{width:"100%",maxWidth:360,animation:"fadeUp .3s ease both"}}>
         <div style={{marginBottom:32}}>
           <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Fleet Management</div>
           <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>Operantia</div>
         </div>
-
-        {/* Form */}
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:24,boxShadow:"0 16px 48px rgba(0,0,0,.5)"}}>
           <div style={{marginBottom:14}}>
-            <label style={S.label}>Usuario</label>
-            <input value={u} onChange={e=>setU(e.target.value)} placeholder="tu.usuario" onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input, borderColor: u?`${C.blue}44`:C.border}}
+            <label style={S.label}>Email</label>
+            <input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="tu@empresa.com" autoComplete="email"
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              style={{...S.input,borderColor:email?`${C.blue}44`:C.border}}
               onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
-              onBlur={e=>e.target.style.borderColor=u?`${C.blue}44`:C.border}/>
+              onBlur={e=>e.target.style.borderColor=email?`${C.blue}44`:C.border}/>
           </div>
           <div style={{marginBottom:20}}>
             <label style={S.label}>Contraseña</label>
-            <input value={p} onChange={e=>setP(e.target.value)} type="password" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input, borderColor: p?`${C.blue}44`:C.border}}
+            <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="••••••••" autoComplete="current-password"
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              style={{...S.input,borderColor:pw?`${C.blue}44`:C.border}}
               onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
-              onBlur={e=>e.target.style.borderColor=p?`${C.blue}44`:C.border}/>
+              onBlur={e=>e.target.style.borderColor=pw?`${C.blue}44`:C.border}/>
           </div>
-          {err&&(
-            <div style={{background:"rgba(248,113,113,0.08)",border:`1px solid rgba(248,113,113,0.25)`,color:C.red,borderRadius:7,padding:"9px 13px",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
-              <span>⚠</span> {err}
-            </div>
-          )}
-          <button onClick={go} disabled={loading} style={{...S.btn,width:"100%",padding:"12px",fontSize:13,fontWeight:600,
-            background:loading?C.blueDim:C.blue,
-            borderColor:"transparent",color:loading?C.blueText:"#fff",
-          }}>
-            {loading ? <span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><span style={{display:"inline-block",width:13,height:13,border:"2px solid rgba(163,196,252,0.3)",borderTopColor:C.blueText,borderRadius:"50%",animation:"spin .6s linear infinite"}}/> Accediendo…</span> : "Acceder"}
+          {err&&<div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.25)",color:C.red,borderRadius:7,padding:"9px 13px",fontSize:12,marginBottom:16}}>⚠ {err}</div>}
+          <button onClick={go} disabled={loading} style={{...S.btn,width:"100%",padding:"12px",fontSize:13,fontWeight:600,background:loading?C.blueDim:C.blue,borderColor:"transparent",color:loading?C.blueText:"#fff"}}>
+            {loading?<span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><span style={{display:"inline-block",width:13,height:13,border:"2px solid rgba(163,196,252,0.3)",borderTopColor:C.blueText,borderRadius:"50%",animation:"spin .6s linear infinite"}}/>Accediendo…</span>:"Acceder"}
           </button>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-
-        {/* Demo users */}
-        <div style={{marginTop:12,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px"}}>
-          <div style={{fontSize:9,color:C.dim,letterSpacing:1.5,marginBottom:8,textTransform:"uppercase",fontWeight:500}}>Accesos de prueba</div>
-          {[["admin","admin123","Supervisor"],["cmartin","1234","Conductor"],["lsanchez","1234","Conductor"]].map(([usr,pwd,rol])=>(
-            <div key={usr} onClick={()=>{setU(usr);setP(pwd);}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer",transition:"opacity .15s"}}
-              onMouseEnter={e=>e.currentTarget.style.opacity=".6"}
-              onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-              <span style={{fontSize:12,color:C.muted,fontFamily:mono,fontWeight:500}}>{usr}</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.dim,fontFamily:mono}}>{pwd}</span>
-                <span style={{fontSize:9,padding:"2px 8px",borderRadius:4,background:C.surface2,color:C.muted,letterSpacing:.5}}>{rol}</span>
-              </div>
-            </div>
-          ))}
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}`}</style>
         </div>
       </div>
     </div>
@@ -1866,31 +1877,61 @@ function Login({onLogin}){
 
 // ── APP ───────────────────────────────────────────────────────────
 export default function App(){
-  const [sesion,setSesion]=useState(null);
-  const [usuarios,setUsuarios]=useState(USUARIOS_INIT);
+  const [sesion,setSesion]=useState(undefined); // undefined=cargando, null=no autenticado
+  const [usuarios,setUsuarios]=useState([]);
   const [tab,setTab]=useState("rutas");
-  const {data:planes} = useCollection("planes","fechaSubida");
 
-  // setPlanes wrapper que usa Firebase
-  async function addPlan(plan){ await fbAdd("planes", plan); }
-  async function updatePlan(plan){ await fbUpdate("planes", plan._id, plan); }
-  async function deletePlan(id){ await fbDelete("planes", id); }
+  // Firebase Auth — escuchar cambios de sesión
+  useEffect(()=>{
+    return onAuthStateChanged(auth,async user=>{
+      if(user){
+        try{
+          const snap=await getDoc(doc(db,"usuarios",user.uid));
+          if(snap.exists()&&snap.data().activo!==false){
+            setSesion({uid:user.uid,...snap.data()});
+          }else{
+            await signOut(auth); setSesion(null);
+          }
+        }catch{ setSesion(null); }
+      }else{ setSesion(null); }
+    });
+  },[]);
 
-  if(!sesion) return <Login onLogin={setSesion}/>;
+  // Cargar usuarios de la misma org en tiempo real
+  useEffect(()=>{
+    if(!sesion?.org_id) return;
+    const q=query(collection(db,"usuarios"),where("org_id","==",sesion.org_id));
+    return onSnapshot(q,snap=>{
+      setUsuarios(snap.docs.map(d=>({...d.data(),_id:d.id,id:d.id})));
+    });
+  },[sesion?.org_id]);
 
-  const esAdmin = sesion.rol === "admin";
+  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id);
 
+  async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
+  async function updatePlan(plan){ await fbUpdate("planes",plan._id,plan); }
+  async function deletePlan(id){ await fbDelete("planes",id); }
+
+  // Pantalla de carga mientras Firebase inicializa auth
+  if(sesion===undefined) return(
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:font}}>
+      <div style={{color:C.muted,fontSize:13}}>Cargando…</div>
+    </div>
+  );
+
+  if(!sesion) return <Login/>;
+
+  const esAdmin=sesion.rol==="admin";
   const TABS=[
     {key:"rutas",      icon:"🗺️", label:"Rutas"},
     {key:"incidencias",icon:"📋", label:"Incidencias"},
     {key:"inventario", icon:"📦", label:"Inventario"},
-    ...(esAdmin ? [{key:"admin", icon:"⚙️", label:"Admin"}] : []),
+    ...(esAdmin?[{key:"admin",icon:"⚙️",label:"Admin"}]:[]),
   ];
   const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
-      {/* ── HEADER ── */}
       <div style={{...S.header,background:"rgba(22,27,39,0.96)",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>Operantia</div>
@@ -1902,7 +1943,7 @@ export default function App(){
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
             <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{sesion.rol}</div>
           </div>
-          <div onClick={()=>setSesion(null)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
+          <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
             {avatarOf(sesion)}
@@ -1911,11 +1952,10 @@ export default function App(){
       </div>
 
       {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
-      {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios} setUsuarios={setUsuarios}/>}
+      {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
       {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan}/>}
 
-      {/* ── BOTTOM NAV ── */}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(22,27,39,0.97)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)"}}>
         {TABS.map(t=>{
           const active=tab===t.key;
