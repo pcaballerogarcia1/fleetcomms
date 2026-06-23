@@ -17,15 +17,17 @@
   .badge-done  { background: #d1fae5; color: #065f46; }
   .badge-wip   { background: #fef3c7; color: #92400e; }
   .badge-plan  { background: #e0e7ff; color: #3730a3; }
-  .badge-new   { background: #fce7f3; color: #9d174d; }
+  .badge-live  { background: #dcfce7; color: #14532d; }
   ul { margin: 4px 0; padding-left: 20px; }
   li { margin-bottom: 3px; }
   code { font-family: Consolas, monospace; background: #f0f4ff; padding: 1px 4px; border-radius: 2px; font-size: 9.5pt; }
   .section-intro { color: #444; margin-bottom: 8px; }
   .pending-box  { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 12px 0; border-radius: 2px; }
   .done-box     { background: #ecfdf5; border-left: 4px solid #34d399; padding: 10px 14px; margin: 12px 0; border-radius: 2px; }
+  .info-box     { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin: 12px 0; border-radius: 2px; }
   .pending-box strong { color: #92400e; }
   .done-box    strong { color: #065f46; }
+  .info-box    strong { color: #1d4ed8; }
   .new-tag { font-size: 8pt; background: #fce7f3; color: #9d174d; padding: 1px 5px; border-radius: 3px; font-weight: bold; vertical-align: middle; margin-left: 5px; }
 </style>
 </head>
@@ -33,222 +35,233 @@
 
 <h1>Operanzia — Estado del Proyecto</h1>
 <div class="meta">
-  Actualizado: 13 de junio de 2026 &nbsp;|&nbsp; Repositorio: pcaballerogarcia1/fleetcomms &nbsp;|&nbsp; Rama: main &nbsp;|&nbsp; <strong>Antes llamado FleetComms</strong>
+  Actualizado: 24 de junio de 2026 &nbsp;|&nbsp; Repositorio: <strong>pcaballerogarcia1/fleetcomms</strong> &nbsp;|&nbsp; Rama: main &nbsp;|&nbsp; Antes llamado FleetComms / Operantia
+</div>
+
+<div class="info-box">
+  <strong>Despliegue activo:</strong>
+  <ul style="margin:6px 0 0 0;">
+    <li><strong>operanzia.com</strong> → Landing page (Vercel, proyecto <code>fleetcomms-nqoo</code>)</li>
+    <li><strong>app.operanzia.com</strong> → App principal (Vercel, proyecto <code>fleetcoms</code>) — DNS pendiente de propagar</li>
+  </ul>
 </div>
 
 <h2>1. Visión general</h2>
 <p class="section-intro">
-<strong>Operanzia</strong> es una SPA (Single-Page Application) para gestión de flotas municipales. Tiene dos zonas diferenciadas: la <strong>app de campo</strong> (conductores — rutas <code>/</code>, <code>/incidencias</code>, <code>/inventario</code>) y el <strong>workspace de planificación</strong> (jefes de oficina — rutas <code>/login</code> → <code>/projects</code> → <code>/planning</code> → <code>/scheduling</code>). Ambas comparten el mismo bundle Vite pero el entry point <code>main.jsx</code> decide qué renderizar según la URL.
+<strong>Operanzia</strong> es una SaaS para gestión de operaciones urbanas (flotas municipales). Tiene dos zonas: la <strong>app de campo</strong> (conductores — rutas <code>/</code>, <code>/incidencias</code>, <code>/inventario</code>) y el <strong>workspace de planificación</strong> (jefes de oficina — rutas <code>/login</code> → <code>/projects</code> → <code>/planning</code> → <code>/scheduling</code>). Ambas comparten el mismo bundle Vite. Separado del repo principal existe la <strong>landing page</strong> en <code>landing/</code>, proyecto Vite independiente, desplegada en <code>operanzia.com</code>.
 </p>
 <table>
   <tr><th>Tecnología</th><th>Uso</th></tr>
-  <tr><td>React 19 + Vite 8</td><td>Framework y bundler. HMR en desarrollo. Build ~1.45 MB (gzip ~435 KB).</td></tr>
+  <tr><td>React 19 + Vite 8</td><td>Framework y bundler. HMR en desarrollo. Build ~1.59 MB (gzip ~474 KB).</td></tr>
   <tr><td>Firebase Firestore</td><td>Base de datos en tiempo real. Sin backend propio.</td></tr>
   <tr><td>Leaflet 1.9.4 (CDN)</td><td>Mapas interactivos en Planning y App. Cargado en runtime (no npm).</td></tr>
   <tr><td>OSRM (API pública)</td><td>Routing por carretera para medición de distancias en Planning. Sin API key.</td></tr>
   <tr><td>SheetJS (xlsx npm)</td><td>Parsing de archivos Excel (.xlsx) en Planning.</td></tr>
-  <tr><td>Inline styles (<code>C.*</code>)</td><td>Sistema de diseño. Constantes de color y fuente definidas como objetos JS. Sin CSS modules.</td></tr>
+  <tr><td>Vercel</td><td>Hosting de landing y app. Auto-deploy en cada push a main.</td></tr>
+  <tr><td>Dynadot</td><td>Registrador del dominio operanzia.com. DNS configurado.</td></tr>
 </table>
 
 <h2>2. Arquitectura de archivos</h2>
 <table>
   <tr><th>Archivo</th><th>Descripción</th><th>Líneas aprox.</th></tr>
   <tr><td><code>src/main.jsx</code></td><td>Entry point SPA. Router manual con <code>pushState + PopStateEvent</code>. Decide entre <code>&lt;App&gt;</code> (campo) y <code>&lt;WorkspaceRouter&gt;</code> (planning/scheduling). Gestiona sesión, proyecto activo, vehículos y trabajadores compartidos. Contiene <code>TopBar</code> con breadcrumb y <code>stripUndef()</code> para Firestore.</td><td>~215</td></tr>
-  <tr><td><code>src/App.jsx.jsx</code></td><td>App de campo para conductores. Auth, tabs, todos los módulos de producción (Incidencias, Rutas, Inventario, Admin). Convención de archivo único.</td><td>~2000</td></tr>
+  <tr><td><code>src/App.jsx.jsx</code></td><td>App de campo para conductores. Auth, tabs, todos los módulos de producción (Incidencias, Rutas, Inventario, Admin).</td><td>~2000</td></tr>
   <tr><td><code>src/firebase.js.js</code></td><td>Init Firebase + helpers exportados (<code>listenCol</code>, <code>addItem</code>, <code>updateItem</code>, <code>deleteItem</code>) + constantes <code>COL</code>.</td><td>~80</td></tr>
   <tr><td><code>src/planning.jsx</code></td><td>Módulo de planificación. Ruta <code>/planning</code>. Importación de capas (CSV/KML/Excel), mapa Leaflet con colores por barrio personalizables, depots, medición de distancias por carretera (OSRM), buscador de puntos.</td><td>~1700</td></tr>
-  <tr><td><code>src/scheduling.jsx</code></td><td>Módulo de programación VRP. Ruta <code>/scheduling</code>. Gantt, algoritmo VRP multi-día, gestión de vehículos y trabajadores. Exporta <code>LoginScheduling</code>, <code>TabProyectos</code>, <code>SchedulingModuleWrapper</code>.</td><td>~2500</td></tr>
-  <tr><td><code>src/rostering.jsx</code></td><td>Módulo de rostering (cuadrante mensual). Ruta <code>/rostering</code>. Cuadrícula trabajadores × días con selección multi-celda rectangular, asignación de turnos y persistencia en Firestore (<code>rostering</code> collection).</td><td>~631</td></tr>
-  <tr><td><code>landing/</code></td><td>Web de empresa Operanzia. Proyecto Vite independiente. Secciones: Hero, Módulos, Cómo funciona, Casos de uso, Precios, Empresa, Contacto, Footer. Bilingüe ES/EN. Iconos SVG inline.</td><td>~1333</td></tr>
+  <tr><td><code>src/scheduling.jsx</code></td><td>Módulo de programación VRP. Ruta <code>/scheduling</code>. Gantt, algoritmo VRP multi-día, gestión de vehículos y trabajadores.</td><td>~2500</td></tr>
+  <tr><td><code>src/rostering.jsx</code></td><td>Módulo de rostering (cuadrante mensual). Cuadrícula trabajadores × días con selección multi-celda rectangular, asignación de turnos y persistencia en Firestore.</td><td>~631</td></tr>
+  <tr><td><code>src/control.jsx</code></td><td>Módulo de Control de actividad. Exportación CSV/Excel de eventos de actividad completada (trabajador, fecha, dirección, turno, nota). Filtro por mes. <span class="new-tag">NUEVO</span></td><td>~200</td></tr>
+  <tr><td><code>landing/src/App.jsx</code></td><td>Landing page. Proyecto Vite independiente. Hero oscuro con mockup de la app, nav transparente → blanca en scroll, secciones: Módulos, Cómo funciona, Casos de uso, Precios, Empresa, Contacto, Footer. Bilingüe ES/EN.</td><td>~1340</td></tr>
+  <tr><td><code>DESPLIEGUE_VERCEL.md</code></td><td>Guía paso a paso para configurar Vercel + DNS Dynadot. <span class="new-tag">NUEVO</span></td><td>—</td></tr>
 </table>
 
-<h2>3. Rutas y navegación</h2>
+<h2>3. Dominio y despliegue</h2>
+<table>
+  <tr><th>URL</th><th>Proyecto Vercel</th><th>Estado</th></tr>
+  <tr><td><code>operanzia.com</code></td><td>fleetcomms-nqoo (root: <code>landing/</code>)</td><td>✅ Live</td></tr>
+  <tr><td><code>www.operanzia.com</code></td><td>fleetcomms-nqoo</td><td>✅ Live</td></tr>
+  <tr><td><code>app.operanzia.com</code></td><td>fleetcoms (root: <code>/</code>)</td><td>⚠️ Pendiente DNS</td></tr>
+</table>
+<p><strong>DNS:</strong> Registro A <code>@ → 216.198.79.1</code> configurado en Dynadot. Auto-deploy activo: cada <code>git push origin main</code> redeploya los dos proyectos en ~1 minuto.</p>
+
+<h2>4. Rutas y navegación (app)</h2>
 <table>
   <tr><th>URL</th><th>Qué renderiza</th><th>Quién accede</th></tr>
   <tr><td><code>/</code>, <code>/incidencias</code>, <code>/rutas</code>, <code>/inventario</code></td><td><code>&lt;App&gt;</code> — app de campo</td><td>Conductores</td></tr>
-  <tr><td><code>/login</code></td><td><code>LoginScheduling</code> — formulario de acceso al workspace</td><td>Planificadores</td></tr>
+  <tr><td><code>/login</code></td><td><code>LoginScheduling</code> — acceso al workspace</td><td>Planificadores</td></tr>
   <tr><td><code>/projects</code></td><td><code>TabProyectos</code> — lista y creación de proyectos</td><td>Planificadores</td></tr>
-  <tr><td><code>/planning</code></td><td><code>PlanningPage</code> — mapa + capas + timetable del proyecto activo</td><td>Planificadores</td></tr>
+  <tr><td><code>/planning</code></td><td><code>PlanningPage</code> — mapa + capas + timetable</td><td>Planificadores</td></tr>
   <tr><td><code>/scheduling</code></td><td><code>SchedulingModuleWrapper</code> — VRP Gantt + vehículos + trabajadores</td><td>Planificadores</td></tr>
+  <tr><td><code>/rostering</code></td><td><code>RosteringPage</code> — cuadrante mensual</td><td>Planificadores</td></tr>
+  <tr><td><code>/control</code></td><td><code>ControlPage</code> — control de actividad + exportación CSV</td><td>Planificadores</td></tr>
 </table>
-<p><strong>Clave de arquitectura:</strong> <code>PlanningPage</code> permanece <em>siempre montada</em> mientras hay proyecto activo (visibilidad <code>hidden</code> cuando no es la ruta activa). Esto preserva el estado de capas importadas al navegar a <code>/scheduling</code> y viceversa. Las capas también se persisten en <code>localStorage</code> como backup.</p>
 
-<h2>4. Colecciones Firestore</h2>
+<h2>5. Colecciones Firestore</h2>
 <table>
   <tr><th>Colección</th><th>Propósito</th><th>Usado por</th></tr>
   <tr><td><code>incidencias</code></td><td>Partes de incidencia con comentarios, categorías y prioridades.</td><td>ModuloIncidencias (App)</td></tr>
   <tr><td><code>planes</code></td><td>Planes de trabajo (rutas KML o tareas manuales).</td><td>ModuloRutas (App)</td></tr>
   <tr><td><code>inventario</code></td><td>Productos de repuesto con stock.</td><td>ModuloInventario (App)</td></tr>
   <tr><td><code>movimientos</code></td><td>Log de movimientos de stock (entradas/salidas).</td><td>ModuloInventario (App)</td></tr>
-  <tr><td><code>usuarios</code></td><td>Cuentas y roles (admin / conductor). Auth sin Firebase Auth.</td><td>App</td></tr>
-  <tr><td><code>scheduling_projects</code></td><td>Proyectos del workspace. Cada doc tiene nombre, descripción, fechas.</td><td>TabProyectos (scheduling.jsx)</td></tr>
-  <tr><td><code>scheduling_projects/{id}/timetable</code></td><td>Paradas/tareas del timetable de Planning. Subcolección por proyecto.</td><td>PlanningPage (planning.jsx)</td></tr>
+  <tr><td><code>usuarios</code></td><td>Cuentas y roles (admin / conductor).</td><td>App</td></tr>
+  <tr><td><code>scheduling_projects</code></td><td>Proyectos del workspace.</td><td>TabProyectos</td></tr>
+  <tr><td><code>scheduling_projects/{id}/timetable</code></td><td>Paradas/tareas del timetable. Subcolección por proyecto.</td><td>PlanningPage</td></tr>
   <tr><td><code>scheduling_vehicles</code></td><td>Vehículos con turno, capacidad y enlace a trabajador.</td><td>scheduling.jsx</td></tr>
   <tr><td><code>scheduling_workers</code></td><td>Trabajadores con turno y <code>vehiculoId</code> opcional.</td><td>scheduling.jsx</td></tr>
-  <tr><td><code>planning_depots/{projectId}</code></td><td>Depots del proyecto (lat, lng, nombre). Migrado de localStorage a Firestore.</td><td>planning.jsx, scheduling.jsx</td></tr>
-  <tr><td><code>rostering/{docId}</code></td><td>Cuadrante mensual. Un doc por (org_id, year, month). Campo <code>grid: { workerId: { "dayNum": "shiftCode" } }</code>.</td><td>rostering.jsx</td></tr>
+  <tr><td><code>planning_depots/{projectId}</code></td><td>Depots del proyecto (lat, lng, nombre).</td><td>planning.jsx, scheduling.jsx</td></tr>
+  <tr><td><code>rostering/{docId}</code></td><td>Cuadrante mensual. Un doc por (org_id, year, month).</td><td>rostering.jsx</td></tr>
+  <tr><td><code>activity_events</code></td><td>Eventos de actividad completada por conductores. Exportable en Control.</td><td>control.jsx</td></tr>
 </table>
 
-<h2>5. localStorage — claves en uso</h2>
+<h2>6. localStorage — claves en uso</h2>
 <table>
   <tr><th>Clave</th><th>Contenido</th></tr>
-  <tr><td><code>fc_session</code></td><td>Objeto de sesión del usuario (nombre, rol). Compartido entre planning y scheduling.</td></tr>
-  <tr><td><code>fc_active_project</code></td><td>Proyecto activo seleccionado (<code>{_id, nombre, …}</code>).</td></tr>
-  <tr><td><code>fc_layers_{projectId}</code></td><td>Array de capas importadas (CSV/KML/Excel) con todos los marcadores. Persiste navegación y recarga.</td></tr>
-  <tr><td><code>fc_depots_{projectId}</code></td><td>Array de depots — fallback de lectura. La fuente de verdad ahora es Firestore (<code>planning_depots/{projectId}</code>).</td></tr>
+  <tr><td><code>fc_session</code></td><td>Objeto de sesión del usuario (nombre, rol).</td></tr>
+  <tr><td><code>fc_active_project</code></td><td>Proyecto activo seleccionado.</td></tr>
+  <tr><td><code>fc_layers_{projectId}</code></td><td>Array de capas importadas (CSV/KML/Excel). Persiste navegación y recarga.</td></tr>
+  <tr><td><code>fc_depots_{projectId}</code></td><td>Fallback de depots. Fuente de verdad: Firestore <code>planning_depots/{projectId}</code>.</td></tr>
   <tr><td><code>fc_barrio_colors_{projectId}</code></td><td>Objeto <code>{barrio: "#hexcolor"}</code> con colores personalizados por barrio.</td></tr>
 </table>
 
-<h2>6. Módulos — Estado de desarrollo</h2>
+<h2>7. Módulos — Estado de desarrollo</h2>
 
-<h3>6.1 Incidencias <span class="badge badge-done">PRODUCCIÓN</span></h3>
+<h3>7.1 Incidencias <span class="badge badge-done">PRODUCCIÓN</span></h3>
 <ul>
-  <li>Feed de incidencias con categorías, prioridades y comentarios.</li>
+  <li>Feed con categorías, prioridades y comentarios.</li>
   <li>Panel de estadísticas para admin (<code>PanelStats</code>).</li>
   <li>Cambio de estado (abierto → en progreso → resuelto) solo para admin.</li>
 </ul>
 
-<h3>6.2 Rutas (Planes de trabajo) <span class="badge badge-done">PRODUCCIÓN</span></h3>
+<h3>7.2 Rutas (Planes de trabajo) <span class="badge badge-done">PRODUCCIÓN</span></h3>
 <ul>
-  <li>4 tipos: Mantenimiento Preventivo (<code>prev</code>), Correctivo (<code>corr</code>), Limpieza Exterior (<code>ext</code>), Interior (<code>int</code>).</li>
-  <li>Parseo KML de Mercat/flota vía <code>parseKML()</code>. CSV descargable como <code>operanzia-rutas.csv</code>.</li>
-  <li>Formulario de inspección (<code>ParteInspeccion</code>) para preventivo — 12 grupos / ~30 puntos.</li>
+  <li>4 tipos: Mantenimiento Preventivo, Correctivo, Limpieza Exterior, Interior.</li>
+  <li>Parseo KML. CSV descargable como <code>operanzia-rutas.csv</code>.</li>
+  <li>Formulario de inspección preventivo — 12 grupos / ~30 puntos.</li>
 </ul>
 
-<h3>6.3 Inventario <span class="badge badge-done">PRODUCCIÓN</span></h3>
+<h3>7.3 Inventario <span class="badge badge-done">PRODUCCIÓN</span></h3>
 <ul>
   <li>Listado de piezas con stock, log de movimientos, alertas de stock bajo.</li>
 </ul>
 
-<h3>6.4 Planning <span class="badge badge-wip">EN DESARROLLO</span></h3>
-<p>Ruta: <code>/planning</code>. Acceso por planificadores tras login en <code>/login</code> y selección de proyecto.</p>
+<h3>7.4 Control <span class="badge badge-done">PRODUCCIÓN</span> <span class="new-tag">NUEVO</span></h3>
+<ul>
+  <li>Vista de actividad completada por trabajadores, filtrable por mes.</li>
+  <li>Exportación CSV/Excel con BOM UTF-8, separador <code>;</code> compatible con Excel español.</li>
+  <li>Columnas: Plan, Mes, Turno, Orden, Dirección, Barrio, Trabajador, Fecha y hora, Nota.</li>
+  <li>Botón de descarga deshabilitado si no hay datos en el mes seleccionado.</li>
+</ul>
 
-<h4>Funcionalidades implementadas</h4>
+<h3>7.5 Planning <span class="badge badge-wip">EN DESARROLLO</span></h3>
 <table>
-  <tr><th>Funcionalidad</th><th>Estado</th><th>Detalles</th></tr>
-  <tr><td>Importación de capas</td><td>✅ Funcional</td><td>CSV (lat/lon), KML (Placemarks), Excel (.xlsx, columna «coordenadas»). Múltiples archivos a la vez. Persistidas en localStorage.</td></tr>
-  <tr><td>Mapa Leaflet</td><td>✅ Funcional</td><td>Marcadores por barrio (color de paleta). <code>invalidateSize()</code> vía ResizeObserver. <code>visibility:hidden</code> para preservar dimensiones al navegar.</td></tr>
-  <tr><td>Colores de barrio personalizables</td><td>✅ Funcional <span class="new-tag">HOY</span></td><td>Input <code>type="color"</code> en la leyenda. Persiste en <code>fc_barrio_colors_{id}</code>. Botón «×» por barrio y «resetear» global.</td></tr>
-  <tr><td>Depots</td><td>✅ Funcional <span class="new-tag">HOY</span></td><td>Sección propia en sidebar. Import CSV/KML/Excel o add manual (lat, lng, nombre). Icono casita naranja 36px en mapa. Persistidos en <code>fc_depots_{id}</code>.</td></tr>
-  <tr><td>Medición de distancias</td><td>✅ Funcional <span class="new-tag">HOY</span></td><td>Modo «Medir distancia» — selección ordenada de puntos (stops y depots). Ruta por carretera vía OSRM (API pública, sin key). Polilínea real en el mapa. Panel flotante con km y tiempo. Fallback Haversine si OSRM falla.</td></tr>
-  <tr><td>Buscador de puntos</td><td>✅ Funcional <span class="new-tag">HOY</span></td><td>Input en top del sidebar. Filtra en tiempo real por cualquier campo de los marcadores. Contador «X de N puntos». Mapa hace fitBounds a los resultados.</td></tr>
-  <tr><td>Timetable</td><td>⚠️ Funcional básico</td><td>Pestaña con tabla de paradas, hora inicio y duración. Datos en Firestore subcolección <code>scheduling_projects/{id}/timetable</code>.</td></tr>
-  <tr><td>Control de capas</td><td>✅ Funcional</td><td>Toggle visibilidad, eliminar capa, «Limpiar todas». Bordes de color en sidebar.</td></tr>
+  <tr><th>Funcionalidad</th><th>Estado</th></tr>
+  <tr><td>Importación CSV / KML / Excel</td><td>✅ Funcional</td></tr>
+  <tr><td>Mapa Leaflet con marcadores por barrio</td><td>✅ Funcional</td></tr>
+  <tr><td>Colores de barrio personalizables</td><td>✅ Funcional</td></tr>
+  <tr><td>Depots (Firestore)</td><td>✅ Funcional</td></tr>
+  <tr><td>Medición distancias por carretera (OSRM)</td><td>✅ Funcional</td></tr>
+  <tr><td>Buscador de puntos</td><td>✅ Funcional</td></tr>
+  <tr><td>Timetable</td><td>⚠️ Funcional básico</td></tr>
 </table>
 
-<div class="done-box">
-  <strong>Commit de hoy (11/06):</strong> <code>feat: planning map — depots, distance measurement by road, barrio color picker, keyword search</code>
-</div>
-
-<h3>6.5 Rostering <span class="badge badge-wip">EN DESARROLLO</span></h3>
-<p>Ruta: <code>/rostering</code>. Cuadrante mensual de turnos por trabajador.</p>
+<h3>7.6 Rostering <span class="badge badge-wip">EN DESARROLLO</span></h3>
 <table>
   <tr><th>Funcionalidad</th><th>Estado</th></tr>
   <tr><td>Cuadrícula trabajadores × días del mes</td><td>✅ Funcional</td></tr>
-  <tr><td>Selección multi-celda rectangular (drag + Shift+click)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Asignación masiva de turno a la selección (teclado)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Escritura debounced a Firestore (400ms, un solo setDoc)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Feedback visual selección (overlay azul inset)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Footer contextual con recuento de celdas</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
+  <tr><td>Selección multi-celda rectangular (drag + Shift+click)</td><td>✅ Funcional</td></tr>
+  <tr><td>Asignación masiva de turno a la selección</td><td>✅ Funcional</td></tr>
+  <tr><td>Persistencia Firestore debounced (400ms)</td><td>✅ Funcional</td></tr>
 </table>
 
-<h3>6.6 Scheduling (VRP) <span class="badge badge-wip">EN DESARROLLO</span></h3>
-<p>Ruta: <code>/scheduling</code>. Sub-tabs: VRP/Gantt | Vehículos | Trabajadores.</p>
+<h3>7.7 Scheduling (VRP) <span class="badge badge-wip">EN DESARROLLO</span></h3>
 <table>
   <tr><th>Componente</th><th>Estado</th></tr>
-  <tr><td>Panel de restricciones (duración turno, pausas, velocidad, días)</td><td>✅ Funcional</td></tr>
-  <tr><td>Gestión de vehículos — alta, edición inline, turno</td><td>✅ Funcional</td></tr>
-  <tr><td>Gestión de trabajadores — alta, edición inline, enlace <code>vehiculoId</code></td><td>✅ Funcional</td></tr>
+  <tr><td>Panel de restricciones (turno, pausas, velocidad, días)</td><td>✅ Funcional</td></tr>
+  <tr><td>Gestión de vehículos y trabajadores</td><td>✅ Funcional</td></tr>
   <tr><td>Generación escenario VRP multi-día</td><td>✅ Funcional</td></tr>
   <tr><td>Gantt 00:00-23:59 con pestañas por día</td><td>✅ Funcional</td></tr>
-  <tr><td>Bloques de viaje en Gantt (filtro ≥50m)</td><td>✅ Funcional</td></tr>
-  <tr><td>Leyenda de barrios colapsable</td><td>✅ Funcional</td></tr>
-  <tr><td>Persistencia al cambiar pestaña</td><td>✅ Funcional</td></tr>
-  <tr><td>Panel de detalle de parada (stack)</td><td>✅ Funcional</td></tr>
   <tr><td>Drag-and-drop de paradas en Gantt</td><td>✅ Funcional</td></tr>
-  <tr><td>Exportar plan a App (conductores)</td><td>⚠️ Parcial — estructura pendiente de validar</td></tr>
-  <tr><td>Duración real de jornada en cabecera Gantt</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Fix bug overtime: tareas sin coords usan última posición conocida para retBuffer</td><td>✅ Corregido <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Picker de depot lee de Firestore (<code>planning_depots</code>) en lugar de localStorage</td><td>✅ Corregido <span class="new-tag">NUEVO</span></td></tr>
+  <tr><td>Panel de detalle de parada</td><td>✅ Funcional</td></tr>
+  <tr><td>Exportar plan a app de conductores</td><td>⚠️ Parcial — pendiente de validar</td></tr>
 </table>
 
-<h3>6.7 Landing page (operanzia.com) <span class="badge badge-wip">EN DESARROLLO</span></h3>
-<p>Proyecto Vite independiente en <code>landing/</code>. Dev: <code>cd landing && npm run dev</code> (puerto 5175).</p>
+<h3>7.8 Landing page (operanzia.com) <span class="badge badge-live">LIVE</span> <span class="new-tag">NUEVO</span></h3>
+<p>Desplegada en <strong>operanzia.com</strong> vía Vercel. Proyecto Vite independiente en <code>landing/</code>.</p>
 <table>
   <tr><th>Sección</th><th>Estado</th></tr>
-  <tr><td>Hero con mockup Gantt animado + stats bar</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>6 módulos con iconos SVG (Planning, Scheduling, Rostering, Incidencias, Inventario, Analytics)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Cómo funciona (3 pasos con iconos SVG)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Casos de uso con SVG (Residuos, Limpieza, Mantenimiento)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Precios (Starter €149/mes · Professional €349/mes · Enterprise Custom)</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Empresa / valores con iconos SVG</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Contacto (formulario — sin backend aún)</td><td>⚠️ Sin backend</td></tr>
-  <tr><td>Bilingüe ES/EN con toggle en navbar</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
-  <tr><td>Scroll reveal con IntersectionObserver</td><td>✅ Funcional <span class="new-tag">NUEVO</span></td></tr>
+  <tr><td>Hero oscuro (#05091a) con nav transparente que se vuelve blanca al hacer scroll</td><td>✅ Live</td></tr>
+  <tr><td>Mockup de la app con chrome de navegador, sidebar y gantt</td><td>✅ Live</td></tr>
+  <tr><td>Stats bar (5 módulos, VRP, Real-time, 100% cloud)</td><td>✅ Live</td></tr>
+  <tr><td>6 módulos con iconos SVG — color único azul</td><td>✅ Live</td></tr>
+  <tr><td>Cómo funciona (3 pasos)</td><td>✅ Live</td></tr>
+  <tr><td>Casos de uso (Residuos, Limpieza, Mantenimiento)</td><td>✅ Live</td></tr>
+  <tr><td>Precios (Starter €149 · Professional €349 · Enterprise Custom)</td><td>✅ Live</td></tr>
+  <tr><td>Empresa / valores</td><td>✅ Live</td></tr>
+  <tr><td>Contacto (formulario sin backend)</td><td>⚠️ Sin backend</td></tr>
+  <tr><td>Bilingüe ES/EN con toggle en navbar</td><td>✅ Live</td></tr>
+  <tr><td>Scroll reveal con IntersectionObserver</td><td>✅ Live</td></tr>
+  <tr><td>Footer oscuro con links</td><td>✅ Live</td></tr>
 </table>
-<div class="pending-box">
-  <strong>Pendiente landing:</strong> conectar formulario de contacto (Formspree / Netlify Forms) · actualizar <code>APP_URL</code> cuando se compre el dominio · enlaces del footer.
+
+<div class="done-box">
+  <strong>Últimos commits (junio 2026):</strong>
+  <ul style="margin:6px 0 0 0;">
+    <li>Rename completo Operantia → Operanzia en todos los archivos</li>
+    <li>Rediseño premium landing: hero oscuro, nav transparente, mockup con chrome de navegador</li>
+    <li>Control module: exportación CSV de actividad (movido desde Rostering)</li>
+    <li>Dominio operanzia.com comprado en Dynadot y conectado a Vercel</li>
+    <li>Hero subtitle: "Gestión inteligente de operaciones urbanas"</li>
+    <li>Guía de despliegue <code>DESPLIEGUE_VERCEL.md</code></li>
+  </ul>
 </div>
 
-<h2>7. Algoritmo VRP</h2>
+<h2>8. Algoritmo VRP</h2>
 <ol>
   <li><strong>K-means geográfico</strong> (maxIter=15): agrupa paradas en k clústeres (k = nº vehículos).</li>
-  <li><strong>TSP vecino más cercano</strong>: ruta greedy dentro de cada clúster desde el punto más cercano al depot.</li>
+  <li><strong>TSP vecino más cercano</strong>: ruta greedy desde el punto más cercano al depot.</li>
   <li><strong>2-opt</strong> (maxPasses=min(20,n)): mejora intercambiando pares de aristas.</li>
   <li><strong>Ventanas de turno</strong>: <code>turnoWindow()</code> parsea «Tarde (14-22)» → <code>{start:840, end:1320}</code>.</li>
-  <li><strong>Multi-día rolling</strong>: paradas no asignadas en el día N se re-clústerizan en el día N+1. <code>daysUsed</code> se calcula automáticamente.</li>
+  <li><strong>Multi-día rolling</strong>: paradas no asignadas en día N se re-clústerizan en día N+1.</li>
 </ol>
 
-<h4>Arquitectura vehicle ↔ worker</h4>
+<h2>9. Sistema de colores por barrio</h2>
 <ul>
-  <li>Vehículos corren VRP con su turno (fuente de verdad).</li>
-  <li>Trabajadores <strong>vinculados</strong> (<code>vehiculoId</code>): copian exactamente las asignaciones del vehículo.</li>
-  <li>Trabajadores <strong>no vinculados</strong>: corren VRP independiente sobre todas las tareas.</li>
-  <li>Velocidad: <code>TRAVEL_SPEED_KMH = 30</code>. Umbral mínimo de movimiento: 50m.</li>
+  <li><strong>Por defecto</strong>: hash de Horner → índice en paleta de 12 colores. Determinista.</li>
+  <li><strong>Personalizable</strong> en Planning con color picker. Guardado en <code>fc_barrio_colors_{projectId}</code>.</li>
+  <li>Paleta: <code>#4f8ef7 #fb923c #34d399 #f87171 #a78bfa #fbbf24 #f472b6 #22d3ee #818cf8 #4ade80 #e879f9 #2dd4bf</code></li>
 </ul>
 
-<h2>8. Sistema de colores por barrio</h2>
+<h2>10. Auth y Roles</h2>
 <ul>
-  <li><strong>Por defecto</strong>: hash de Horner (multiplicador 31) → índice en paleta de 12 colores. Determinista — mismo barrio, mismo color siempre. Cache en <code>_barrioCache</code>.</li>
-  <li><strong>Personalizable</strong> (Planning): el usuario puede cambiar el color de cualquier barrio con un color picker. Overrides guardados en <code>fc_barrio_colors_{projectId}</code>. <code>barrioColor(b, overrides)</code> consulta overrides primero.</li>
-  <li>Paleta default: <code>#4f8ef7 #fb923c #34d399 #f87171 #a78bfa #fbbf24 #f472b6 #22d3ee #818cf8 #4ade80 #e879f9 #2dd4bf</code></li>
-  <li>Sin barrio → gris <code>#8b95a5</code>.</li>
-</ul>
-
-<h2>9. Auth y Roles</h2>
-<ul>
-  <li>Auth workspace: usuario/contraseña contra colección Firestore <code>usuarios</code> o array <code>USUARIOS_INIT</code>. Sesión en <code>localStorage</code> bajo <code>fc_session</code>. <strong>No usa Firebase Auth.</strong></li>
+  <li>Auth workspace: usuario/contraseña contra Firestore <code>usuarios</code>. Sesión en <code>localStorage</code>. <strong>No usa Firebase Auth.</strong></li>
   <li>Rol <code>"admin"</code>: subir KML, borrar planes, gestionar usuarios, cambiar estado incidencias.</li>
   <li>Rol <code>"conductor"</code>: reportar incidencias, marcar paradas, ver inventario.</li>
-  <li>Planificadores: cualquier usuario autenticado en <code>/login</code> puede acceder a <code>/projects</code>, <code>/planning</code>, <code>/scheduling</code>.</li>
 </ul>
 
-<h2>10. Pendientes y próximos pasos</h2>
+<h2>11. Pendientes y próximos pasos</h2>
 <table>
   <tr><th>#</th><th>Tarea</th><th>Prioridad</th></tr>
-  <tr><td>1</td><td>Validar exportación de planes VRP a la app de conductores (ModuloRutas)</td><td>Alta</td></tr>
-  <tr><td>2</td><td>Conectar formulario de contacto de la landing (Formspree / Netlify Forms)</td><td>Alta</td></tr>
-  <tr><td>3</td><td>Actualizar <code>APP_URL</code> en <code>landing/src/App.jsx</code> cuando se compre el dominio</td><td>Alta</td></tr>
-  <tr><td>4</td><td>Verificar persistencia <code>vehiculoId</code> end-to-end (save → reload → VRP enlaza correctamente)</td><td>Media</td></tr>
-  <tr><td>5</td><td>Validar VRP multi-día con dataset real (>200 paradas, >1 día)</td><td>Media</td></tr>
-  <tr><td>6</td><td>Rostering: integrar vista en la ruta <code>/rostering</code> del workspace (main.jsx)</td><td>Media</td></tr>
-  <tr><td>7</td><td>Considerar self-hosting OSRM para producción (el servidor público es para desarrollo)</td><td>Media</td></tr>
-  <tr><td>8</td><td>Eliminar <code>console.log</code> de debug en planning.jsx</td><td>Baja</td></tr>
-  <tr><td>9</td><td>Despliegue en Firebase Hosting + despliegue landing</td><td>Baja</td></tr>
+  <tr><td>1</td><td>Configurar DNS CNAME para <code>app.operanzia.com</code> en Dynadot y asignar a Vercel (proyecto fleetcoms)</td><td>Alta</td></tr>
+  <tr><td>2</td><td>Conectar formulario de contacto del landing (Formspree / Resend)</td><td>Alta</td></tr>
+  <tr><td>3</td><td>Validar exportación de planes VRP a la app de conductores (ModuloRutas)</td><td>Alta</td></tr>
+  <tr><td>4</td><td>Verificar persistencia <code>vehiculoId</code> end-to-end</td><td>Media</td></tr>
+  <tr><td>5</td><td>Validar VRP multi-día con dataset real (>200 paradas)</td><td>Media</td></tr>
+  <tr><td>6</td><td>Añadir <code>www.operanzia.com</code> CNAME en Dynadot</td><td>Media</td></tr>
+  <tr><td>7</td><td>Considerar self-hosting OSRM para producción</td><td>Media</td></tr>
+  <tr><td>8</td><td>Añadir <code>.gitignore</code> para excluir <code>.Rhistory</code>, <code>.gbrain-source</code>, <code>.sources/</code></td><td>Baja</td></tr>
 </table>
 
-<h2>11. Comandos de desarrollo</h2>
+<h2>12. Comandos de desarrollo</h2>
 <table>
   <tr><th>Comando</th><th>Descripción</th></tr>
-  <tr><td><code>npm run dev</code></td><td>Servidor de desarrollo con HMR (Vite). Workspace en <code>http://localhost:5173/login</code></td></tr>
+  <tr><td><code>npm run dev</code></td><td>App principal en <code>http://localhost:5173/login</code></td></tr>
+  <tr><td><code>cd landing && npm run dev</code></td><td>Landing en <code>http://localhost:5173</code></td></tr>
   <tr><td><code>npm run build</code></td><td>Build de producción → <code>dist/</code></td></tr>
-  <tr><td><code>npm run preview</code></td><td>Preview del build de producción local</td></tr>
-  <tr><td><code>npm run lint</code></td><td>ESLint check</td></tr>
+  <tr><td><code>git push origin main</code></td><td>Redeploya automáticamente ambos proyectos en Vercel</td></tr>
 </table>
-<p>No hay suite de tests configurada.</p>
 
 <hr style="margin-top:40px; border:none; border-top:1px solid #dde3ef;">
-<p style="color:#999; font-size:9pt; text-align:center;">Operanzia (antes FleetComms) · Estado del proyecto actualizado 13/06/2026</p>
+<p style="color:#999; font-size:9pt; text-align:center;">Operanzia (antes FleetComms / Operantia) · Estado del proyecto actualizado 24/06/2026</p>
 
 </body>
 </html>
