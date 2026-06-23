@@ -299,7 +299,7 @@ function WorkspaceRouter() {
 
 // ── Entry ─────────────────────────────────────────────────────────
 const initPath = window.location.pathname;
-const isFleetApp = initPath === "/" || initPath.startsWith("/incidencias") ||
+const isFleetApp = initPath.startsWith("/incidencias") ||
                    initPath.startsWith("/rutas") || initPath.startsWith("/inventario");
 
 createRoot(document.getElementById("root")).render(
