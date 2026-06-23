@@ -112,7 +112,7 @@ const T = {
     hero: {
       tag: "Plataforma de operaciones",
       h1a: "Gestión inteligente",
-      h1b: "de flotas urbanas",
+      h1b: "de operaciones",
       sub: "Planifica rutas, optimiza horarios, gestiona turnos y controla incidencias — todo en una plataforma integrada y en tiempo real.",
       cta1: "Solicitar demo",
       cta2: "Ver en acción",
@@ -320,7 +320,7 @@ const T = {
     hero: {
       tag: "Operations platform",
       h1a: "Intelligent management",
-      h1b: "of urban fleets",
+      h1b: "of operations",
       sub: "Plan routes, optimize schedules, manage shifts and track incidents — all in one integrated, real-time platform.",
       cta1: "Request demo",
       cta2: "See it in action",
