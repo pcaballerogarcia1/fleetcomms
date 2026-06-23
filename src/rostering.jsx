@@ -7,10 +7,10 @@ import {
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
-  bg: "#0f1117", card: "#161b27", surface2: "#1c2333",
-  border: "rgba(255,255,255,0.07)", border2: "rgba(255,255,255,0.13)",
-  text: "#e2e8f0", muted: "#94a3b8", dim: "#475569",
-  blue: "#4f8ef7",
+  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
+  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
+  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  blue: "#5c9bff",
 };
 const font = "'Inter',system-ui,sans-serif";
 
@@ -341,7 +341,7 @@ export function RosteringPage({ sesion, embedded = false }) {
           </div>
         </div>
 
-        {/* Legend */}
+        {/* Legend + export */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           {SHIFTS.map(s => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -355,6 +355,7 @@ export function RosteringPage({ sesion, embedded = false }) {
               <span style={{ fontSize: 11, color: C.muted }}>{SHIFT_META[s].label}</span>
             </div>
           ))}
+
         </div>
       </div>
 
@@ -395,7 +396,7 @@ export function RosteringPage({ sesion, embedded = false }) {
                     <th key={d} style={{
                       width: CELL_W, minWidth: CELL_W,
                       position: "sticky", top: 0, zIndex: 3,
-                      background: today ? "#0e1f3d" : weekend ? "#13181f" : C.card,
+                      background: today ? "#0e2248" : weekend ? "#161e34" : C.card,
                       borderBottom: `2px solid ${today ? C.blue : C.border}`,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
@@ -498,7 +499,7 @@ export function RosteringPage({ sesion, embedded = false }) {
                             cursor: "pointer",
                             background: meta
                               ? meta.bg
-                              : (today ? "#0d1830" : weekend ? "#111620" : "transparent"),
+                              : (today ? "#0e2040" : weekend ? "#141c30" : "transparent"),
                             color: meta ? meta.text : C.dim,
                             borderRight: `1px solid ${C.border}`,
                             borderBottom: `1px solid ${C.border}`,
@@ -560,7 +561,7 @@ export function RosteringPage({ sesion, embedded = false }) {
                   return (
                     <td key={d} style={{
                       width: CELL_W, textAlign: "center", height: 38,
-                      background: today ? "#0e1f3d" : C.surface2,
+                      background: today ? "#0e2248" : C.surface2,
                       borderRight: `1px solid ${C.border}`,
                       borderTop: `2px solid ${C.border2}`,
                       verticalAlign: "middle", padding: "2px 0",

@@ -3,125 +3,100 @@ import { useState, useEffect, useRef } from "react";
 // ── MODULE ICONS (SVG) ────────────────────────────────────────────
 const ModuleIcons = {
   Planning: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
       <line x1="9" y1="3" x2="9" y2="18"/>
       <line x1="15" y1="6" x2="15" y2="21"/>
     </svg>
   ),
   Scheduling: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="16" rx="2"/>
       <line x1="3" y1="9" x2="21" y2="9"/>
       <line x1="7" y1="4" x2="7" y2="2"/>
       <line x1="17" y1="4" x2="17" y2="2"/>
       <rect x="7" y="13" width="3" height="2" rx="0.5" fill={color} stroke="none"/>
-      <rect x="11" y="13" width="5" height="2" rx="0.5" fill={color} stroke="none" opacity="0.6"/>
+      <rect x="11" y="13" width="5" height="2" rx="0.5" fill={color} stroke="none" opacity="0.5"/>
     </svg>
   ),
   Rostering: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2"/>
       <line x1="3" y1="9" x2="21" y2="9"/>
       <line x1="3" y1="15" x2="21" y2="15"/>
       <line x1="9" y1="3" x2="9" y2="21"/>
       <line x1="15" y1="3" x2="15" y2="21"/>
-      <rect x="9.5" y="9.5" width="5" height="5" rx="0.5" fill={color} stroke="none" opacity="0.35"/>
     </svg>
   ),
   Incidencias: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
       <line x1="12" y1="9" x2="12" y2="13"/>
       <circle cx="12" cy="17" r="1" fill={color} stroke="none"/>
     </svg>
   ),
   Inventario: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
       <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
       <line x1="12" y1="22.08" x2="12" y2="12"/>
     </svg>
   ),
   Analytics: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="20" x2="18" y2="10"/>
       <line x1="12" y1="20" x2="12" y2="4"/>
       <line x1="6"  y1="20" x2="6"  y2="14"/>
       <line x1="3"  y1="20" x2="21" y2="20"/>
-      <polyline points="3 10 7 6 11 9 15 4 21 7" stroke={color} strokeWidth="1.4" strokeDasharray="0"/>
-      <circle cx="21" cy="7" r="1.5" fill={color} stroke="none"/>
     </svg>
   ),
-  // Use case icons
   Waste: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6"/>
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6M14 11v6"/>
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   ),
   Cleaning: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 21h18"/>
       <path d="M5 21V7l8-4v18"/>
       <path d="M19 21V11l-6-4"/>
-      <path d="M9 9h1M9 12h1M9 15h1M9 18h1"/>
     </svg>
   ),
   Maintenance: ({ color }) => (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
     </svg>
   ),
-  // Value icons
   Target: ({ color }) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/>
       <circle cx="12" cy="12" r="6"/>
       <circle cx="12" cy="12" r="2" fill={color} stroke="none"/>
     </svg>
   ),
   Speed: ({ color }) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
     </svg>
   ),
   Security: ({ color }) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       <polyline points="9 12 11 14 15 10"/>
     </svg>
   ),
   Leaf: ({ color }) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
       <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
-    </svg>
-  ),
-  // Hero section icons
-  HowItWorks1: ({ color }) => (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-    </svg>
-  ),
-  HowItWorks2: ({ color }) => (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-    </svg>
-  ),
-  HowItWorks3: ({ color }) => (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 3v18h18"/>
-      <path d="m19 9-5 5-4-4-3 3"/>
     </svg>
   ),
 };
 
 // ── APP URL ────────────────────────────────────────────────────────
-const APP_URL = "https://app.operantia.com"; // update when live
+const APP_URL = "https://app.operanzia.com";
 
 // ── TRANSLATIONS ──────────────────────────────────────────────────
 const T = {
@@ -141,8 +116,8 @@ const T = {
       sub: "Planifica rutas, optimiza horarios, gestiona turnos y controla incidencias — todo en una plataforma integrada y en tiempo real.",
       cta1: "Solicitar demo",
       cta2: "Ver en acción",
-      badge1: "Planificación VRP",
-      badge2: "Tiempo real",
+      badge1: "Optimización VRP",
+      badge2: "Datos en tiempo real",
       badge3: "Multi-empresa",
     },
     stats: [
@@ -152,51 +127,45 @@ const T = {
       { value: "100%", label: "En la nube" },
     ],
     modules: {
-      tag: "Módulos",
-      h2: "Todo lo que necesitas, en un solo lugar",
-      sub: "Cada módulo está diseñado para cubrir una fase crítica de la operación de flotas urbanas.",
+      tag: "Plataforma",
+      h2: "Todo lo que necesitas, integrado",
+      sub: "Cada módulo cubre una fase crítica de la operación. Sin silos, sin exportaciones manuales: los datos fluyen entre módulos automáticamente.",
       items: [
         {
           icon: "Planning",
           name: "Planning",
-          desc: "Importa archivos KML de tu flota, define zonas geográficas, asigna colores por barrio y visualiza tus rutas en mapa interactivo.",
+          desc: "Importa archivos KML, define zonas geográficas y visualiza tus rutas en mapa interactivo con asignación por barrios.",
           pills: ["KML import", "Mapa interactivo", "Zonas y barrios"],
-          color: "#4f8ef7",
         },
         {
           icon: "Scheduling",
           name: "Scheduling",
-          desc: "Optimiza la asignación de conductores con algoritmo VRP (Vehicle Routing Problem). Genera Gantt automático multi-día con restricciones de jornada.",
+          desc: "Motor VRP que genera el Gantt óptimo multi-día respetando jornadas, descansos y capacidad de cada vehículo.",
           pills: ["VRP Algorithm", "Gantt Chart", "Multi-día"],
-          color: "#a78bfa",
         },
         {
           icon: "Rostering",
           name: "Rostering",
-          desc: "Gestiona el cuadrante de disponibilidad de tus trabajadores. Asigna turnos M/T/N y detecta conflictos automáticamente con el scheduling.",
+          desc: "Cuadrante mensual de disponibilidad con asignación M/T/N y detección automática de conflictos con el scheduling.",
           pills: ["Cuadrante mensual", "Detección conflictos", "Bulk assign"],
-          color: "#34d399",
         },
         {
           icon: "Incidencias",
           name: "Incidencias",
-          desc: "Registra, categoriza y haz seguimiento de incidencias operativas. Estadísticas, comentarios y flujo de estados para el equipo de administración.",
+          desc: "Registro, categorización y seguimiento de incidencias operativas con estadísticas y flujo de estados.",
           pills: ["Categorías", "Prioridades", "Panel estadístico"],
-          color: "#fb923c",
         },
         {
           icon: "Inventario",
           name: "Inventario",
-          desc: "Controla el stock de recambios y materiales. Alertas de stock bajo, registro de movimientos y trazabilidad completa por producto.",
+          desc: "Control de stock de recambios con alertas de mínimos, registro de movimientos y trazabilidad completa.",
           pills: ["Control stock", "Alertas mínimos", "Movimientos"],
-          color: "#fbbf24",
         },
         {
           icon: "Analytics",
           name: "Analytics",
-          desc: "Visualiza KPIs operativos en tiempo real: productividad por conductor, cumplimiento de rutas, evolución de incidencias y tendencias de consumo.",
+          desc: "KPIs operativos en tiempo real: productividad, cumplimiento de rutas, evolución de incidencias y tendencias.",
           pills: ["KPIs en vivo", "Tendencias", "Exportar CSV"],
-          color: "#22d3ee",
         },
       ],
     },
@@ -207,19 +176,16 @@ const T = {
       steps: [
         {
           num: "01",
-          icon: "HowItWorks1",
           title: "Configura tu flota",
           desc: "Importa tus vehículos, conductores y puntos de servicio. Define turnos, depots y restricciones operativas de cada recurso.",
         },
         {
           num: "02",
-          icon: "HowItWorks2",
           title: "Optimiza automáticamente",
           desc: "El motor VRP calcula la asignación óptima de rutas respetando jornadas, descansos, capacidad y distancias reales.",
         },
         {
           num: "03",
-          icon: "HowItWorks3",
           title: "Ejecuta y controla",
           desc: "Publica los planes, gestiona incidencias en tiempo real y analiza métricas de rendimiento para mejorar cada día.",
         },
@@ -235,21 +201,18 @@ const T = {
           title: "Recogida de residuos",
           desc: "Optimiza rutas de recogida RSU minimizando kilómetros en vacío. Gestiona turnos de noche y detecta ausencias antes de salir a calle.",
           tags: ["Rutas RSU", "Turno noche", "KPI operativo"],
-          color: "#4f8ef7",
         },
         {
           icon: "Cleaning",
           title: "Limpieza viaria",
-          desc: "Asigna zonas por barrio, gestiona cuadrillas y realiza seguimiento de incidencias de suciedad con fotos y geolocalización.",
+          desc: "Asigna zonas por barrio, gestiona cuadrillas y realiza seguimiento de incidencias de suciedad con geolocalización.",
           tags: ["Zonas barrio", "Cuadrillas", "Incidencias"],
-          color: "#34d399",
         },
         {
           icon: "Maintenance",
           title: "Mantenimiento urbano",
           desc: "Crea planes de mantenimiento preventivo y correctivo. Gestiona el inventario de recambios y genera partes de inspección.",
           tags: ["Preventivo", "Correctivo", "Stock recambios"],
-          color: "#a78bfa",
         },
       ],
     },
@@ -263,7 +226,6 @@ const T = {
           price: "149",
           period: "/mes",
           desc: "Para flotas pequeñas que quieren empezar a digitalizar.",
-          color: "#4f8ef7",
           features: [
             "Hasta 10 vehículos",
             "Módulos Planning + Incidencias",
@@ -278,7 +240,6 @@ const T = {
           price: "349",
           period: "/mes",
           desc: "Para operadores que necesitan optimización y control total.",
-          color: "#a78bfa",
           features: [
             "Hasta 50 vehículos",
             "Todos los módulos",
@@ -295,7 +256,6 @@ const T = {
           price: "Custom",
           period: "",
           desc: "Para grandes operadores con necesidades específicas.",
-          color: "#34d399",
           features: [
             "Vehículos ilimitados",
             "Multi-tenant",
@@ -313,18 +273,18 @@ const T = {
       tag: "Empresa",
       h2: "Construido por expertos en operaciones",
       sub: "Nacimos de la frustración de gestionar flotas con hojas de cálculo. Creamos la herramienta que nos hubiera gustado tener.",
-      mission: "Nuestra misión es digitalizarlas operaciones de flotas urbanas para hacerlas más eficientes, sostenibles y fáciles de gestionar — para que los equipos puedan centrarse en lo que importa.",
+      mission: "Nuestra misión es digitalizar las operaciones de flotas urbanas para hacerlas más eficientes, sostenibles y fáciles de gestionar — para que los equipos puedan centrarse en lo que importa.",
       values: [
         { icon: "Target",   title: "Enfoque operativo", desc: "Cada funcionalidad nace de un problema real en calle." },
         { icon: "Speed",    title: "Velocidad",          desc: "Iteramos rápido junto a nuestros clientes." },
         { icon: "Security", title: "Seguridad",          desc: "Datos en la nube con aislamiento multi-tenant." },
-        { icon: "Leaf",     title: "Sostenibilidad",     desc: "Rutas optimizadas = menos emisiones." },
+        { icon: "Leaf",     title: "Sostenibilidad",     desc: "Rutas optimizadas significan menos emisiones." },
       ],
     },
     contact: {
       tag: "Contacto",
       h2: "Hablemos de tu operación",
-      sub: "Cuéntanos cómo funciona tu flota y te mostramos cómo Operantia puede ayudarte.",
+      sub: "Cuéntanos cómo funciona tu flota y te mostramos cómo Operanzia puede ayudarte.",
       name: "Nombre",
       company: "Empresa",
       email: "Email corporativo",
@@ -344,7 +304,7 @@ const T = {
         company: ["Sobre nosotros", "Blog", "Careers", "Partners"],
         legal: ["Privacidad", "Términos de uso", "Cookies"],
       },
-      copy: "© 2025 Operantia. Todos los derechos reservados.",
+      copy: "© 2025 Operanzia. Todos los derechos reservados.",
     },
   },
 
@@ -364,8 +324,8 @@ const T = {
       sub: "Plan routes, optimize schedules, manage shifts and track incidents — all in one integrated, real-time platform.",
       cta1: "Request demo",
       cta2: "See it in action",
-      badge1: "VRP Planning",
-      badge2: "Real-time",
+      badge1: "VRP Optimization",
+      badge2: "Real-time data",
       badge3: "Multi-tenant",
     },
     stats: [
@@ -375,51 +335,45 @@ const T = {
       { value: "100%", label: "Cloud-based" },
     ],
     modules: {
-      tag: "Modules",
-      h2: "Everything you need, in one place",
-      sub: "Each module is designed to cover a critical phase of urban fleet operations.",
+      tag: "Platform",
+      h2: "Everything you need, integrated",
+      sub: "Each module covers a critical operational phase. No silos, no manual exports — data flows between modules automatically.",
       items: [
         {
           icon: "Planning",
           name: "Planning",
-          desc: "Import KML files from your fleet, define geographic zones, assign colors by district and visualize your routes on an interactive map.",
+          desc: "Import KML files, define geographic zones and visualize your routes on an interactive map with district assignment.",
           pills: ["KML import", "Interactive map", "Zones & districts"],
-          color: "#4f8ef7",
         },
         {
           icon: "Scheduling",
           name: "Scheduling",
-          desc: "Optimize driver assignment with VRP (Vehicle Routing Problem) algorithm. Generate automatic multi-day Gantt charts with shift constraints.",
+          desc: "VRP engine that generates the optimal multi-day Gantt chart respecting shifts, breaks and vehicle capacity.",
           pills: ["VRP Algorithm", "Gantt Chart", "Multi-day"],
-          color: "#a78bfa",
         },
         {
           icon: "Rostering",
           name: "Rostering",
-          desc: "Manage your workers' availability calendar. Assign M/T/N shifts and automatically detect conflicts with the scheduling plan.",
+          desc: "Monthly availability calendar with M/T/N shift assignment and automatic conflict detection with scheduling.",
           pills: ["Monthly grid", "Conflict detection", "Bulk assign"],
-          color: "#34d399",
         },
         {
           icon: "Incidencias",
           name: "Incidents",
-          desc: "Log, categorize and track operational incidents. Statistics, comments and status workflows for the management team.",
+          desc: "Log, categorize and track operational incidents with statistics and status workflows.",
           pills: ["Categories", "Priorities", "Stats panel"],
-          color: "#fb923c",
         },
         {
           icon: "Inventario",
           name: "Inventory",
-          desc: "Control spare parts and materials stock. Low stock alerts, movement logs and full traceability per product.",
+          desc: "Spare parts stock control with low-stock alerts, movement logs and full traceability per product.",
           pills: ["Stock control", "Low-stock alerts", "Movements"],
-          color: "#fbbf24",
         },
         {
           icon: "Analytics",
           name: "Analytics",
-          desc: "Visualize operational KPIs in real time: driver productivity, route compliance, incident trends and consumption patterns.",
+          desc: "Real-time operational KPIs: productivity, route compliance, incident trends and consumption patterns.",
           pills: ["Live KPIs", "Trends", "Export CSV"],
-          color: "#22d3ee",
         },
       ],
     },
@@ -430,19 +384,16 @@ const T = {
       steps: [
         {
           num: "01",
-          icon: "HowItWorks1",
           title: "Configure your fleet",
           desc: "Import your vehicles, drivers and service points. Define shifts, depots and operational constraints for each resource.",
         },
         {
           num: "02",
-          icon: "HowItWorks2",
           title: "Optimize automatically",
           desc: "The VRP engine calculates the optimal route assignment, respecting shift hours, breaks, capacity and real road distances.",
         },
         {
           num: "03",
-          icon: "HowItWorks3",
           title: "Execute and monitor",
           desc: "Publish plans, manage incidents in real time and analyze performance metrics to improve operations every day.",
         },
@@ -458,21 +409,18 @@ const T = {
           title: "Waste collection",
           desc: "Optimize waste collection routes minimizing empty mileage. Manage night shifts and detect absences before going out.",
           tags: ["Waste routes", "Night shift", "Operational KPIs"],
-          color: "#4f8ef7",
         },
         {
           icon: "Cleaning",
           title: "Street cleaning",
-          desc: "Assign zones by district, manage crews and track cleanliness incidents with photos and geolocation.",
+          desc: "Assign zones by district, manage crews and track cleanliness incidents with geolocation.",
           tags: ["District zones", "Crews", "Incidents"],
-          color: "#34d399",
         },
         {
           icon: "Maintenance",
           title: "Urban maintenance",
           desc: "Create preventive and corrective maintenance plans. Manage spare parts inventory and generate inspection reports.",
           tags: ["Preventive", "Corrective", "Spare parts"],
-          color: "#a78bfa",
         },
       ],
     },
@@ -486,7 +434,6 @@ const T = {
           price: "149",
           period: "/mo",
           desc: "For small fleets starting their digital journey.",
-          color: "#4f8ef7",
           features: [
             "Up to 10 vehicles",
             "Planning + Incidents modules",
@@ -501,7 +448,6 @@ const T = {
           price: "349",
           period: "/mo",
           desc: "For operators who need full optimization and control.",
-          color: "#a78bfa",
           features: [
             "Up to 50 vehicles",
             "All modules",
@@ -518,7 +464,6 @@ const T = {
           price: "Custom",
           period: "",
           desc: "For large operators with specific requirements.",
-          color: "#34d399",
           features: [
             "Unlimited vehicles",
             "Multi-tenant",
@@ -541,13 +486,13 @@ const T = {
         { icon: "Target",   title: "Operations focus", desc: "Every feature comes from a real problem in the field." },
         { icon: "Speed",    title: "Speed",             desc: "We iterate fast, together with our customers." },
         { icon: "Security", title: "Security",          desc: "Cloud data with multi-tenant isolation." },
-        { icon: "Leaf",     title: "Sustainability",    desc: "Optimized routes = fewer emissions." },
+        { icon: "Leaf",     title: "Sustainability",    desc: "Optimized routes mean fewer emissions." },
       ],
     },
     contact: {
       tag: "Contact",
       h2: "Let's talk about your operation",
-      sub: "Tell us how your fleet works and we'll show you how Operantia can help.",
+      sub: "Tell us how your fleet works and we'll show you how Operanzia can help.",
       name: "Name",
       company: "Company",
       email: "Corporate email",
@@ -567,61 +512,61 @@ const T = {
         company: ["About us", "Blog", "Careers", "Partners"],
         legal: ["Privacy", "Terms of service", "Cookies"],
       },
-      copy: "© 2025 Operantia. All rights reserved.",
+      copy: "© 2025 Operanzia. All rights reserved.",
     },
   },
 };
 
-// ── SCROLL REVEAL HOOK ─────────────────────────────────────────────
+// ── SCROLL REVEAL ─────────────────────────────────────────────────
 function useReveal() {
   const ref = useRef(null);
   useEffect(() => {
     if (!ref.current) return;
     const obs = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) { entry.target.classList.add("visible"); obs.unobserve(entry.target); } },
-      { threshold: 0.12 }
+      { threshold: 0.1 }
     );
-    const els = ref.current.querySelectorAll(".reveal");
-    els.forEach(el => obs.observe(el));
+    ref.current.querySelectorAll(".reveal").forEach(el => obs.observe(el));
     return () => obs.disconnect();
   }, []);
   return ref;
 }
 
-// ── SVG ICONS ─────────────────────────────────────────────────────
+// ── ICONS ─────────────────────────────────────────────────────────
 const IconArrow = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 12h14M12 5l7 7-7 7"/>
   </svg>
 );
-const IconCheck = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+const IconCheck = ({ color }) => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
 const IconMenu = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
   </svg>
 );
 const IconX = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
 
 // ── LOGO ──────────────────────────────────────────────────────────
-function Logo({ size = 28 }) {
+function Logo({ size = 28, textColor = "#0f172a" }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
       <div style={{
-        width: size, height: size, borderRadius: 8,
-        background: "linear-gradient(135deg, #4f8ef7, #6c6ef7)",
+        width: size, height: size, borderRadius: 7,
+        background: "linear-gradient(135deg, #2563eb, #6d28d9)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontWeight: 900, fontSize: size * 0.55, color: "#fff",
-        boxShadow: "0 4px 12px rgba(79,142,247,0.4)",
+        fontWeight: 900, fontSize: size * 0.52, color: "#fff",
+        letterSpacing: "-0.5px", flexShrink: 0,
+        boxShadow: "0 2px 8px rgba(37,99,235,0.35)",
       }}>O</div>
-      <span style={{ fontWeight: 800, fontSize: size * 0.72, color: "#f0f4f8", letterSpacing: -0.5 }}>Operantia</span>
+      <span style={{ fontWeight: 700, fontSize: size * 0.72, color: textColor, letterSpacing: "-0.02em" }}>Operanzia</span>
     </div>
   );
 }
@@ -632,31 +577,38 @@ function NavBar({ lang, setLang, t }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll);
+    const onScroll = () => setScrolled(window.scrollY > 64);
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const lc = scrolled ? "#475569" : "rgba(255,255,255,0.65)";
+  const lh = scrolled ? "#0f172a" : "#ffffff";
+
   const navLink = (label, href) => (
     <a href={href} onClick={() => setOpen(false)} style={{
-      color: "#94a3b8", fontSize: 14, fontWeight: 500,
-      textDecoration: "none", transition: "color .15s",
+      color: lc, fontSize: 14, fontWeight: 500, textDecoration: "none", transition: "color .15s",
     }}
-      onMouseEnter={e => e.currentTarget.style.color = "#f0f4f8"}
-      onMouseLeave={e => e.currentTarget.style.color = "#94a3b8"}
+      onMouseEnter={e => e.currentTarget.style.color = lh}
+      onMouseLeave={e => e.currentTarget.style.color = lc}
     >{label}</a>
   );
 
   return (
     <nav style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-      borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "1px solid transparent",
-      transition: "all .3s",
-    }} className={scrolled || open ? "nav-blur" : ""}>
+      background: scrolled ? "rgba(255,255,255,0.97)" : "transparent",
+      borderBottom: scrolled ? "1px solid #f1f5f9" : "1px solid transparent",
+      boxShadow: scrolled ? "0 1px 6px rgba(0,0,0,0.06)" : "none",
+      backdropFilter: scrolled ? "blur(16px)" : "none",
+      WebkitBackdropFilter: scrolled ? "blur(16px)" : "none",
+      transition: "all .3s cubic-bezier(.4,0,.2,1)",
+    }}>
       <div className="container" style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <a href="#" style={{ textDecoration: "none" }}><Logo /></a>
+        <a href="#" style={{ textDecoration: "none" }}>
+          <Logo textColor={scrolled ? "#0f172a" : "#ffffff"} />
+        </a>
 
-        {/* Desktop links */}
         <div className="hide-mobile" style={{ display: "flex", alignItems: "center", gap: 32 }}>
           {navLink(t.nav.product, "#modules")}
           {navLink(t.nav.modules, "#modules")}
@@ -664,175 +616,299 @@ function NavBar({ lang, setLang, t }) {
           {navLink(t.nav.about, "#about")}
         </div>
 
-        {/* Right actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Language toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => setLang(lang === "es" ? "en" : "es")} style={{
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 8, color: "#94a3b8", fontSize: 12, fontWeight: 700,
-            padding: "5px 10px", cursor: "pointer", letterSpacing: 1,
-            transition: "all .15s", fontFamily: "inherit",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.color = "#f0f4f8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
-          >{lang === "es" ? "EN" : "ES"}</button>
+            background: scrolled ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.08)",
+            border: scrolled ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 7, color: scrolled ? "#475569" : "rgba(255,255,255,0.6)",
+            fontSize: 11, fontWeight: 700, padding: "5px 10px", cursor: "pointer",
+            letterSpacing: "0.05em", transition: "all .15s", fontFamily: "inherit",
+          }}>{lang === "es" ? "EN" : "ES"}</button>
 
-          <a href={APP_URL} className="hide-mobile btn-outline" style={{ padding: "8px 16px", fontSize: 13 }}>
-            {t.nav.login}
-          </a>
-          <a href="#contact" className="hide-mobile btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
-            {t.nav.demo}
-          </a>
-
-          {/* Hamburger */}
-          <button className="hide-desktop" onClick={() => setOpen(!open)} style={{
-            background: "none", border: "none", color: "#94a3b8", cursor: "pointer",
-            display: "none",
+          <a href={APP_URL} className="hide-mobile" style={{
+            fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "7px 14px",
+            borderRadius: 8, transition: "all .15s",
+            color: scrolled ? "#475569" : "rgba(255,255,255,0.65)",
+            background: scrolled ? "transparent" : "transparent",
+            border: scrolled ? "1px solid #e2e8f0" : "1px solid rgba(255,255,255,0.18)",
           }}
-            // show on mobile
-          >
-            {open ? <IconX /> : <IconMenu />}
-          </button>
+            onMouseEnter={e => { e.currentTarget.style.color = scrolled ? "#0f172a" : "#ffffff"; e.currentTarget.style.borderColor = scrolled ? "#94a3b8" : "rgba(255,255,255,0.40)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = scrolled ? "#475569" : "rgba(255,255,255,0.65)"; e.currentTarget.style.borderColor = scrolled ? "#e2e8f0" : "rgba(255,255,255,0.18)"; }}
+          >{t.nav.login}</a>
+
+          <a href="#contact" className="hide-mobile" style={{
+            fontSize: 13, fontWeight: 600, textDecoration: "none", padding: "7px 16px",
+            borderRadius: 8, transition: "all .18s", fontFamily: "inherit",
+            background: scrolled ? "#1e40af" : "#ffffff",
+            color: scrolled ? "#ffffff" : "#0f172a",
+            boxShadow: scrolled ? "0 1px 3px rgba(30,64,175,0.25)" : "0 1px 4px rgba(0,0,0,0.20)",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "translateY(0)"; }}
+          >{t.nav.demo}</a>
+
+          <button onClick={() => setOpen(!open)} style={{
+            background: "none", border: "none",
+            color: scrolled ? "#475569" : "rgba(255,255,255,0.7)",
+            cursor: "pointer", display: "none", padding: 4,
+          }} className="hide-desktop">{open ? <IconX /> : <IconMenu />}</button>
         </div>
       </div>
 
-      {/* Mobile menu */}
       {open && (
-        <div className="nav-blur" style={{ padding: "16px 24px 24px", display: "flex", flexDirection: "column", gap: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {navLink(t.nav.product, "#modules")}
-          {navLink(t.nav.modules, "#modules")}
-          {navLink(t.nav.pricing, "#pricing")}
-          {navLink(t.nav.about, "#about")}
-          <a href={APP_URL} className="btn-outline" style={{ textAlign: "center" }}>{t.nav.login}</a>
-          <a href="#contact" className="btn-primary" style={{ textAlign: "center", justifyContent: "center" }}>{t.nav.demo}</a>
+        <div style={{
+          padding: "16px 24px 24px", display: "flex", flexDirection: "column", gap: 16,
+          borderTop: "1px solid #e2e8f0", background: "#ffffff",
+        }}>
+          {[
+            [t.nav.product, "#modules"], [t.nav.modules, "#modules"],
+            [t.nav.pricing, "#pricing"], [t.nav.about, "#about"],
+          ].map(([l, h]) => (
+            <a key={l} href={h} onClick={() => setOpen(false)} style={{ color: "#475569", fontSize: 15, textDecoration: "none" }}>{l}</a>
+          ))}
+          <a href={APP_URL} style={{ textAlign: "center", padding: "11px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, color: "#475569", textDecoration: "none" }}>{t.nav.login}</a>
+          <a href="#contact" onClick={() => setOpen(false)} style={{ textAlign: "center", padding: "11px", borderRadius: 8, fontSize: 14, color: "#fff", background: "#1e40af", textDecoration: "none" }}>{t.nav.demo}</a>
         </div>
       )}
     </nav>
   );
 }
 
+// ── APP MOCKUP (browser chrome + gantt) ──────────────────────────
+function MockupGantt() {
+  const rows = [
+    { name: "Carlos León",   color: "#3b82f6", blocks: [{l:8,w:18},{l:30,w:10},{l:44,w:20},{l:68,w:11}] },
+    { name: "Paco Pérez",    color: "#8b5cf6", blocks: [{l:5,w:24},{l:34,w:14},{l:53,w:17},{l:74,w:8}] },
+    { name: "Andrés Muñoz",  color: "#10b981", blocks: [{l:11,w:13},{l:28,w:19},{l:51,w:15},{l:70,w:14}] },
+    { name: "Juan Álvarez",  color: "#f59e0b", blocks: [{l:6,w:28},{l:38,w:11},{l:54,w:22}] },
+    { name: "María Torres",  color: "#ec4899", blocks: [{l:13,w:21},{l:39,w:16},{l:60,w:19}] },
+  ];
+  const sideItems = ["P","S","R","I","Inv","A"];
+
+  return (
+    <div style={{
+      borderRadius: 14, overflow: "hidden",
+      boxShadow: "0 48px 96px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.07)",
+    }}>
+      {/* Browser chrome */}
+      <div style={{
+        background: "#141d2e", padding: "0 16px",
+        height: 44, display: "flex", alignItems: "center", gap: 12,
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+      }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f56" }} />
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#27c840" }} />
+        </div>
+        <div style={{
+          flex: 1, maxWidth: 320, margin: "0 auto",
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)",
+          borderRadius: 7, height: 26, display: "flex", alignItems: "center",
+          padding: "0 10px", gap: 7,
+        }}>
+          <svg width="8" height="8" viewBox="0 0 12 12" fill="#27c840"><circle cx="6" cy="6" r="6"/></svg>
+          <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.38)", letterSpacing: "0.01em", fontFamily: "monospace" }}>
+            app.operanzia.com/scheduling
+          </span>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10, opacity: 0.2 }}>
+          {[16, 12, 10].map(w => <div key={w} style={{ width: w, height: 3, background: "#fff", borderRadius: 2 }} />)}
+        </div>
+      </div>
+
+      {/* App layout */}
+      <div style={{ display: "flex", background: "#0c1525" }}>
+        {/* Sidebar */}
+        <div style={{
+          width: 48, background: "#080f1e", borderRight: "1px solid rgba(255,255,255,0.05)",
+          display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 0", gap: 4,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 7, marginBottom: 12,
+            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 11, fontWeight: 900, color: "#fff",
+          }}>O</div>
+          {sideItems.map((l, i) => (
+            <div key={l} style={{
+              width: 32, height: 32, borderRadius: 7,
+              background: l === "S" ? "rgba(59,130,246,0.18)" : "transparent",
+              border: l === "S" ? "1px solid rgba(59,130,246,0.35)" : "1px solid transparent",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 9.5, color: l === "S" ? "#60a5fa" : "rgba(255,255,255,0.18)",
+              fontWeight: 700, letterSpacing: "0.02em",
+            }}>{l}</div>
+          ))}
+        </div>
+
+        {/* Main area */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* App header */}
+          <div style={{
+            height: 44, display: "flex", alignItems: "center", padding: "0 16px",
+            borderBottom: "1px solid rgba(255,255,255,0.05)", gap: 12,
+          }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Scheduling</span>
+            <span style={{
+              fontSize: 10.5, color: "#475569", padding: "2px 8px",
+              background: "rgba(255,255,255,0.04)", borderRadius: 5, border: "1px solid rgba(255,255,255,0.06)",
+            }}>Semana 26 · 2025</span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 7 }}>
+              {["Exportar", "Publicar"].map((btn, i) => (
+                <div key={btn} style={{
+                  padding: "5px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "default",
+                  background: i === 1 ? "#2563eb" : "rgba(255,255,255,0.05)",
+                  color: i === 1 ? "#fff" : "#64748b",
+                  border: i === 1 ? "none" : "1px solid rgba(255,255,255,0.07)",
+                }}>{btn}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Time ruler */}
+          <div style={{
+            display: "flex", paddingLeft: 116,
+            background: "rgba(0,0,0,0.25)", borderBottom: "1px solid rgba(255,255,255,0.04)",
+          }}>
+            {["06:00","08:00","10:00","12:00","14:00","16:00"].map(h => (
+              <div key={h} style={{ flex: 1, padding: "5px 0", fontSize: 9, color: "#334155", fontWeight: 500, textAlign: "center" }}>{h}</div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {rows.map((row, ri) => (
+            <div key={ri} style={{
+              display: "flex", alignItems: "center", height: 38,
+              borderBottom: "1px solid rgba(255,255,255,0.025)",
+              background: ri === 1 ? "rgba(59,130,246,0.035)" : "transparent",
+            }}>
+              <div style={{
+                width: 116, padding: "0 14px", fontSize: 10.5, fontWeight: 500,
+                color: "#4b5563", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden",
+              }}>{row.name}</div>
+              <div style={{ flex: 1, position: "relative", height: "100%", padding: "6px 0" }}>
+                {row.blocks.map((b, bi) => (
+                  <div key={bi} style={{
+                    position: "absolute", left: `${b.l}%`, width: `${b.w}%`,
+                    height: "calc(100% - 12px)",
+                    background: `${row.color}1a`, border: `1px solid ${row.color}50`,
+                    borderLeft: `2px solid ${row.color}cc`,
+                    borderRadius: "0 4px 4px 0",
+                    display: "flex", alignItems: "center", paddingLeft: 6,
+                  }}>
+                    <div style={{ width: 4, height: 4, borderRadius: "50%", background: row.color, opacity: 0.75 }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Status bar */}
+          <div style={{
+            padding: "7px 14px 7px 130px", display: "flex", gap: 18, alignItems: "center",
+            borderTop: "1px solid rgba(255,255,255,0.04)", background: "rgba(0,0,0,0.18)",
+          }}>
+            {[["#10b981","5 turnos activos"],["#f59e0b","1 conflicto"],["#3b82f6","96% cobertura"]].map(([c, l]) => (
+              <div key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", background: c }} />
+                <span style={{ fontSize: 9.5, color: "#475569", fontWeight: 500 }}>{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── HERO ──────────────────────────────────────────────────────────
 function HeroSection({ t }) {
   return (
-    <section style={{ position: "relative", overflow: "hidden", paddingTop: 140, paddingBottom: 120 }} className="grid-bg">
-      {/* Radial glow */}
+    <section style={{
+      position: "relative", overflow: "hidden",
+      background: "#05091a",
+      paddingTop: 152, paddingBottom: 96,
+    }}>
+      {/* Dot grid overlay */}
+      <div className="grid-bg" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
+
+      {/* Blue radial glow — center */}
       <div style={{
-        position: "absolute", top: "30%", left: "50%", transform: "translate(-50%,-50%)",
-        width: 800, height: 500,
-        background: "radial-gradient(ellipse at center, rgba(79,142,247,0.12) 0%, transparent 70%)",
-        pointerEvents: "none",
+        position: "absolute", top: "18%", left: "50%", transform: "translateX(-50%)",
+        width: 1000, height: 700, pointerEvents: "none",
+        background: "radial-gradient(ellipse at center, rgba(37,99,235,0.20) 0%, transparent 62%)",
       }} />
+      {/* Purple glow — top right */}
       <div style={{
-        position: "absolute", top: "60%", left: "25%",
-        width: 400, height: 300,
-        background: "radial-gradient(ellipse at center, rgba(167,139,250,0.08) 0%, transparent 70%)",
-        pointerEvents: "none",
+        position: "absolute", top: "5%", right: "5%",
+        width: 500, height: 500, pointerEvents: "none",
+        background: "radial-gradient(ellipse, rgba(109,40,217,0.12) 0%, transparent 65%)",
       }} />
 
       <div className="container" style={{ position: "relative", textAlign: "center" }}>
         {/* Tag */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
-          <span className="tag">✦ {t.hero.tag}</span>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }} className="animate-fadein">
+          <span className="tag">{t.hero.tag}</span>
         </div>
 
         {/* Headline */}
-        <h1 style={{
-          fontSize: "clamp(42px, 7vw, 80px)", fontWeight: 900,
-          lineHeight: 1.05, letterSpacing: -2, color: "#f0f4f8",
-          marginBottom: 24, maxWidth: 820, margin: "0 auto 24px",
+        <h1 className="animate-fadeup" style={{
+          fontSize: "clamp(46px, 7vw, 90px)", fontWeight: 800,
+          lineHeight: 1.04, letterSpacing: "-0.04em",
+          maxWidth: 900, margin: "0 auto 26px",
         }}>
           <span className="grad-text">{t.hero.h1a}</span>
           <br />
-          {t.hero.h1b}
+          <span style={{ color: "rgba(255,255,255,0.90)" }}>{t.hero.h1b}</span>
         </h1>
 
         {/* Subtext */}
-        <p style={{
-          fontSize: "clamp(16px, 2vw, 20px)", color: "#8b95a5", lineHeight: 1.7,
-          maxWidth: 620, margin: "0 auto 40px", fontWeight: 400,
+        <p className="animate-fadeup" style={{
+          fontSize: "clamp(15px, 1.6vw, 18px)", color: "rgba(255,255,255,0.48)",
+          lineHeight: 1.78, maxWidth: 540, margin: "0 auto 44px",
+          animationDelay: "0.08s",
         }}>{t.hero.sub}</p>
 
         {/* CTAs */}
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 60 }}>
-          <a href="#contact" className="btn-primary" style={{ fontSize: 16, padding: "16px 32px" }}>
+        <div className="animate-fadeup" style={{
+          display: "flex", gap: 12, justifyContent: "center",
+          flexWrap: "wrap", marginBottom: 48, animationDelay: "0.14s",
+        }}>
+          <a href="#contact" className="btn-hero" style={{ fontSize: 14, padding: "12px 24px" }}>
             {t.hero.cta1} <IconArrow />
           </a>
-          <a href="#modules" className="btn-outline" style={{ fontSize: 16, padding: "16px 32px" }}>
+          <a href="#modules" className="btn-hero-outline" style={{ fontSize: 14, padding: "11px 24px" }}>
             {t.hero.cta2}
           </a>
         </div>
 
-        {/* Badges */}
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          {[
-            { label: t.hero.badge1, color: "#4f8ef7" },
-            { label: t.hero.badge2, color: "#34d399" },
-            { label: t.hero.badge3, color: "#a78bfa" },
-          ].map(b => (
-            <span key={b.label} style={{
-              padding: "6px 14px", borderRadius: 99, fontSize: 13, fontWeight: 600,
-              background: `${b.color}15`, border: `1px solid ${b.color}33`, color: b.color,
-            }}>● {b.label}</span>
+        {/* Trust badges */}
+        <div className="animate-fadein" style={{
+          display: "flex", gap: 28, justifyContent: "center",
+          flexWrap: "wrap", marginBottom: 64, animationDelay: "0.22s",
+        }}>
+          {[t.hero.badge1, t.hero.badge2, t.hero.badge3].map((b, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: ["#3b82f6","#10b981","#8b5cf6"][i], boxShadow: `0 0 6px ${["#3b82f6","#10b981","#8b5cf6"][i]}` }} />
+              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.35)", fontWeight: 500, letterSpacing: "0.01em" }}>{b}</span>
+            </div>
           ))}
         </div>
 
-        {/* App mockup */}
-        <div className="animate-float" style={{ marginTop: 70, maxWidth: 960, margin: "70px auto 0" }}>
+        {/* Product screenshot */}
+        <div className="animate-fadeup" style={{ maxWidth: 960, margin: "0 auto", animationDelay: "0.28s" }}>
           <MockupGantt />
         </div>
       </div>
-    </section>
-  );
-}
 
-// ── GANTT MOCKUP ─────────────────────────────────────────────────
-function MockupGantt() {
-  const rows = [
-    { name: "Carlos León",    color: "#4f8ef7", blocks: [{l:8,w:18},{l:30,w:8},{l:40,w:22},{l:65,w:12}] },
-    { name: "Paco Perez",     color: "#a78bfa", blocks: [{l:5,w:25},{l:33,w:15},{l:52,w:18},{l:73,w:7}] },
-    { name: "Andres Muñoz",   color: "#34d399", blocks: [{l:10,w:12},{l:26,w:20},{l:50,w:14},{l:68,w:16}] },
-    { name: "Juan Álvarez",   color: "#fb923c", blocks: [{l:6,w:30},{l:40,w:10},{l:55,w:24}] },
-  ];
-  return (
-    <div style={{
-      background: "rgba(14,18,28,0.9)", borderRadius: 16,
-      border: "1px solid rgba(255,255,255,0.08)",
-      boxShadow: "0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,142,247,0.1)",
-      overflow: "hidden",
-    }}>
-      {/* Toolbar */}
-      <div style={{ height: 44, background: "#0d1120", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", padding: "0 16px", gap: 8 }}>
-        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f87171" }} />
-        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#fbbf24" }} />
-        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#34d399" }} />
-        <span style={{ marginLeft: 16, fontSize: 12, color: "#3d4d63", fontWeight: 500 }}>Operantia · Scheduling</span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {["06:00","08:00","10:00","12:00","14:00"].map(h => (
-            <span key={h} style={{ fontSize: 10, color: "#3d4d63", width: 48, textAlign: "center" }}>{h}</span>
-          ))}
-        </div>
-      </div>
-      {/* Rows */}
-      <div style={{ padding: "8px 0" }}>
-        {rows.map((row, ri) => (
-          <div key={ri} style={{ display: "flex", alignItems: "center", height: 44, padding: "0 16px", gap: 0,
-            background: ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-            <div style={{ width: 110, fontSize: 11, fontWeight: 600, color: "#8b95a5", flexShrink: 0 }}>{row.name}</div>
-            <div style={{ flex: 1, position: "relative", height: 28 }}>
-              {row.blocks.map((b, bi) => (
-                <div key={bi} style={{
-                  position: "absolute", left: `${b.l}%`, width: `${b.w}%`, height: "100%",
-                  background: `${row.color}22`, border: `1px solid ${row.color}55`,
-                  borderRadius: 5, display: "flex", alignItems: "center", paddingLeft: 6,
-                }}>
-                  <div style={{ width: 4, height: 4, borderRadius: "50%", background: row.color, flexShrink: 0 }} />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      {/* Bottom edge glow */}
+      <div style={{
+        position: "absolute", bottom: -2, left: 0, right: 0,
+        height: 2, background: "linear-gradient(90deg, transparent, rgba(59,130,246,0.5), transparent)",
+        pointerEvents: "none",
+      }} />
+    </section>
   );
 }
 
@@ -840,14 +916,17 @@ function MockupGantt() {
 function StatsBar({ t }) {
   const ref = useReveal();
   return (
-    <section ref={ref} style={{ padding: "60px 0", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={ref} style={{ padding: "52px 0", background: "#ffffff", borderBottom: "1px solid #f1f5f9" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0 }}>
           {t.stats.map((s, i) => (
-            <div key={i} className="reveal" style={{ textAlign: "center", transitionDelay: `${i * 0.1}s` }}>
-              <div style={{ fontSize: 36, fontWeight: 900, color: "#f0f4f8", letterSpacing: -1 }}
-                className="grad-text">{s.value}</div>
-              <div style={{ fontSize: 13, color: "#8b95a5", marginTop: 6, fontWeight: 500 }}>{s.label}</div>
+            <div key={i} className="reveal" style={{
+              textAlign: "center", padding: "8px 24px",
+              borderRight: i < 3 ? "1px solid #f1f5f9" : "none",
+              transitionDelay: `${i * 0.08}s`,
+            }}>
+              <div style={{ fontSize: 40, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1.1 }}>{s.value}</div>
+              <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 8, fontWeight: 500 }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -860,65 +939,65 @@ function StatsBar({ t }) {
 function ModulesSection({ t }) {
   const ref = useReveal();
   const m = t.modules;
+  const ACCENT = "#2563eb";
   return (
-    <section id="modules" ref={ref} className="section" style={{ background: "rgba(8,12,20,1)" }}>
+    <section id="modules" ref={ref} className="section" style={{ background: "#f8fafc" }}>
       <div className="container">
         <div style={{ textAlign: "center", marginBottom: 64 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <span className="tag">{m.tag}</span>
+            <span className="tag-light">{m.tag}</span>
           </div>
-          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 16, transitionDelay: "0.1s" }}>{m.h2}</h2>
-          <p className="reveal" style={{ fontSize: 17, color: "#8b95a5", maxWidth: 560, margin: "0 auto", transitionDelay: "0.2s" }}>{m.sub}</p>
+          <h2 className="reveal" style={{
+            fontSize: "clamp(28px,4vw,50px)", fontWeight: 800, color: "#0f172a",
+            letterSpacing: "-0.03em", marginBottom: 16, lineHeight: 1.1,
+            transitionDelay: "0.1s",
+          }}>{m.h2}</h2>
+          <p className="reveal" style={{ fontSize: 17, color: "#64748b", maxWidth: 560, margin: "0 auto", lineHeight: 1.7, transitionDelay: "0.18s" }}>{m.sub}</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-          {m.items.map((mod, i) => (
-            <div key={i} className="reveal glass" style={{
-              borderRadius: 16, padding: 28, transition: "all .25s",
-              transitionDelay: `${i * 0.1}s`,
-              borderColor: `${mod.color}22`,
-              cursor: "default",
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = "translateY(-4px)";
-                e.currentTarget.style.borderColor = `${mod.color}55`;
-                e.currentTarget.style.boxShadow = `0 20px 40px rgba(0,0,0,0.3), 0 0 0 1px ${mod.color}33`;
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+          {m.items.map((mod, i) => {
+            const Icon = ModuleIcons[mod.icon];
+            return (
+              <div key={i} className="reveal" style={{
+                background: "#ffffff", borderRadius: 12, padding: 28,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                transition: "all .22s cubic-bezier(.4,0,.2,1)",
+                transitionDelay: `${i * 0.07}s`,
               }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.borderColor = `${mod.color}22`;
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              {/* Icon */}
-              {(() => {
-                const Icon = ModuleIcons[mod.icon];
-                return (
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 14,
-                    background: `${mod.color}15`, border: `1px solid ${mod.color}30`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    marginBottom: 20, flexShrink: 0,
-                  }}>
-                    {Icon ? <Icon color={mod.color} /> : mod.icon}
-                  </div>
-                );
-              })()}
-
-              <h3 style={{ fontSize: 20, fontWeight: 700, color: "#f0f4f8", marginBottom: 10 }}>{mod.name}</h3>
-              <p style={{ fontSize: 14, color: "#8b95a5", lineHeight: 1.7, marginBottom: 16 }}>{mod.desc}</p>
-
-              {/* Pills */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {mod.pills.map((p, pi) => (
-                  <span key={pi} style={{
-                    padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600,
-                    background: `${mod.color}12`, color: mod.color, border: `1px solid ${mod.color}25`,
-                  }}>{p}</span>
-                ))}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = "0 10px 28px rgba(0,0,0,0.09)";
+                  e.currentTarget.style.borderColor = "#c7d2fe";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03)";
+                  e.currentTarget.style.borderColor = "#e2e8f0";
+                }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10, marginBottom: 18,
+                  background: "#eff6ff", border: "1px solid #bfdbfe",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {Icon ? <Icon color={ACCENT} /> : null}
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 8, letterSpacing: "-0.01em" }}>{mod.name}</h3>
+                <p style={{ fontSize: 13.5, color: "#64748b", lineHeight: 1.7, marginBottom: 16 }}>{mod.desc}</p>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {mod.pills.map((p, pi) => (
+                    <span key={pi} style={{
+                      padding: "3px 9px", borderRadius: 5, fontSize: 10.5, fontWeight: 600,
+                      background: "#f8fafc", color: "#64748b", border: "1px solid #e2e8f0",
+                      letterSpacing: "0.01em",
+                    }}>{p}</span>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
@@ -930,43 +1009,30 @@ function HowItWorksSection({ t }) {
   const ref = useReveal();
   const h = t.howitworks;
   return (
-    <section ref={ref} className="section" style={{ background: "rgba(10,14,22,1)", position: "relative", overflow: "hidden" }}>
-      <div style={{
-        position: "absolute", top: "50%", right: -100, transform: "translateY(-50%)",
-        width: 600, height: 600,
-        background: "radial-gradient(ellipse, rgba(79,142,247,0.06) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-      <div className="container" style={{ position: "relative" }}>
-        <div style={{ textAlign: "center", marginBottom: 64 }}>
+    <section ref={ref} className="section" style={{ background: "#ffffff" }}>
+      <div className="container">
+        <div style={{ textAlign: "center", marginBottom: 72 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <span className="tag">{h.tag}</span>
+            <span className="tag-light">{h.tag}</span>
           </div>
-          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 16, transitionDelay: "0.1s" }}>{h.h2}</h2>
-          <p className="reveal" style={{ fontSize: 17, color: "#8b95a5", maxWidth: 500, margin: "0 auto", transitionDelay: "0.2s" }}>{h.sub}</p>
+          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,50px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 16, transitionDelay: "0.1s" }}>{h.h2}</h2>
+          <p className="reveal" style={{ fontSize: 17, color: "#64748b", maxWidth: 480, margin: "0 auto", transitionDelay: "0.18s" }}>{h.sub}</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2, position: "relative" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 0 }}>
           {h.steps.map((step, i) => (
-            <div key={i} className="reveal" style={{ padding: "36px 32px", position: "relative", transitionDelay: `${i * 0.15}s` }}>
-              {/* Connector line */}
-              {i < h.steps.length - 1 && (
-                <div className="hide-mobile" style={{
-                  position: "absolute", right: -1, top: "50%", transform: "translateY(-50%)",
-                  width: 2, height: 60,
-                  background: "linear-gradient(180deg, transparent, rgba(79,142,247,0.3), transparent)",
-                }} />
-              )}
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#4f8ef7", letterSpacing: 2, marginBottom: 20 }}>{step.num}</div>
+            <div key={i} className="reveal" style={{
+              padding: "44px 40px", position: "relative",
+              borderRight: i < h.steps.length - 1 ? "1px solid #f1f5f9" : "none",
+              transitionDelay: `${i * 0.14}s`,
+            }}>
               <div style={{
-                width: 52, height: 52, borderRadius: 14, marginBottom: 16,
-                background: "rgba(79,142,247,0.1)", border: "1px solid rgba(79,142,247,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {(() => { const Icon = ModuleIcons[step.icon]; return Icon ? <Icon color="#4f8ef7" /> : step.icon; })()}
-              </div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, color: "#f0f4f8", marginBottom: 12 }}>{step.title}</h3>
-              <p style={{ fontSize: 14, color: "#8b95a5", lineHeight: 1.7 }}>{step.desc}</p>
+                width: 44, height: 44, borderRadius: "50%", marginBottom: 24,
+                background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.03em",
+              }}>{step.num}</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 10, letterSpacing: "-0.02em" }}>{step.title}</h3>
+              <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.75 }}>{step.desc}</p>
             </div>
           ))}
         </div>
@@ -980,47 +1046,48 @@ function UseCasesSection({ t }) {
   const ref = useReveal();
   const u = t.usecases;
   return (
-    <section ref={ref} className="section" style={{ background: "#080c14" }}>
+    <section ref={ref} className="section" style={{ background: "#f8fafc" }}>
       <div className="container">
         <div style={{ textAlign: "center", marginBottom: 64 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <span className="tag">{u.tag}</span>
+            <span className="tag-light">{u.tag}</span>
           </div>
-          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 16, transitionDelay: "0.1s" }}>{u.h2}</h2>
-          <p className="reveal" style={{ fontSize: 17, color: "#8b95a5", maxWidth: 540, margin: "0 auto", transitionDelay: "0.2s" }}>{u.sub}</p>
+          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,50px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 16, transitionDelay: "0.1s" }}>{u.h2}</h2>
+          <p className="reveal" style={{ fontSize: 17, color: "#64748b", maxWidth: 520, margin: "0 auto", transitionDelay: "0.18s" }}>{u.sub}</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
-          {u.items.map((item, i) => (
-            <div key={i} className="reveal glass" style={{
-              borderRadius: 16, padding: 32,
-              transitionDelay: `${i * 0.1}s`,
-              transition: "all .25s",
-              borderColor: `${item.color}22`,
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = `0 20px 40px rgba(0,0,0,0.3), 0 0 0 1px ${item.color}33`; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
-            >
-              <div style={{
-                width: 52, height: 52, borderRadius: 14, marginBottom: 20,
-                background: `${item.color}15`, border: `1px solid ${item.color}30`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {(() => { const Icon = ModuleIcons[item.icon]; return Icon ? <Icon color={item.color} /> : item.icon; })()}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+          {u.items.map((item, i) => {
+            const Icon = ModuleIcons[item.icon];
+            return (
+              <div key={i} className="reveal" style={{
+                background: "#ffffff", borderRadius: 12, padding: 32,
+                border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                transition: "all .22s", transitionDelay: `${i * 0.1}s`,
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 10px 28px rgba(0,0,0,0.09)"; e.currentTarget.style.borderColor = "#c7d2fe"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03)"; e.currentTarget.style.borderColor = "#e2e8f0"; }}
+              >
+                <div style={{
+                  width: 46, height: 46, borderRadius: 12, marginBottom: 20,
+                  background: "#f1f5f9", border: "1px solid #e2e8f0",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {Icon ? <Icon color="#334155" /> : null}
+                </div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 10, letterSpacing: "-0.01em" }}>{item.title}</h3>
+                <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.72, marginBottom: 20 }}>{item.desc}</p>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {item.tags.map((tag, ti) => (
+                    <span key={ti} style={{
+                      padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600,
+                      background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0",
+                    }}>{tag}</span>
+                  ))}
+                </div>
               </div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, color: "#f0f4f8", marginBottom: 12 }}>{item.title}</h3>
-              <p style={{ fontSize: 14, color: "#8b95a5", lineHeight: 1.7, marginBottom: 20 }}>{item.desc}</p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {item.tags.map((tag, ti) => (
-                  <span key={ti} style={{
-                    padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600,
-                    background: "rgba(255,255,255,0.05)", color: "#8b95a5",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}>{tag}</span>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
@@ -1032,84 +1099,82 @@ function PricingSection({ t }) {
   const ref = useReveal();
   const p = t.pricing;
   return (
-    <section id="pricing" ref={ref} className="section" style={{ background: "rgba(10,14,22,1)", position: "relative", overflow: "hidden" }}>
-      <div style={{
-        position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)",
-        width: 700, height: 400,
-        background: "radial-gradient(ellipse, rgba(167,139,250,0.07) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-      <div className="container" style={{ position: "relative" }}>
+    <section id="pricing" ref={ref} className="section" style={{ background: "#ffffff" }}>
+      <div className="container">
         <div style={{ textAlign: "center", marginBottom: 64 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <span className="tag">{p.tag}</span>
+            <span className="tag-light">{p.tag}</span>
           </div>
-          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 16, transitionDelay: "0.1s" }}>{p.h2}</h2>
-          <p className="reveal" style={{ fontSize: 17, color: "#8b95a5", maxWidth: 480, margin: "0 auto", transitionDelay: "0.2s" }}>{p.sub}</p>
+          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,50px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 16, transitionDelay: "0.1s" }}>{p.h2}</h2>
+          <p className="reveal" style={{ fontSize: 17, color: "#64748b", maxWidth: 460, margin: "0 auto", transitionDelay: "0.18s" }}>{p.sub}</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, alignItems: "start" }}>
           {p.plans.map((plan, i) => (
             <div key={i} className="reveal" style={{
-              borderRadius: 20, padding: 32,
-              background: plan.highlighted ? `linear-gradient(135deg, ${plan.color}14, rgba(22,27,39,0.9))` : "rgba(22,27,39,0.6)",
-              border: plan.highlighted ? `1px solid ${plan.color}44` : "1px solid rgba(255,255,255,0.07)",
-              boxShadow: plan.highlighted ? `0 0 60px ${plan.color}15` : "none",
+              borderRadius: 14, overflow: "hidden",
+              background: "#ffffff",
+              border: plan.highlighted ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+              boxShadow: plan.highlighted ? "0 8px 32px rgba(37,99,235,0.12)" : "0 1px 3px rgba(0,0,0,0.04)",
               transitionDelay: `${i * 0.1}s`,
-              display: "flex", flexDirection: "column",
-              position: "relative", overflow: "hidden",
-              transition: "transform .25s",
+              transition: "transform .22s, box-shadow .22s",
             }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = plan.highlighted ? "0 16px 40px rgba(37,99,235,0.18)" : "0 10px 28px rgba(0,0,0,0.09)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = plan.highlighted ? "0 8px 32px rgba(37,99,235,0.12)" : "0 1px 3px rgba(0,0,0,0.04)"; }}
             >
               {plan.highlighted && (
-                <div style={{
-                  position: "absolute", top: 16, right: 16,
-                  padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 700,
-                  background: plan.color, color: "#fff", letterSpacing: 1,
-                }}>POPULAR</div>
+                <div style={{ height: 3, background: "linear-gradient(90deg, #2563eb, #7c3aed)" }} />
               )}
-
-              <div style={{ fontSize: 13, fontWeight: 700, color: plan.color, letterSpacing: 1, marginBottom: 12 }}>{plan.name.toUpperCase()}</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                {plan.price !== "Custom" ? (
-                  <>
-                    <span style={{ fontSize: 44, fontWeight: 900, color: "#f0f4f8", letterSpacing: -2 }}>€{plan.price}</span>
-                    <span style={{ fontSize: 14, color: "#8b95a5" }}>{plan.period}</span>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 36, fontWeight: 900, color: "#f0f4f8", letterSpacing: -1 }}>Custom</span>
+              <div style={{ padding: 32, position: "relative" }}>
+                {plan.highlighted && (
+                  <div style={{
+                    position: "absolute", top: 24, right: 24,
+                    padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+                    background: "#2563eb", color: "#fff", letterSpacing: "0.06em",
+                  }}>POPULAR</div>
                 )}
-              </div>
-              <p style={{ fontSize: 13, color: "#8b95a5", marginBottom: 28 }}>{plan.desc}</p>
 
-              <div style={{ flex: 1, marginBottom: 28 }}>
-                {plan.features.map((f, fi) => (
-                  <div key={fi} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    <div style={{
-                      width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                      background: `${plan.color}20`, border: `1px solid ${plan.color}44`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: plan.color,
-                    }}><IconCheck /></div>
-                    <span style={{ fontSize: 14, color: "#c4cdd8" }}>{f}</span>
-                  </div>
-                ))}
-              </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: plan.highlighted ? "#2563eb" : "#94a3b8", letterSpacing: "0.08em", marginBottom: 14 }}>{plan.name.toUpperCase()}</div>
 
-              <a href="#contact" style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600,
-                textDecoration: "none",
-                background: plan.highlighted ? plan.color : "rgba(255,255,255,0.05)",
-                color: plan.highlighted ? "#fff" : "#c4cdd8",
-                border: plan.highlighted ? "none" : "1px solid rgba(255,255,255,0.1)",
-                transition: "all .2s",
-              }}
-                onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-              >{plan.cta} <IconArrow /></a>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginBottom: 8 }}>
+                  {plan.price !== "Custom" ? (
+                    <>
+                      <span style={{ fontSize: 46, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1 }}>€{plan.price}</span>
+                      <span style={{ fontSize: 14, color: "#94a3b8" }}>{plan.period}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 38, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em" }}>Custom</span>
+                  )}
+                </div>
+                <p style={{ fontSize: 13.5, color: "#64748b", marginBottom: 28, lineHeight: 1.6 }}>{plan.desc}</p>
+
+                <div style={{ marginBottom: 28 }}>
+                  {plan.features.map((f, fi) => (
+                    <div key={fi} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11 }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                        background: plan.highlighted ? "#dbeafe" : "#f1f5f9",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <IconCheck color={plan.highlighted ? "#2563eb" : "#64748b"} />
+                      </div>
+                      <span style={{ fontSize: 13.5, color: "#334155" }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <a href="#contact" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                  padding: "12px 20px", borderRadius: 9, fontSize: 14, fontWeight: 600,
+                  textDecoration: "none", transition: "all .18s",
+                  background: plan.highlighted ? "#1e40af" : "#f8fafc",
+                  color: plan.highlighted ? "#fff" : "#334155",
+                  border: plan.highlighted ? "none" : "1px solid #e2e8f0",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                >{plan.cta} <IconArrow /></a>
+              </div>
             </div>
           ))}
         </div>
@@ -1123,40 +1188,44 @@ function AboutSection({ t }) {
   const ref = useReveal();
   const a = t.about;
   return (
-    <section id="about" ref={ref} className="section" style={{ background: "#080c14" }}>
+    <section id="about" ref={ref} className="section" style={{ background: "#f8fafc" }}>
       <div className="container">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
-          {/* Left */}
           <div>
             <div className="reveal" style={{ display: "flex", marginBottom: 20 }}>
-              <span className="tag">{a.tag}</span>
+              <span className="tag-light">{a.tag}</span>
             </div>
-            <h2 className="reveal" style={{ fontSize: "clamp(26px,3.5vw,42px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 20, lineHeight: 1.2, transitionDelay: "0.1s" }}>{a.h2}</h2>
-            <p className="reveal" style={{ fontSize: 15, color: "#8b95a5", lineHeight: 1.8, marginBottom: 16, transitionDelay: "0.15s" }}>{a.sub}</p>
-            <p className="reveal" style={{ fontSize: 15, color: "#8b95a5", lineHeight: 1.8, transitionDelay: "0.2s" }}>{a.mission}</p>
+            <h2 className="reveal" style={{ fontSize: "clamp(26px,3.5vw,44px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 20, lineHeight: 1.15, transitionDelay: "0.1s" }}>{a.h2}</h2>
+            <p className="reveal" style={{ fontSize: 15, color: "#64748b", lineHeight: 1.8, marginBottom: 14, transitionDelay: "0.15s" }}>{a.sub}</p>
+            <p className="reveal" style={{ fontSize: 15, color: "#64748b", lineHeight: 1.8, transitionDelay: "0.2s" }}>{a.mission}</p>
           </div>
 
-          {/* Right — values grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {a.values.map((v, i) => (
-              <div key={i} className="reveal glass" style={{
-                borderRadius: 14, padding: 24, transitionDelay: `${0.1 + i * 0.1}s`,
-                transition: "transform .25s",
-              }}
-                onMouseEnter={e => e.currentTarget.style.transform = "translateY(-3px)"}
-                onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
-              >
-                <div style={{
-                  width: 40, height: 40, borderRadius: 10, marginBottom: 12,
-                  background: "rgba(79,142,247,0.1)", border: "1px solid rgba(79,142,247,0.2)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {(() => { const Icon = ModuleIcons[v.icon]; return Icon ? <Icon color="#4f8ef7" /> : v.icon; })()}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {a.values.map((v, i) => {
+              const Icon = ModuleIcons[v.icon];
+              return (
+                <div key={i} className="reveal" style={{
+                  borderRadius: 12, padding: 22,
+                  background: "#ffffff", border: "1px solid #e2e8f0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                  transitionDelay: `${0.1 + i * 0.08}s`,
+                  transition: "all .2s",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03)"; }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 9, marginBottom: 12,
+                    background: "#eff6ff", border: "1px solid #bfdbfe",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {Icon ? <Icon color="#2563eb" /> : null}
+                  </div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", marginBottom: 5 }}>{v.title}</div>
+                  <div style={{ fontSize: 12.5, color: "#64748b", lineHeight: 1.6 }}>{v.desc}</div>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#f0f4f8", marginBottom: 6 }}>{v.title}</div>
-                <div style={{ fontSize: 13, color: "#8b95a5", lineHeight: 1.6 }}>{v.desc}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1171,22 +1240,18 @@ function ContactSection({ t }) {
   const [form, setForm] = useState({ name: "", company: "", email: "", message: "" });
   const [sent, setSent] = useState(false);
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    // In production, connect to a form service (Formspree, Netlify, etc.)
-    setSent(true);
-  }
+  const handleSubmit = e => { e.preventDefault(); setSent(true); };
 
   const inp = (key, placeholder, multi = false) => {
     const base = {
-      width: "100%", background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
-      color: "#f0f4f8", fontSize: 14, fontFamily: "inherit",
-      padding: "12px 14px", outline: "none", transition: "border-color .15s",
+      width: "100%", background: "#f8fafc",
+      border: "1px solid #e2e8f0", borderRadius: 9,
+      color: "#0f172a", fontSize: 14, fontFamily: "inherit",
+      padding: "11px 13px", outline: "none", transition: "border-color .15s, box-shadow .15s",
     };
     const handlers = {
-      onFocus: e => { e.currentTarget.style.borderColor = "rgba(79,142,247,0.5)"; },
-      onBlur:  e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; },
+      onFocus: e => { e.currentTarget.style.borderColor = "#93c5fd"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(147,197,253,0.25)"; },
+      onBlur:  e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; },
       value: form[key],
       onChange: e => setForm({ ...form, [key]: e.target.value }),
       placeholder,
@@ -1197,57 +1262,60 @@ function ContactSection({ t }) {
   };
 
   return (
-    <section id="contact" ref={ref} className="section" style={{ background: "rgba(10,14,22,1)", position: "relative", overflow: "hidden" }}>
-      <div style={{
-        position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: 600, height: 300,
-        background: "radial-gradient(ellipse, rgba(79,142,247,0.08) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-      <div className="container" style={{ position: "relative", maxWidth: 720 }}>
+    <section id="contact" ref={ref} className="section" style={{ background: "#ffffff" }}>
+      <div className="container" style={{ maxWidth: 720 }}>
         <div style={{ textAlign: "center", marginBottom: 52 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <span className="tag">{c.tag}</span>
+            <span className="tag-light">{c.tag}</span>
           </div>
-          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,46px)", fontWeight: 800, color: "#f0f4f8", letterSpacing: -1, marginBottom: 14, transitionDelay: "0.1s" }}>{c.h2}</h2>
-          <p className="reveal" style={{ fontSize: 17, color: "#8b95a5", transitionDelay: "0.2s" }}>{c.sub}</p>
+          <h2 className="reveal" style={{ fontSize: "clamp(28px,4vw,50px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 14, transitionDelay: "0.1s" }}>{c.h2}</h2>
+          <p className="reveal" style={{ fontSize: 17, color: "#64748b", transitionDelay: "0.18s" }}>{c.sub}</p>
         </div>
 
-        <div className="reveal glass" style={{ borderRadius: 20, padding: 40 }}>
+        <div className="reveal" style={{
+          background: "#ffffff", borderRadius: 14,
+          border: "1px solid #e2e8f0", padding: 40,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+        }}>
           {sent ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-              <p style={{ fontSize: 18, fontWeight: 600, color: "#f0f4f8" }}>{c.sent}</p>
+              <div style={{
+                width: 56, height: 56, borderRadius: "50%", background: "#dbeafe",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px", fontSize: 24,
+              }}>✓</div>
+              <p style={{ fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{c.sent}</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: "#8b95a5", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.name}</label>
+                  <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.name}</label>
                   {inp("name", "Ana García")}
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, color: "#8b95a5", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.company}</label>
+                  <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.company}</label>
                   {inp("company", "Empresa SL")}
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: 12, color: "#8b95a5", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.email}</label>
+                <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.email}</label>
                 {inp("email", "ana@empresa.com")}
               </div>
               <div>
-                <label style={{ fontSize: 12, color: "#8b95a5", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.message}</label>
+                <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.message}</label>
                 {inp("message", "Gestionamos 30 vehículos de limpieza viaria…", true)}
               </div>
-              <button type="submit" className="btn-primary" style={{ marginTop: 8, justifyContent: "center", fontSize: 15, padding: "14px 24px" }}>
+              <button type="submit" className="btn-primary" style={{ marginTop: 6, justifyContent: "center", fontSize: 15, padding: "13px 24px" }}>
                 {c.send} <IconArrow />
               </button>
             </form>
           )}
         </div>
 
-        <div className="reveal" style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#8b95a5" }}>
-          {c.phone} <a href={`tel:${c.phoneVal.replace(/\s/g,"")}`} style={{ color: "#4f8ef7", textDecoration: "none", fontWeight: 600 }}>{c.phoneVal}</a>
+        <div className="reveal" style={{ textAlign: "center", marginTop: 22, fontSize: 13, color: "#94a3b8" }}>
+          {c.phone}{" "}
+          <a href={`tel:${c.phoneVal.replace(/\s/g, "")}`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>{c.phoneVal}</a>
         </div>
       </div>
     </section>
@@ -1259,10 +1327,10 @@ function FooterSection({ t }) {
   const f = t.footer;
   const col = (title, links) => (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>{title}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#475569", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 }}>{title}</div>
       {links.map((l, i) => (
-        <a key={i} href="#" style={{ display: "block", fontSize: 14, color: "#8b95a5", textDecoration: "none", marginBottom: 10, transition: "color .15s" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#f0f4f8"}
+        <a key={i} href="#" style={{ display: "block", fontSize: 13.5, color: "#8b95a5", textDecoration: "none", marginBottom: 10, transition: "color .15s" }}
+          onMouseEnter={e => e.currentTarget.style.color = "#e2e8f0"}
           onMouseLeave={e => e.currentTarget.style.color = "#8b95a5"}
         >{l}</a>
       ))}
@@ -1270,24 +1338,23 @@ function FooterSection({ t }) {
   );
 
   return (
-    <footer style={{ background: "#050810", borderTop: "1px solid rgba(255,255,255,0.05)", padding: "64px 0 32px" }}>
+    <footer style={{ background: "#0a0f1e", borderTop: "1px solid rgba(255,255,255,0.06)", padding: "72px 0 36px" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, marginBottom: 48 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, marginBottom: 52 }}>
           <div>
-            <Logo size={30} />
-            <p style={{ fontSize: 14, color: "#8b95a5", marginTop: 16, lineHeight: 1.7, maxWidth: 260 }}>{f.tagline}</p>
-            {/* Social links */}
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            <Logo size={30} textColor="#f0f4f8" />
+            <p style={{ fontSize: 13.5, color: "#64748b", marginTop: 16, lineHeight: 1.75, maxWidth: 250 }}>{f.tagline}</p>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               {["𝕏", "in", "gh"].map((s, i) => (
                 <a key={i} href="#" style={{
                   width: 34, height: 34, borderRadius: 8,
-                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "#8b95a5", fontSize: 12, fontWeight: 700, textDecoration: "none",
+                  color: "#64748b", fontSize: 12, fontWeight: 700, textDecoration: "none",
                   transition: "all .15s",
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(79,142,247,0.15)"; e.currentTarget.style.color = "#4f8ef7"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#8b95a5"; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.12)"; e.currentTarget.style.color = "#60a5fa"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.25)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#64748b"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}
                 >{s}</a>
               ))}
             </div>
@@ -1297,12 +1364,18 @@ function FooterSection({ t }) {
           {col(f.legal, f.links.legal)}
         </div>
 
-        <hr className="divider" style={{ marginBottom: 24 }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <p style={{ fontSize: 13, color: "#475569" }}>{f.copy}</p>
-          <a href={APP_URL} className="btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
-            Acceder a la app <IconArrow />
-          </a>
+          <a href={APP_URL} style={{
+            display: "inline-flex", alignItems: "center", gap: 7,
+            padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+            textDecoration: "none", background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.10)", color: "#e2e8f0",
+            transition: "all .15s",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.10)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+          >Acceder a la app <IconArrow /></a>
         </div>
       </div>
     </footer>

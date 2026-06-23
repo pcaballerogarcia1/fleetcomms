@@ -6,17 +6,17 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
-  bg:      "#0f1117",
-  card:    "#161b27",
-  surface2:"#1c2333",
-  border:  "rgba(255,255,255,0.08)",
-  border2: "rgba(255,255,255,0.13)",
-  blue:    "#4f8ef7",
-  blueDim: "#0d2248",
-  blueText:"#a3c4fc",
-  cyan:    "#4f8ef7",
-  cyanDim: "#0d2248",
-  cyanText:"#a3c4fc",
+  bg:      "#0f1623",
+  card:    "#172035",
+  surface2:"#1e2d48",
+  border:  "rgba(88,130,225,0.22)",
+  border2: "rgba(88,130,225,0.40)",
+  blue:    "#5c9bff",
+  blueDim: "#0d2550",
+  blueText:"#b0ccff",
+  cyan:    "#5c9bff",
+  cyanDim: "#0d2550",
+  cyanText:"#b0ccff",
   green:   "#34d399",
   greenDim:"#072015",
   orange:  "#fb923c",
@@ -1871,7 +1871,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
             fontSize: 11, fontWeight: 700, color: C.muted,
             letterSpacing: 2, textTransform: "uppercase",
           }}>
-            Operantia
+            Operanzia
           </div>
           <div style={{ width: 1, height: 16, background: C.border2 }} />
           <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planning</div>
@@ -2043,7 +2043,7 @@ function LoginPlanning({ onLogin }) {
         animation: "planning-fadein .3s ease both",
       }}>
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operantia</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operanzia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
         </div>

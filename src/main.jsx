@@ -6,15 +6,16 @@ import App from "./App.jsx";
 import { PlanningPage } from "./planning.jsx";
 import { LoginScheduling, TabProyectos, SchedulingModuleWrapper } from "./scheduling.jsx";
 import { RosteringPage } from "./rostering.jsx";
+import { ControlPage } from "./control.jsx";
 import { db, auth } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 const C = {
-  bg: "#0f1117", card: "#161b27", surface2: "#1c2333",
-  border: "rgba(255,255,255,0.07)", border2: "rgba(255,255,255,0.13)",
-  text: "#e2e8f0", muted: "#94a3b8", dim: "#475569",
-  blue: "#4f8ef7",
+  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
+  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
+  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  blue: "#5c9bff",
 };
 const font = '"Inter","Segoe UI",system-ui,sans-serif';
 
@@ -53,7 +54,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
       padding: "0 16px", fontFamily: font, gap: 6,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Operantia</span>
+        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Operanzia</span>
         <span style={{ color: C.dim, margin: "0 4px" }}>/</span>
         {crumb("Proyectos", "/projects", path === "/projects")}
         {activeProject && <>
@@ -65,6 +66,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           {crumb("Planning",    "/planning",    path === "/planning")}
           {crumb("Scheduling",  "/scheduling",  path === "/scheduling")}
           {crumb("Rostering",   "/rostering",   path === "/rostering")}
+          {crumb("Control",     "/control",     path === "/control")}
         </>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -72,7 +74,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion?.rol}</div>
         </div>
-        {(path === "/planning" || path === "/scheduling" || path === "/rostering") && (
+        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control") && (
           <button onClick={onFullscreen} title="Pantalla completa" style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -155,7 +157,7 @@ function WorkspaceRouter() {
     if (!sesion && path !== "/login")  { go("/login"); return; }
     if (sesion  && path === "/login")  { go("/projects"); return; }
     if (sesion  && path === "/")       { go("/projects"); return; }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering")) {
+    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control")) {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
@@ -255,6 +257,13 @@ function WorkspaceRouter() {
         {activeProject && path === "/rostering" && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
             <RosteringPage sesion={sesion} embedded />
+          </div>
+        )}
+
+        {/* /control — real-time field activity monitor */}
+        {activeProject && path === "/control" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+            <ControlPage sesion={sesion} embedded />
           </div>
         )}
 

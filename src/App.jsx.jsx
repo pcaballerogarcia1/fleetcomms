@@ -78,25 +78,25 @@ const FONTS = `
 *, *::before, *::after { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 :root {
-  --bg:       #0f1117;
-  --surface:  #161b27;
-  --surface2: #1c2333;
-  --border:   rgba(255,255,255,0.08);
-  --border2:  rgba(255,255,255,0.13);
-  --blue:     #4f8ef7;
-  --blueDim:  #0d2248;
-  --blueText: #a3c4fc;
-  --cyan:     #4f8ef7;
-  --cyanDim:  #0d2248;
-  --cyanText: #a3c4fc;
+  --bg:       #0f1623;
+  --surface:  #172035;
+  --surface2: #1e2d48;
+  --border:   rgba(88,130,225,0.22);
+  --border2:  rgba(88,130,225,0.40);
+  --blue:     #5c9bff;
+  --blueDim:  #0d2550;
+  --blueText: #b0ccff;
+  --cyan:     #5c9bff;
+  --cyanDim:  #0d2550;
+  --cyanText: #b0ccff;
   --green:    #34d399;
-  --greenDim: #072015;
+  --greenDim: #082a18;
   --orange:   #fb923c;
   --red:      #f87171;
   --amber:    #fbbf24;
-  --text:     #f0f4f8;
-  --muted:    #8b95a5;
-  --dim:      #3d4d63;
+  --text:     #e2eeff;
+  --muted:    #8aa5cc;
+  --dim:      #4a5f82;
   --font:     'Inter', system-ui, sans-serif;
   --mono:     'JetBrains Mono', 'Courier New', monospace;
   --radius:   8px;
@@ -135,13 +135,13 @@ const mono = "var(--mono)";
 const font = "var(--font)";
 
 const C = {
-  bg:"#0f1117", card:"#161b27", surface2:"#1c2333",
-  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.13)",
-  cyan:"#4f8ef7", cyanDim:"#0d2248", cyanText:"#a3c4fc",
-  green:"#34d399", greenDim:"#072015",
+  bg:"#0f1623", card:"#172035", surface2:"#1e2d48",
+  border:"rgba(88,130,225,0.22)", border2:"rgba(88,130,225,0.40)",
+  cyan:"#5c9bff", cyanDim:"#0d2550", cyanText:"#b0ccff",
+  green:"#34d399", greenDim:"#082a18",
   orange:"#fb923c", red:"#f87171", amber:"#fbbf24",
-  text:"#f0f4f8", muted:"#8b95a5", dim:"#3d4d63",
-  blue:"#4f8ef7", blueDim:"#0d2248", blueText:"#a3c4fc",
+  text:"#e2eeff", muted:"#8aa5cc", dim:"#4a5f82",
+  blue:"#5c9bff", blueDim:"#0d2550", blueText:"#b0ccff",
 };
 
 // Componente base de botón con hover
@@ -399,7 +399,7 @@ function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
 
   return (
     <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>
-      <div ref={divRef} style={{height,background:"#1a2535"}}/>
+      <div ref={divRef} style={{height,background:"#162038"}}/>
       <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",gap:12}}>
           {[[C.green,"Realizada"],[C.blue,"Pendiente"],[C.orange,"Seleccionada"]].map(([c,l])=>(
@@ -439,7 +439,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
                 ? <span style={{fontSize:9,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:10,padding:"2px 7px"}}>📋 Parte firmado</span>
                 : tieneParteIniciado
                   ? <span style={{fontSize:9,color:C.orange,background:"#2a1500",border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}>📋 Parte en curso</span>
-                  : <span style={{fontSize:9,color:C.dim,background:"#0a1628",border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}>📋 Sin parte</span>
+                  : <span style={{fontSize:9,color:C.dim,background:"#0d1c34",border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}>📋 Sin parte</span>
               }
             </div>
           )}
@@ -463,7 +463,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           {isExp&&(
             <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
               {ub.elementos.map(el=>(
-                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:"#0a1628",border:`1px solid ${el.realizado?C.green+"44":"#1e2535"}`,borderRadius:6,padding:"7px 10px"}}>
+                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:"#0d1c34",border:`1px solid ${el.realizado?C.green+"44":"#1c2d45"}`,borderRadius:6,padding:"7px 10px"}}>
                   <div><span style={{fontSize:12,color:el.realizado?C.green:C.blueText,fontWeight:700}}>{el.codiQR}</span><span style={{fontSize:10,color:C.dim,marginLeft:8}}>{el.model}</span></div>
                   <button onClick={()=>onMarcarQR(el.codiQR,!el.realizado)} style={el.realizado?S.btnOk:S.btnSm}>{el.realizado?"✓":"Marcar"}</button>
                 </div>
@@ -554,7 +554,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
   function toggle(pt){ setChecks(prev=>({...prev,[pt]:!prev[pt]})); }
 
   function guardar(finalizar=false){
-    const parte = { checks, observaciones:obs, firmado: finalizar||firmado, fechaFirma: finalizar?Date.now():ub.parte?.fechaFirma, operarioId: sesion.id };
+    const parte = { checks, observaciones:obs, firmado: finalizar||firmado, fechaFirma: finalizar?Date.now():(ub.parte?.fechaFirma??null), operarioId: sesion.id };
     onSave(parte, finalizar);
   }
 
@@ -641,7 +641,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         {PUNTOS_INSPECCION.map(g=>(
           <div key={g.grupo} style={{marginBottom:12}}>
             {/* Cabecera grupo */}
-            <div style={{background:"#1a2535",borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{background:"#162038",borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
               {g.grupo}
             </div>
             {/* Puntos */}
@@ -656,7 +656,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
               }}>
                 <div style={{
                   width:22,height:22,borderRadius:4,flexShrink:0,
-                  background:checks[pt]?C.green:"#0a1628",
+                  background:checks[pt]?C.green:"#0d1c34",
                   border:`2px solid ${checks[pt]?C.green:C.border}`,
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:13,color:"white",fontWeight:800,
@@ -787,7 +787,7 @@ function DetallePlan({plan,sesion,onBack,onUpdate}){
           <div style={{height:"100%",background:tasaColor,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/>
         </div>
         {proxima&&(
-          <div style={{background:"#1a2535",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:"#162038",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:C.blueDim,border:`2px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.blueText,flexShrink:0}}>{proxima.orden}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,color:C.muted,marginBottom:1}}>PRÓXIMA PARADA</div>
@@ -877,7 +877,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       {expandida&&(
         <div style={{marginTop:8}}>
           {(tarea.comentarios||[]).map((c,i)=>{const u=getUser(c.usuarioId);return(
-            <div key={i} style={{background:"#0a1628",borderRadius:6,padding:"7px 10px",marginBottom:5}}>
+            <div key={i} style={{background:"#0d1c34",borderRadius:6,padding:"7px 10px",marginBottom:5}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                 <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div><span style={{fontSize:11,color:C.muted}}>{u.nombre}</span></div>
                 <span style={{fontSize:9,color:C.dim}}>{timeAgo(c.fecha)}</span>
@@ -1677,7 +1677,7 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
     const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8"});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = "operantia-rutas.csv"; a.click();
+    a.href = url; a.download = "operanzia-rutas.csv"; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -1845,7 +1845,7 @@ function Login(){
       <div style={{width:"100%",maxWidth:360,animation:"fadeUp .3s ease both"}}>
         <div style={{marginBottom:32}}>
           <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Fleet Management</div>
-          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>Operantia</div>
+          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>Operanzia</div>
         </div>
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:24,boxShadow:"0 16px 48px rgba(0,0,0,.5)"}}>
           <div style={{marginBottom:14}}>
@@ -1888,7 +1888,7 @@ export default function App(){
         try{
           const snap=await getDoc(doc(db,"usuarios",user.uid));
           if(snap.exists()&&snap.data().activo!==false){
-            setSesion({uid:user.uid,...snap.data()});
+            setSesion({uid:user.uid,id:user.uid,...snap.data()});
           }else{
             await signOut(auth); setSesion(null);
           }
@@ -1934,7 +1934,7 @@ export default function App(){
     <div style={S.page}>
       <div style={{...S.header,background:"rgba(22,27,39,0.96)",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>Operantia</div>
+          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>Operanzia</div>
           <div style={{width:1,height:16,background:C.border2}}/>
           <div style={{fontSize:14,fontWeight:600,color:C.text}}>{TAB_TITLES[tab]||tab}</div>
         </div>

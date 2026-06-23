@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Operantia — Estado del Proyecto</title>
+<title>Operanzia — Estado del Proyecto</title>
 <style>
   body { font-family: Calibri, Arial, sans-serif; max-width: 960px; margin: 40px auto; color: #1a1a2e; font-size: 11pt; line-height: 1.5; }
   h1 { font-size: 22pt; color: #1a1a2e; border-bottom: 3px solid #4f8ef7; padding-bottom: 8px; margin-bottom: 4px; }
@@ -31,14 +31,14 @@
 </head>
 <body>
 
-<h1>Operantia — Estado del Proyecto</h1>
+<h1>Operanzia — Estado del Proyecto</h1>
 <div class="meta">
   Actualizado: 13 de junio de 2026 &nbsp;|&nbsp; Repositorio: pcaballerogarcia1/fleetcomms &nbsp;|&nbsp; Rama: main &nbsp;|&nbsp; <strong>Antes llamado FleetComms</strong>
 </div>
 
 <h2>1. Visión general</h2>
 <p class="section-intro">
-<strong>Operantia</strong> es una SPA (Single-Page Application) para gestión de flotas municipales. Tiene dos zonas diferenciadas: la <strong>app de campo</strong> (conductores — rutas <code>/</code>, <code>/incidencias</code>, <code>/inventario</code>) y el <strong>workspace de planificación</strong> (jefes de oficina — rutas <code>/login</code> → <code>/projects</code> → <code>/planning</code> → <code>/scheduling</code>). Ambas comparten el mismo bundle Vite pero el entry point <code>main.jsx</code> decide qué renderizar según la URL.
+<strong>Operanzia</strong> es una SPA (Single-Page Application) para gestión de flotas municipales. Tiene dos zonas diferenciadas: la <strong>app de campo</strong> (conductores — rutas <code>/</code>, <code>/incidencias</code>, <code>/inventario</code>) y el <strong>workspace de planificación</strong> (jefes de oficina — rutas <code>/login</code> → <code>/projects</code> → <code>/planning</code> → <code>/scheduling</code>). Ambas comparten el mismo bundle Vite pero el entry point <code>main.jsx</code> decide qué renderizar según la URL.
 </p>
 <table>
   <tr><th>Tecnología</th><th>Uso</th></tr>
@@ -59,7 +59,7 @@
   <tr><td><code>src/planning.jsx</code></td><td>Módulo de planificación. Ruta <code>/planning</code>. Importación de capas (CSV/KML/Excel), mapa Leaflet con colores por barrio personalizables, depots, medición de distancias por carretera (OSRM), buscador de puntos.</td><td>~1700</td></tr>
   <tr><td><code>src/scheduling.jsx</code></td><td>Módulo de programación VRP. Ruta <code>/scheduling</code>. Gantt, algoritmo VRP multi-día, gestión de vehículos y trabajadores. Exporta <code>LoginScheduling</code>, <code>TabProyectos</code>, <code>SchedulingModuleWrapper</code>.</td><td>~2500</td></tr>
   <tr><td><code>src/rostering.jsx</code></td><td>Módulo de rostering (cuadrante mensual). Ruta <code>/rostering</code>. Cuadrícula trabajadores × días con selección multi-celda rectangular, asignación de turnos y persistencia en Firestore (<code>rostering</code> collection).</td><td>~631</td></tr>
-  <tr><td><code>landing/</code></td><td>Web de empresa Operantia. Proyecto Vite independiente. Secciones: Hero, Módulos, Cómo funciona, Casos de uso, Precios, Empresa, Contacto, Footer. Bilingüe ES/EN. Iconos SVG inline.</td><td>~1333</td></tr>
+  <tr><td><code>landing/</code></td><td>Web de empresa Operanzia. Proyecto Vite independiente. Secciones: Hero, Módulos, Cómo funciona, Casos de uso, Precios, Empresa, Contacto, Footer. Bilingüe ES/EN. Iconos SVG inline.</td><td>~1333</td></tr>
 </table>
 
 <h2>3. Rutas y navegación</h2>
@@ -111,7 +111,7 @@
 <h3>6.2 Rutas (Planes de trabajo) <span class="badge badge-done">PRODUCCIÓN</span></h3>
 <ul>
   <li>4 tipos: Mantenimiento Preventivo (<code>prev</code>), Correctivo (<code>corr</code>), Limpieza Exterior (<code>ext</code>), Interior (<code>int</code>).</li>
-  <li>Parseo KML de Mercat/flota vía <code>parseKML()</code>. CSV descargable como <code>operantia-rutas.csv</code>.</li>
+  <li>Parseo KML de Mercat/flota vía <code>parseKML()</code>. CSV descargable como <code>operanzia-rutas.csv</code>.</li>
   <li>Formulario de inspección (<code>ParteInspeccion</code>) para preventivo — 12 grupos / ~30 puntos.</li>
 </ul>
 
@@ -172,7 +172,7 @@
   <tr><td>Picker de depot lee de Firestore (<code>planning_depots</code>) en lugar de localStorage</td><td>✅ Corregido <span class="new-tag">NUEVO</span></td></tr>
 </table>
 
-<h3>6.7 Landing page (operantia.com) <span class="badge badge-wip">EN DESARROLLO</span></h3>
+<h3>6.7 Landing page (operanzia.com) <span class="badge badge-wip">EN DESARROLLO</span></h3>
 <p>Proyecto Vite independiente en <code>landing/</code>. Dev: <code>cd landing && npm run dev</code> (puerto 5175).</p>
 <table>
   <tr><th>Sección</th><th>Estado</th></tr>
@@ -248,7 +248,7 @@
 <p>No hay suite de tests configurada.</p>
 
 <hr style="margin-top:40px; border:none; border-top:1px solid #dde3ef;">
-<p style="color:#999; font-size:9pt; text-align:center;">Operantia (antes FleetComms) · Estado del proyecto actualizado 13/06/2026</p>
+<p style="color:#999; font-size:9pt; text-align:center;">Operanzia (antes FleetComms) · Estado del proyecto actualizado 13/06/2026</p>
 
 </body>
 </html>

@@ -10,12 +10,12 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
-  bg:"#0f1117", card:"#161b27", surface2:"#1c2333",
-  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.13)",
-  blue:"#4f8ef7", blueDim:"#0d2248", blueText:"#a3c4fc",
-  green:"#34d399", greenDim:"#072015",
+  bg:"#0f1623", card:"#172035", surface2:"#1e2d48",
+  border:"rgba(88,130,225,0.22)", border2:"rgba(88,130,225,0.40)",
+  blue:"#5c9bff", blueDim:"#0d2550", blueText:"#b0ccff",
+  green:"#34d399", greenDim:"#082a18",
   orange:"#fb923c", red:"#f87171", amber:"#fbbf24",
-  text:"#f0f4f8", muted:"#8b95a5", dim:"#3d4d63",
+  text:"#e2eeff", muted:"#8aa5cc", dim:"#4a5f82",
 };
 const font = "'Inter',system-ui,sans-serif";
 const mono = "'JetBrains Mono','Courier New',monospace";
@@ -2533,7 +2533,7 @@ function SchedulingPage({ sesion, onLogout }) {
             <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
               onMouseEnter={e => e.currentTarget.style.color = C.muted}
               onMouseLeave={e => e.currentTarget.style.color = C.dim}>
-              Operantia
+              Operanzia
             </a>
             <div style={{ width: 1, height: 16, background: C.border2 }} />
             <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Proyectos</div>
@@ -2746,7 +2746,7 @@ export function LoginScheduling({ onLogin }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
       <div style={{ width: 380, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px", boxShadow: "0 16px 48px rgba(0,0,0,.5)", animation: "sched-fadein .3s ease both" }}>
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operantia</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operanzia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
             {mode === "setup" ? "Configuración inicial" : "Planning & Scheduling"}
           </div>
