@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { db, auth, secondaryAuth } from "./firebase.js";
+import { db, auth, secondaryAuth, secondaryDb } from "./firebase.js";
 import { useRostering, workerCodeOnDay, isUnavailable, SHIFT_META } from "./rostering.jsx";
-import { PlanningPage } from "./planning.jsx";
+import { PlanningPage, idbGet } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
   doc, serverTimestamp, query, where, getDoc, setDoc, getDocs, limit,
@@ -32,6 +32,7 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
     ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
     @keyframes sched-fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
     @keyframes sched-spin{to{transform:rotate(360deg)}}
+    @keyframes sched-shimmer{0%,100%{opacity:1}50%{opacity:.6}}
     .sched-block{transition:filter .1s,box-shadow .1s;}
     .sched-block:hover{filter:brightness(1.15);box-shadow:0 2px 8px rgba(0,0,0,.4);}
   `;
@@ -98,20 +99,28 @@ function hasCoords(lat, lng) {
 // ── VRP ALGORITHM HELPERS ─────────────────────────────────────────
 const TRAVEL_SPEED_KMH = 30;
 
+// Fast squared euclidean distance (no sqrt, no trig) — sufficient for clustering comparisons
+function distSq(a, b) {
+  const dlat = a.lat - b.lat, dlng = a.lng - b.lng;
+  return dlat * dlat + dlng * dlng;
+}
+
 // Farthest-point sampling: deterministic k-means seed (no randomness)
 function fpsSeed(pts, k) {
   if (!pts.length) return [];
   const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
   const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+  const center = { lat: cx, lng: cy };
   let seed0 = 0, minD = Infinity;
-  pts.forEach((p, i) => { const d = haversineKm(p.lat, p.lng, cx, cy); if (d < minD) { minD = d; seed0 = i; } });
+  pts.forEach((p, i) => { const d = distSq(p, center); if (d < minD) { minD = d; seed0 = i; } });
   const seeds = [seed0];
   while (seeds.length < k) {
     let far = -1, maxD = -Infinity;
     for (let i = 0; i < pts.length; i++) {
       if (seeds.includes(i)) continue;
-      const d = Math.min(...seeds.map(s => haversineKm(pts[i].lat, pts[i].lng, pts[s].lat, pts[s].lng)));
-      if (d > maxD) { maxD = d; far = i; }
+      let minSeedD = Infinity;
+      for (const s of seeds) { const d = distSq(pts[i], pts[s]); if (d < minSeedD) minSeedD = d; }
+      if (minSeedD > maxD) { maxD = minSeedD; far = i; }
     }
     if (far === -1) break;
     seeds.push(far);
@@ -119,30 +128,29 @@ function fpsSeed(pts, k) {
   return seeds;
 }
 
-// K-means geographic clustering (deterministic)
-function kMeansCluster(pts, k, maxIter = 15) {
+// K-means geographic clustering (deterministic, uses fast squared distance)
+function kMeansCluster(pts, k, maxIter = 20) {
   if (k <= 1 || !pts.length) return new Array(pts.length).fill(0);
   if (k >= pts.length) return pts.map((_, i) => i);
   const seeds = fpsSeed(pts, k);
   const C = seeds.map(i => ({ lat: pts[i].lat, lng: pts[i].lng }));
-  let asgn = new Array(pts.length).fill(0);
+  const asgn = new Int32Array(pts.length);
   for (let iter = 0; iter < maxIter; iter++) {
     let changed = false;
     for (let i = 0; i < pts.length; i++) {
       let best = 0, bestD = Infinity;
       for (let j = 0; j < C.length; j++) {
-        const d = haversineKm(pts[i].lat, pts[i].lng, C[j].lat, C[j].lng);
+        const d = distSq(pts[i], C[j]);
         if (d < bestD) { bestD = d; best = j; }
       }
       if (asgn[i] !== best) { asgn[i] = best; changed = true; }
     }
     if (!changed) break;
-    for (let j = 0; j < k; j++) {
-      const cl = pts.filter((_, i) => asgn[i] === j);
-      if (cl.length) C[j] = { lat: cl.reduce((s, p) => s + p.lat, 0) / cl.length, lng: cl.reduce((s, p) => s + p.lng, 0) / cl.length };
-    }
+    const sumLat = new Float64Array(k), sumLng = new Float64Array(k), cnt = new Int32Array(k);
+    for (let i = 0; i < pts.length; i++) { sumLat[asgn[i]] += pts[i].lat; sumLng[asgn[i]] += pts[i].lng; cnt[asgn[i]]++; }
+    for (let j = 0; j < k; j++) if (cnt[j]) { C[j].lat = sumLat[j] / cnt[j]; C[j].lng = sumLng[j] / cnt[j]; }
   }
-  return asgn;
+  return Array.from(asgn);
 }
 
 // Nearest-neighbor TSP — optionally start from a depot point
@@ -172,6 +180,22 @@ function nnTSP(stops, depotPt = null) {
     route.push(rem.splice(bi, 1)[0]);
   }
   return route;
+}
+
+// Boustrophedon (strip) sort — O(n log n), used for large clusters instead of O(n²) TSP.
+// Divides the bounding box into horizontal strips and zigzags through them,
+// producing a geographically coherent route without quadratic distance calculations.
+function stripSort(stops, strips = 30) {
+  if (stops.length < 2) return stops;
+  const minLat = Math.min(...stops.map(s => s.lat));
+  const maxLat = Math.max(...stops.map(s => s.lat));
+  const range  = maxLat - minLat || 1e-9;
+  return [...stops].sort((a, b) => {
+    const sa = Math.floor((a.lat - minLat) / range * strips);
+    const sb = Math.floor((b.lat - minLat) / range * strips);
+    if (sa !== sb) return sa - sb;
+    return sa % 2 === 0 ? a.lng - b.lng : b.lng - a.lng;
+  });
 }
 
 // 2-opt improvement (open path, no depot return)
@@ -204,6 +228,14 @@ function twoOpt(route) {
 // After VRP generation (which uses fast Haversine), replace travel block km
 // with real road distances from OSRM. Time layout stays unchanged.
 async function enrichWithOSRM(schedule) {
+  // Skip OSRM entirely when routes are too large — the URL would exceed 100KB,
+  // causing fetch to hang regardless of the timeout signal in some environments.
+  const OSRM_MAX_STOPS = 80;
+  const maxStopsAny = Math.max(0, ...schedule.map(row =>
+    row.assignments.filter(a => !a._travel && !a._break).length
+  ));
+  if (maxStopsAny > OSRM_MAX_STOPS) return schedule;
+
   return Promise.all(schedule.map(async (row) => {
     const depot = (row.depotLat && row.depotLng)
       ? { lat: +row.depotLat, lng: +row.depotLng } : null;
@@ -220,12 +252,16 @@ async function enrichWithOSRM(schedule) {
     if (waypoints.filter(w => !w.isDepot).length < 1) return row;
     if (waypoints.length < 2) return row;
 
+    // Manual timeout via AbortController — more reliable than AbortSignal.timeout
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 10000);
     const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
     try {
       const resp = await fetch(
         `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`,
-        { signal: AbortSignal.timeout(12000) }
+        { signal: ctrl.signal }
       );
+      clearTimeout(tid);
       const data = await resp.json();
       if (data.code !== 'Ok' || !data.routes?.[0]?.legs) return row;
 
@@ -256,6 +292,7 @@ async function enrichWithOSRM(schedule) {
 
       return { ...row, assignments: newAssignments, totalKm: +totalKm.toFixed(2) };
     } catch {
+      clearTimeout(tid);
       return row;
     }
   }));
@@ -289,19 +326,15 @@ async function generateScenario(tasks, resources, constraints) {
     return { ...r, assignments: [], shiftStart, shiftEnd, totalKm: 0 };
   });
 
-  let remaining = [...tasks];
-  let day = 0;
+  // ── ONE-TIME cluster + route ordering (key speedup vs. re-clustering every day) ──
+  const withCoords = tasks.filter(t => hasCoords(t.lat, t.lng));
+  const noCoords   = tasks.filter(t => !hasCoords(t.lat, t.lng));
+  const clusterQueues = Array.from({ length: k }, () => []);
 
-  while (remaining.length > 0 && day < MAX_AUTO_DAYS) {
-    const tasksAtDayStart = remaining.length;
-    const dayOffset = day * 1440;
-
-    // ── Phase 1: re-cluster remaining tasks for this day ──────────
-    const withCoords = remaining.filter(t => hasCoords(t.lat, t.lng));
-    const noCoords   = remaining.filter(t => !hasCoords(t.lat, t.lng));
-    const clusterForRes = Array.from({ length: k }, () => []);
-
-    if (withCoords.length > 0) {
+  if (withCoords.length > 0) {
+    if (k === 1) {
+      clusterQueues[0] = [...withCoords];
+    } else {
       const asgn = kMeansCluster(withCoords, k);
       const rawClusters = Array.from({ length: k }, () => []);
       withCoords.forEach((t, i) => rawClusters[asgn[i]].push(t));
@@ -309,40 +342,53 @@ async function generateScenario(tasks, resources, constraints) {
         ? { lat: cl.reduce((s, t) => s + t.lat, 0) / cl.length, lng: cl.reduce((s, t) => s + t.lng, 0) / cl.length }
         : { lat: 0, lng: 0 });
       const clusterOrder = centroids.map((_, i) => i).sort((a, b) => centroids[a].lng - centroids[b].lng);
-      for (let i = 0; i < k; i++) clusterForRes[resOrder[i]] = rawClusters[clusterOrder[i]];
+      for (let i = 0; i < k; i++) clusterQueues[resOrder[i]] = rawClusters[clusterOrder[i]];
     }
-    noCoords.forEach((t, i) => clusterForRes[resOrder[i % k]].push(t));
+  }
+  noCoords.forEach((t, i) => clusterQueues[resOrder[i % k]].push(t));
 
-    // ── Phase 2: TSP + 2-opt per cluster (start nearest to depot) ──
-    const routes = clusterForRes.map((cluster, i) => {
-      const depot = (state[i].depotLat && state[i].depotLng)
-        ? { lat: +state[i].depotLat, lng: +state[i].depotLng } : null;
-      const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
-      const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
-      return [...twoOpt(nnTSP(withC, depot)), ...noC];
-    });
+  // Sort each cluster once (strip-sort for large, TSP+2-opt for small)
+  const sortedQueues = clusterQueues.map((cluster, i) => {
+    const depot = (resources[i]?.depotLat && resources[i]?.depotLng)
+      ? { lat: +resources[i].depotLat, lng: +resources[i].depotLng } : null;
+    const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
+    const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
+    const ordered = withC.length > 1500 ? stripSort(withC) : twoOpt(nnTSP(withC, depot));
+    return [...ordered, ...noC];
+  });
 
-    // ── Phase 3: assign within today's shift window ───────────────
-    const dayUnassigned = [];
+  // Pointer into each queue — advances as tasks are assigned (never reset between days)
+  const queueIdx  = new Int32Array(k);
+  // Per-resource counter of stops assigned today (reset each day, for maxStops)
+  const dayStops  = new Int32Array(k);
+
+  let day = 0;
+  let anyAssignedThisDay = true;
+
+  while (anyAssignedThisDay && day < MAX_AUTO_DAYS) {
+    anyAssignedThisDay = false;
+    const dayOffset = day * 1440;
+    dayStops.fill(0);
+
     for (let i = 0; i < k; i++) {
-      const res = state[i];
+      const res   = state[i];
+      const queue = sortedQueues[i];
+      if (queueIdx[i] >= queue.length) continue; // all tasks for this resource done
+
       const depot = (res.depotLat && res.depotLng)
         ? { lat: +res.depotLat, lng: +res.depotLng } : null;
       let cursor     = res.shiftStart + dayOffset;
       const dayEnd   = res.shiftEnd   + dayOffset;
       let sinceBreak = 0;
-      // Start position is the depot (if set), so first travel block is depot→stop1
-      let lastLat = depot ? depot.lat : null;
-      let lastLng = depot ? depot.lng : null;
-      let fromDepot = !!depot; // next travel block is a depot exit
+      let lastLat    = depot ? depot.lat : null;
+      let lastLng    = depot ? depot.lng : null;
+      let fromDepot  = !!depot;
 
-      for (const task of routes[i]) {
-        const dur = task.duracion || 15;
+      while (queueIdx[i] < queue.length) {
+        const task = queue[queueIdx[i]];
+        const dur  = task.duracion || 15;
 
-        if (maxStops > 0) {
-          const todayCount = res.assignments.filter(a => !a._break && !a._travel && Math.floor(a._start / 1440) === day).length;
-          if (todayCount >= maxStops) { dayUnassigned.push(task); continue; }
-        }
+        if (maxStops > 0 && dayStops[i] >= maxStops) break;
 
         if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= dayEnd) {
           res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
@@ -352,14 +398,9 @@ async function generateScenario(tasks, resources, constraints) {
         let travelMin = 0, travelKm = 0;
         if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
           travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-          if (travelKm >= 0.05) {
-            travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
-          }
+          if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
         }
 
-        // Reserve time to return to depot after this stop (if depot set).
-        // If task has no coords, use lastLat/lastLng (the actual position
-        // from which the depot return will be computed after the loop).
         let retBuffer = 0;
         if (depot) {
           const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
@@ -371,8 +412,8 @@ async function generateScenario(tasks, resources, constraints) {
         }
 
         const workSoFar = cursor - (res.shiftStart + dayOffset);
-        if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) { dayUnassigned.push(task); continue; }
-        if (cursor + travelMin + dur + retBuffer > dayEnd) { dayUnassigned.push(task); continue; }
+        if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) break;
+        if (cursor + travelMin + dur + retBuffer > dayEnd) break;
 
         if (travelMin > 0) {
           const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
@@ -381,15 +422,17 @@ async function generateScenario(tasks, resources, constraints) {
           cursor += travelMin; res.totalKm += travelKm;
         }
         fromDepot = false;
-
         res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
         cursor += dur; sinceBreak += dur;
         if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
+        queueIdx[i]++;
+        dayStops[i]++;
+        anyAssignedThisDay = true;
       }
 
-      // Return to depot — always fits because retBuffer was reserved per stop
+      // Return to depot
       if (depot && hasCoords(lastLat, lastLng) && (lastLat !== depot.lat || lastLng !== depot.lng)) {
-        const retKm  = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
+        const retKm = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
         if (retKm >= 0.05) {
           const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
           res.assignments.push({
@@ -402,15 +445,18 @@ async function generateScenario(tasks, resources, constraints) {
       }
     }
 
-    remaining = dayUnassigned;
     day++;
-    if (remaining.length >= tasksAtDayStart) break; // nothing assigned this day — stop
-    // Yield to the UI thread between days to prevent "not responding"
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0)); // yield to UI — timer updates
+  }
+
+  // Collect remaining unassigned tasks
+  const unassigned = [];
+  for (let i = 0; i < k; i++) {
+    for (let j = queueIdx[i]; j < sortedQueues[i].length; j++) unassigned.push(sortedQueues[i][j]);
   }
 
   const daysUsed = Math.max(1, day);
-  return { schedule: state, unassigned: remaining, daysUsed };
+  return { schedule: state, unassigned, daysUsed };
 }
 
 // ── GANTT CHART ───────────────────────────────────────────────────
@@ -426,6 +472,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [pxPerMin,     setPxPerMin]     = useState(2);
   const [legendOpen,   setLegendOpen]   = useState(false);
   const [selectedDay,  setSelectedDay]  = useState(0);
+  const [compactDayNav, setCompactDayNav] = useState(() => days > 10);
   const [dragging,     setDragging]     = useState(null); // { task, fromRowId }
   const [dropRowId,    setDropRowId]    = useState(null);
   const [stackPanel,   setStackPanel]   = useState(null); // { task, row }
@@ -500,18 +547,59 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           <div style={{ width: 1, height: 16, background: C.border, margin: "0 8px" }} />
           <button onClick={() => setSelectedDay(d => Math.max(0, d - 1))} disabled={selectedDay === 0}
             style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: selectedDay === 0 ? C.dim : C.muted, cursor: selectedDay === 0 ? "default" : "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-          {Array.from({ length: days }, (_, d) => (
-            <button key={d} onClick={() => setSelectedDay(d)} style={{
-              padding: "2px 10px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
-              border: `1px solid ${selectedDay === d ? C.green : C.border}`,
-              background: selectedDay === d ? C.greenDim : "none",
-              color: selectedDay === d ? C.green : C.dim,
-              fontWeight: selectedDay === d ? 700 : 400,
-              transition: "all .1s",
-            }}>Día {d + 1}</button>
-          ))}
+
+          {compactDayNav ? (
+            /* Compact: input + total */
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number" min="1" max={days} value={selectedDay + 1}
+                onChange={e => { const v = parseInt(e.target.value, 10) - 1; if (v >= 0 && v < days) setSelectedDay(v); }}
+                style={{
+                  width: 48, background: C.card, border: `1px solid ${C.green}55`,
+                  color: C.green, borderRadius: 5, padding: "1px 6px",
+                  fontSize: 11, fontFamily: mono, fontWeight: 700,
+                  textAlign: "center", outline: "none",
+                }}
+              />
+              <span style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>/ {days}</span>
+            </div>
+          ) : (
+            /* Expanded: all day pills */
+            Array.from({ length: days }, (_, d) => (
+              <button key={d} onClick={() => setSelectedDay(d)} style={{
+                padding: "2px 10px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
+                border: `1px solid ${selectedDay === d ? C.green : C.border}`,
+                background: selectedDay === d ? C.greenDim : "none",
+                color: selectedDay === d ? C.green : C.dim,
+                fontWeight: selectedDay === d ? 700 : 400,
+                transition: "all .1s",
+              }}>Día {d + 1}</button>
+            ))
+          )}
+
           <button onClick={() => setSelectedDay(d => Math.min(days - 1, d + 1))} disabled={selectedDay === days - 1}
             style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: selectedDay === days - 1 ? C.dim : C.muted, cursor: selectedDay === days - 1 ? "default" : "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+
+          {/* Toggle compact/expanded */}
+          <button
+            onClick={() => setCompactDayNav(v => !v)}
+            title={compactDayNav ? "Mostrar todos los días" : "Ocultar días"}
+            style={{
+              width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`,
+              background: "none", color: C.dim, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all .12s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              {compactDayNav
+                ? <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>
+              }
+            </svg>
+          </button>
         </>}
       </div>
 
@@ -1063,28 +1151,35 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
 
   async function create() {
     if (!form.nombre.trim()) return;
+    if (!orgId) { alert("No se puede crear un vehículo sin org_id. Abre un proyecto primero."); return; }
     setSaving(true);
-    await addDoc(collection(db, "scheduling_vehicles"), {
-      nombre: form.nombre.trim(), matricula: form.matricula.trim(),
-      tipo: form.tipo, turno: form.turno,
-      capacidad: parseInt(form.capacidad) || 0,
-      depotLat: form.depotLat ? +form.depotLat : null,
-      depotLng: form.depotLng ? +form.depotLng : null,
-      activo: true, org_id: orgId, createdAt: serverTimestamp(),
-    });
-    setForm(empty); setAdding(false); setSaving(false);
+    try {
+      await addDoc(collection(db, "scheduling_vehicles"), {
+        nombre: form.nombre.trim(), matricula: form.matricula.trim(),
+        tipo: form.tipo, turno: form.turno,
+        capacidad: parseInt(form.capacidad) || 0,
+        depotLat: form.depotLat ? +form.depotLat : null,
+        depotLng: form.depotLng ? +form.depotLng : null,
+        activo: true, org_id: orgId, createdAt: serverTimestamp(),
+      });
+      setForm(empty); setAdding(false);
+    } catch (e) { console.error("create vehicle:", e); alert("Error al crear vehículo: " + e.message); }
+    setSaving(false);
   }
 
   async function save(id) {
     setSaving(true);
-    await updateDoc(doc(db, "scheduling_vehicles", id), {
-      nombre: editForm.nombre.trim(), matricula: editForm.matricula.trim(),
-      tipo: editForm.tipo, turno: editForm.turno,
-      capacidad: parseInt(editForm.capacidad) || 0,
-      depotLat: editForm.depotLat ? +editForm.depotLat : null,
-      depotLng: editForm.depotLng ? +editForm.depotLng : null,
-    });
-    setEditId(null); setSaving(false);
+    try {
+      await updateDoc(doc(db, "scheduling_vehicles", id), {
+        nombre: editForm.nombre.trim(), matricula: editForm.matricula.trim(),
+        tipo: editForm.tipo, turno: editForm.turno,
+        capacidad: parseInt(editForm.capacidad) || 0,
+        depotLat: editForm.depotLat ? +editForm.depotLat : null,
+        depotLng: editForm.depotLng ? +editForm.depotLng : null,
+      });
+      setEditId(null);
+    } catch (e) { console.error("save vehicle:", e); alert("Error al guardar."); }
+    setSaving(false);
   }
 
   async function remove(id) {
@@ -1286,24 +1381,31 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
 
   async function create() {
     if (!form.nombre.trim()) return;
+    if (!orgId) { alert("No se puede crear un trabajador sin org_id. Abre un proyecto primero."); return; }
     setSaving(true);
-    await addDoc(collection(db, "scheduling_workers"), {
-      nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
-      turno: form.turno, rol: form.rol,
-      vehiculoId: form.vehiculoId || "",
-      activo: true, org_id: orgId, createdAt: serverTimestamp(),
-    });
-    setForm(empty); setAdding(false); setSaving(false);
+    try {
+      await addDoc(collection(db, "scheduling_workers"), {
+        nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
+        turno: form.turno, rol: form.rol,
+        vehiculoId: form.vehiculoId || "",
+        activo: true, org_id: orgId, createdAt: serverTimestamp(),
+      });
+      setForm(empty); setAdding(false);
+    } catch (e) { console.error("create worker:", e); alert("Error al crear trabajador: " + e.message); }
+    setSaving(false);
   }
 
   async function save(id) {
     setSaving(true);
-    await updateDoc(doc(db, "scheduling_workers", id), {
-      nombre: editForm.nombre.trim(), apellidos: (editForm.apellidos || "").trim(),
-      turno: editForm.turno, rol: editForm.rol,
-      vehiculoId: editForm.vehiculoId || "",
-    });
-    setEditId(null); setSaving(false);
+    try {
+      await updateDoc(doc(db, "scheduling_workers", id), {
+        nombre: editForm.nombre.trim(), apellidos: (editForm.apellidos || "").trim(),
+        turno: editForm.turno, rol: editForm.rol,
+        vehiculoId: editForm.vehiculoId || "",
+      });
+      setEditId(null);
+    } catch (e) { console.error("save worker:", e); alert("Error al guardar."); }
+    setSaving(false);
   }
 
   async function remove(id) {
@@ -1458,9 +1560,79 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
   );
 }
 
+// ── helpers for loading tasks from planning_layers ────────────────
+const BARRIO_KEYS_VRP = ["barri","barrio","barri_nom","sector","zona","zone","district",
+                         "districte","municipio","area","neighbourhood","neighborhood"];
+function extractFieldVRP(fields, keys) {
+  for (const [k, v] of Object.entries(fields || {})) {
+    if (keys.includes(k.toLowerCase().trim()) && v) return String(v);
+  }
+  return "";
+}
+async function loadTasksFromLayers(projectId) {
+  const snap = await getDocs(
+    query(collection(db, "planning_layers"), where("projectId", "==", projectId))
+  );
+  const mainDocs  = snap.docs.filter(d => !d.id.match(/_c\d+$/));
+  const chunkDocs = snap.docs.filter(d =>  d.id.match(/_c\d+$/));
+
+  const assembled = await Promise.all(mainDocs.map(async d => {
+    const layer = { _docId: d.id, ...d.data() };
+    if (layer.localOnly) {
+      layer.markers = await idbGet(d.id).catch(() => []);
+    } else if (layer.chunked) {
+      const chunks = chunkDocs
+        .filter(c => c.data().layerId === layer.id)
+        .sort((a, b) => a.data().chunkIndex - b.data().chunkIndex);
+      layer.markers = chunks.flatMap(c => c.data().markers || []);
+    }
+    return layer;
+  }));
+
+  const allTasks = [];
+  assembled.forEach(layer => {
+    if (!layer.visible) return;
+    (layer.markers || []).forEach(m => {
+      const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
+      if (!isFinite(lat) || !isFinite(lng)) return;
+      // IDB markers are flat { lat, lng, Barrio: "X", ... }; Firestore markers nest under .campos/.fields
+      const nested = m.campos || m.fields || null;
+      const fields = (nested && Object.keys(nested).length > 0) ? nested : m;
+      const nombre = extractFieldVRP(fields, ["nombre","name","calle","street"]) || "";
+      const barrio = extractFieldVRP(fields, BARRIO_KEYS_VRP) || "";
+      const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
+      allTasks.push({ _id: puntoKey, lat, lng, nombre, barrio, campos: fields, layerColor: layer.color });
+    });
+  });
+
+  // Apply default duration from project settings (set in Timetable tab)
+  try {
+    const settingsSnap = await getDoc(doc(db, "planning_settings", projectId));
+    if (settingsSnap.exists()) {
+      const defDur = settingsSnap.data().defaultDuracion;
+      if (defDur != null && defDur > 0) {
+        allTasks.forEach(t => { if (t.duracion == null) t.duracion = defDur; });
+      }
+    }
+  } catch {}
+
+  return allTasks;
+}
+
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId }) {
-  const tasks = activeProject?.planning?.tasks || [];
+  const [tasks,        setTasks]       = useState([]);
+  const [loadingTasks, setLoadingTasks]= useState(false);
+
+  // Load tasks when project opens (from IDB for large localOnly layers, Firestore for rest)
+  useEffect(() => {
+    setTasks([]);
+    if (!activeProject?._id || !activeProject?.planning?.tasksCount) return;
+    setLoadingTasks(true);
+    loadTasksFromLayers(activeProject._id)
+      .then(t => { setTasks(t); setLoadingTasks(false); })
+      .catch(() => setLoadingTasks(false));
+  }, [activeProject?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [importing,    setImporting]   = useState(false);
   const [mode,         setMode]        = useState("vehicles");
@@ -1471,9 +1643,31 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
+  const [showDayStrip, setShowDayStrip] = useState(true);
   const [generating,   setGenerating]  = useState(false);
   const [osrmRunning,  setOsrmRunning] = useState(false);
   const [genError,     setGenError]    = useState(null);
+  const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
+  const [elapsedSec,   setElapsedSec]  = useState(0);
+  const genStartRef = useRef(null);
+
+  const GEN_PHASES = {
+    vrp:     { label: "Calculando rutas VRP…",            pct: 20 },
+    osrm:    { label: "Calculando km reales por carretera…", pct: 55 },
+    workers: { label: "Asignando trabajadores…",          pct: 78 },
+    saving:  { label: "Guardando resultado…",             pct: 92 },
+  };
+
+  // Elapsed-time counter — starts when generating=true, resets when done
+  useEffect(() => {
+    if (!generating) { setElapsedSec(0); return; }
+    genStartRef.current = Date.now();
+    const id = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - genStartRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [generating]);
+
   const [publishModal, setPublishModal] = useState(null);
   const [publishing,   setPublishing]  = useState(false);
 
@@ -1530,24 +1724,33 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?._id]);
 
-  function importFromPlanning() {
+  async function importFromPlanning() {
     if (!activeProject) return;
     setImporting(true);
-    const unsub = onSnapshot(collection(db, "planning_timetable"), snap => {
-      unsub();
-      const allTasks = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    try {
+      const allTasks = await loadTasksFromLayers(activeProject._id);
+
+      if (allTasks.length === 0) {
+        alert("No hay puntos en planning para este proyecto.\nVe a Planning, sube el Excel y vuelve aquí a importar.");
+        setImporting(false);
+        return;
+      }
+
       const uniqueBarrios = [...new Set(allTasks.map(t => t.barrio).filter(Boolean))];
+      setTasks(allTasks);
       onProjectUpdate({
         planning: {
-          tasks: allTasks,
-          importedAt: new Date().toISOString(),
           tasksCount: allTasks.length,
+          importedAt: new Date().toISOString(),
           uniqueBarrios: uniqueBarrios.slice(0, 30),
         },
         status: "con_planning",
       });
-      setImporting(false);
-    }, () => setImporting(false));
+    } catch (e) {
+      console.error("importFromPlanning:", e);
+      alert("Error al importar: " + e.message);
+    }
+    setImporting(false);
   }
 
   async function runGenerate() {
@@ -1555,7 +1758,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     if (!vehicles.length && !workers.length) return;
     setGenerating(true);
     setGenError(null);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    setGenPhase("vrp");
+    await new Promise(resolve => setTimeout(resolve, 30)); // let React render the phase
 
     try {
       // Read Planning depots from localStorage as fallback depot for vehicles
@@ -1600,11 +1804,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       }));
 
       // Enrich travel block km with real road distances via OSRM
+      setGenPhase("osrm");
       setOsrmRunning(true);
       const vehicleSchedule = await enrichWithOSRM(vehicleScheduleRaw);
       setOsrmRunning(false);
 
       // ── Step 2: Worker schedule ──────────────────────────────────
+      setGenPhase("workers");
+      await new Promise(resolve => setTimeout(resolve, 0));
       // Routes come ONLY from vehicles. Workers are human assignments
       // on top of a vehicle route — they never generate routes on their own.
       //
@@ -1663,34 +1870,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
 
-      // Auto-save scheduling result to active project
+      // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
+      setGenPhase("saving");
       if (activeProject && onProjectUpdate) {
         const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
         const totalStops = vehicleSchedule.reduce((s, v) =>
           s + v.assignments.filter(a => !a._break && !a._travel).length, 0);
         await onProjectUpdate({
           scheduling: {
-            vehicleSchedule: vehicleSchedule.map(v => ({
-              _id: v._id, nombre: v.nombre, matricula: v.matricula,
-              turno: v.turno, totalKm: v.totalKm,
-              shiftStart: v.shiftStart, shiftEnd: v.shiftEnd,
-              assignments: v.assignments.map(a => ({
-                _start: a._start, _end: a._end, duracion: a.duracion,
-                nombre: a.nombre, barrio: a.barrio, lat: a.lat, lng: a.lng,
-                _break: a._break || undefined, _travel: a._travel || undefined, km: a.km,
-              })).filter(a => a._start != null),
-            })),
-            workerSchedule: workerRows.map(w => ({
-              _id: w._id, nombre: w.nombre, apellidos: w.apellidos,
-              vehiculoId: w.vehiculoId, turno: w.turno,
-              totalKm: w.totalKm, _tw: w._tw,
-              assignments: w.assignments.map(a => ({
-                _start: a._start, _end: a._end, duracion: a.duracion,
-                nombre: a.nombre, barrio: a.barrio, lat: a.lat, lng: a.lng,
-                _break: a._break || undefined, _travel: a._travel || undefined, km: a.km,
-              })).filter(a => a._start != null),
-            })),
-            constraints: { ...constraints, days: newDays },
+            vehicleCount: vehicleSchedule.length,
+            workerCount:  workerRows.length,
+            constraints:  { ...constraints, days: newDays },
             daysUsed: newDays, totalKm, totalStops,
             generatedAt: new Date().toISOString(),
           },
@@ -1701,8 +1891,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     } catch (e) {
       console.error("generateScenario error:", e);
       setGenError(e.message || "Error al generar el escenario");
+    } finally {
+      setGenerating(false);
+      setGenPhase(null);
     }
-    setGenerating(false);
   }
 
   function taskToUbicacion(task, idx) {
@@ -1932,6 +2124,77 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       {/* Constraints panel */}
       {showC && <ConstraintsPanel c={constraints} onChange={setConstraints} />}
 
+      {/* Progress bar */}
+      {generating && (
+        <div style={{
+          padding: "12px 20px 14px",
+          background: C.card,
+          borderBottom: `1px solid ${C.border}`,
+          animation: "sched-fadein .15s ease both",
+          flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(92,155,255,.3)", borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
+                {GEN_PHASES[genPhase]?.label ?? "Preparando…"}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: elapsedSec >= 60 ? "#f59e0b" : C.muted }}>
+                {elapsedSec >= 60
+                  ? `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`
+                  : `${elapsedSec}s`}
+              </span>
+              <span style={{ fontSize: 11, color: C.dim }}>
+                {tasks.length.toLocaleString()} paradas · {(vehicles.length || workers.length) > 0 ? `${Math.max(vehicles.length, workers.length)} recurso${Math.max(vehicles.length, workers.length) !== 1 ? "s" : ""}` : ""}
+              </span>
+            </div>
+          </div>
+          {/* Track */}
+          <div style={{ height: 5, background: C.surface2, borderRadius: 3, overflow: "hidden" }}>
+            {/* Fill */}
+            <div style={{
+              height: "100%",
+              width: `${GEN_PHASES[genPhase]?.pct ?? 4}%`,
+              background: `linear-gradient(90deg, ${C.blue}, #818cf8)`,
+              borderRadius: 3,
+              transition: "width 0.5s ease",
+              animation: "sched-shimmer 1.8s ease-in-out infinite",
+            }} />
+          </div>
+          {/* Phase steps */}
+          <div style={{ display: "flex", gap: 0, marginTop: 8 }}>
+            {Object.entries(GEN_PHASES).map(([key, ph]) => {
+              const currentIdx  = Object.keys(GEN_PHASES).indexOf(genPhase);
+              const thisIdx     = Object.keys(GEN_PHASES).indexOf(key);
+              const done        = currentIdx > thisIdx;
+              const active      = key === genPhase;
+              return (
+                <div key={key} style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: done ? C.green : active ? C.blue : C.surface2,
+                    border: `1px solid ${done ? C.green : active ? C.blue : C.border}`,
+                    transition: "all .3s",
+                  }} />
+                  <span style={{
+                    fontSize: 9, color: done ? C.green : active ? C.blueText : C.dim,
+                    letterSpacing: .3, fontWeight: active ? 600 : 400,
+                    transition: "color .3s", whiteSpace: "nowrap",
+                  }}>
+                    {ph.label.replace("…", "").replace(" por carretera", "")}
+                  </span>
+                  {thisIdx < Object.keys(GEN_PHASES).length - 1 && (
+                    <div style={{ flex: 1, height: 1, background: done ? C.green : C.border, margin: "0 4px", transition: "background .3s" }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Error banner */}
       {genError && (
         <div style={{ padding: "8px 20px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10 }}>
@@ -2019,14 +2282,26 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       {schedule && (constraints.days || 1) > 1 && (
         <div style={{
           flexShrink: 0, background: C.surface2, borderBottom: `1px solid ${C.border}`,
-          padding: "5px 20px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          padding: showDayStrip ? "5px 20px" : "3px 20px",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: showDayStrip ? "wrap" : "nowrap",
         }}>
-          <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginRight: 4 }}>Reparto por día</span>
-          {Array.from({ length: constraints.days || 1 }, (_, d) => (
+          {/* Header row — always visible */}
+          <button onClick={() => setShowDayStrip(v => !v)} style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
+            <span style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>({constraints.days})</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
+              style={{ transform: showDayStrip ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {showDayStrip && Array.from({ length: constraints.days || 1 }, (_, d) => (
             <div key={d} style={{
               display: "flex", alignItems: "center", gap: 5,
               background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 6, padding: "2px 10px",
+              borderRadius: 6, padding: "2px 10px", flexShrink: 0,
             }}>
               <span style={{ fontSize: 10, color: C.blue, fontWeight: 700, fontFamily: mono }}>Día {d + 1}</span>
               <span style={{ fontSize: 10, color: C.muted }}>{stopsPerDay[d] || 0} paradas</span>
@@ -2195,7 +2470,15 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
       query(collection(db, "scheduling_projects"), ...constraints),
       snap => {
         const docs = snap.docs
-          .map(d => ({ _id: d.id, ...d.data() }))
+          .map(d => {
+            const data = d.data();
+            // Strip tasks from memory — list view doesn't need them
+            // (tasks remain in Firestore until user re-imports, which saves without them)
+            const planning = data.planning
+              ? { tasksCount: data.planning.tasksCount, importedAt: data.planning.importedAt, uniqueBarrios: data.planning.uniqueBarrios }
+              : null;
+            return { _id: d.id, ...data, planning };
+          })
           .sort((a, b) => {
             const am = a.updatedAt?.toMillis?.() ?? 0;
             const bm = b.updatedAt?.toMillis?.() ?? 0;
@@ -2208,25 +2491,28 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
     return () => unsub();
   }, [orgId]);
 
-  async function createProject() {
+  function createProject() {
     if (!newModal?.nombre?.trim()) return;
-    setCreating(true);
-    const now = serverTimestamp();
-    const ref = await addDoc(collection(db, "scheduling_projects"), {
-      nombre:      newModal.nombre.trim(),
-      descripcion: newModal.descripcion?.trim() || "",
-      mes:         newModal.mes || new Date().toISOString().slice(0, 7),
-      status:      "nuevo",
-      planning:    null,
-      scheduling:  null,
-      createdAt:   now,
-      updatedAt:   now,
-      ...(orgId ? { org_id: orgId } : {}),
-    });
+    const docId  = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const nombre = newModal.nombre.trim();
+    const desc   = newModal.descripcion?.trim() || "";
+    const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
+    const effectiveOrgId = orgId || docId;
+
+    // Close modal and navigate immediately (optimistic)
     setNewModal(null);
-    setCreating(false);
-    // Auto-open after creating
-    onOpenProject({ _id: ref.id, nombre: newModal.nombre.trim(), status: "nuevo", planning: null, scheduling: null });
+    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: effectiveOrgId });
+
+    // Save in background — alert only on failure
+    setDoc(doc(db, "scheduling_projects", docId), {
+      nombre, descripcion: desc, mes, status: "nuevo",
+      org_id: effectiveOrgId,
+      planning: null, scheduling: null,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }).catch(e => {
+      console.error("createProject:", e);
+      alert("Error al guardar el proyecto en la nube: " + e.message);
+    });
   }
 
   async function removeProject(id) {
@@ -2695,7 +2981,7 @@ export function LoginScheduling({ onLogin }) {
         await signOut(auth); setErr("Usuario inactivo o sin perfil."); setLoading(false); return;
       }
       const profile = { uid: cred.user.uid, ...snap.data() };
-      if (profile.rol !== "admin") {
+      if (profile.rol !== "admin" && profile.rol !== "superadmin") {
         await signOut(auth); setErr("Acceso restringido a administradores."); setLoading(false); return;
       }
       onLogin(profile);
@@ -2716,7 +3002,7 @@ export function LoginScheduling({ onLogin }) {
         rol: "admin", org_id: orgId.trim() || "default",
         activo: true, createdAt: serverTimestamp(),
       };
-      await setDoc(doc(db, "usuarios", cred.user.uid), profile);
+      await setDoc(doc(secondaryDb, "usuarios", cred.user.uid), profile);
       await secondaryAuth.signOut();
       // Now sign in as the new user
       const cred2 = await signInWithEmailAndPassword(auth, email, password);

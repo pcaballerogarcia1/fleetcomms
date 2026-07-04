@@ -21,9 +21,11 @@ export const auth = getAuth(app);
 // Secondary app for admin user-creation (avoids signing out current session)
 const secondaryApp = initializeApp(firebaseConfig, "secondary");
 export const secondaryAuth = getAuth(secondaryApp);
+export const secondaryDb   = getFirestore(secondaryApp);
 
 // ── COLECCIONES ───────────────────────────────────────────────────
 export const COL = {
+  orgs:             "orgs",
   incidencias:      "incidencias",
   planes:           "planes",
   inventario:       "inventario",
