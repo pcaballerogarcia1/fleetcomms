@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 
 import App from "./App.jsx";
+import SuperAdminApp from "./superadmin.jsx";
 import { PlanningPage } from "./planning.jsx";
 import { LoginScheduling, TabProyectos, SchedulingModuleWrapper } from "./scheduling.jsx";
 import { RosteringPage } from "./rostering.jsx";
@@ -121,10 +122,10 @@ function WorkspaceRouter() {
   const [path,          setPath]          = useState(window.location.pathname);
   const [sesion,        setSesion]        = useState(undefined); // undefined=cargando
   const [activeProject, setActiveProject] = useState(() => readLS("fc_active_project"));
-  const [vehicles,      setVehicles]      = useState([]);
-  const [workers,       setWorkers]       = useState([]);
-  const [loadingV,      setLoadingV]      = useState(true);
-  const [loadingW,      setLoadingW]      = useState(true);
+  const [vehicles,        setVehicles]        = useState([]);
+  const [workers,         setWorkers]         = useState([]);
+  const [loadingV,        setLoadingV]        = useState(true);
+  const [loadingW,        setLoadingW]        = useState(true);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -162,22 +163,30 @@ function WorkspaceRouter() {
     }
   }, [sesion, activeProject, path]);
 
+  // Superadmin may not have org_id — fall back to project's org, then project's _id
+  const effectiveOrgId = sesion?.org_id || activeProject?.org_id || activeProject?._id || null;
+
   // Firestore: vehicles + workers filtrados por org_id
   useEffect(() => {
-    if (!sesion?.org_id) return;
-    const orgId = sesion.org_id;
+    if (!effectiveOrgId) {
+      setLoadingV(false);
+      setLoadingW(false);
+      return;
+    }
+    setLoadingV(true);
+    setLoadingW(true);
     const u1 = onSnapshot(
-      query(collection(db, "scheduling_vehicles"), where("org_id", "==", orgId)),
+      query(collection(db, "scheduling_vehicles"), where("org_id", "==", effectiveOrgId)),
       s => { setVehicles(s.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoadingV(false); },
       () => setLoadingV(false)
     );
     const u2 = onSnapshot(
-      query(collection(db, "scheduling_workers"), where("org_id", "==", orgId)),
+      query(collection(db, "scheduling_workers"), where("org_id", "==", effectiveOrgId)),
       s => { setWorkers(s.docs.map(d => ({ _id: d.id, ...d.data() }))); setLoadingW(false); },
       () => setLoadingW(false)
     );
     return () => { u1(); u2(); };
-  }, [sesion?.org_id]);
+  }, [effectiveOrgId]);
 
   function login(u) {
     setSesion(u); go("/projects");
@@ -221,7 +230,7 @@ function WorkspaceRouter() {
         {/* /projects — unmounts when leaving (no heavy state to preserve) */}
         {path === "/projects" && (
           <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
-            <TabProyectos activeProject={activeProject} onOpenProject={openProject} orgId={sesion?.org_id} />
+            <TabProyectos activeProject={activeProject} onOpenProject={openProject} orgId={sesion?.org_id} isSuperAdmin={sesion?.rol === "superadmin"} />
           </div>
         )}
 
@@ -248,7 +257,7 @@ function WorkspaceRouter() {
               vehicles={vehicles} workers={workers}
               loadingV={loadingV} loadingW={loadingW}
               activeProject={activeProject} onProjectUpdate={updateProject}
-              orgId={sesion?.org_id}
+              orgId={effectiveOrgId}
             />
           </div>
         )}
@@ -299,9 +308,10 @@ function WorkspaceRouter() {
 
 // ── Entry ─────────────────────────────────────────────────────────
 const initPath = window.location.pathname;
-const isFleetApp = initPath.startsWith("/incidencias") ||
-                   initPath.startsWith("/rutas") || initPath.startsWith("/inventario");
+const isFleetApp    = initPath.startsWith("/incidencias") ||
+                      initPath.startsWith("/rutas") || initPath.startsWith("/inventario");
+const isSuperAdmin  = initPath.startsWith("/superadmin");
 
 createRoot(document.getElementById("root")).render(
-  isFleetApp ? <App /> : <WorkspaceRouter />
+  isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />
 );

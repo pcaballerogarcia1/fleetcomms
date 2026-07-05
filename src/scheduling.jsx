@@ -2458,14 +2458,29 @@ const PROJECT_STATUS = {
   publicado:    { label: "Publicado",   color: C.amber },
 };
 
-export function TabProyectos({ activeProject, onOpenProject, orgId }) {
-  const [projects,   setProjects]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [newModal,   setNewModal]   = useState(null); // { nombre:"", descripcion:"", mes:"" }
-  const [creating,   setCreating]   = useState(false);
+export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin }) {
+  const [projects,    setProjects]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [newModal,    setNewModal]    = useState(null);
+  const [creating,    setCreating]    = useState(false);
+  const [orgs,        setOrgs]        = useState([]);
+  const [filterOrg,   setFilterOrg]   = useState("__all__");
+
+  // Load orgs list for superadmin filter
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const unsub = onSnapshot(collection(db, "orgs"), snap => {
+      setOrgs(snap.docs.map(d => ({ org_id: d.id, ...d.data() })).sort((a, b) => a.nombre?.localeCompare(b.nombre)));
+    });
+    return () => unsub();
+  }, [isSuperAdmin]);
+
+  const effectiveOrgId = isSuperAdmin
+    ? (filterOrg === "__all__" ? null : filterOrg)
+    : orgId;
 
   useEffect(() => {
-    const constraints = orgId ? [where("org_id", "==", orgId)] : [];
+    const constraints = effectiveOrgId ? [where("org_id", "==", effectiveOrgId)] : [];
     const unsub = onSnapshot(
       query(collection(db, "scheduling_projects"), ...constraints),
       snap => {
@@ -2489,7 +2504,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
       () => setLoading(false)
     );
     return () => unsub();
-  }, [orgId]);
+  }, [effectiveOrgId]);
 
   function createProject() {
     if (!newModal?.nombre?.trim()) return;
@@ -2497,16 +2512,16 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
     const nombre = newModal.nombre.trim();
     const desc   = newModal.descripcion?.trim() || "";
     const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
-    const effectiveOrgId = orgId || docId;
+    const projectOrgId = effectiveOrgId || docId;
 
     // Close modal and navigate immediately (optimistic)
     setNewModal(null);
-    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: effectiveOrgId });
+    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId });
 
     // Save in background — alert only on failure
     setDoc(doc(db, "scheduling_projects", docId), {
       nombre, descripcion: desc, mes, status: "nuevo",
-      org_id: effectiveOrgId,
+      org_id: projectOrgId,
       planning: null, scheduling: null,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     }).catch(e => {
@@ -2525,7 +2540,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 28 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isSuperAdmin ? 12 : 24 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Proyectos</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
@@ -2540,6 +2555,23 @@ export function TabProyectos({ activeProject, onOpenProject, orgId }) {
           <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Nuevo proyecto
         </button>
       </div>
+
+      {/* Superadmin org filter */}
+      {isSuperAdmin && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+          <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>Organización:</span>
+          <select
+            value={filterOrg}
+            onChange={e => setFilterOrg(e.target.value)}
+            style={{ background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: font, outline: "none", cursor: "pointer", flex: 1, maxWidth: 320 }}
+          >
+            <option value="__all__">Todas las organizaciones ({projects.length})</option>
+            {orgs.map(o => (
+              <option key={o.org_id} value={o.org_id}>{o.nombre}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: C.dim }}>Cargando…</div>
@@ -2840,7 +2872,7 @@ function SchedulingPage({ sesion, onLogout }) {
           </div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
-          <TabProyectos activeProject={null} onOpenProject={openProject} orgId={sesion?.org_id} />
+          <TabProyectos activeProject={null} onOpenProject={openProject} orgId={sesion?.org_id} isSuperAdmin={sesion?.rol === "superadmin"} />
         </div>
       </div>
     );
