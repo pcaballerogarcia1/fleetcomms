@@ -302,7 +302,7 @@ async function enrichWithOSRM(schedule) {
 // Phase 1 — k-means geographic clustering (one compact zone per resource)
 // Phase 2 — nearest-neighbor TSP + 2-opt per zone (minimize route km)
 // Phase 3 — sequential time layout with travel blocks and shift constraints
-const MAX_AUTO_DAYS = 60; // safety cap for auto-day expansion
+const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 async function generateScenario(tasks, resources, constraints) {
   const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd } = constraints;
@@ -450,13 +450,98 @@ async function generateScenario(tasks, resources, constraints) {
   }
 
   // Collect remaining unassigned tasks
-  const unassigned = [];
+  const leftover = [];
   for (let i = 0; i < k; i++) {
-    for (let j = queueIdx[i]; j < sortedQueues[i].length; j++) unassigned.push(sortedQueues[i][j]);
+    for (let j = queueIdx[i]; j < sortedQueues[i].length; j++) leftover.push(sortedQueues[i][j]);
+  }
+
+  // ── Mop-up pass: redistribute leftover tasks across ALL vehicles ──
+  // Each vehicle scans the entire remaining pool and assigns what fits,
+  // skipping tasks that don't fit (instead of breaking). This prevents
+  // one outlier task from blocking all subsequent assignable tasks.
+  if (leftover.length > 0) {
+    const pool   = leftover.slice(); // mutable; tasks removed when assigned
+    let mopDay   = day;
+    let anyMop   = true;
+
+    while (pool.length > 0 && anyMop && mopDay < MAX_AUTO_DAYS) {
+      anyMop = false;
+      const dayOffset = mopDay * 1440;
+
+      for (let i = 0; i < k && pool.length > 0; i++) {
+        const res   = state[i];
+        const depot = (res.depotLat && res.depotLng)
+          ? { lat: +res.depotLat, lng: +res.depotLng } : null;
+        let cursor     = res.shiftStart + dayOffset;
+        const dayEnd   = res.shiftEnd   + dayOffset;
+        let sinceBreak = 0;
+        let lastLat    = depot ? depot.lat : null;
+        let lastLng    = depot ? depot.lng : null;
+        let fromDepot  = !!depot;
+
+        // Scan every remaining pool task; assign what fits, skip what doesn't.
+        // No retBuffer check here — depot return is appended after the loop and
+        // may slightly overshoot dayEnd, which is acceptable for the mop-up.
+        let pi = 0;
+        while (pi < pool.length) {
+          const task = pool[pi];
+          const dur  = task.duracion || 15;
+
+          if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= dayEnd) {
+            res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
+            cursor += breakDur; sinceBreak = 0;
+          }
+
+          let travelMin = 0, travelKm = 0;
+          if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
+            travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
+            if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+          }
+
+          const workSoFar = cursor - (res.shiftStart + dayOffset);
+          const fitsShift   = maxShiftMin <= 0 || workSoFar + travelMin + dur <= maxShiftMin;
+          const fitsDay     = cursor + travelMin + dur <= dayEnd;
+
+          if (!fitsShift || !fitsDay) {
+            pi++; // skip this task for now; it stays in pool for later vehicles/days
+            continue;
+          }
+
+          // Assign
+          if (travelMin > 0) {
+            const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
+            if (fromDepot) block._depot_exit = true;
+            res.assignments.push(block);
+            cursor += travelMin; res.totalKm += travelKm;
+          }
+          fromDepot = false;
+          res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
+          cursor += dur; sinceBreak += dur;
+          if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
+          pool.splice(pi, 1); // remove from pool; pi now points to next element
+          anyMop = true;
+        }
+
+        // Return to depot
+        if (depot && hasCoords(lastLat, lastLng) && (lastLat !== depot.lat || lastLng !== depot.lng)) {
+          const retKm = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
+          if (retKm >= 0.05) {
+            const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+            res.assignments.push({ _travel: true, _depot_return: true, _start: cursor, _end: cursor + retMin, duracion: retMin, km: +retKm.toFixed(3) });
+            res.totalKm += retKm;
+          }
+        }
+      }
+
+      mopDay++;
+    }
+
+    const daysUsed = Math.max(1, mopDay);
+    return { schedule: state, unassigned: pool, daysUsed };
   }
 
   const daysUsed = Math.max(1, day);
-  return { schedule: state, unassigned, daysUsed };
+  return { schedule: state, unassigned: [], daysUsed };
 }
 
 // ── GANTT CHART ───────────────────────────────────────────────────
@@ -1648,6 +1733,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [osrmRunning,  setOsrmRunning] = useState(false);
   const [genError,     setGenError]    = useState(null);
   const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
+  const [showUnassigned, setShowUnassigned] = useState(true);
+  const [focusMode,    setFocusMode]   = useState(false); // hide all panels except gantt
   const [elapsedSec,   setElapsedSec]  = useState(0);
   const genStartRef = useRef(null);
 
@@ -1762,12 +1849,16 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     await new Promise(resolve => setTimeout(resolve, 30)); // let React render the phase
 
     try {
-      // Read Planning depots from localStorage as fallback depot for vehicles
+      // Read Planning depots from Firestore as fallback depot for vehicles
       let planningDepot = null;
       try {
-        const raw = localStorage.getItem(`fc_depots_${activeProject?._id}`);
-        const depots = raw ? JSON.parse(raw) : [];
-        if (depots.length > 0) planningDepot = { lat: +depots[0].lat, lng: +depots[0].lng };
+        if (activeProject?._id) {
+          const snap = await getDoc(doc(db, "planning_depots", activeProject._id));
+          if (snap.exists()) {
+            const list = snap.data().depots ?? [];
+            if (list.length > 0) planningDepot = { lat: +list[0].lat, lng: +list[0].lng };
+          }
+        }
       } catch { /* ignore */ }
 
       // Inject planning depot into vehicles that have no depot set
@@ -1852,11 +1943,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const wId   = w._id || w.id;
 
         const myAssignments = vehicleRow.assignments.filter(a => {
-          // Depot return belongs to the vehicle, not to any individual worker
-          if (a._depot_return) return false;
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
           const tStart = a._start - dayOffset;
-          // Owner = first peer whose window contains the start of this slot
+          // Depot return: assign to the last worker of the vehicle (latest shift end)
+          if (a._depot_return) {
+            const last = peers.reduce((best, p) => !best || p._tw.end > best._tw.end ? p : best, null);
+            return last && (last._id || last.id) === wId;
+          }
+          // All other blocks: owner = first peer whose window contains the slot start
           const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
           return owner && (owner._id || owner.id) === wId;
         });
@@ -1866,7 +1960,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       });
 
       setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
-      setUnassigneds({ vehicles: vr.unassigned, workers: [] });
+      setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
 
@@ -1886,6 +1980,34 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           },
           status: "schedulado",
         });
+      }
+
+      // Save worker–day roster so Rostering can display scheduled shifts
+      if (activeProject?._id && orgId) {
+        try {
+          const turnoByWorker = {};
+          const daysWorked    = {};
+          for (const wRow of workerRows) {
+            const wId = wRow._id || wRow.id;
+            const t   = wRow.turno ?? "";
+            const code = /06.?14/i.test(t) ? "M" : /14.?22/i.test(t) ? "T" : /22.?06/i.test(t) ? "N" : null;
+            if (code) turnoByWorker[wId] = code;
+            const dSet = new Set();
+            for (const a of (wRow.assignments ?? [])) {
+              if (a._break || a._travel) continue;
+              dSet.add(Math.floor((a._start - constraints.startMin) / 1440) + 1);
+            }
+            if (dSet.size) daysWorked[wId] = [...dSet].sort((a, b) => a - b);
+          }
+          await setDoc(doc(db, "scheduling_roster", activeProject._id), {
+            projectId: activeProject._id,
+            orgId,
+            mes: activeProject.mes ?? "",   // "YYYY-MM" — schedule starts on day 1 of this month
+            turnoByWorker,
+            daysWorked,
+            generatedAt: new Date().toISOString(),
+          });
+        } catch { /* non-critical */ }
       }
 
     } catch (e) {
@@ -2028,35 +2150,35 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      {/* Toolbar */}
-      <div style={{
-        padding: "10px 20px", borderBottom: `1px solid ${C.border}`,
+      {/* ── TOOLBAR ──────────────────────────────────────────────── */}
+      {!focusMode && <div style={{
+        padding: "0 16px", height: 46, borderBottom: `1px solid ${C.border}`,
         background: C.card, flexShrink: 0,
-        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+        display: "flex", alignItems: "center", gap: 8,
       }}>
         {/* Import */}
         <button onClick={importFromPlanning} disabled={importing} style={{
-          padding: "7px 13px", background: importing ? C.surface2 : !!tasks.length ? C.greenDim : C.surface2,
+          padding: "5px 11px", background: importing ? C.surface2 : !!tasks.length ? C.greenDim : C.surface2,
           border: `1px solid ${!!tasks.length ? C.green + "44" : C.border}`,
           color: !!tasks.length ? C.green : C.muted,
-          borderRadius: 7, fontSize: 12, fontWeight: 500, cursor: importing ? "wait" : "pointer",
-          fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 7,
+          borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: importing ? "wait" : "pointer",
+          fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
         }}>
           {importing
-            ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(52,211,153,.2)", borderTopColor: C.green, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Importando…</>
+            ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(52,211,153,.2)", borderTopColor: C.green, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Importando…</>
             : !!tasks.length
-              ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {tasks.length} paradas importadas</>
+              ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {tasks.length.toLocaleString()} paradas</>
               : "Importar desde Planning"
           }
         </button>
 
-        <div style={{ width: 1, height: 22, background: C.border }} />
+        <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
 
         {/* Mode toggle */}
-        <div style={{ display: "flex", gap: 3, background: C.surface2, borderRadius: 7, padding: 3 }}>
+        <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
           {[["vehicles","Vehículos"],["workers","Trabajadores"]].map(([v, l]) => (
             <button key={v} onClick={() => setMode(v)} style={{
-              padding: "5px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+              padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer",
               background: mode === v ? C.blue : "none",
               color: mode === v ? "#fff" : C.muted,
               fontSize: 11, fontWeight: mode === v ? 600 : 400, fontFamily: font,
@@ -2066,74 +2188,156 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         </div>
 
         {/* Constraints toggle */}
-        <button onClick={() => setShowC(!showC)} style={{
-          padding: "7px 12px", background: showC ? C.surface2 : "none",
-          border: `1px solid ${C.border}`, color: showC ? C.text : C.muted,
-          borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font, transition: "all .12s",
-          display: "flex", alignItems: "center", gap: 6,
+        <button onClick={() => setShowC(!showC)} title="Restricciones" style={{
+          padding: "5px 10px", background: showC ? C.surface2 : "none",
+          border: `1px solid ${showC ? C.border2 : C.border}`, color: showC ? C.text : C.muted,
+          borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
+          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
         }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
           </svg>
           Restricciones
         </button>
 
-        {/* Worker mode hint when no vehicle schedule yet */}
+        {/* Inline KPI chips — only when schedule exists */}
+        {schedule && <>
+          <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
+            <span><span style={{ fontWeight: 700, color: C.green }}>{totalAssigned.toLocaleString()}</span> <span style={{ color: C.dim }}>asig.</span></span>
+            {unassigned.length > 0 && <span><span style={{ fontWeight: 700, color: C.red }}>{unassigned.length.toLocaleString()}</span> <span style={{ color: C.dim }}>sin asig.</span></span>}
+            <span><span style={{ fontWeight: 700, color: C.blue }}>{constraints.days || 1}</span> <span style={{ color: C.dim }}>días</span></span>
+            {totalKm > 0 && <span><span style={{ fontWeight: 700, color: C.amber }}>{totalKm.toFixed(0)}</span> <span style={{ color: C.dim }}>km∅</span></span>}
+          </div>
+          {schedules.vehicles && (
+            <>
+              <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
+              <button
+                onClick={() => { const now = new Date(); setPublishModal({ tipo: "prev", mes: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}` }); }}
+                style={{
+                  padding: "5px 10px", background: C.greenDim, border: `1px solid ${C.green}44`,
+                  color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Publicar en Rutas
+              </button>
+            </>
+          )}
+        </>}
+
+        {/* Worker mode hint */}
         {mode === "workers" && !schedules.vehicles && (
-          <span style={{ fontSize: 11, color: C.amber, display: "flex", alignItems: "center", gap: 5 }}>
-            <span>⚠</span> Genera primero el escenario de vehículos para vincular conductores
+          <span style={{ fontSize: 11, color: C.amber, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <span>⚠</span> Genera primero el escenario de vehículos
           </span>
         )}
 
-        {/* Generate */}
-        <button onClick={runGenerate} disabled={!canGenerate} style={{
-          marginLeft: "auto",
-          padding: "7px 16px", background: canGenerate ? C.blue : C.blueDim,
-          border: "none", color: canGenerate ? "#fff" : C.blueText,
-          borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: canGenerate ? "pointer" : "not-allowed",
-          fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 7,
-          opacity: canGenerate ? 1 : .6,
+        {/* Generate + Focus mode toggle */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={runGenerate} disabled={!canGenerate} style={{
+            padding: "6px 14px", background: canGenerate ? C.blue : C.blueDim,
+            border: "none", color: canGenerate ? "#fff" : C.blueText,
+            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: canGenerate ? "pointer" : "not-allowed",
+            fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 6,
+            opacity: canGenerate ? 1 : .6,
+          }}>
+            {osrmRunning
+              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Calculando km…</>
+              : generating
+              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Generando…</>
+              : "Generar escenario"
+            }
+          </button>
+          {schedule && (
+            <button
+              onClick={() => setFocusMode(true)}
+              title="Modo pantalla completa (Gantt)"
+              style={{
+                width: 30, height: 30, borderRadius: 6,
+                background: C.surface2, border: `1px solid ${C.border}`,
+                color: C.dim, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>}
+
+      {/* Focus-mode mini bar — only when focusMode */}
+      {focusMode && (
+        <div style={{
+          position: "absolute", top: 8, right: 8, zIndex: 999,
+          display: "flex", alignItems: "center", gap: 6,
         }}>
-          {osrmRunning
-            ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Calculando km por carretera…</>
-            : generating
-            ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Generando…</>
-            : "Generar escenario"
-          }
-        </button>
-      </div>
+          {schedule && <div style={{
+            background: "rgba(23,32,53,0.9)", border: `1px solid ${C.border}`,
+            borderRadius: 8, padding: "5px 12px", fontSize: 11,
+            display: "flex", gap: 12, backdropFilter: "blur(4px)",
+          }}>
+            <span><span style={{ fontWeight: 700, color: C.green }}>{totalAssigned.toLocaleString()}</span> <span style={{ color: C.dim }}>asig.</span></span>
+            {unassigned.length > 0 && <span><span style={{ fontWeight: 700, color: C.red }}>{unassigned.length.toLocaleString()}</span> <span style={{ color: C.dim }}>sin asig.</span></span>}
+            <span><span style={{ fontWeight: 700, color: C.blue }}>{constraints.days || 1}</span> <span style={{ color: C.dim }}>días</span></span>
+          </div>}
+          <button
+            onClick={() => setFocusMode(false)}
+            style={{
+              padding: "5px 12px", background: "rgba(23,32,53,0.9)", border: `1px solid ${C.border2}`,
+              color: C.muted, borderRadius: 8, cursor: "pointer",
+              fontFamily: font, fontSize: 11, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 5, backdropFilter: "blur(4px)",
+              transition: "all .15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => { e.currentTarget.style.color = C.muted; }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+              <path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+            </svg>
+            Salir
+          </button>
+        </div>
+      )}
 
       {/* Warnings */}
-      {!!tasks.length && vehicles.length === 0 && workers.length === 0 && (
-        <div style={{ padding: "8px 20px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 12, color: C.orange, flexShrink: 0 }}>
+      {!focusMode && !!tasks.length && vehicles.length === 0 && workers.length === 0 && (
+        <div style={{ padding: "7px 16px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 11, color: C.orange, flexShrink: 0 }}>
           No hay vehículos ni trabajadores registrados. Añade recursos en las pestañas correspondientes.
         </div>
       )}
-      {mode === "workers" && schedules.workers && (() => {
+      {!focusMode && mode === "workers" && schedules.workers && (() => {
         const sinVehiculo = workers.filter(w => !w.vehiculoId || !vehicles.some(v => (v._id || v.id) === w.vehiculoId));
         if (!sinVehiculo.length) return null;
         const nombres = sinVehiculo.map(w => w.nombre).join(", ");
         return (
-          <div style={{ padding: "6px 20px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, fontSize: 11, color: C.red, flexShrink: 0 }}>
-            <strong>Sin vehículo asignado (sin paradas):</strong> {nombres}.
-            {" "}Ve a la pestaña Trabajadores y asigna un vehículo a cada uno.
+          <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, fontSize: 11, color: C.red, flexShrink: 0 }}>
+            <strong>Sin vehículo asignado:</strong> {nombres}. Ve a Trabajadores y asigna un vehículo.
           </div>
         );
       })()}
 
       {/* Constraints panel */}
-      {showC && <ConstraintsPanel c={constraints} onChange={setConstraints} />}
+      {!focusMode && showC && <ConstraintsPanel c={constraints} onChange={setConstraints} />}
 
       {/* Progress bar */}
       {generating && (
         <div style={{
-          padding: "12px 20px 14px",
+          padding: "10px 16px 12px",
           background: C.card,
           borderBottom: `1px solid ${C.border}`,
           animation: "sched-fadein .15s ease both",
           flexShrink: 0,
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(92,155,255,.3)", borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite", flexShrink: 0 }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
@@ -2152,8 +2356,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             </div>
           </div>
           {/* Track */}
-          <div style={{ height: 5, background: C.surface2, borderRadius: 3, overflow: "hidden" }}>
-            {/* Fill */}
+          <div style={{ height: 4, background: C.surface2, borderRadius: 3, overflow: "hidden" }}>
             <div style={{
               height: "100%",
               width: `${GEN_PHASES[genPhase]?.pct ?? 4}%`,
@@ -2164,7 +2367,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             }} />
           </div>
           {/* Phase steps */}
-          <div style={{ display: "flex", gap: 0, marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 0, marginTop: 7 }}>
             {Object.entries(GEN_PHASES).map(([key, ph]) => {
               const currentIdx  = Object.keys(GEN_PHASES).indexOf(genPhase);
               const thisIdx     = Object.keys(GEN_PHASES).indexOf(key);
@@ -2196,121 +2399,58 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       )}
 
       {/* Error banner */}
-      {genError && (
-        <div style={{ padding: "8px 20px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 12, color: C.red }}>Error al generar: {genError}</span>
+      {genError && !focusMode && (
+        <div style={{ padding: "7px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.red }}>Error al generar: {genError}</span>
           <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
 
       {/* Rostering conflict banner */}
-      {rosterConflicts.length > 0 && (
-        <div style={{ padding: "7px 20px", background: "rgba(251,191,36,0.07)", borderBottom: `1px solid rgba(251,191,36,0.2)`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span style={{ fontSize: 12, color: "#fbbf24", fontWeight: 600 }}>Conflictos de disponibilidad:</span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {rosterConflicts.map((c, i) => (
-              <span key={i} style={{ fontSize: 11, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 4, padding: "1px 7px" }}>
-                {c.name} — día {c.day} ({c.label})
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Stats bar (when schedule exists) */}
-      {schedule && (
-        <div style={{
-          padding: "8px 20px", borderBottom: `1px solid ${C.border}`,
-          background: C.card, flexShrink: 0,
-          display: "flex", alignItems: "center", gap: 24,
-        }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{schedule.length}</span>
-            <span style={{ fontSize: 11, color: C.muted }}>{mode === "vehicles" ? "vehículos" : "trabajadores"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{totalAssigned}</span>
-            <span style={{ fontSize: 11, color: C.muted }}>asignadas</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: unassigned.length > 0 ? C.red : C.text }}>{unassigned.length}</span>
-            <span style={{ fontSize: 11, color: C.muted }}>sin asignar</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: C.blue }}>{constraints.days || 1}</span>
-            <span style={{ fontSize: 11, color: C.muted }}>día{(constraints.days || 1) !== 1 ? "s" : ""} necesario{(constraints.days || 1) !== 1 ? "s" : ""}</span>
-          </div>
-          {totalKm > 0 && (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: C.amber }}>{totalKm.toFixed(1)}</span>
-              <span style={{ fontSize: 11, color: C.muted }}>km vacío</span>
-            </div>
-          )}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>
-              {minToTime(constraints.startMin)} – {minToTime(constraints.endMin)}
-            </div>
-            {schedules.vehicles && (<>
-              {activeProject && (
-                <div style={{ fontSize: 10, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  Guardado en proyecto
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  const now = new Date();
-                  const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-                  setPublishModal({ tipo: "prev", mes });
-                }}
-                style={{
-                  padding: "5px 12px", background: C.greenDim, border: `1px solid ${C.green}44`,
-                  color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Publicar en Rutas
-              </button>
-            </>)}
-          </div>
+      {rosterConflicts.length > 0 && !focusMode && (
+        <div style={{ padding: "5px 16px", background: "rgba(251,191,36,0.07)", borderBottom: `1px solid rgba(251,191,36,0.2)`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style={{ fontSize: 11, color: "#fbbf24", fontWeight: 600 }}>Conflictos:</span>
+          {rosterConflicts.map((c, i) => (
+            <span key={i} style={{ fontSize: 10, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 4, padding: "1px 6px" }}>
+              {c.name} — día {c.day} ({c.label})
+            </span>
+          ))}
         </div>
       )}
 
       {/* Per-day breakdown strip */}
-      {schedule && (constraints.days || 1) > 1 && (
+      {schedule && !focusMode && (constraints.days || 1) > 1 && (
         <div style={{
           flexShrink: 0, background: C.surface2, borderBottom: `1px solid ${C.border}`,
-          padding: showDayStrip ? "5px 20px" : "3px 20px",
-          display: "flex", alignItems: "center", gap: 8, flexWrap: showDayStrip ? "wrap" : "nowrap",
+          padding: showDayStrip ? "4px 16px" : "3px 16px",
+          display: "flex", alignItems: "center", gap: 6, flexWrap: showDayStrip ? "wrap" : "nowrap",
         }}>
-          {/* Header row — always visible */}
           <button onClick={() => setShowDayStrip(v => !v)} style={{
-            display: "flex", alignItems: "center", gap: 5,
+            display: "flex", alignItems: "center", gap: 4,
             background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
           }}>
             <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
-            <span style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>({constraints.days})</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
+            <span style={{ fontSize: 9, color: C.dim, fontFamily: mono }}>({constraints.days})</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
               style={{ transform: showDayStrip ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
           {showDayStrip && Array.from({ length: constraints.days || 1 }, (_, d) => (
             <div key={d} style={{
-              display: "flex", alignItems: "center", gap: 5,
+              display: "flex", alignItems: "center", gap: 4,
               background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 6, padding: "2px 10px", flexShrink: 0,
+              borderRadius: 5, padding: "2px 8px", flexShrink: 0,
             }}>
-              <span style={{ fontSize: 10, color: C.blue, fontWeight: 700, fontFamily: mono }}>Día {d + 1}</span>
-              <span style={{ fontSize: 10, color: C.muted }}>{stopsPerDay[d] || 0} paradas</span>
+              <span style={{ fontSize: 9, color: C.blue, fontWeight: 700, fontFamily: mono }}>Día {d + 1}</span>
+              <span style={{ fontSize: 9, color: C.muted }}>{stopsPerDay[d] || 0}p</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Main content */}
+      {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
       {!schedule ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: C.dim }}>
           {!!!tasks.length
@@ -2319,7 +2459,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 <div style={{ fontSize: 11 }}>Planning → Timetable → Exportar a Scheduling</div>
               </>
             : <>
-                <div style={{ fontSize: 13, color: C.muted }}>{tasks.length} paradas listas</div>
+                <div style={{ fontSize: 13, color: C.muted }}>{tasks.length.toLocaleString()} paradas listas</div>
                 <div style={{ fontSize: 11 }}>
                   {(vehicles.length > 0 || workers.length > 0)
                     ? "Pulsa «Generar escenario» para asignar paradas"
@@ -2329,51 +2469,79 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           }
         </div>
       ) : (
-        <>
-          <GanttChart
-            rows={schedule}
-            startMin={constraints.startMin}
-            endMin={constraints.endMin}
-            days={constraints.days || 1}
-            mode={mode}
-            allWorkers={workers}
-            allVehicles={vehicles}
-            onScheduleChange={({ task, fromRowId, toRowId }) => {
-              setSchedules(prev => {
-                const key = mode === "vehicles" ? "vehicles" : "workers";
-                const rows = (prev[key] || []).map(r => {
-                  const rid = r._id || r.id;
-                  if (rid === fromRowId) return { ...r, assignments: r.assignments.filter(a => a !== task) };
-                  if (rid === toRowId)   return { ...r, assignments: [...r.assignments, task] };
-                  return r;
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Gantt — fills all available space */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <GanttChart
+              rows={schedule}
+              startMin={constraints.startMin}
+              endMin={constraints.endMin}
+              days={constraints.days || 1}
+              mode={mode}
+              allWorkers={workers}
+              allVehicles={vehicles}
+              onScheduleChange={({ task, fromRowId, toRowId }) => {
+                setSchedules(prev => {
+                  const key = mode === "vehicles" ? "vehicles" : "workers";
+                  const rows = (prev[key] || []).map(r => {
+                    const rid = r._id || r.id;
+                    if (rid === fromRowId) return { ...r, assignments: r.assignments.filter(a => a !== task) };
+                    if (rid === toRowId)   return { ...r, assignments: [...r.assignments, task] };
+                    return r;
+                  });
+                  return { ...prev, [key]: rows };
                 });
-                return { ...prev, [key]: rows };
-              });
-            }}
-          />
+              }}
+            />
+          </div>
 
-          {/* Unassigned section */}
+          {/* ── Sin asignar — collapsible bottom drawer ───────────── */}
           {unassigned.length > 0 && (
-            <div style={{
-              flexShrink: 0, borderTop: `1px solid ${C.border}`,
-              background: C.card, padding: "10px 20px", maxHeight: 140, overflowY: "auto",
-            }}>
-              <div style={{ fontSize: 10, color: C.red, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
-                Sin asignar ({unassigned.length})
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {unassigned.map((t, i) => (
-                  <div key={i} style={{
-                    background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)",
-                    borderRadius: 5, padding: "3px 8px", fontSize: 10, color: C.red, fontFamily: mono,
-                  }}>
-                    {t.nombre || t.barrio || minToTime(timeToMin(t.horaInicio))} {t.horaInicio && `· ${t.horaInicio}`}
+            <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: C.card }}>
+              {/* Handle / toggle */}
+              <button
+                onClick={() => setShowUnassigned(v => !v)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 16px", background: "none", border: "none", cursor: "pointer",
+                  borderBottom: showUnassigned ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
+                  style={{ transform: showUnassigned ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <span style={{ fontSize: 10, color: C.red, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700 }}>
+                  Sin asignar
+                </span>
+                <span style={{
+                  background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)",
+                  color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700,
+                }}>
+                  {unassigned.length.toLocaleString()}
+                </span>
+                <span style={{ marginLeft: "auto", fontSize: 10, color: C.dim }}>
+                  {showUnassigned ? "Ocultar" : "Mostrar"}
+                </span>
+              </button>
+              {/* Content */}
+              {showUnassigned && (
+                <div style={{ maxHeight: 120, overflowY: "auto", padding: "8px 16px 10px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {unassigned.map((t, i) => (
+                      <div key={i} style={{
+                        background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.2)",
+                        borderRadius: 4, padding: "2px 7px", fontSize: 10, color: C.red, fontFamily: mono,
+                      }}>
+                        {t.nombre || t.barrio || minToTime(timeToMin(t.horaInicio))}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Publish modal */}

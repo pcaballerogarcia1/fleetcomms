@@ -250,9 +250,13 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /scheduling — remounts on project change, no map state to preserve */}
-        {activeProject && path === "/scheduling" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        {/* /scheduling — kept mounted to preserve generated scenario state */}
+        {activeProject && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === "/scheduling" ? "visible" : "hidden",
+            pointerEvents: path === "/scheduling" ? "auto" : "none",
+          }}>
             <SchedulingModuleWrapper
               vehicles={vehicles} workers={workers}
               loadingV={loadingV} loadingW={loadingW}
@@ -265,7 +269,7 @@ function WorkspaceRouter() {
         {/* /rostering — monthly availability grid */}
         {activeProject && path === "/rostering" && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-            <RosteringPage sesion={sesion} embedded />
+            <RosteringPage sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
           </div>
         )}
 

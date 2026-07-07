@@ -71,14 +71,46 @@ export function isUnavailable(code) {
 }
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
-export function RosteringPage({ sesion, embedded = false }) {
-  const orgId = sesion?.org_id ?? null;
+export function RosteringPage({ sesion, embedded = false, activeProject = null, orgId: orgIdProp = null }) {
+  const orgId = orgIdProp ?? sesion?.org_id ?? null;
 
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
   const [workers, setWorkers] = useState([]);
+
+  // ── Scheduling roster (populated when a scenario is generated) ──
+  const [schedRoster, setSchedRoster] = useState(null); // { mes, turnoByWorker, daysWorked }
+
+  useEffect(() => {
+    if (!activeProject?._id) { setSchedRoster(null); return; }
+    return onSnapshot(doc(db, "scheduling_roster", activeProject._id), snap => {
+      setSchedRoster(snap.exists() ? snap.data() : null);
+    });
+  }, [activeProject?._id]);
+
+  // Given a calendar day in the current view, return the scheduling day number
+  // (1-indexed from the first day of schedRoster.mes). Returns null if out of range.
+  function schedDayFor(calDay) {
+    if (!schedRoster?.mes) return null;
+    const [sy, sm] = schedRoster.mes.split("-").map(Number);
+    const startDate = new Date(sy, sm - 1, 1);
+    const thisDate  = new Date(year, month - 1, calDay);
+    const diff = Math.round((thisDate - startDate) / 86400000);
+    const dayNum = diff + 1;
+    return dayNum >= 1 ? dayNum : null;
+  }
+
+  // Returns the scheduled shift code for a worker on a calendar day, or null
+  function scheduledCode(workerId, calDay) {
+    if (!schedRoster) return null;
+    const dayNum = schedDayFor(calDay);
+    if (!dayNum) return null;
+    const days = schedRoster.daysWorked?.[workerId];
+    if (!days || !days.includes(dayNum)) return null;
+    return schedRoster.turnoByWorker?.[workerId] ?? null;
+  }
 
   // Local grid state (Firestore is the backing store, but we edit locally)
   const [grid,    setGrid]    = useState({});
@@ -291,6 +323,35 @@ export function RosteringPage({ sesion, embedded = false }) {
     });
   }
 
+  // ── Optimizar: auto-assign scheduled shifts respecting availability ──
+  function optimizar() {
+    if (!schedRoster) return;
+    const BLOCKED = new Set(["L", "B"]);     // can't override
+    const MANUAL  = new Set(["M","T","N","G"]); // already manually set, skip
+
+    const newGrid = { ...grid };
+    for (const w of workers) {
+      const wId  = w._id;
+      const code = schedRoster.turnoByWorker?.[wId];
+      if (!code) continue;
+      const scheduledDays = new Set(schedRoster.daysWorked?.[wId] ?? []);
+      const wGrid = { ...(newGrid[wId] ?? {}) };
+      for (const d of days) {
+        const dayNum = schedDayFor(d);
+        if (!dayNum || !scheduledDays.has(dayNum)) continue;
+        const cur = wGrid[String(d)] ?? "";
+        if (BLOCKED.has(cur) || MANUAL.has(cur)) continue;
+        wGrid[String(d)] = code;
+      }
+      newGrid[wId] = wGrid;
+    }
+    setGrid(newGrid);
+    pendingRef.current = newGrid;
+    if (docId) setDoc(doc(db, "rostering", docId), {
+      org_id: orgId, year, month, grid: newGrid, updatedAt: serverTimestamp(),
+    });
+  }
+
   // ── Totals ────────────────────────────────────────────────────
   function dayTotals(day) {
     const key    = String(day);
@@ -356,6 +417,35 @@ export function RosteringPage({ sesion, embedded = false }) {
             </div>
           ))}
 
+          {/* Scheduling overlay legend + optimizar */}
+          {schedRoster && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>
+              <div style={{
+                width: 22, height: 22, borderRadius: 4,
+                background: SHIFT_META["M"].bg + "55",
+                border: `1px dashed ${SHIFT_META["M"].text}44`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: SHIFT_META["M"].text + "88", fontWeight: 700, fontSize: 11,
+              }}>M</div>
+              <span style={{ fontSize: 11, color: C.dim }}>= planificado</span>
+              <button
+                onClick={optimizar}
+                style={{
+                  marginLeft: 4,
+                  padding: "4px 12px", borderRadius: 6,
+                  background: C.blue + "22",
+                  border: `1px solid ${C.blue}55`,
+                  color: C.blue, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: font,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.blue + "40"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = C.blue + "22"; }}
+                title="Asigna los turnos del escenario de scheduling a los trabajadores disponibles"
+              >
+                Optimizar
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -479,7 +569,10 @@ export function RosteringPage({ sesion, embedded = false }) {
                     {/* Shift cells */}
                     {days.map((d, dIdx) => {
                       const shift    = grid[w._id]?.[String(d)] ?? "";
-                      const meta     = shift ? SHIFT_META[shift] : null;
+                      const sched    = scheduledCode(w._id, d); // from scheduling scenario
+                      const display  = shift || sched;
+                      const isManual = !!shift;
+                      const meta     = display ? SHIFT_META[display] : null;
                       const weekend  = isWeekend(d);
                       const today    = isToday(d);
                       const selected = isCellSelected(wi, dIdx);
@@ -492,23 +585,27 @@ export function RosteringPage({ sesion, embedded = false }) {
                           onContextMenu={e => clearCell(w._id, d, e)}
                           title={shift
                             ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[shift].label}`
-                            : `Día ${d} · sin asignar — selecciona y escribe M/T/N/L/G/B/D`}
+                            : sched
+                              ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[sched].label} (planificado)`
+                              : `Día ${d} · sin asignar — selecciona y escribe M/T/N/L/G/B/D`}
                           style={{
                             width: CELL_W, minWidth: CELL_W, height: 32,
                             textAlign: "center", fontSize: 11, fontWeight: 700,
                             cursor: "pointer",
                             background: meta
-                              ? meta.bg
+                              ? (isManual ? meta.bg : meta.bg + "55")
                               : (today ? "#0e2040" : weekend ? "#141c30" : "transparent"),
-                            color: meta ? meta.text : C.dim,
-                            borderRight: `1px solid ${C.border}`,
+                            color: meta ? (isManual ? meta.text : meta.text + "88") : C.dim,
+                            borderRight: !isManual && sched
+                              ? `1px dashed ${SHIFT_META[sched].text}44`
+                              : `1px solid ${C.border}`,
                             borderBottom: `1px solid ${C.border}`,
                             transition: "filter .1s",
                             userSelect: "none",
                             position: "relative",
                           }}
                         >
-                          {shift}
+                          {display}
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
