@@ -46,5 +46,10 @@ service cloud.firestore {
     match /scheduling_workers/{docId} {
       allow read, write: if request.auth != null;
     }
+
+    // Planes de ruta publicados desde Scheduling
+    match /planes/{docId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

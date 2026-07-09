@@ -20,12 +20,14 @@ const CATS = [
 const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
-function useCollection(colName, orderField = "fecha", orgId = null) {
+function useCollection(colName, orderField = "fecha", orgId = null, superAdmin = false) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!orgId) { setData([]); setLoading(false); return; }
-    const q = query(collection(db, colName), where("org_id", "==", orgId));
+    if (!orgId && !superAdmin) { setData([]); setLoading(false); return; }
+    const q = orgId
+      ? query(collection(db, colName), where("org_id", "==", orgId))
+      : collection(db, colName);
     const unsub = onSnapshot(q, snap => {
       const docs = snap.docs
         .map(d => ({ ...d.data(), _id: d.id }))
@@ -39,7 +41,7 @@ function useCollection(colName, orderField = "fecha", orgId = null) {
       setData(docs); setLoading(false);
     }, err => { console.error(colName, err); setLoading(false); });
     return () => unsub();
-  }, [colName, orgId]);
+  }, [colName, orgId, superAdmin]);
   return { data, loading };
 }
 
@@ -1282,6 +1284,16 @@ function PanelAdmin({usuarios,orgId,onClose}){
     if(form.password.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
     setSaving(true);setErr("");
     try{
+      // Verificar cuota de usuarios de la org
+      const orgSnap=await getDoc(doc(db,"orgs",orgId));
+      if(orgSnap.exists()){
+        const maxUsuarios=orgSnap.data().max_usuarios||0;
+        const activos=usuarios.filter(u=>u.activo).length;
+        if(activos>=maxUsuarios){
+          setErr(`Has alcanzado el límite de ${maxUsuarios} usuario${maxUsuarios===1?"":"s"} de tu plan. Contacta con Operanzia para ampliarlo.`);
+          setSaving(false);return;
+        }
+      }
       const cred=await createUserWithEmailAndPassword(secondaryAuth,form.email.trim().toLowerCase(),form.password);
       await setDoc(doc(db,"usuarios",cred.user.uid),{
         nombre:form.nombre.trim(),apellidos:form.apellidos.trim(),
@@ -1906,7 +1918,8 @@ export default function App(){
     });
   },[sesion?.org_id]);
 
-  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id);
+  const isSA = sesion?.rol === "superadmin";
+  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id, isSA);
 
   async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
   async function updatePlan(plan){ await fbUpdate("planes",plan._id,plan); }
