@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, onSnapshot, addDoc, updateDoc,
   deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc,
 } from "firebase/firestore";
@@ -19,7 +19,7 @@ const app = initializeApp(firebaseConfig);
 // Offline persistence: data loads from local IndexedDB cache instantly,
 // syncs with Firestore in background — prevents disappearing data on slow mobile networks
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
 });
 export const auth = getAuth(app);
 
