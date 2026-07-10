@@ -919,7 +919,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // Si hay plan KML activo, mostrar detalle
   if(planActivo){
     const live=planes.find(p=>p._id===planActivo._id)||planActivo;
-    return <DetallePlan plan={live} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={async(updated)=>{await updatePlan(updated);setPlanActivo(updated);}}/>;
+    return <DetallePlan plan={live} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated)=>{setPlanActivo(updated); updatePlan(updated);}}/>;
   }
 
   const tipo = TIPOS_TRABAJO.find(t=>t.key===tipoActivo);

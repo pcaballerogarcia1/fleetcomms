@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, onSnapshot, addDoc, updateDoc,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, onSnapshot, addDoc, updateDoc,
   deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -15,7 +16,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db  = getFirestore(app);
+// Offline persistence: data loads from local IndexedDB cache instantly,
+// syncs with Firestore in background — prevents disappearing data on slow mobile networks
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 export const auth = getAuth(app);
 
 // Secondary app for admin user-creation (avoids signing out current session)

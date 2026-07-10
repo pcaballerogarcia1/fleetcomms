@@ -227,8 +227,9 @@ function ActivityFeed({ events, usuarios }) {
 }
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
-export function ControlPage({ sesion, embedded = false }) {
-  const orgId = sesion?.org_id ?? null;
+export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
+  const orgId = orgIdProp ?? sesion?.org_id ?? null;
+  const isSuperAdmin = sesion?.rol === "superadmin";
 
   const [planes,      setPlanes]      = useState([]);
   const [usuarios,    setUsuarios]    = useState([]);
@@ -240,21 +241,23 @@ export function ControlPage({ sesion, embedded = false }) {
 
   // Real-time: planes
   useEffect(() => {
-    if (!orgId) return;
-    const q = query(collection(db, "planes"), where("org_id", "==", orgId));
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "planes");
+    const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
     return onSnapshot(q, snap => {
       setPlanes(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
     });
-  }, [orgId]);
+  }, [orgId, isSuperAdmin]);
 
   // Real-time: usuarios (for name resolution)
   useEffect(() => {
-    if (!orgId) return;
-    const q = query(collection(db, "usuarios"), where("org_id", "==", orgId));
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "usuarios");
+    const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
     return onSnapshot(q, snap => {
       setUsuarios(snap.docs.map(d => ({ _id: d.id, id: d.id, ...d.data() })));
     });
-  }, [orgId]);
+  }, [orgId, isSuperAdmin]);
 
   // Available months
   const meses = useMemo(() => {

@@ -276,7 +276,7 @@ function WorkspaceRouter() {
         {/* /control — real-time field activity monitor */}
         {activeProject && path === "/control" && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-            <ControlPage sesion={sesion} embedded />
+            <ControlPage sesion={sesion} orgId={effectiveOrgId} embedded />
           </div>
         )}
 

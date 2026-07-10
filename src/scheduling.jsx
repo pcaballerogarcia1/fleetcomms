@@ -97,6 +97,38 @@ function hasCoords(lat, lng) {
   return isFinite(+lat) && isFinite(+lng) && (+lat !== 0 || +lng !== 0);
 }
 
+// ── IndexedDB: persist full VRP schedule across page reloads ─────
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("vrp_cache", 1);
+    r.onupgradeneeded = e => e.target.result.createObjectStore("schedules");
+    r.onsuccess = e => res(e.target.result);
+    r.onerror   = e => rej(e);
+  });
+}
+async function idbSave(key, value) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction("schedules", "readwrite");
+      tx.objectStore("schedules").put(value, key);
+      tx.oncomplete = () => res();
+      tx.onerror    = e => rej(e);
+    });
+  } catch { /* non-critical */ }
+}
+async function idbLoad(key) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const tx  = db.transaction("schedules", "readonly");
+      const req = tx.objectStore("schedules").get(key);
+      req.onsuccess = e => res(e.target.result ?? null);
+      req.onerror   = e => rej(e);
+    });
+  } catch { return null; }
+}
+
 // ── VRP ALGORITHM HELPERS ─────────────────────────────────────────
 const TRAVEL_SPEED_KMH = 30;
 
@@ -1990,19 +2022,24 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // an empty array [] is truthy in JS but means "no data yet".
   const activeDays = schedule?.length > 0 ? (constraints.days || 1) : 1;
 
-  // When active project changes, restore its scheduling state
+  // When active project changes, restore its scheduling state (IndexedDB first, Firestore summary as fallback)
   useEffect(() => {
     if (!activeProject) {
       setSchedules({ vehicles: null, workers: null });
       return;
     }
     const sc = activeProject.scheduling;
-    if (sc) {
-      setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
-      setConstraints(prev => ({ ...prev, ...(sc.constraints || {}), days: sc.daysUsed || 1 }));
-    } else {
-      setSchedules({ vehicles: null, workers: null });
-    }
+    idbLoad(`vrp_${activeProject._id}`).then(cached => {
+      if (cached?.vehicles?.length) {
+        setSchedules({ vehicles: cached.vehicles, workers: cached.workers || [] });
+        if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days: sc.daysUsed || 1 }));
+      } else if (sc) {
+        setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
+        setConstraints(prev => ({ ...prev, ...(sc.constraints || {}), days: sc.daysUsed || 1 }));
+      } else {
+        setSchedules({ vehicles: null, workers: null });
+      }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?._id]);
 
@@ -2158,6 +2195,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
+
+      // Persist full schedule to IndexedDB (too large for Firestore)
+      if (activeProject?._id) {
+        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: workerRows });
+      }
 
       // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
       setGenPhase("saving");
@@ -3055,7 +3097,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     const nombre = newModal.nombre.trim();
     const desc   = newModal.descripcion?.trim() || "";
     const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
-    const projectOrgId = effectiveOrgId || docId;
+    const projectOrgId = newModal.orgId || effectiveOrgId || docId;
 
     // Close modal and navigate immediately (optimistic)
     setNewModal(null);
@@ -3230,6 +3272,19 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
           <div style={{ background: C.card, borderRadius: 14, padding: "28px 28px 22px", width: 400, boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: `1px solid ${C.border}` }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 18 }}>Nuevo proyecto</div>
+            {isSuperAdmin && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Organización *</label>
+                <select
+                  value={newModal.orgId || effectiveOrgId || ""}
+                  onChange={e => setNewModal(p => ({ ...p, orgId: e.target.value }))}
+                  style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: "dark" }}
+                >
+                  <option value="">— Selecciona una organización —</option>
+                  {orgs.map(o => <option key={o.org_id} value={o.org_id}>{o.nombre}</option>)}
+                </select>
+              </div>
+            )}
             <input autoFocus placeholder="Nombre del proyecto *" value={newModal.nombre}
               onChange={e => setNewModal(p => ({ ...p, nombre: e.target.value }))}
               onKeyDown={e => e.key === "Enter" && createProject()}
@@ -3245,7 +3300,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button onClick={() => setNewModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
-              <button onClick={createProject} disabled={creating || !newModal.nombre.trim()} style={{
+              <button onClick={createProject} disabled={creating || !newModal.nombre.trim() || (isSuperAdmin && !newModal.orgId && !effectiveOrgId)} style={{
                 flex: 2, padding: "9px 0", background: C.blue, border: "none", color: "#fff",
                 borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: creating ? "wait" : "pointer",
                 fontFamily: font, opacity: !newModal.nombre.trim() ? .5 : 1,
