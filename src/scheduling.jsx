@@ -338,7 +338,8 @@ async function enrichWithOSRM(schedule) {
 const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 async function generateScenario(tasks, resources, constraints) {
-  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd } = constraints;
+  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays } = constraints;
+  const dayCap = maxDays > 0 ? maxDays : MAX_AUTO_DAYS;
 
   if (!resources.length) return { schedule: [], unassigned: [...tasks], daysUsed: 1 };
 
@@ -439,7 +440,7 @@ async function generateScenario(tasks, resources, constraints) {
   let day = 0;
   let anyAssignedThisDay = true;
 
-  while (anyAssignedThisDay && day < MAX_AUTO_DAYS) {
+  while (anyAssignedThisDay && day < dayCap) {
     anyAssignedThisDay = false;
     const dayOffset = day * 1440;
     dayStops.fill(0);
@@ -640,7 +641,7 @@ async function generateScenario(tasks, resources, constraints) {
     let mopDay   = day;
     let anyMop   = true;
 
-    while (pool.length > 0 && anyMop && mopDay < MAX_AUTO_DAYS) {
+    while (pool.length > 0 && anyMop && mopDay < dayCap) {
       anyMop = false;
       const dayOffset = mopDay * 1440;
 
@@ -718,6 +719,46 @@ async function generateScenario(tasks, resources, constraints) {
 
   const daysUsed = Math.max(1, day);
   return { schedule: state, unassigned: [], daysUsed };
+}
+
+// ── AUTO-SCALE FLEET ─────────────────────────────────────────────
+// When "días máximos de escenario" is set and the base fleet can't clear all
+// tasks within that many days, grow the fleet with virtual "Vehículo
+// necesario N" units (cloned from the first real vehicle's depot/tipo, on a
+// full-day "Jornada completa" turno) and re-run the VRP, until everything
+// fits or a safety cap on extra vehicles is hit.
+const MAX_VIRTUAL_VEHICLES = 200;
+
+async function autoScaleFleet(tasks, baseResources, constraints) {
+  let resources = baseResources;
+  let result = await generateScenario(tasks, resources, constraints);
+  let added = 0;
+
+  while (result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES) {
+    const assigned    = tasks.length - result.unassigned.length;
+    const perVehicle   = Math.max(1, assigned / resources.length);
+    const needed       = Math.max(1, Math.ceil(result.unassigned.length / perVehicle));
+    const batch        = Math.min(needed, MAX_VIRTUAL_VEHICLES - added);
+    const template      = baseResources[0] || {};
+
+    const extra = Array.from({ length: batch }, (_, i) => {
+      const n = added + i + 1;
+      return {
+        _id: `virtual_veh_${n}`, id: `virtual_veh_${n}`,
+        nombre: `Vehículo necesario ${n}`, matricula: "",
+        tipo: template.tipo || "Camión lateral",
+        turno: "Jornada completa",
+        depotLat: template.depotLat ?? null, depotLng: template.depotLng ?? null,
+        _virtual: true,
+      };
+    });
+
+    resources = [...resources, ...extra];
+    added += batch;
+    result = await generateScenario(tasks, resources, constraints);
+  }
+
+  return { result, resources, addedCount: added };
 }
 
 // ── GANTT CHART ───────────────────────────────────────────────────
@@ -1416,8 +1457,14 @@ function ConstraintsPanel({ c, onChange }) {
         {row("Duración de la pausa", numInput("breakDur", 0, 120, "min"))}
         {row("Ventana: hora de inicio", timeInput("startMin"))}
         {row("Ventana: hora de fin", timeInput("endMin"))}
-        {/* días se computa automáticamente por el algoritmo, no se muestra aquí */}
+        {row("Días máximos de escenario (0 = automático)", numInput("maxDays", 0, 365, "días"))}
       </div>
+      {c.maxDays > 0 && (
+        <div style={{ marginTop: 10, fontSize: 11, color: C.dim }}>
+          Si con la flota actual no caben todas las paradas en {c.maxDays} día{c.maxDays === 1 ? "" : "s"},
+          se añadirán automáticamente los vehículos y conductores necesarios ("Vehículo necesario 1", "Conductor necesario 1"…) para cumplir el límite.
+        </div>
+      )}
     </div>
   );
 }
@@ -1948,7 +1995,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [showC,        setShowC]       = useState(false);
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
-    startMin: 360, endMin: 1320, days: 1,
+    startMin: 360, endMin: 1320, days: 1, maxDays: 0,
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
@@ -1956,6 +2003,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [generating,   setGenerating]  = useState(false);
   const [osrmRunning,  setOsrmRunning] = useState(false);
   const [genError,     setGenError]    = useState(null);
+  const [scaleInfo,    setScaleInfo]   = useState(null);
   const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
   const [showUnassigned, setShowUnassigned] = useState(true);
   const [focusMode,    setFocusMode]   = useState(false); // hide all panels except gantt
@@ -2077,6 +2125,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     if (!vehicles.length && !workers.length) return;
     setGenerating(true);
     setGenError(null);
+    setScaleInfo(null);
     setGenPhase("vrp");
     await new Promise(resolve => setTimeout(resolve, 30)); // let React render the phase
 
@@ -2113,12 +2162,23 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       });
 
       // ── Step 1: Vehicle VRP ──────────────────────────────────────
-      // generateScenario preserves resource order: vr.schedule[i] ↔ vehiclesForVRP[i]
+      // generateScenario preserves resource order: vr.schedule[i] ↔ vehiclesForSchedule[i]
       let vr = { schedule: [], unassigned: [...tasks], daysUsed: 1 };
+      let vehiclesForSchedule = vehiclesForVRP;
+      let addedVehicles = [];
       if (vehiclesForVRP.length > 0) {
         vr = await generateScenario(tasks, vehiclesForVRP, constraints);
+
+        // Días máximos de escenario: si sobran paradas dentro de ese límite,
+        // añade vehículos virtuales "Vehículo necesario N" hasta que quepan todas.
+        if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
+          const scaled = await autoScaleFleet(tasks, vehiclesForVRP, constraints);
+          vr = scaled.result;
+          vehiclesForSchedule = scaled.resources;
+          addedVehicles = scaled.resources.slice(vehiclesForVRP.length);
+        }
       }
-      const vehicleScheduleRaw = vehiclesForVRP.map((v, i) => ({
+      const vehicleScheduleRaw = vehiclesForSchedule.map((v, i) => ({
         ...v,
         assignments: vr.schedule[i]?.assignments || [],
         totalKm:     vr.schedule[i]?.totalKm     || 0,
@@ -2144,8 +2204,16 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // turno window covers that time slot (earliest-start wins on overlap).
       // Workers without a valid vehiculoId appear with empty assignments.
 
-      // Pre-compute turno window for every worker
-      const workersWithTw = workers.map(w => ({
+      // Virtual drivers to pair with any virtual "Vehículo necesario N" added by autoScaleFleet
+      const virtualWorkers = addedVehicles.map((v, i) => ({
+        _id: `virtual_wrk_${i + 1}`, id: `virtual_wrk_${i + 1}`,
+        nombre: `Conductor necesario ${i + 1}`, apellidos: "",
+        turno: "Jornada completa", rol: "conductor",
+        vehiculoId: v._id, _virtual: true,
+      }));
+
+      // Pre-compute turno window for every worker (real + virtual)
+      const workersWithTw = [...workers, ...virtualWorkers].map(w => ({
         ...w,
         _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
       }));
@@ -2195,6 +2263,9 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
+      setScaleInfo(addedVehicles.length > 0
+        ? `Se han añadido ${addedVehicles.length} vehículo(s) y conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
+        : null);
 
       // Persist full schedule to IndexedDB (too large for Firestore)
       if (activeProject?._id) {
@@ -2820,6 +2891,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         <div style={{ padding: "7px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>Error al generar: {genError}</span>
           <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+        </div>
+      )}
+
+      {/* Auto-scale (virtual fleet) banner */}
+      {scaleInfo && !focusMode && (
+        <div style={{ padding: "7px 16px", background: "rgba(251,191,36,0.08)", borderBottom: `1px solid rgba(251,191,36,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "#fbbf24" }}>⚙ {scaleInfo}</span>
+          <button onClick={() => setScaleInfo(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
 
