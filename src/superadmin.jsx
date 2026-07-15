@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db, auth, secondaryAuth, secondaryDb } from "./firebase.js";
 import {
   collection, onSnapshot, doc, setDoc, updateDoc,
-  serverTimestamp, query, where, getDoc, writeBatch, runTransaction,
+  serverTimestamp, query, where, getDoc, getDocFromServer, writeBatch, runTransaction,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 
@@ -77,7 +77,7 @@ function LoginSA({ onLogin }) {
     setLoading(true); setErr("");
     try {
       const cred = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pw);
-      const snap = await getDoc(doc(db, "usuarios", cred.user.uid));
+      const snap = await getDocFromServer(doc(db, "usuarios", cred.user.uid));
       if (!snap.exists() || snap.data().rol !== "superadmin") {
         await signOut(auth);
         setErr("Acceso denegado — solo superadmins");
@@ -669,7 +669,7 @@ export default function SuperAdminApp() {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDoc(doc(db, "usuarios", user.uid));
+          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
           if (snap.exists() && snap.data().rol === "superadmin") {
             setSesion({ uid: user.uid, ...snap.data() });
           } else {

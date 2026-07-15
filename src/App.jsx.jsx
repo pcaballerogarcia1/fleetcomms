@@ -3,7 +3,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveCo
 import { db, auth, secondaryAuth } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, query, where, setDoc, getDoc,
+  doc, serverTimestamp, query, where, setDoc, getDoc, getDocFromServer,
 } from "firebase/firestore";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
@@ -1942,7 +1942,10 @@ export default function App(){
     return onAuthStateChanged(auth,async user=>{
       if(user){
         try{
-          const snap=await getDoc(doc(db,"usuarios",user.uid));
+          // getDocFromServer, no getDoc: evita leer de una caché local que
+          // aún no ha sincronizado justo tras iniciar sesión (cerraba la
+          // sesión recién abierta creyendo que no había perfil).
+          const snap=await getDocFromServer(doc(db,"usuarios",user.uid));
           if(snap.exists()&&snap.data().activo!==false){
             setSesion({uid:user.uid,id:user.uid,...snap.data()});
           }else{

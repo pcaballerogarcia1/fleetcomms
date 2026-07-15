@@ -9,7 +9,7 @@ import { LoginScheduling, TabProyectos, SchedulingModuleWrapper } from "./schedu
 import { RosteringPage } from "./rostering.jsx";
 import { ControlPage } from "./control.jsx";
 import { db, auth } from "./firebase.js";
-import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc, getDocFromServer } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 const C = {
@@ -133,12 +133,18 @@ function WorkspaceRouter() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Firebase Auth — escuchar sesión
+  // Firebase Auth — escuchar sesión.
+  // getDocFromServer (no getDoc): justo después de iniciar sesión, la caché
+  // local de Firestore puede no tener aún este documento — getDoc podría
+  // devolver "no existe" desde una caché vacía/desactualizada antes de que
+  // sincronice, cerrando la sesión que se acaba de abrir. Forzar servidor
+  // evita esa carrera (se notaba como "solo funciona con las DevTools
+  // abiertas", que ralentizan lo suficiente para que la caché ya sincronice).
   useEffect(() => {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDoc(doc(db, "usuarios", user.uid));
+          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
           if (snap.exists()) {
             const profile = { uid: user.uid, ...snap.data() };
             setSesion(profile);

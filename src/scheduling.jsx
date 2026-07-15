@@ -5,7 +5,7 @@ import { useRostering, workerCodeOnDay, isUnavailable, SHIFT_META } from "./rost
 import { PlanningPage, idbGet } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
-  doc, serverTimestamp, query, where, getDoc, setDoc, getDocs, limit,
+  doc, serverTimestamp, query, where, getDoc, getDocFromServer, setDoc, getDocs, limit,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
@@ -3716,7 +3716,9 @@ export function LoginScheduling({ onLogin }) {
     setLoading(true); setErr("");
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, "usuarios", cred.user.uid));
+      // getDocFromServer: recién autenticado, la caché local puede no tener
+      // aún este documento y devolver "no existe" antes de sincronizar.
+      const snap = await getDocFromServer(doc(db, "usuarios", cred.user.uid));
       if (!snap.exists() || snap.data().activo === false) {
         await signOut(auth); setErr("Usuario inactivo o sin perfil."); setLoading(false); return;
       }
@@ -3862,7 +3864,7 @@ export default function SchedulingApp() {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDoc(doc(db, "usuarios", user.uid));
+          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
           if (snap.exists() && snap.data().activo !== false) {
             setSesion({ uid: user.uid, ...snap.data() });
           } else { await signOut(auth); setSesion(null); }
