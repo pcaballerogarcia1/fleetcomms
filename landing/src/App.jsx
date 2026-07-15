@@ -255,7 +255,7 @@ const T = {
       send: "Enviar mensaje",
       sent: "¡Mensaje enviado! Te contactamos en 24h.",
       phone: "También puedes llamarnos:",
-      phoneVal: "+34 900 000 000",
+      phoneVal: "+34 620 12 18 57",
     },
     footer: {
       tagline: "La plataforma de operaciones para flotas urbanas.",
@@ -426,7 +426,7 @@ const T = {
       send: "Send message",
       sent: "Message sent! We'll contact you within 24h.",
       phone: "You can also call us:",
-      phoneVal: "+34 900 000 000",
+      phoneVal: "+34 620 12 18 57",
     },
     footer: {
       tagline: "The operations platform for urban fleets.",
@@ -1139,13 +1139,29 @@ function AboutSection({ t }) {
 }
 
 // ── CONTACT ──────────────────────────────────────────────────────
+const CONTACT_EMAIL = "p.caballerogarcia1@gmail.com";
+
 function ContactSection({ t }) {
   const ref = useReveal();
   const c = t.contact;
   const [form, setForm] = useState({ name: "", company: "", email: "", message: "" });
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = e => { e.preventDefault(); setSent(true); };
+  // No backend: opens the visitor's mail client with everything pre-filled,
+  // addressed to CONTACT_EMAIL, so the reply-to is whatever they typed in.
+  const handleSubmit = e => {
+    e.preventDefault();
+    const subject = `Contacto Operanzia — ${form.company || form.name || "Nueva consulta"}`;
+    const body = [
+      `Nombre: ${form.name}`,
+      `Empresa: ${form.company}`,
+      `Email: ${form.email}`,
+      "",
+      form.message,
+    ].join("\n");
+    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setSent(true);
+  };
 
   const inp = (key, placeholder, multi = false) => {
     const base = {
