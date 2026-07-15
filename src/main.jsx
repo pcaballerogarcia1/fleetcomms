@@ -266,9 +266,15 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /rostering — monthly availability grid */}
-        {activeProject && path === "/rostering" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        {/* /rostering — kept mounted like Planning/Scheduling/Control so its
+            listeners stay connected instead of reconnecting from scratch
+            every time you navigate back here. */}
+        {activeProject && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === "/rostering" ? "visible" : "hidden",
+            pointerEvents: path === "/rostering" ? "auto" : "none",
+          }}>
             <RosteringPage sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
           </div>
         )}
