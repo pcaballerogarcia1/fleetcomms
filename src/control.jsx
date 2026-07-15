@@ -46,10 +46,16 @@ function userName(uid, usuarios) {
 }
 
 // ── LEAFLET MINI-MAP (read-only, updates on ubicaciones change) ────
+// Stops are drawn on a single canvas overlay instead of one Leaflet DOM
+// marker per stop — with hundreds of paradas, recreating a DOM divIcon for
+// every point on every real-time update (one driver check-in = full rebuild)
+// was the main source of lag. The map is read-only (no marker click/popup),
+// so canvas has no functional downside here.
 function MapaControl({ ubicaciones, recorrido, height = 280 }) {
-  const divRef    = useRef(null);
-  const mapRef    = useRef(null);
-  const layersRef = useRef([]);
+  const divRef      = useRef(null);
+  const mapRef      = useRef(null);
+  const polyRef      = useRef(null);
+  const canvasRef    = useRef(null); // { canvas, draw }
 
   function ensureLeaflet(cb) {
     if (!document.getElementById("leaflet-css")) {
@@ -69,28 +75,70 @@ function MapaControl({ ubicaciones, recorrido, height = 280 }) {
     const L = window.L;
     if (!L || !mapRef.current) return;
     const map = mapRef.current;
-    layersRef.current.forEach(l => map.removeLayer(l));
-    layersRef.current = [];
 
-    const pts = (ubicaciones || []).filter(u => u.lat && u.lng);
-
+    if (polyRef.current) { try { map.removeLayer(polyRef.current); } catch {} polyRef.current = null; }
     if (recorrido && recorrido.length > 1) {
       const ll = recorrido.map(p => Array.isArray(p) ? p : [p.lat, p.lng]);
-      const poly = L.polyline(ll, { color: "#1e3a5f", weight: 2, opacity: 0.6, dashArray: "6,4" }).addTo(map);
-      layersRef.current.push(poly);
+      polyRef.current = L.polyline(ll, { color: "#1e3a5f", weight: 2, opacity: 0.6, dashArray: "6,4" }).addTo(map);
     }
 
-    pts.forEach(u => {
-      const color = u.realizado ? C.green : barrioColor(u.barri);
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:2px solid ${u.realizado ? "#ffffff88" : color + "55"};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:white;box-shadow:0 2px 6px #0008;font-family:${mono};">${u.orden}</div>`,
-        iconSize: [20, 20], iconAnchor: [10, 10],
-      });
-      layersRef.current.push(L.marker([u.lat, u.lng], { icon }).addTo(map));
-    });
+    if (canvasRef.current) {
+      const { canvas, draw } = canvasRef.current;
+      try { map.off("moveend zoomend viewreset resize", draw); } catch {}
+      try { canvas.remove(); } catch {}
+      canvasRef.current = null;
+    }
 
-    if (pts.length > 0) map.fitBounds(pts.map(u => [u.lat, u.lng]), { padding: [16, 16] });
+    const pts = (ubicaciones || []).filter(u => u.lat && u.lng);
+    if (pts.length === 0) return;
+
+    const showLabels = pts.length <= 300; // order number inside the dot — skip when it'd just be visual noise
+    const packed = pts.map(u => ({
+      lat: u.lat, lng: u.lng, orden: u.orden,
+      done: !!u.realizado,
+      color: u.realizado ? C.green : barrioColor(u.barri),
+    }));
+
+    const PAD = 60;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:absolute;pointer-events:none;";
+    map.getPanes().overlayPane.appendChild(canvas);
+
+    function draw() {
+      if (!canvas.parentNode || !mapRef.current) return;
+      const sz = map.getSize();
+      const topLeft = map.containerPointToLayerPoint([-PAD, -PAD]);
+      L.DomUtil.setPosition(canvas, topLeft);
+      canvas.width  = sz.x + 2 * PAD;
+      canvas.height = sz.y + 2 * PAD;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      packed.forEach(p => {
+        const cp = map.latLngToContainerPoint([p.lat, p.lng]);
+        const x = cp.x + PAD, y = cp.y + PAD;
+        ctx.beginPath();
+        ctx.arc(x, y, 9, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = p.done ? "#ffffff88" : p.color + "55";
+        ctx.stroke();
+        if (showLabels) {
+          ctx.fillStyle = "#fff";
+          ctx.font = `800 8px ${mono}`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(p.orden ?? ""), x, y + 0.5);
+        }
+      });
+    }
+
+    draw();
+    map.on("moveend zoomend viewreset resize", draw);
+    canvasRef.current = { canvas, draw };
+
+    map.invalidateSize();
+    map.fitBounds(pts.map(u => [u.lat, u.lng]), { padding: [16, 16] });
   }
 
   function initMap() {
