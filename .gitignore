@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+
+# Tool artifacts (gbrain, R)
+.Rhistory
+.gbrain-source
+.sources/

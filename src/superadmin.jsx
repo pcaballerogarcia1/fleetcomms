@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db, auth, secondaryAuth, secondaryDb } from "./firebase.js";
 import {
   collection, onSnapshot, doc, setDoc, updateDoc,
-  serverTimestamp, query, where, getDoc, writeBatch,
+  serverTimestamp, query, where, getDoc, writeBatch, runTransaction,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 
@@ -213,9 +213,9 @@ function OrgDetail({ org, onBack, onUpdate }) {
         }
       }
 
-      const batch = writeBatch(db);
-      batch.set(doc(db, "usuarios", uid), perfil);
-      await batch.commit();
+      await runTransaction(db, async (tx) => {
+        tx.set(doc(db, "usuarios", uid), perfil);
+      });
       await secondaryAuth.signOut().catch(() => {});
       setShowAdd(false);
       setAddForm({ nombre: "", apellidos: "", email: "", password: "", rol: "admin" });
@@ -469,17 +469,17 @@ function SuperAdminPanel({ sesion }) {
     if (!slug) { setErr("Nombre inválido para generar ID"); return; }
     setSaving(true); setErr("");
     try {
-      const batch = writeBatch(db);
-      batch.set(doc(db, "orgs", slug), {
-        nombre:       form.nombre.trim(),
-        org_id:       slug,
-        activo:       true,
-        max_usuarios: parseInt(form.max_usuarios) || 5,
-        plan:         form.plan,
-        contacto:     form.contacto.trim(),
-        createdAt:    serverTimestamp(),
+      await runTransaction(db, async (tx) => {
+        tx.set(doc(db, "orgs", slug), {
+          nombre:       form.nombre.trim(),
+          org_id:       slug,
+          activo:       true,
+          max_usuarios: parseInt(form.max_usuarios) || 5,
+          plan:         form.plan,
+          contacto:     form.contacto.trim(),
+          createdAt:    serverTimestamp(),
+        });
       });
-      await batch.commit();
       setForm({ nombre: "", max_usuarios: 5, plan: "basic", contacto: "" });
       setShowCrear(false);
     } catch (e) {

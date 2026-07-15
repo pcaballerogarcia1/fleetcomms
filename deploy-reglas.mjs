@@ -3,22 +3,16 @@
 
 import http from "http";
 import { exec } from "child_process";
+import { readFileSync } from "fs";
 
 const CLIENT_ID     = "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com";
 const CLIENT_SECRET = "j9iVZfS8kkCEFUPaAeJV0sAi";
 const PROJECT_ID    = "fleetcomms-13d89";
 const PORT          = 9005;
 const REDIRECT      = `http://localhost:${PORT}`;
-const SCOPE         = "https://www.googleapis.com/auth/cloud-platform";
+const SCOPE         = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/firebase";
 
-const RULES = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}`;
+const RULES = readFileSync("firestore.rules", "utf8");
 
 async function postForm(url, body) {
   const r = await fetch(url, {
@@ -92,13 +86,25 @@ const rs = await apiCall("POST",
 if (!rs.ok) { console.error("Error creando ruleset:", rs.body); process.exit(1); }
 const rulesetName = JSON.parse(rs.body).name;
 
-// Step 4: update Firestore release (PUT replaces the whole resource — no updateMask needed)
-const rel = await apiCall("PUT",
+// Step 4: update Firestore release — exact format used by firebase-tools internally
+const rel = await apiCall("PATCH",
   `https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases/cloud.firestore`,
   t.access_token,
-  { name: `projects/${PROJECT_ID}/releases/cloud.firestore`, rulesetName }
+  { release: { name: `projects/${PROJECT_ID}/releases/cloud.firestore`, rulesetName } }
 );
-if (!rel.ok) { console.error("Error actualizando release:", rel.body); process.exit(1); }
+if (!rel.ok) {
+  // If release doesn't exist yet, create it
+  if (rel.status === 404) {
+    const rel2 = await apiCall("POST",
+      `https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases`,
+      t.access_token,
+      { name: `projects/${PROJECT_ID}/releases/cloud.firestore`, rulesetName }
+    );
+    if (!rel2.ok) { console.error("Error creando release:", rel2.body); process.exit(1); }
+  } else {
+    console.error("Error actualizando release:", rel.body); process.exit(1);
+  }
+}
 
 console.log("=== REGLAS DESPLEGADAS CORRECTAMENTE ===");
 console.log("Ya puedes crear usuarios en app.operanzia.com/superadmin\n");
