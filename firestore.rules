@@ -2,157 +2,79 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── HELPERS ──────────────────────────────────────────────────
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // get() inside a rule is unrestricted by these same rules (Firestore
-    // evaluates rule-internal get()/exists() calls without re-checking
-    // rules), so this is safe to call from anywhere, including while
-    // evaluating access to the caller's own usuarios doc.
-    function myProfile() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
-    }
-
-    function myOrgId() {
-      return myProfile().org_id;
-    }
-
-    function isSuperAdmin() {
-      return isSignedIn() && myProfile().rol == 'superadmin';
-    }
-
-    // True only when both sides are a real, non-null org_id and they match.
-    // (Two documents that both happen to be missing org_id must NOT be
-    // treated as "same org" — that would let broken profiles see each
-    // other's data.)
-    function sameOrg(orgIdValue) {
-      return isSignedIn() && orgIdValue != null && orgIdValue == myOrgId();
-    }
-
-    // planning_layers / planning_depots / planning_settings / scheduling_roster
-    // are scoped by projectId, not org_id directly — resolve the owning
-    // org via the parent scheduling_projects doc.
-    function projectOrg(projectId) {
-      return get(/databases/$(database)/documents/scheduling_projects/$(projectId)).data.org_id;
-    }
-
-    // ── SUPERADMIN: acceso total a todo ─────────────────────────────
+    // Superadmin: acceso total via get() al doc de usuario
     match /{document=**} {
-      allow read, write: if isSuperAdmin();
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'superadmin';
     }
 
-    // ── ORGS ─────────────────────────────────────────────────────
+    // Orgs: cualquier usuario autenticado (solo superadmin llega al panel)
     match /orgs/{orgId} {
-      allow read: if isSignedIn() && orgId == myOrgId();
-      allow write: if false; // solo superadmin (regla de arriba)
+      allow read, write: if request.auth != null;
     }
 
-    // ── USUARIOS ─────────────────────────────────────────────────
+    // Usuarios: lectura y creación para cualquier autenticado
     match /usuarios/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || resource.data.org_id == myOrgId());
-
-      // Cubre tanto el alta inicial del primer admin (se autentica con su
-      // propio uid recién creado, antes de tener perfil; org_id ahí es
-      // texto libre del formulario, no hay doc en orgs todavía) como el
-      // alta de usuarios nuevos desde el panel de admin (usa una sesión de
-      // Firebase Auth secundaria autenticada como el usuario nuevo, así
-      // que request.auth.uid también es el uid que se está creando).
-      // No puede autoasignarse rol superadmin bajo ningún caso — es la
-      // protección importante aquí, ya que evita escalar privilegios.
-      allow create: if isSignedIn() && request.auth.uid == uid &&
-        request.resource.data.rol != 'superadmin';
-
-      allow update: if isSignedIn() && (
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
         request.auth.uid == uid ||
-        (resource.data.org_id == myOrgId() && myProfile().rol in ['admin', 'superadmin'])
-      ) && request.resource.data.org_id == resource.data.org_id; // org_id no se puede reasignar en un update
-
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['admin', 'superadmin']
+      );
       allow delete: if false;
     }
 
-    // ── PLANES / INCIDENCIAS / INVENTARIO / MOVIMIENTOS ─────────────
-    // Mismo patrón: org_id como campo directo del documento, siempre
-    // filtrado en el cliente por where("org_id","==",...).
-    match /planes/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+    // Planning / Scheduling: cualquier usuario autenticado
+    match /planning_layers/{docId} {
+      allow read, write: if request.auth != null;
     }
-    match /incidencias/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+    match /planning_depots/{docId} {
+      allow read, write: if request.auth != null;
     }
-    match /inventario/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+    match /planning_settings/{docId} {
+      allow read, write: if request.auth != null;
     }
-    match /movimientos/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
-    }
-
-    // ── SCHEDULING ───────────────────────────────────────────────
-    match /scheduling_vehicles/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
-    }
-    match /scheduling_workers/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
-    }
-    match /scheduling_projects/{projectId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
-
-      // Sin campos propios de tenant — el único límite es la ruta
-      // (subcolección del proyecto), así que se resuelve el dueño vía el
-      // documento padre.
+    match /scheduling_projects/{docId} {
+      allow read, write: if request.auth != null;
       match /timetable/{entry} {
-        allow read, write: if sameOrg(projectOrg(projectId));
+        allow read, write: if request.auth != null;
       }
     }
-
-    // ── PLANNING (campo orgId, camelCase, y siempre por projectId) ──
-    match /planning_layers/{docId} {
-      allow read: if sameOrg(projectOrg(resource.data.projectId));
-      allow create: if sameOrg(projectOrg(request.resource.data.projectId));
-      allow update, delete: if sameOrg(projectOrg(resource.data.projectId));
+    match /scheduling_vehicles/{docId} {
+      allow read, write: if request.auth != null;
     }
-    // planning_depots / planning_settings / scheduling_roster: siempre un
-    // único documento cuyo ID ES el projectId (nunca se listan), así que
-    // se resuelve directamente por el propio ID del documento en vez de
-    // fiarse de que el campo orgId esté siempre presente (algunos guardados
-    // parciales con merge:true no lo re-escriben).
-    match /planning_depots/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
+    match /scheduling_workers/{docId} {
+      allow read, write: if request.auth != null;
     }
-    match /planning_settings/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
+    match /scheduling_roster/{docId} {
+      allow read, write: if request.auth != null;
     }
-    match /scheduling_roster/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
-    }
-
-    // ── ROSTERING (documento único por org+mes, campo org_id) ───────
     match /rostering/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow write: if sameOrg(request.resource.data.org_id);
+      allow read, write: if request.auth != null;
     }
 
-    // ── UBICACIÓN EN VIVO DEL CONDUCTOR ─────────────────────────────
+    // Otras colecciones usadas por la app del conductor (Rutas/Incidencias/Inventario)
+    match /incidencias/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /inventario/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /movimientos/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Planes de ruta publicados desde Scheduling
+    match /planes/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Ubicación en vivo del conductor (mapa de flota en Control).
+    // Solo el propio conductor puede escribir su documento — evita que
+    // alguien falsifique la posición GPS de otro usuario.
     match /ubicaciones_activas/{uid} {
-      allow read: if sameOrg(resource.data.org_id);
-      // Solo el propio conductor puede escribir su documento — evita que
-      // alguien falsifique la posición GPS de otro usuario.
-      allow write: if isSignedIn() && request.auth.uid == uid;
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
   }
 }
