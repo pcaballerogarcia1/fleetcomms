@@ -3843,14 +3843,12 @@ export function LoginScheduling({ onLogin }) {
           }
         </button>
 
-        {mode === "login" && (
-          <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: C.dim }}>
-            ¿Sin acceso?{" "}
-            <button onClick={() => { setMode("setup"); setErr(""); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 11, fontFamily: font, textDecoration: "underline" }}>
-              Crear primer admin
-            </button>
-          </div>
-        )}
+        {/* No hay botón manual para pasar a modo "setup" — eso permitía a
+            cualquier visitante de la pantalla de login crearse una cuenta
+            de admin para el org_id que quisiera, sin pasar por el
+            superadmin. El modo "setup" solo debe activarse automáticamente
+            (arriba, al detectar que no existe ningún admin en todo el
+            sistema todavía). */}
       </div>
     </div>
   );

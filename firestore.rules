@@ -53,16 +53,18 @@ service cloud.firestore {
     match /usuarios/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || resource.data.org_id == myOrgId());
 
-      // Cubre tanto el alta inicial del primer admin (se autentica con su
-      // propio uid recién creado, antes de tener perfil; org_id ahí es
-      // texto libre del formulario, no hay doc en orgs todavía) como el
-      // alta de usuarios nuevos desde el panel de admin (usa una sesión de
-      // Firebase Auth secundaria autenticada como el usuario nuevo, así
-      // que request.auth.uid también es el uid que se está creando).
-      // No puede autoasignarse rol superadmin bajo ningún caso — es la
-      // protección importante aquí, ya que evita escalar privilegios.
+      // Cubre el alta de usuarios nuevos desde el panel de admin (usa una
+      // sesión de Firebase Auth secundaria autenticada como el usuario
+      // nuevo, así que request.auth.uid también es el uid que se está
+      // creando). Nunca puede autoasignarse rol superadmin, y el org_id
+      // tiene que apuntar a una organización que YA exista — creada antes
+      // por el superadmin — para que nadie pueda autoregistrarse como
+      // admin de una organización inventada (la pantalla de login ya no
+      // tiene ningún atajo para esto, pero la regla lo bloquea también
+      // aunque alguien llame a Firestore directamente, sin pasar por la UI).
       allow create: if isSignedIn() && request.auth.uid == uid &&
-        request.resource.data.rol != 'superadmin';
+        request.resource.data.rol != 'superadmin' &&
+        exists(/databases/$(database)/documents/orgs/$(request.resource.data.org_id));
 
       allow update: if isSignedIn() && (
         request.auth.uid == uid ||
