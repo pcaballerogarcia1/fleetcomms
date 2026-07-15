@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
-import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, limit } from "firebase/firestore";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -406,24 +406,33 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   const now    = new Date();
   const curMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [mesFilter, setMesFilter] = useState(curMes);
+  const PLANES_QUERY_LIMIT = 300;
+  const [planesCapped, setPlanesCapped] = useState(false);
 
   // Real-time: planes — scoped to the selected month when one is chosen (the
   // common case) so we don't stream every plan ever created for the org on
   // every stop check-in. docChanges() keeps object refs stable for unchanged
   // plans, so the map/feed only re-render for the plan that actually changed.
+  // limit() bounds how many full documents (each carrying an ubicaciones
+  // array) Firestore has to fetch + the SDK has to decode every time this
+  // listener (re)connects — without it, a month with 1000+ plans took ~11s
+  // to show ANYTHING every single time you switched away from Control and
+  // back, because the whole set was re-downloaded and re-decoded from
+  // scratch on every mount.
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
     const col = collection(db, "planes");
     const filters = [];
     if (orgId) filters.push(where("org_id", "==", orgId));
     if (mesFilter) filters.push(where("mes", "==", mesFilter));
-    const q = filters.length ? query(col, ...filters) : col;
+    const q = query(col, ...filters, limit(PLANES_QUERY_LIMIT));
     const cache = new Map();
     return onSnapshot(q, snap => {
       snap.docChanges().forEach(change => {
         if (change.type === "removed") cache.delete(change.doc.id);
         else cache.set(change.doc.id, { _id: change.doc.id, ...change.doc.data() });
       });
+      setPlanesCapped(snap.size >= PLANES_QUERY_LIMIT);
       setPlanes([...cache.values()]);
     });
   }, [orgId, isSuperAdmin, mesFilter]);
@@ -433,7 +442,8 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
     const col = collection(db, "planes");
-    const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
+    const filters = orgId ? [where("org_id", "==", orgId)] : [];
+    const q = query(col, ...filters, limit(500));
     getDocs(q).then(snap => {
       const set = new Set();
       snap.docs.forEach(d => { const m = d.data().mes; if (m) set.add(m); });
@@ -619,8 +629,13 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
           overflowY: "auto", padding: "12px 12px",
         }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
-            {filteredPlanes.length} planes
+            {filteredPlanes.length}{planesCapped ? `+` : ""} planes
           </div>
+          {planesCapped && (
+            <div style={{ fontSize: 10, color: C.orange, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.25)", borderRadius: 6, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
+              Hay más de {PLANES_QUERY_LIMIT} planes este mes — se muestran los primeros {PLANES_QUERY_LIMIT}. Progreso global también es solo de estos.
+            </div>
+          )}
           {filteredPlanes.length === 0 && (
             <div style={{ color: C.dim, fontSize: 13, textAlign: "center", padding: "40px 0" }}>
               Sin planes para este mes
