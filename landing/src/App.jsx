@@ -253,7 +253,9 @@ const T = {
       email: "Email corporativo",
       message: "¿Qué necesitas gestionar?",
       send: "Enviar mensaje",
+      sending: "Enviando…",
       sent: "¡Mensaje enviado! Te contactamos en 24h.",
+      error: "No se pudo enviar. Prueba de nuevo o llámanos directamente.",
       phone: "También puedes llamarnos:",
       phoneVal: "+34 620 12 18 57",
     },
@@ -424,7 +426,9 @@ const T = {
       email: "Corporate email",
       message: "What do you need to manage?",
       send: "Send message",
+      sending: "Sending…",
       sent: "Message sent! We'll contact you within 24h.",
+      error: "Couldn't send it. Try again or call us directly.",
       phone: "You can also call us:",
       phoneVal: "+34 620 12 18 57",
     },
@@ -1139,28 +1143,26 @@ function AboutSection({ t }) {
 }
 
 // ── CONTACT ──────────────────────────────────────────────────────
-const CONTACT_EMAIL = "p.caballerogarcia1@gmail.com";
-
 function ContactSection({ t }) {
   const ref = useReveal();
   const c = t.contact;
   const [form, setForm] = useState({ name: "", company: "", email: "", message: "" });
-  const [sent, setSent] = useState(false);
+  const [status, setStatus] = useState("idle"); // idle | sending | sent | error
 
-  // No backend: opens the visitor's mail client with everything pre-filled,
-  // addressed to CONTACT_EMAIL, so the reply-to is whatever they typed in.
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault();
-    const subject = `Contacto Operanzia — ${form.company || form.name || "Nueva consulta"}`;
-    const body = [
-      `Nombre: ${form.name}`,
-      `Empresa: ${form.company}`,
-      `Email: ${form.email}`,
-      "",
-      form.message,
-    ].join("\n");
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    setStatus("sending");
+    try {
+      const r = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!r.ok) throw new Error("send failed");
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
   };
 
   const inp = (key, placeholder, multi = false) => {
@@ -1198,7 +1200,7 @@ function ContactSection({ t }) {
           border: "1px solid #e2e8f0", padding: 40,
           boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
         }}>
-          {sent ? (
+          {status === "sent" ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <div style={{
                 width: 56, height: 56, borderRadius: "50%", background: "#dbeafe",
@@ -1227,8 +1229,13 @@ function ContactSection({ t }) {
                 <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.message}</label>
                 {inp("message", "Gestionamos 30 vehículos de limpieza viaria…", true)}
               </div>
-              <button type="submit" className="btn-primary" style={{ marginTop: 6, justifyContent: "center", fontSize: 15, padding: "13px 24px" }}>
-                {c.send} <IconArrow />
+              {status === "error" && (
+                <div style={{ fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "9px 12px" }}>
+                  {c.error}
+                </div>
+              )}
+              <button type="submit" disabled={status === "sending"} className="btn-primary" style={{ marginTop: 6, justifyContent: "center", fontSize: 15, padding: "13px 24px", opacity: status === "sending" ? 0.7 : 1, cursor: status === "sending" ? "wait" : "pointer" }}>
+                {status === "sending" ? c.sending : <>{c.send} <IconArrow /></>}
               </button>
             </form>
           )}
