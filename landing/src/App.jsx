@@ -219,55 +219,18 @@ const T = {
     pricing: {
       tag: "Precios",
       h2: "Sin sorpresas, sin letra pequeña",
-      sub: "Planes adaptados al tamaño de tu operación.",
-      plans: [
-        {
-          name: "Starter",
-          price: "149",
-          period: "/mes",
-          desc: "Para flotas pequeñas que quieren empezar a digitalizar.",
-          features: [
-            "Hasta 10 vehículos",
-            "Módulos Planning + Incidencias",
-            "1 organización",
-            "Soporte por email",
-          ],
-          cta: "Empezar gratis",
-          highlighted: false,
-        },
-        {
-          name: "Professional",
-          price: "349",
-          period: "/mes",
-          desc: "Para operadores que necesitan optimización y control total.",
-          features: [
-            "Hasta 50 vehículos",
-            "Todos los módulos",
-            "VRP multi-día",
-            "Rostering + Scheduling",
-            "Inventario + Movimientos",
-            "Soporte prioritario",
-          ],
-          cta: "Solicitar demo",
-          highlighted: true,
-        },
-        {
-          name: "Enterprise",
-          price: "Custom",
-          period: "",
-          desc: "Para grandes operadores con necesidades específicas.",
-          features: [
-            "Vehículos ilimitados",
-            "Multi-tenant",
-            "API + Integraciones",
-            "SLA garantizado",
-            "Onboarding dedicado",
-            "Formación in situ",
-          ],
-          cta: "Contactar ventas",
-          highlighted: false,
-        },
+      sub: "Un precio simple: pagas por vehículo activo, no por planes cerrados.",
+      priceFrom: "Desde",
+      price: "60",
+      unit: "€ / vehículo / mes",
+      note: "Sin permanencia · Factura según flota real",
+      features: [
+        "Todos los módulos incluidos",
+        "Planning, Scheduling, Rostering, Incidencias, Inventario",
+        "Soporte incluido",
+        "Sin coste de alta",
       ],
+      cta: "Solicitar demo",
     },
     about: {
       tag: "Empresa",
@@ -427,55 +390,18 @@ const T = {
     pricing: {
       tag: "Pricing",
       h2: "No surprises, no fine print",
-      sub: "Plans tailored to the size of your operation.",
-      plans: [
-        {
-          name: "Starter",
-          price: "149",
-          period: "/mo",
-          desc: "For small fleets starting their digital journey.",
-          features: [
-            "Up to 10 vehicles",
-            "Planning + Incidents modules",
-            "1 organization",
-            "Email support",
-          ],
-          cta: "Start free",
-          highlighted: false,
-        },
-        {
-          name: "Professional",
-          price: "349",
-          period: "/mo",
-          desc: "For operators who need full optimization and control.",
-          features: [
-            "Up to 50 vehicles",
-            "All modules",
-            "Multi-day VRP",
-            "Rostering + Scheduling",
-            "Inventory + Movements",
-            "Priority support",
-          ],
-          cta: "Request demo",
-          highlighted: true,
-        },
-        {
-          name: "Enterprise",
-          price: "Custom",
-          period: "",
-          desc: "For large operators with specific requirements.",
-          features: [
-            "Unlimited vehicles",
-            "Multi-tenant",
-            "API + Integrations",
-            "Guaranteed SLA",
-            "Dedicated onboarding",
-            "On-site training",
-          ],
-          cta: "Contact sales",
-          highlighted: false,
-        },
+      sub: "One simple price: you pay per active vehicle, not for closed-off plans.",
+      priceFrom: "From",
+      price: "60",
+      unit: "€ / vehicle / month",
+      note: "No commitment · Billed on your actual fleet",
+      features: [
+        "All modules included",
+        "Planning, Scheduling, Rostering, Incidents, Inventory",
+        "Support included",
+        "No setup fee",
       ],
+      cta: "Request demo",
     },
     about: {
       tag: "Company",
@@ -1101,7 +1027,7 @@ function PricingSection({ t }) {
   return (
     <section id="pricing" ref={ref} className="section" style={{ background: "#ffffff" }}>
       <div className="container">
-        <div style={{ textAlign: "center", marginBottom: 64 }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
           <div className="reveal" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
             <span className="tag-light">{p.tag}</span>
           </div>
@@ -1109,74 +1035,53 @@ function PricingSection({ t }) {
           <p className="reveal" style={{ fontSize: 17, color: "#64748b", maxWidth: 460, margin: "0 auto", transitionDelay: "0.18s" }}>{p.sub}</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, alignItems: "start" }}>
-          {p.plans.map((plan, i) => (
-            <div key={i} className="reveal" style={{
-              borderRadius: 14, overflow: "hidden",
-              background: "#ffffff",
-              border: plan.highlighted ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
-              boxShadow: plan.highlighted ? "0 8px 32px rgba(37,99,235,0.12)" : "0 1px 3px rgba(0,0,0,0.04)",
-              transitionDelay: `${i * 0.1}s`,
-              transition: "transform .22s, box-shadow .22s",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = plan.highlighted ? "0 16px 40px rgba(37,99,235,0.18)" : "0 10px 28px rgba(0,0,0,0.09)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = plan.highlighted ? "0 8px 32px rgba(37,99,235,0.12)" : "0 1px 3px rgba(0,0,0,0.04)"; }}
-            >
-              {plan.highlighted && (
-                <div style={{ height: 3, background: "linear-gradient(90deg, #2563eb, #7c3aed)" }} />
-              )}
-              <div style={{ padding: 32, position: "relative" }}>
-                {plan.highlighted && (
-                  <div style={{
-                    position: "absolute", top: 24, right: 24,
-                    padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
-                    background: "#2563eb", color: "#fff", letterSpacing: "0.06em",
-                  }}>POPULAR</div>
-                )}
+        <div className="reveal" style={{
+          maxWidth: 460, margin: "0 auto",
+          borderRadius: 16, overflow: "hidden",
+          background: "#ffffff",
+          border: "1.5px solid #2563eb",
+          boxShadow: "0 8px 32px rgba(37,99,235,0.12)",
+          transitionDelay: "0.1s",
+          transition: "transform .22s, box-shadow .22s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 40px rgba(37,99,235,0.18)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(37,99,235,0.12)"; }}
+        >
+          <div style={{ height: 3, background: "linear-gradient(90deg, #2563eb, #7c3aed)" }} />
+          <div style={{ padding: "40px 36px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", letterSpacing: "0.08em", marginBottom: 14 }}>{p.priceFrom.toUpperCase()}</div>
 
-                <div style={{ fontSize: 11, fontWeight: 700, color: plan.highlighted ? "#2563eb" : "#94a3b8", letterSpacing: "0.08em", marginBottom: 14 }}>{plan.name.toUpperCase()}</div>
-
-                <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginBottom: 8 }}>
-                  {plan.price !== "Custom" ? (
-                    <>
-                      <span style={{ fontSize: 46, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1 }}>€{plan.price}</span>
-                      <span style={{ fontSize: 14, color: "#94a3b8" }}>{plan.period}</span>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: 38, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em" }}>Custom</span>
-                  )}
-                </div>
-                <p style={{ fontSize: 13.5, color: "#64748b", marginBottom: 28, lineHeight: 1.6 }}>{plan.desc}</p>
-
-                <div style={{ marginBottom: 28 }}>
-                  {plan.features.map((f, fi) => (
-                    <div key={fi} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11 }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                        background: plan.highlighted ? "#dbeafe" : "#f1f5f9",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <IconCheck color={plan.highlighted ? "#2563eb" : "#64748b"} />
-                      </div>
-                      <span style={{ fontSize: 13.5, color: "#334155" }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <a href="#contact" style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                  padding: "12px 20px", borderRadius: 9, fontSize: 14, fontWeight: 600,
-                  textDecoration: "none", transition: "all .18s",
-                  background: plan.highlighted ? "#1e40af" : "#f8fafc",
-                  color: plan.highlighted ? "#fff" : "#334155",
-                  border: plan.highlighted ? "none" : "1px solid #e2e8f0",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-                >{plan.cta} <IconArrow /></a>
-              </div>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 58, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1 }}>{p.price}€</span>
             </div>
-          ))}
+            <div style={{ fontSize: 15, color: "#334155", fontWeight: 600, marginBottom: 8 }}>{p.unit}</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 30 }}>{p.note}</div>
+
+            <div style={{ marginBottom: 30, textAlign: "left" }}>
+              {p.features.map((f, fi) => (
+                <div key={fi} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11 }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                    background: "#dbeafe",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <IconCheck color="#2563eb" />
+                  </div>
+                  <span style={{ fontSize: 13.5, color: "#334155" }}>{f}</span>
+                </div>
+              ))}
+            </div>
+
+            <a href="#contact" style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              padding: "13px 20px", borderRadius: 9, fontSize: 14, fontWeight: 600,
+              textDecoration: "none", transition: "all .18s",
+              background: "#1e40af", color: "#fff",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+            >{p.cta} <IconArrow /></a>
+          </div>
         </div>
       </div>
     </section>
