@@ -472,11 +472,18 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   // Selected plan
   const activePlan = selectedId ? filteredPlanes.find(p => p._id === selectedId) : null;
 
-  // Activity feed source: selected plan or global
-  const feedSource = activePlan ? [activePlan] : filteredPlanes;
+  // Activity feed: built from the selected plan, or all plans of the month.
+  // Dependency is deliberately a single value that IS whichever source is
+  // actually relevant (activePlan when one is selected, filteredPlanes
+  // otherwise) — not both. Depending on both would recompute this on every
+  // write to ANY plan in the month even while looking at one specific plan,
+  // since filteredPlanes gets a new array reference on every such write.
+  // That was rebuilding (and re-sorting) the whole events list — every stop
+  // of the plan — on updates that had nothing to do with the open plan.
   const activityEvents = useMemo(() => {
+    const source = activePlan ? [activePlan] : filteredPlanes;
     const events = [];
-    feedSource.forEach(plan => {
+    source.forEach(plan => {
       (plan.ubicaciones || []).forEach(u => {
         if (u.realizado && u.realizadoEn) {
           events.push({ ...u, planNombre: plan.nombre || plan.archivo || "Plan" });
@@ -484,7 +491,8 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
       });
     });
     return events.sort((a, b) => b.realizadoEn - a.realizadoEn).slice(0, 80);
-  }, [feedSource]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlan ?? filteredPlanes]);
 
   const hasMapa = activePlan && (activePlan.ubicaciones || []).some(u => u.lat && u.lng);
 
