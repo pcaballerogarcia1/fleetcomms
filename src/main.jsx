@@ -273,9 +273,17 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /control — real-time field activity monitor */}
-        {activeProject && path === "/control" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        {/* /control — kept mounted like Planning/Scheduling so its Firestore
+            listeners (planes, usuarios, ubicaciones_activas) stay connected
+            in the background instead of tearing down and reconnecting from
+            scratch — with hundreds of plans, that reconnect was the multi-
+            second "blank screen" every time you navigated back here. */}
+        {activeProject && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === "/control" ? "visible" : "hidden",
+            pointerEvents: path === "/control" ? "auto" : "none",
+          }}>
             <ControlPage sesion={sesion} orgId={effectiveOrgId} embedded />
           </div>
         )}
