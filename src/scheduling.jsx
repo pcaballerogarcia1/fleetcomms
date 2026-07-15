@@ -2605,6 +2605,16 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const canGenerate  = (vehicles.length > 0 || workers.length > 0) && tasks.length > 0 && !generating;
   const totalAssigned = schedule ? schedule.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel).length, 0) : 0;
   const totalKm       = schedule ? schedule.reduce((s, r) => s + (r.totalKm || 0), 0) : 0;
+
+  // Scenario-wide summary (independent of the vehicles/workers mode toggle)
+  const vehicleRows     = schedules.vehicles || [];
+  const workerRows      = schedules.workers || [];
+  const summaryKm        = vehicleRows.length ? vehicleRows.reduce((s, r) => s + (r.totalKm || 0), 0) : totalKm;
+  const summaryAssigned  = vehicleRows.length
+    ? vehicleRows.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel).length, 0)
+    : totalAssigned;
+  const vehiclesUsed     = vehicleRows.filter(r => r.assignments.some(a => !a._break && !a._travel)).length;
+  const workersUsed      = workerRows.filter(r => r.assignments.some(a => !a._break && !a._travel)).length;
   const stopsPerDay   = schedule ? (() => {
     const counts = {};
     schedule.forEach(r => r.assignments.filter(a => !a._break && !a._travel).forEach(a => {
@@ -2941,6 +2951,27 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             }}>
               <span style={{ fontSize: 9, color: C.blue, fontWeight: 700, fontFamily: mono }}>Día {d + 1}</span>
               <span style={{ fontSize: 9, color: C.muted }}>{stopsPerDay[d] || 0}p</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Scenario summary bar */}
+      {schedule?.length > 0 && !focusMode && (
+        <div style={{
+          flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`,
+          padding: "10px 16px", display: "flex", gap: 28,
+        }}>
+          {[
+            { l: "Kms totales",  v: `${summaryKm.toFixed(0)} km`,       c: C.amber },
+            { l: "Días",         v: activeDays,                          c: C.blue  },
+            { l: "Asignaciones", v: summaryAssigned.toLocaleString(),    c: C.green },
+            { l: "Conductores",  v: workersUsed,                         c: C.text  },
+            { l: "Vehículos",    v: vehiclesUsed,                        c: C.text  },
+          ].map(s => (
+            <div key={s.l} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 17, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</span>
+              <span style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: .8 }}>{s.l}</span>
             </div>
           ))}
         </div>

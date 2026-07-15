@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { db } from "./firebase.js";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -234,19 +234,44 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   const [planes,      setPlanes]      = useState([]);
   const [usuarios,    setUsuarios]    = useState([]);
   const [selectedId,  setSelectedId]  = useState(null);
+  const [mesesDisponibles, setMesesDisponibles] = useState([]);
 
   const now    = new Date();
   const curMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [mesFilter, setMesFilter] = useState(curMes);
 
-  // Real-time: planes
+  // Real-time: planes — scoped to the selected month when one is chosen (the
+  // common case) so we don't stream every plan ever created for the org on
+  // every stop check-in. docChanges() keeps object refs stable for unchanged
+  // plans, so the map/feed only re-render for the plan that actually changed.
+  useEffect(() => {
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "planes");
+    const filters = [];
+    if (orgId) filters.push(where("org_id", "==", orgId));
+    if (mesFilter) filters.push(where("mes", "==", mesFilter));
+    const q = filters.length ? query(col, ...filters) : col;
+    const cache = new Map();
+    return onSnapshot(q, snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type === "removed") cache.delete(change.doc.id);
+        else cache.set(change.doc.id, { _id: change.doc.id, ...change.doc.data() });
+      });
+      setPlanes([...cache.values()]);
+    });
+  }, [orgId, isSuperAdmin, mesFilter]);
+
+  // One-time (not real-time) fetch of which months have plans, to populate the
+  // month picker without keeping a permanent listener on the whole org's history.
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
     const col = collection(db, "planes");
     const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
-    return onSnapshot(q, snap => {
-      setPlanes(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
-    });
+    getDocs(q).then(snap => {
+      const set = new Set();
+      snap.docs.forEach(d => { const m = d.data().mes; if (m) set.add(m); });
+      setMesesDisponibles([...set]);
+    }).catch(() => {});
   }, [orgId, isSuperAdmin]);
 
   // Real-time: usuarios (for name resolution)
@@ -260,10 +285,10 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   }, [orgId, isSuperAdmin]);
 
   // Available months
-  const meses = useMemo(() => {
-    const set = new Set(planes.filter(p => p.mes).map(p => p.mes));
-    return [...set].sort((a, b) => b.localeCompare(a));
-  }, [planes]);
+  const meses = useMemo(() =>
+    [...mesesDisponibles].sort((a, b) => b.localeCompare(a)),
+    [mesesDisponibles]
+  );
 
   // Planes filtered by month (exclude correctivos — they have no ubicaciones map)
   const filteredPlanes = useMemo(() =>
