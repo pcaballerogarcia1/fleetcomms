@@ -916,10 +916,17 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const planesKML   = planes.filter(p=>p.tipo!=="corr");
   const tareasCorr  = planes.filter(p=>p.tipo==="corr");
 
-  // Si hay plan KML activo, mostrar detalle
+  // Si hay plan KML activo, mostrar detalle.
+  // Renderiza desde el estado local optimista (planActivo), no desde `planes`:
+  // cada marca de parada dispara un onSnapshot (propio o de cualquier otro
+  // plan del mismo mes en cualquier dispositivo) que antes sobrescribía la
+  // vista con la versión del servidor, obligando a esperar el round-trip
+  // completo de Firestore antes de ver el check ✓ — muy notorio en 4G.
   if(planActivo){
-    const live=planes.find(p=>p._id===planActivo._id)||planActivo;
-    return <DetallePlan plan={live} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated)=>{setPlanActivo(updated); updatePlan(updated);}}/>;
+    return <DetallePlan plan={planActivo} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated)=>{
+      setPlanActivo(updated);
+      fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
+    }}/>;
   }
 
   const tipo = TIPOS_TRABAJO.find(t=>t.key===tipoActivo);
