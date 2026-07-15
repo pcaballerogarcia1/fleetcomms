@@ -267,7 +267,11 @@ const T = {
       links: {
         product: ["Planning", "Scheduling", "Rostering", "Incidencias", "Inventario"],
         company: ["Sobre nosotros", "Blog", "Careers", "Partners"],
-        legal: ["Privacidad", "Términos de uso", "Cookies"],
+        legal: [
+          { label: "Privacidad", href: "/privacidad.html" },
+          { label: "Términos de uso", href: "/terminos.html" },
+          { label: "Cookies", href: "/cookies.html" },
+        ],
       },
       copy: "© 2025 Operanzia. Todos los derechos reservados.",
     },
@@ -440,7 +444,11 @@ const T = {
       links: {
         product: ["Planning", "Scheduling", "Rostering", "Incidents", "Inventory"],
         company: ["About us", "Blog", "Careers", "Partners"],
-        legal: ["Privacy", "Terms of service", "Cookies"],
+        legal: [
+          { label: "Privacy", href: "/privacidad.html" },
+          { label: "Terms of service", href: "/terminos.html" },
+          { label: "Cookies", href: "/cookies.html" },
+        ],
       },
       copy: "© 2025 Operanzia. All rights reserved.",
     },
@@ -1257,10 +1265,10 @@ function FooterSection({ t }) {
     <div>
       <div style={{ fontSize: 11, fontWeight: 600, color: "#475569", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 }}>{title}</div>
       {links.map((l, i) => (
-        <a key={i} href="#" style={{ display: "block", fontSize: 13.5, color: "#8b95a5", textDecoration: "none", marginBottom: 10, transition: "color .15s" }}
+        <a key={i} href={l.href || "#"} style={{ display: "block", fontSize: 13.5, color: "#8b95a5", textDecoration: "none", marginBottom: 10, transition: "color .15s" }}
           onMouseEnter={e => e.currentTarget.style.color = "#e2e8f0"}
           onMouseLeave={e => e.currentTarget.style.color = "#8b95a5"}
-        >{l}</a>
+        >{l.label || l}</a>
       ))}
     </div>
   );
