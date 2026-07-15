@@ -179,6 +179,122 @@ function MapaControl({ ubicaciones, recorrido, height = 280 }) {
   );
 }
 
+// ── FLEET MAP (live position of every driver currently sharing location) ──
+const DRIVER_STALE_MS = 3 * 60 * 1000;   // grey out / "desconectado" past this
+const DRIVER_WARN_MS  = 90 * 1000;        // amber past this
+
+function MapaFlota({ orgId, isSuperAdmin }) {
+  const divRef      = useRef(null);
+  const mapRef      = useRef(null);
+  const markersRef  = useRef(new Map()); // uid -> Leaflet marker
+  const firstFitRef = useRef(false);
+  const [drivers, setDrivers] = useState([]);
+  const [tick, setTick] = useState(0); // forces re-color as markers age, even with no new writes
+
+  useEffect(() => {
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "ubicaciones_activas");
+    const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
+    return onSnapshot(q, snap => {
+      setDrivers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+    });
+  }, [orgId, isSuperAdmin]);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  function ensureLeaflet(cb) {
+    if (!document.getElementById("leaflet-css")) {
+      const css = document.createElement("link");
+      css.id = "leaflet-css"; css.rel = "stylesheet";
+      css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+      document.head.appendChild(css);
+    }
+    if (window.L) { cb(); return; }
+    const js = document.createElement("script");
+    js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    js.onload = cb;
+    document.head.appendChild(js);
+  }
+
+  function initMap() {
+    if (!divRef.current || mapRef.current) return;
+    const L = window.L;
+    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false }).setView([39.57, 2.65], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+    mapRef.current = map;
+  }
+
+  function drawDrivers() {
+    const L = window.L;
+    if (!L || !mapRef.current) return;
+    const map = mapRef.current;
+    const now = Date.now();
+    const seen = new Set();
+
+    drivers.forEach(d => {
+      if (!d.lat || !d.lng) return;
+      seen.add(d.uid);
+      const age   = now - (d.updatedAt || 0);
+      const color = age > DRIVER_STALE_MS ? C.dim : age > DRIVER_WARN_MS ? C.orange : C.green;
+      const label = age > DRIVER_STALE_MS ? `${d.nombre || "?"} · desconectado` : (d.nombre || "?");
+
+      const html = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none;">
+        <div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>
+        <div style="margin-top:3px;padding:2px 7px;border-radius:5px;background:${C.card};border:1px solid ${C.border};color:${C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${label}</div>
+      </div>`;
+      const icon = L.divIcon({ className: "", html, iconSize: [16, 16], iconAnchor: [8, 8] });
+
+      const existing = markersRef.current.get(d.uid);
+      if (existing) {
+        existing.setLatLng([d.lat, d.lng]);
+        existing.setIcon(icon);
+      } else {
+        markersRef.current.set(d.uid, L.marker([d.lat, d.lng], { icon }).addTo(map));
+      }
+    });
+
+    for (const [uid, marker] of markersRef.current.entries()) {
+      if (!seen.has(uid)) { map.removeLayer(marker); markersRef.current.delete(uid); }
+    }
+
+    if (!firstFitRef.current) {
+      const pts = drivers.filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]);
+      if (pts.length > 0) {
+        firstFitRef.current = true;
+        map.fitBounds(pts, { padding: [50, 50], maxZoom: 14 });
+      }
+    }
+  }
+
+  useEffect(() => {
+    ensureLeaflet(() => { if (!mapRef.current) initMap(); drawDrivers(); });
+  }, [drivers, tick]);
+
+  useEffect(() => () => {
+    if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+  }, []);
+
+  const activeCount = drivers.filter(d => Date.now() - (d.updatedAt || 0) < DRIVER_STALE_MS).length;
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+        <span style={{ fontSize: 12, color: C.muted }}>
+          <span style={{ color: C.green, fontWeight: 700, fontFamily: mono }}>{activeCount}</span>{" "}
+          conductor{activeCount !== 1 ? "es" : ""} compartiendo ubicación ahora
+        </span>
+        {drivers.length === 0 && (
+          <span style={{ fontSize: 11, color: C.dim }}>Nadie está compartiendo ubicación todavía — se activa al entrar en Rutas y aceptar el permiso</span>
+        )}
+      </div>
+      <div ref={divRef} style={{ flex: 1, background: "#131e35" }} />
+    </div>
+  );
+}
+
 // ── PLAN CARD ─────────────────────────────────────────────────────
 function PlanCard({ plan, selected, onSelect }) {
   const ubs   = plan.ubicaciones || [];
@@ -283,6 +399,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   const [usuarios,    setUsuarios]    = useState([]);
   const [selectedId,  setSelectedId]  = useState(null);
   const [mesesDisponibles, setMesesDisponibles] = useState([]);
+  const [vista, setVista] = useState("planes"); // planes | flota
 
   const now    = new Date();
   const curMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -414,6 +531,17 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
             Control · tiempo real
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+              {[["planes", "Planes"], ["flota", "Mapa de flota"]].map(([k, l]) => (
+                <button key={k} onClick={() => setVista(k)} style={{
+                  padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
+                  background: vista === k ? C.blue : "none",
+                  color: vista === k ? "#fff" : C.muted,
+                  fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
+                  transition: "all .12s",
+                }}>{l}</button>
+              ))}
+            </div>
             <select
               value={mesFilter}
               onChange={e => { setMesFilter(e.target.value); setSelectedId(null); }}
@@ -471,7 +599,10 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
 
       {/* ── Body ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-
+        {vista === "flota" ? (
+        <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} />
+        ) : (
+        <>
         {/* Left: plan list */}
         <div style={{
           width: 290, flexShrink: 0, borderRight: `1px solid ${C.border}`,
@@ -524,6 +655,8 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
           </div>
 
         </div>
+        </>
+        )}
       </div>
     </div>
   );

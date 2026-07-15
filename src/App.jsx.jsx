@@ -912,6 +912,40 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const fileRef = useRef();
   const esAdmin = sesion.rol==="admin";
 
+  // Compartir ubicación en vivo mientras se está en Rutas, para el mapa de
+  // flota de Control. Pide permiso del navegador la primera vez que entra
+  // aquí; si lo deniega, simplemente no comparte (sin romper nada). Las
+  // escrituras se limitan a 1 cada ~20s para no gastar batería/datos ni
+  // saturar Firestore.
+  useEffect(()=>{
+    if(!navigator.geolocation || !sesion?.id) return;
+    const uid = sesion.id;
+    const ref = doc(db,"ubicaciones_activas",uid);
+    let lastWrite = 0;
+    const MIN_INTERVAL_MS = 20000;
+
+    const watchId = navigator.geolocation.watchPosition(
+      pos=>{
+        const now = Date.now();
+        if(now - lastWrite < MIN_INTERVAL_MS) return;
+        lastWrite = now;
+        setDoc(ref,{
+          uid, org_id: sesion.org_id,
+          nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
+          lat: pos.coords.latitude, lng: pos.coords.longitude,
+          activo: true, updatedAt: now,
+        },{merge:true}).catch(()=>{});
+      },
+      ()=>{ /* permiso denegado o error de geolocalización: no comparte, sin romper la UI */ },
+      { enableHighAccuracy:false, maximumAge:15000, timeout:20000 }
+    );
+
+    return ()=>{
+      navigator.geolocation.clearWatch(watchId);
+      setDoc(ref,{activo:false},{merge:true}).catch(()=>{});
+    };
+  },[sesion?.id, sesion?.org_id]);
+
   // Separar planes KML de tareas correctivo
   const planesKML   = planes.filter(p=>p.tipo!=="corr");
   const tareasCorr  = planes.filter(p=>p.tipo==="corr");
