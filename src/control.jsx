@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 
@@ -296,7 +296,7 @@ function MapaFlota({ orgId, isSuperAdmin }) {
 }
 
 // ── PLAN CARD ─────────────────────────────────────────────────────
-function PlanCard({ plan, selected, onSelect }) {
+const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
   const ubs   = plan.ubicaciones || [];
   const total = ubs.length;
   const done  = ubs.filter(u => u.realizado).length;
@@ -348,7 +348,7 @@ function PlanCard({ plan, selected, onSelect }) {
       </div>
     </div>
   );
-}
+});
 
 // ── ACTIVITY FEED ─────────────────────────────────────────────────
 function ActivityFeed({ events, usuarios }) {
@@ -400,6 +400,8 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
   const [selectedId,  setSelectedId]  = useState(null);
   const [mesesDisponibles, setMesesDisponibles] = useState([]);
   const [vista, setVista] = useState("planes"); // planes | flota
+  const PAGE_SIZE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const now    = new Date();
   const curMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -552,7 +554,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
             </div>
             <select
               value={mesFilter}
-              onChange={e => { setMesFilter(e.target.value); setSelectedId(null); }}
+              onChange={e => { setMesFilter(e.target.value); setSelectedId(null); setVisibleCount(PAGE_SIZE); }}
               style={{
                 background: C.surface2, border: `1px solid ${C.border2}`,
                 color: C.text, borderRadius: 7, padding: "5px 10px",
@@ -624,7 +626,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
               Sin planes para este mes
             </div>
           )}
-          {filteredPlanes.map(plan => (
+          {filteredPlanes.slice(0, visibleCount).map(plan => (
             <PlanCard
               key={plan._id}
               plan={plan}
@@ -632,6 +634,21 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
               onSelect={setSelectedId}
             />
           ))}
+          {filteredPlanes.length > visibleCount && (
+            <button
+              onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
+              style={{
+                width: "100%", padding: "9px", marginTop: 4, background: "none",
+                border: `1px solid ${C.border}`, color: C.muted,
+                borderRadius: 8, fontSize: 12, cursor: "pointer",
+                fontFamily: font, transition: "all .15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+            >
+              Cargar {Math.min(PAGE_SIZE, filteredPlanes.length - visibleCount)} más ({filteredPlanes.length - visibleCount} restantes)
+            </button>
+          )}
         </div>
 
         {/* Right: map + feed */}
