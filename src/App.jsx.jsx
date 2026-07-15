@@ -930,19 +930,22 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
         if(now - lastWrite < MIN_INTERVAL_MS) return;
         lastWrite = now;
         setDoc(ref,{
-          uid, org_id: sesion.org_id,
+          uid, org_id: sesion.org_id ?? null, // Firestore rejects `undefined` outright (silent no-op otherwise)
           nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
           lat: pos.coords.latitude, lng: pos.coords.longitude,
           activo: true, updatedAt: now,
-        },{merge:true}).catch(()=>{});
+        },{merge:true}).then(
+          ()=>console.log("[ubicación] guardada", pos.coords.latitude, pos.coords.longitude),
+          e=>console.error("[ubicación] error al guardar:", e)
+        );
       },
-      ()=>{ /* permiso denegado o error de geolocalización: no comparte, sin romper la UI */ },
+      e=>console.error("[ubicación] error de geolocalización:", e.code, e.message),
       { enableHighAccuracy:false, maximumAge:15000, timeout:20000 }
     );
 
     return ()=>{
       navigator.geolocation.clearWatch(watchId);
-      setDoc(ref,{activo:false},{merge:true}).catch(()=>{});
+      setDoc(ref,{activo:false},{merge:true}).catch(e=>console.error("[ubicación] error al marcar inactivo:", e));
     };
   },[sesion?.id, sesion?.org_id]);
 

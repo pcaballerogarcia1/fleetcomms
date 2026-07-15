@@ -196,8 +196,10 @@ function MapaFlota({ orgId, isSuperAdmin }) {
     const col = collection(db, "ubicaciones_activas");
     const q = orgId ? query(col, where("org_id", "==", orgId)) : col;
     return onSnapshot(q, snap => {
-      setDrivers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
-    });
+      const docs = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      console.log("[flota] ubicaciones_activas:", docs.length, "docs", docs);
+      setDrivers(docs);
+    }, e => console.error("[flota] error leyendo ubicaciones_activas:", e));
   }, [orgId, isSuperAdmin]);
 
   useEffect(() => {
