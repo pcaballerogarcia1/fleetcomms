@@ -221,7 +221,7 @@ const T = {
       h2: "Sin sorpresas, sin letra pequeña",
       sub: "Un precio simple: pagas por vehículo activo, no por planes cerrados.",
       priceFrom: "Desde",
-      price: "60",
+      price: "75",
       unit: "€ / vehículo / mes",
       note: "Sin permanencia · Factura según flota real",
       features: [
@@ -392,7 +392,7 @@ const T = {
       h2: "No surprises, no fine print",
       sub: "One simple price: you pay per active vehicle, not for closed-off plans.",
       priceFrom: "From",
-      price: "60",
+      price: "75",
       unit: "€ / vehicle / month",
       note: "No commitment · Billed on your actual fleet",
       features: [
