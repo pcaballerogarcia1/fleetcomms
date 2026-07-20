@@ -100,6 +100,34 @@ function getBarrio(m) {
   return "";
 }
 
+// Quita acentos y normaliza para comparar nombres de columna con más tolerancia
+// (los archivos subidos escriben "Fracción"/"Fraccion"/"FRACCIÓN" de formas distintas)
+function _normKey(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+function _fieldGetter(keys) {
+  const normKeys = keys.map(_normKey);
+  return function (m) {
+    for (const [k, v] of Object.entries(m)) {
+      if (normKeys.includes(_normKey(k)) && v) return String(v);
+    }
+    return "";
+  };
+}
+
+const FRACCION_KEYS = [
+  "fraccion", "tipo fraccion", "tipo_fraccion", "tipofraccion",
+  "residuo", "tipo residuo", "tipo_residuo", "tiporesiduo",
+  "material", "tipo material", "tipo_material",
+];
+const getFraccion = _fieldGetter(FRACCION_KEYS);
+
+const CONTENEDOR_KEYS = [
+  "contenedor", "tipo contenedor", "tipo_contenedor", "tipocontenedor",
+  "modelo contenedor", "modelo_contenedor",
+];
+const getContenedor = _fieldGetter(CONTENEDOR_KEYS);
+
 const USUARIOS_INIT = [
   { id:"1", nombre:"Admin",  apellidos:"Sistema",  usuario:"admin",    password:"admin123", rol:"admin",     activo:true },
   { id:"2", nombre:"Carlos", apellidos:"Martín",   usuario:"cmartin",  password:"1234",     rol:"conductor", activo:true },
@@ -897,7 +925,7 @@ function DepotIcon({ size = 16 }) {
   );
 }
 
-function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId }) {
+function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
   const [manualLat, setManualLat] = useState("");
@@ -1405,6 +1433,88 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
           </div>
         );
       })()}
+
+      {/* Filtro por tipo de fracción / tipo de contenedor — a diferencia de
+          Barrios (que es solo leyenda de color), estas SÍ filtran el mapa y
+          la lista: clic para activar, clic otra vez para quitar el filtro. */}
+      <FilterChipsSection
+        label="Tipo de fracción"
+        layers={layers}
+        getValue={getFraccion}
+        active={fraccionFilter}
+        onSelect={setFraccionFilter}
+      />
+      <FilterChipsSection
+        label="Tipo de contenedor"
+        layers={layers}
+        getValue={getContenedor}
+        active={contenedorFilter}
+        onSelect={setContenedorFilter}
+      />
+    </div>
+  );
+}
+
+// ── FILTER CHIPS (Fracción / Contenedor) ────────────────────────────
+// Detects distinct values for a given field getter across visible layers
+// and renders them as click-to-toggle filter chips (single active value).
+function FilterChipsSection({ label, layers, getValue, active, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const values = [...new Set(
+    layers.filter(l => l.visible).flatMap(l => (l.markers ?? []).map(getValue)).filter(Boolean)
+  )].sort();
+  if (values.length === 0) return null;
+
+  return (
+    <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "none", border: "none", cursor: "pointer", padding: "8px 12px 6px",
+        color: C.dim, fontFamily: font,
+      }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+            {label} ({values.length})
+          </span>
+        </span>
+        {active && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); onSelect(null); }}
+            title="Quitar filtro"
+            style={{ background: "none", border: "none", fontSize: 10, color: C.dim, cursor: "pointer", padding: 0, fontFamily: font, transition: "color .12s" }}
+            onMouseEnter={e => e.currentTarget.style.color = C.red}
+            onMouseLeave={e => e.currentTarget.style.color = C.dim}
+          >quitar filtro</span>
+        )}
+      </button>
+      {open && (
+        <div style={{ padding: "2px 12px 10px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {values.map(v => {
+            const isActive = active === v;
+            return (
+              <button
+                key={v}
+                onClick={() => onSelect(isActive ? null : v)}
+                style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontFamily: font,
+                  cursor: "pointer", transition: "all .12s",
+                  background: isActive ? C.blueDim : C.surface2,
+                  border: `1px solid ${isActive ? C.blue : C.border}`,
+                  color: isActive ? C.blueText : C.muted,
+                  fontWeight: isActive ? 600 : 400,
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = C.border2; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = C.border; }}
+              >{v}</button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2251,6 +2361,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   const [errors, setErrors]                 = useState([]);
   const [tab, setTab]                       = useState("mapa");
   const [searchQuery, setSearchQuery]       = useState("");
+  const [fraccionFilter, setFraccionFilter]     = useState(null);
+  const [contenedorFilter, setContenedorFilter] = useState(null);
 
   const timetableCol = projectId
     ? collection(db, "scheduling_projects", projectId, "timetable")
@@ -2366,12 +2478,16 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
 
-  const filteredLayers = searchQuery.trim()
+  const hasActiveFilter = !!searchQuery.trim() || !!fraccionFilter || !!contenedorFilter;
+  const filteredLayers = hasActiveFilter
     ? layers.map(l => ({
         ...l,
-        markers: (l.markers ?? []).filter(m =>
-          Object.values(m).some(v => String(v ?? "").toLowerCase().includes(searchQuery.toLowerCase()))
-        ),
+        markers: (l.markers ?? []).filter(m => {
+          if (searchQuery.trim() && !Object.values(m).some(v => String(v ?? "").toLowerCase().includes(searchQuery.toLowerCase()))) return false;
+          if (fraccionFilter && getFraccion(m) !== fraccionFilter) return false;
+          if (contenedorFilter && getContenedor(m) !== contenedorFilter) return false;
+          return true;
+        }),
       }))
     : layers;
 
@@ -2501,6 +2617,10 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               onAddManualPoint={addManualPoint}
               projectId={projectId}
               orgId={orgId}
+              fraccionFilter={fraccionFilter}
+              setFraccionFilter={setFraccionFilter}
+              contenedorFilter={contenedorFilter}
+              setContenedorFilter={setContenedorFilter}
             />
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} />
           </>
