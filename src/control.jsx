@@ -297,6 +297,152 @@ function MapaFlota({ orgId, isSuperAdmin }) {
   );
 }
 
+// ── FICHAJES PANEL ────────────────────────────────────────────────
+function fmtHoraF(ts) { return ts ? new Date(ts).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "—"; }
+function fmtFecha(f) { try { return new Date(f + "T00:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }); } catch { return f; } }
+function fmtDur(ms) {
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return `${h}h ${String(m).padStart(2, "0")}min`;
+}
+
+function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
+  const [fichajes, setFichajes] = useState([]);
+  const [mesFilter, setMesFilter] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  useEffect(() => {
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "fichajes");
+    const q = orgId ? query(col, where("org_id", "==", orgId), limit(500)) : query(col, limit(500));
+    return onSnapshot(q, snap => {
+      setFichajes(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
+    }, e => console.error("[fichajes] error leyendo:", e));
+  }, [orgId, isSuperAdmin]);
+
+  const meses = useMemo(() =>
+    [...new Set(fichajes.map(f => f.fecha?.slice(0, 7)).filter(Boolean))].sort((a, b) => b.localeCompare(a)),
+    [fichajes]
+  );
+
+  const delMes = useMemo(() =>
+    fichajes.filter(f => f.fecha?.startsWith(mesFilter)).sort((a, b) => (b.horaEntrada || 0) - (a.horaEntrada || 0)),
+    [fichajes, mesFilter]
+  );
+
+  const abiertosAhora = useMemo(() => fichajes.filter(f => f.estado === "abierto"), [fichajes]);
+
+  const stats = useMemo(() => {
+    let ms = 0, km = 0;
+    delMes.forEach(f => {
+      if (f.horaSalida) ms += f.horaSalida - f.horaEntrada;
+      km += f.kmRecorridos || 0;
+    });
+    return { horas: fmtDur(ms), km: km.toFixed(0), registros: delMes.length };
+  }, [delMes]);
+
+  function nombreDe(f) { return f.nombre || userName(f.uid, usuarios); }
+
+  function exportarExcel() {
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["Conductor", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Estado"];
+    const rows = delMes.map(f => [
+      nombreDe(f), f.fecha, fmtHoraF(f.horaEntrada), fmtHoraF(f.horaSalida),
+      f.horaSalida ? fmtDur(f.horaSalida - f.horaEntrada) : "en curso",
+      f.kmInicio ?? "", f.kmFin ?? "", f.kmRecorridos ?? "", f.estado,
+    ]);
+    const csv = "﻿" + [header, ...rows].map(r => r.map(esc).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `fichajes_${mesFilter}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <select
+            value={mesFilter}
+            onChange={e => setMesFilter(e.target.value)}
+            style={{
+              background: C.surface2, border: `1px solid ${C.border2}`,
+              color: C.text, borderRadius: 7, padding: "5px 10px",
+              fontSize: 12, fontFamily: font, cursor: "pointer", outline: "none",
+            }}
+          >
+            {!meses.includes(mesFilter) && <option value={mesFilter}>{fmtMes(mesFilter)}</option>}
+            {meses.map(m => <option key={m} value={m}>{fmtMes(m)}</option>)}
+          </select>
+          <button
+            onClick={exportarExcel}
+            disabled={delMes.length === 0}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)",
+              color: C.green, borderRadius: 7, padding: "5px 12px",
+              fontSize: 12, fontWeight: 600, cursor: delMes.length === 0 ? "not-allowed" : "pointer",
+              opacity: delMes.length === 0 ? 0.4 : 1, fontFamily: font,
+            }}
+          >Excel</button>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          {[
+            { l: "Fichados ahora", v: abiertosAhora.length, c: abiertosAhora.length > 0 ? C.green : C.dim },
+            { l: "Registros del mes", v: stats.registros, c: C.blue },
+            { l: "Horas del mes", v: stats.horas, c: C.muted },
+            { l: "Km del mes", v: stats.km, c: C.orange },
+          ].map(s => (
+            <div key={s.l} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {delMes.length === 0 ? (
+          <div style={{ color: C.dim, fontSize: 13, textAlign: "center", padding: "60px 0" }}>
+            Sin fichajes este mes
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
+                {["Conductor", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", ""].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: C.dim, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {delMes.map(f => (
+                <tr key={f._id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "8px 14px", color: C.text, fontWeight: 600 }}>{nombreDe(f)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{fmtFecha(f.fecha)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted, fontFamily: mono }}>{fmtHoraF(f.horaEntrada)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted, fontFamily: mono }}>{fmtHoraF(f.horaSalida)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted }}>{f.horaSalida ? fmtDur(f.horaSalida - f.horaEntrada) : "—"}</td>
+                  <td style={{ padding: "8px 14px", color: C.dim, fontFamily: mono }}>{f.kmInicio ?? "—"}</td>
+                  <td style={{ padding: "8px 14px", color: C.dim, fontFamily: mono }}>{f.kmFin ?? "—"}</td>
+                  <td style={{ padding: "8px 14px", color: C.orange, fontFamily: mono, fontWeight: 600 }}>{f.kmRecorridos ?? "—"}</td>
+                  <td style={{ padding: "8px 14px" }}>
+                    {f.estado === "abierto" && (
+                      <span style={{ fontSize: 10, color: C.green, background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "2px 7px" }}>en curso</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── PLAN CARD ─────────────────────────────────────────────────────
 const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
   const ubs   = plan.ubicaciones || [];
@@ -554,7 +700,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["planes", "Planes"], ["flota", "Mapa de flota"]].map(([k, l]) => (
+              {[["planes", "Planes"], ["flota", "Mapa de flota"], ["fichajes", "Fichajes"]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? C.blue : "none",
@@ -623,6 +769,8 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {vista === "flota" ? (
         <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} />
+        ) : vista === "fichajes" ? (
+        <PanelFichajes orgId={orgId} isSuperAdmin={isSuperAdmin} usuarios={usuarios} />
         ) : (
         <>
         {/* Left: plan list */}
