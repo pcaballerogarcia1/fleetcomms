@@ -910,6 +910,7 @@ function FichajeWidget({ sesion }){
   const [fichajeAbierto, setFichajeAbierto] = useState(undefined); // undefined=cargando, null=ninguno
   const [recientes, setRecientes] = useState([]);
   const [km, setKm] = useState("");
+  const [matricula, setMatricula] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -933,7 +934,9 @@ function FichajeWidget({ sesion }){
 
   async function ficharEntrada(){
     const v = km.trim();
+    const mat = matricula.trim();
     if(!v || isNaN(+v)){ setErr("Introduce el cuentakilómetros de inicio"); return; }
+    if(!mat){ setErr("Introduce la matrícula del vehículo"); return; }
     setSaving(true); setErr("");
     try{
       await addDoc(collection(db,"fichajes"),{
@@ -941,10 +944,11 @@ function FichajeWidget({ sesion }){
         nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
         fecha: new Date().toISOString().slice(0,10),
         horaEntrada: Date.now(), horaSalida: null,
+        matricula: mat.toUpperCase(),
         kmInicio: +v, kmFin: null, kmRecorridos: null,
         estado: "abierto",
       });
-      setKm("");
+      setKm(""); setMatricula("");
     }catch(e){ setErr("No se pudo fichar entrada: "+e.message); }
     setSaving(false);
   }
@@ -976,7 +980,7 @@ function FichajeWidget({ sesion }){
           </div>
           {fichajeAbierto && (
             <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-              Desde las {fmtHora(fichajeAbierto.horaEntrada)} · {fmtDuracion(fichajeAbierto.horaEntrada)} · {fichajeAbierto.kmInicio} km inicio
+              Desde las {fmtHora(fichajeAbierto.horaEntrada)} · {fmtDuracion(fichajeAbierto.horaEntrada)} · {fichajeAbierto.matricula || "sin matrícula"} · {fichajeAbierto.kmInicio} km inicio
             </div>
           )}
         </div>
@@ -987,6 +991,13 @@ function FichajeWidget({ sesion }){
         )}
       </div>
 
+      {!fichajeAbierto && (
+        <input
+          type="text" placeholder="Matrícula del vehículo"
+          value={matricula} onChange={e=>setMatricula(e.target.value)}
+          style={{...S.input, marginBottom:8, textTransform:"uppercase"}}
+        />
+      )}
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <input
           type="number" inputMode="decimal"
@@ -1008,7 +1019,7 @@ function FichajeWidget({ sesion }){
         <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
           {recientes.map(f=>(
             <div key={f._id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,padding:"4px 0"}}>
-              <span>{f.fecha} · {fmtHora(f.horaEntrada)}–{fmtHora(f.horaSalida)}</span>
+              <span>{f.fecha} · {fmtHora(f.horaEntrada)}–{fmtHora(f.horaSalida)} · {f.matricula || "—"}</span>
               <span style={{color:C.text,fontWeight:600}}>{f.kmRecorridos ?? "—"} km</span>
             </div>
           ))}

@@ -346,9 +346,9 @@ function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
 
   function exportarExcel() {
     const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const header = ["Conductor", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Estado"];
+    const header = ["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Estado"];
     const rows = delMes.map(f => [
-      nombreDe(f), f.fecha, fmtHoraF(f.horaEntrada), fmtHoraF(f.horaSalida),
+      nombreDe(f), f.matricula ?? "", f.fecha, fmtHoraF(f.horaEntrada), fmtHoraF(f.horaSalida),
       f.horaSalida ? fmtDur(f.horaSalida - f.horaEntrada) : "en curso",
       f.kmInicio ?? "", f.kmFin ?? "", f.kmRecorridos ?? "", f.estado,
     ]);
@@ -412,7 +412,7 @@ function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
-                {["Conductor", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", ""].map(h => (
+                {["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", ""].map(h => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: C.dim, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -421,6 +421,7 @@ function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
               {delMes.map(f => (
                 <tr key={f._id} style={{ borderBottom: `1px solid ${C.border}` }}>
                   <td style={{ padding: "8px 14px", color: C.text, fontWeight: 600 }}>{nombreDe(f)}</td>
+                  <td style={{ padding: "8px 14px", color: C.muted, fontFamily: mono }}>{f.matricula || "—"}</td>
                   <td style={{ padding: "8px 14px", color: C.muted }}>{fmtFecha(f.fecha)}</td>
                   <td style={{ padding: "8px 14px", color: C.muted, fontFamily: mono }}>{fmtHoraF(f.horaEntrada)}</td>
                   <td style={{ padding: "8px 14px", color: C.muted, fontFamily: mono }}>{fmtHoraF(f.horaSalida)}</td>
