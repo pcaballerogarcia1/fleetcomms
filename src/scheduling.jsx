@@ -138,8 +138,15 @@ function distSq(a, b) {
   return dlat * dlat + dlng * dlng;
 }
 
-// Farthest-point sampling: deterministic k-means seed (no randomness)
-function fpsSeed(pts, k) {
+const _yield = () => new Promise(resolve => setTimeout(resolve, 0));
+
+// Farthest-point sampling: deterministic k-means seed (no randomness).
+// async + yields once per seed picked: for large fleets (autoScaleFleet can
+// push k past 100) this loop alone can run tens of millions of comparisons
+// with no chance for the browser to paint — since every module stays
+// mounted in the background (see main.jsx), that froze the ENTIRE app, not
+// just Scheduling, while a scenario was generating.
+async function fpsSeed(pts, k) {
   if (!pts.length) return [];
   const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
   const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
@@ -157,15 +164,17 @@ function fpsSeed(pts, k) {
     }
     if (far === -1) break;
     seeds.push(far);
+    await _yield();
   }
   return seeds;
 }
 
-// K-means geographic clustering (deterministic, uses fast squared distance)
-function kMeansCluster(pts, k, maxIter = 20) {
+// K-means geographic clustering (deterministic, uses fast squared distance).
+// async + yields once per iteration (max 20) for the same reason as fpsSeed.
+async function kMeansCluster(pts, k, maxIter = 20) {
   if (k <= 1 || !pts.length) return new Array(pts.length).fill(0);
   if (k >= pts.length) return pts.map((_, i) => i);
-  const seeds = fpsSeed(pts, k);
+  const seeds = await fpsSeed(pts, k);
   const C = seeds.map(i => ({ lat: pts[i].lat, lng: pts[i].lng }));
   const asgn = new Int32Array(pts.length);
   for (let iter = 0; iter < maxIter; iter++) {
@@ -182,6 +191,7 @@ function kMeansCluster(pts, k, maxIter = 20) {
     const sumLat = new Float64Array(k), sumLng = new Float64Array(k), cnt = new Int32Array(k);
     for (let i = 0; i < pts.length; i++) { sumLat[asgn[i]] += pts[i].lat; sumLng[asgn[i]] += pts[i].lng; cnt[asgn[i]]++; }
     for (let j = 0; j < k; j++) if (cnt[j]) { C[j].lat = sumLat[j] / cnt[j]; C[j].lng = sumLng[j] / cnt[j]; }
+    await _yield();
   }
   return Array.from(asgn);
 }
@@ -231,8 +241,10 @@ function stripSort(stops, strips = 30) {
   });
 }
 
-// 2-opt improvement (open path, no depot return)
-function twoOpt(route) {
+// 2-opt improvement (open path, no depot return). async + yields once per
+// pass — a single ~1500-stop cluster can otherwise run up to 20 passes over
+// an O(n²) scan (tens of millions of haversine calls) with no yield at all.
+async function twoOpt(route) {
   if (route.length < 4) return route;
   const d = (a, b) => (!a || !b || !hasCoords(a.lat, a.lng) || !hasCoords(b.lat, b.lng)) ? 0
     : haversineKm(a.lat, a.lng, b.lat, b.lng);
@@ -253,6 +265,7 @@ function twoOpt(route) {
         }
       }
     }
+    await _yield();
   }
   return best;
 }
@@ -369,7 +382,7 @@ async function generateScenario(tasks, resources, constraints) {
     if (k === 1) {
       clusterQueues[0] = [...withCoords];
     } else {
-      const asgn = kMeansCluster(withCoords, k);
+      const asgn = await kMeansCluster(withCoords, k);
       const rawClusters = Array.from({ length: k }, () => []);
       withCoords.forEach((t, i) => rawClusters[asgn[i]].push(t));
 
@@ -422,15 +435,22 @@ async function generateScenario(tasks, resources, constraints) {
   }
   noCoords.forEach((t, i) => clusterQueues[resOrder[i % k]].push(t));
 
-  // Sort each cluster once (strip-sort for large, TSP+2-opt for small)
-  const sortedQueues = clusterQueues.map((cluster, i) => {
+  // Sort each cluster once (strip-sort for large, TSP+2-opt for small).
+  // A plain .map() here ran every cluster's O(n²) twoOpt/nnTSP back-to-back
+  // with zero yields between them — for many vehicles this alone could
+  // freeze the whole app for seconds. Now an async loop with a yield
+  // between clusters, so the UI stays responsive throughout.
+  const sortedQueues = [];
+  for (let i = 0; i < clusterQueues.length; i++) {
+    const cluster = clusterQueues[i];
     const depot = (resources[i]?.depotLat && resources[i]?.depotLng)
       ? { lat: +resources[i].depotLat, lng: +resources[i].depotLng } : null;
     const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
     const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
-    const ordered = withC.length > 1500 ? stripSort(withC) : twoOpt(nnTSP(withC, depot));
-    return [...ordered, ...noC];
-  });
+    const ordered = withC.length > 1500 ? stripSort(withC) : await twoOpt(nnTSP(withC, depot));
+    sortedQueues.push([...ordered, ...noC]);
+    await _yield();
+  }
 
   // Pointer into each queue — advances as tasks are assigned (never reset between days)
   const queueIdx  = new Int32Array(k);
