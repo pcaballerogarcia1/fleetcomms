@@ -898,6 +898,126 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
   );
 }
 
+// ── FICHAJE (entrada/salida + kms de la jornada) ────────────────────
+function fmtHora(ts){ return ts ? new Date(ts).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}) : "—"; }
+function fmtDuracion(desde, hasta){
+  const ms = (hasta ?? Date.now()) - desde;
+  const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+  return `${h}h ${String(m).padStart(2,"0")}min`;
+}
+
+function FichajeWidget({ sesion }){
+  const [fichajeAbierto, setFichajeAbierto] = useState(undefined); // undefined=cargando, null=ninguno
+  const [recientes, setRecientes] = useState([]);
+  const [km, setKm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [, forceTick] = useState(0); // refresca el cronómetro cada minuto mientras hay fichaje abierto
+
+  useEffect(()=>{
+    if(!sesion?.id) return;
+    const q = query(collection(db,"fichajes"), where("uid","==",sesion.id));
+    return onSnapshot(q, snap=>{
+      const docs = snap.docs.map(d=>({_id:d.id,...d.data()}));
+      setFichajeAbierto(docs.find(f=>f.estado==="abierto") || null);
+      setRecientes(docs.filter(f=>f.estado==="cerrado").sort((a,b)=>(b.horaEntrada||0)-(a.horaEntrada||0)).slice(0,5));
+    }, e=>{ console.error("[fichaje] error leyendo:", e); setFichajeAbierto(null); });
+  },[sesion?.id]);
+
+  useEffect(()=>{
+    if(!fichajeAbierto) return;
+    const t = setInterval(()=>forceTick(x=>x+1), 60000);
+    return ()=>clearInterval(t);
+  },[fichajeAbierto]);
+
+  async function ficharEntrada(){
+    const v = km.trim();
+    if(!v || isNaN(+v)){ setErr("Introduce el cuentakilómetros de inicio"); return; }
+    setSaving(true); setErr("");
+    try{
+      await addDoc(collection(db,"fichajes"),{
+        uid: sesion.id, org_id: sesion.org_id ?? null,
+        nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
+        fecha: new Date().toISOString().slice(0,10),
+        horaEntrada: Date.now(), horaSalida: null,
+        kmInicio: +v, kmFin: null, kmRecorridos: null,
+        estado: "abierto",
+      });
+      setKm("");
+    }catch(e){ setErr("No se pudo fichar entrada: "+e.message); }
+    setSaving(false);
+  }
+
+  async function ficharSalida(){
+    const v = km.trim();
+    if(!v || isNaN(+v)){ setErr("Introduce el cuentakilómetros de fin"); return; }
+    const kmFin = +v;
+    if(kmFin < fichajeAbierto.kmInicio){ setErr("El km de fin no puede ser menor que el de inicio"); return; }
+    setSaving(true); setErr("");
+    try{
+      await updateDoc(doc(db,"fichajes",fichajeAbierto._id),{
+        horaSalida: Date.now(), kmFin, kmRecorridos: +(kmFin - fichajeAbierto.kmInicio).toFixed(1),
+        estado: "cerrado",
+      });
+      setKm("");
+    }catch(e){ setErr("No se pudo fichar salida: "+e.message); }
+    setSaving(false);
+  }
+
+  if(fichajeAbierto === undefined) return null;
+
+  return (
+    <div style={{...S.card, margin:"12px 14px 0", borderLeft:`4px solid ${fichajeAbierto ? C.green : C.blue}`}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: fichajeAbierto?10:0}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700}}>
+            {fichajeAbierto ? "Jornada en curso" : "Sin fichar"}
+          </div>
+          {fichajeAbierto && (
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+              Desde las {fmtHora(fichajeAbierto.horaEntrada)} · {fmtDuracion(fichajeAbierto.horaEntrada)} · {fichajeAbierto.kmInicio} km inicio
+            </div>
+          )}
+        </div>
+        {recientes.length>0 && (
+          <button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:font}}>
+            {expanded ? "ocultar" : "historial"}
+          </button>
+        )}
+      </div>
+
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input
+          type="number" inputMode="decimal"
+          placeholder={fichajeAbierto ? "Km de fin" : "Km de inicio"}
+          value={km} onChange={e=>setKm(e.target.value)}
+          style={{...S.input, flex:1}}
+        />
+        <Btn
+          onClick={fichajeAbierto ? ficharSalida : ficharEntrada}
+          variant={fichajeAbierto ? "danger" : "success"}
+          size="md" disabled={saving}
+        >
+          {saving ? "..." : (fichajeAbierto ? "Fichar salida" : "Fichar entrada")}
+        </Btn>
+      </div>
+      {err && <div style={{fontSize:11,color:C.red,marginTop:6}}>{err}</div>}
+
+      {expanded && recientes.length>0 && (
+        <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          {recientes.map(f=>(
+            <div key={f._id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,padding:"4px 0"}}>
+              <span>{f.fecha} · {fmtHora(f.horaEntrada)}–{fmtHora(f.horaSalida)}</span>
+              <span style={{color:C.text,fontWeight:600}}>{f.kmRecorridos ?? "—"} km</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MÓDULO RUTAS POR TIPO ─────────────────────────────────────────
 function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [tipoActivo,setTipoActivo]   = useState(null); // null = portada
@@ -971,6 +1091,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // ── PORTADA ──
   if(!tipoActivo) return(
     <div style={{paddingBottom:80}}>
+      <FichajeWidget sesion={sesion} />
       <div style={{padding:"12px 14px 0"}}>
         <div style={{fontSize:10,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>Selecciona tipo de trabajo</div>
         {TIPOS_TRABAJO.map(t=>{

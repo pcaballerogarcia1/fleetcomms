@@ -156,5 +156,22 @@ service cloud.firestore {
       // alguien falsifique la posición GPS de otro usuario.
       allow write: if isSignedIn() && request.auth.uid == uid;
     }
+
+    // ── FICHAJES (entrada/salida + kms de la jornada) ───────────────
+    // Lectura: el propio conductor (su historial), o un admin/superadmin
+    // de su misma organización (control horario/laboral). Escritura:
+    // solo el propio conductor puede fichar o cerrar su propio fichaje —
+    // nadie puede fichar en nombre de otro ni tocar fichajes ajenos.
+    match /fichajes/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        (sameOrg(resource.data.org_id) && myProfile().rol in ['admin', 'superadmin'])
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        sameOrg(request.resource.data.org_id);
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
   }
 }
