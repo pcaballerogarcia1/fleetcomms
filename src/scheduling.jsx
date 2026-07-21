@@ -902,7 +902,13 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   // paradas sin asignar).
   if (added > 0) {
     const shrinkStart = Date.now();
-    const SHRINK_TIME_BUDGET_MS = 15000;
+    // Cada intento es una simulación completa (clustering + rutas de todas
+    // las paradas) — con miles de paradas puede tardar varios segundos cada
+    // una, y hacen falta ~7-9 intentos para converger en una flota grande.
+    // Un tope bajo (15s) cortaba la búsqueda a medias antes de llegar al
+    // mínimo real, dejando muchos más vehículos de los necesarios. Mejor
+    // esperar más y llegar al número correcto que ser rápido con uno malo.
+    const SHRINK_TIME_BUDGET_MS = 90000;
     const cache = new Map(); // tamaño de flota -> { result, resources } ya simulados
     cache.set(resources.length, { result, resources });
 
