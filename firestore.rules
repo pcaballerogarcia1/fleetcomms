@@ -67,8 +67,14 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/orgs/$(request.resource.data.org_id));
 
       allow update: if isSignedIn() && (
-        request.auth.uid == uid ||
-        (resource.data.org_id == myOrgId() && myProfile().rol in ['admin', 'superadmin'])
+        // El propio usuario puede editar su perfil, pero nunca su propio rol
+        // (si no, cualquiera podría auto-promoverse a admin/superadmin con
+        // un updateDoc directo, sin pasar por la UI).
+        (request.auth.uid == uid && request.resource.data.rol == resource.data.rol) ||
+        // Un admin de la misma org puede cambiar el rol de otros usuarios de
+        // su org, pero nunca ascender a nadie a superadmin.
+        (resource.data.org_id == myOrgId() && myProfile().rol in ['admin', 'superadmin'] &&
+          request.resource.data.rol != 'superadmin')
       ) && request.resource.data.org_id == resource.data.org_id; // org_id no se puede reasignar en un update
 
       allow delete: if false;
