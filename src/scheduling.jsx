@@ -865,6 +865,44 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
     result = await generateScenario(tasks, resources, constraints);
   }
 
+  // ── Shrink pass ──────────────────────────────────────────────────
+  // El bucle de arriba añade vehículos por lotes estimando la productividad
+  // media hasta el momento, y con turnos emparejados (mañana+tarde) cada
+  // vehículo tiene mucha más capacidad de la que el clustering geográfico
+  // (un cluster por vehículo, de tamaño parecido) suele llenar del todo —
+  // el resultado eran decenas de vehículos con la tarde casi vacía (1-2
+  // paradas sueltas) en vez de menos vehículos usando esa tarde de verdad.
+  //
+  // Con todo ya asignado, calcula cuántos vehículos harían falta si cada uno
+  // trabajara cerca de su capacidad real (minutos de trabajo+viaje totales /
+  // capacidad por vehículo, con margen), salta ahí de golpe si sigue
+  // encajando todo, y afina quitando vehículos de uno en uno (re-simulando
+  // cada vez) hasta que quitar el siguiente deje paradas sin asignar.
+  if (added > 0) {
+    const totalWorkMin = result.schedule.reduce((s, r) =>
+      s + r.assignments.reduce((ss, a) => ss + (a._break ? 0 : (a.duracion || 0)), 0), 0);
+    const perVehicleCapacity = Math.max(1, virtualShiftMin ? shiftsPerVehicle * virtualShiftMin : winSpan);
+    const estimate = Math.max(baseResources.length, Math.ceil((totalWorkMin / perVehicleCapacity) * 1.15));
+
+    if (estimate < resources.length) {
+      const trial = resources.slice(0, estimate);
+      const trialResult = await generateScenario(tasks, trial, constraints);
+      if (trialResult.unassigned.length === 0) {
+        resources = trial; result = trialResult; added = estimate - baseResources.length;
+      }
+    }
+
+    const MAX_SHRINK_TRIES = 30; // acota el coste — cada intento es una simulación completa
+    let tries = 0;
+    while (resources.length > baseResources.length && tries < MAX_SHRINK_TRIES) {
+      const trial = resources.slice(0, -1);
+      const trialResult = await generateScenario(tasks, trial, constraints);
+      tries++;
+      if (trialResult.unassigned.length > 0) break; // quitar este ya no encaja — parar
+      resources = trial; result = trialResult; added -= 1;
+    }
+  }
+
   return { result, resources, addedCount: added };
 }
 
