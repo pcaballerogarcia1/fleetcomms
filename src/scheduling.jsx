@@ -352,7 +352,7 @@ async function enrichWithOSRM(schedule) {
 const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 async function generateScenario(tasks, resources, constraints) {
-  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays } = constraints;
+  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular } = constraints;
   const dayCap = maxDays > 0 ? maxDays : MAX_AUTO_DAYS;
 
   if (!resources.length) return { schedule: [], unassigned: [...tasks], daysUsed: 1 };
@@ -471,100 +471,122 @@ async function generateScenario(tasks, resources, constraints) {
       const queue = sortedQueues[i];
       if (queueIdx[i] >= queue.length) continue; // all tasks for this resource done
 
-      const depot = (res.depotLat && res.depotLng)
+      const depot  = (res.depotLat && res.depotLng)
         ? { lat: +res.depotLat, lng: +res.depotLng } : null;
+      const dayEnd = res.shiftEnd + dayOffset;
+
+      // Circularidad: con depósito, cada conductor vinculado al vehículo
+      // vuelve a él al final de SU turno, no solo al final del día (segEnds
+      // = un límite por cada relevo + el fin de jornada). Sin depósito, el
+      // punto de vuelta es la ubicación de la primera parada del propio día
+      // (anchor se fija dinámicamente más abajo). Con circular=false,
+      // segEnds=[dayEnd] reproduce exactamente el comportamiento anterior.
+      const segEnds = circular && res._shiftBreaks?.length
+        ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+        : [dayEnd];
+
       let cursor     = res.shiftStart + dayOffset;
-      const dayEnd   = res.shiftEnd   + dayOffset;
       let sinceBreak = 0;
       let lastLat    = depot ? depot.lat : null;
       let lastLng    = depot ? depot.lng : null;
       let fromDepot  = !!depot;
+      let anchor     = depot; // null hasta que circular fije la primera parada del día
 
-      // If the head-of-queue task is infeasible for this vehicle today (e.g. too far from
-      // depot for retBuffer), scan ahead up to 15 tasks and swap the first feasible one
-      // to the front so the vehicle isn't permanently blocked on an outlier.
-      if (queueIdx[i] < queue.length) {
-        const LOOK = Math.min(15, queue.length - queueIdx[i]);
-        let swapTo = -1;
-        for (let li = 0; li < LOOK && swapTo === -1; li++) {
-          const t = queue[queueIdx[i] + li];
-          const tdur = t.duracion || 15;
-          let ttMin = 0;
-          if (hasCoords(lastLat, lastLng) && hasCoords(t.lat, t.lng)) {
-            const tkm = haversineKm(lastLat, lastLng, t.lat, t.lng);
-            if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(tkm / TRAVEL_SPEED_KMH * 60));
+      for (const segEnd of segEnds) {
+        // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
+        // del anchor para volver a tiempo), busca hasta 15 tareas por delante y
+        // adelanta la primera viable para no bloquear el recurso en un outlier.
+        if (queueIdx[i] < queue.length) {
+          const LOOK = Math.min(15, queue.length - queueIdx[i]);
+          let swapTo = -1;
+          for (let li = 0; li < LOOK && swapTo === -1; li++) {
+            const t = queue[queueIdx[i] + li];
+            const tdur = t.duracion || 15;
+            let ttMin = 0;
+            if (hasCoords(lastLat, lastLng) && hasCoords(t.lat, t.lng)) {
+              const tkm = haversineKm(lastLat, lastLng, t.lat, t.lng);
+              if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(tkm / TRAVEL_SPEED_KMH * 60));
+            }
+            let tRet = 0;
+            if (anchor && hasCoords(t.lat, t.lng)) {
+              const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
+              if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
+            }
+            if (cursor + ttMin + tdur + tRet <= segEnd) swapTo = li;
           }
-          let tRet = 0;
-          if (depot && hasCoords(t.lat, t.lng)) {
-            const rkm = haversineKm(+t.lat, +t.lng, depot.lat, depot.lng);
-            if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
-          }
-          if (cursor + ttMin + tdur + tRet <= dayEnd) swapTo = li;
-        }
-        if (swapTo > 0) {
-          const [best] = queue.splice(queueIdx[i] + swapTo, 1);
-          queue.splice(queueIdx[i], 0, best);
-        }
-      }
-
-      while (queueIdx[i] < queue.length) {
-        const task = queue[queueIdx[i]];
-        const dur  = task.duracion || 15;
-
-        if (maxStops > 0 && dayStops[i] >= maxStops) break;
-
-        if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= dayEnd) {
-          res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
-          cursor += breakDur; sinceBreak = 0;
-        }
-
-        let travelMin = 0, travelKm = 0;
-        if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
-          travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-          if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
-        }
-
-        let retBuffer = 0;
-        if (depot) {
-          const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
-          const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
-          if (hasCoords(refLat, refLng)) {
-            const retKmEst = haversineKm(refLat, refLng, depot.lat, depot.lng);
-            if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+          if (swapTo > 0) {
+            const [best] = queue.splice(queueIdx[i] + swapTo, 1);
+            queue.splice(queueIdx[i], 0, best);
           }
         }
 
-        const workSoFar = cursor - (res.shiftStart + dayOffset);
-        if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) break;
-        if (cursor + travelMin + dur + retBuffer > dayEnd) break;
+        while (queueIdx[i] < queue.length) {
+          const task = queue[queueIdx[i]];
+          const dur  = task.duracion || 15;
 
-        if (travelMin > 0) {
-          const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
-          if (fromDepot) block._depot_exit = true;
-          res.assignments.push(block);
-          cursor += travelMin; res.totalKm += travelKm;
-        }
-        fromDepot = false;
-        res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
-        cursor += dur; sinceBreak += dur;
-        if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
-        queueIdx[i]++;
-        dayStops[i]++;
-        anyAssignedThisDay = true;
-      }
+          if (maxStops > 0 && dayStops[i] >= maxStops) break;
 
-      // Return to depot
-      if (depot && hasCoords(lastLat, lastLng) && (lastLat !== depot.lat || lastLng !== depot.lng)) {
-        const retKm = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
-        if (retKm >= 0.05) {
-          const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
-          res.assignments.push({
-            _travel: true, _depot_return: true,
-            _start: cursor, _end: cursor + retMin,
-            duracion: retMin, km: +retKm.toFixed(3),
-          });
-          res.totalKm += retKm;
+          if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= segEnd) {
+            res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
+            cursor += breakDur; sinceBreak = 0;
+          }
+
+          let travelMin = 0, travelKm = 0;
+          if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
+            travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
+            if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+          }
+
+          let retBuffer = 0;
+          if (anchor) {
+            const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
+            const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
+            if (hasCoords(refLat, refLng)) {
+              const retKmEst = haversineKm(refLat, refLng, anchor.lat, anchor.lng);
+              if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+            }
+          }
+
+          const workSoFar = cursor - (res.shiftStart + dayOffset);
+          if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) break;
+          if (cursor + travelMin + dur + retBuffer > segEnd) break;
+
+          if (travelMin > 0) {
+            const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
+            if (fromDepot) block._depot_exit = true;
+            res.assignments.push(block);
+            cursor += travelMin; res.totalKm += travelKm;
+          }
+          fromDepot = false;
+          res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
+          cursor += dur; sinceBreak += dur;
+          if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
+          // Circularidad sin depósito: la primera parada del día fija el
+          // punto de vuelta para el resto de la jornada (todos los tramos).
+          if (circular && !depot && !anchor) anchor = { lat: lastLat, lng: lastLng };
+          queueIdx[i]++;
+          dayStops[i]++;
+          anyAssignedThisDay = true;
         }
+
+        // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
+        if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
+          const retKm = haversineKm(lastLat, lastLng, anchor.lat, anchor.lng);
+          if (retKm >= 0.05) {
+            const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+            res.assignments.push({
+              _travel: true, _depot_return: true,
+              _start: cursor, _end: cursor + retMin,
+              duracion: retMin, km: +retKm.toFixed(3),
+            });
+            cursor += retMin; res.totalKm += retKm;
+          }
+        }
+
+        // El siguiente tramo (relevo de conductor) empieza en su hora fija,
+        // no antes aunque el anterior haya terminado con margen.
+        if (anchor) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
+        cursor = Math.max(cursor, segEnd);
       }
     }
 
@@ -587,54 +609,65 @@ async function generateScenario(tasks, resources, constraints) {
       ? { lat: +res.depotLat, lng: +res.depotLng } : null;
 
     for (let bDay = 0; bDay < day; bDay++) {
-      const dOff   = bDay * 1440;
-      let   cur    = res.shiftStart + dOff;
-      const dEnd   = res.shiftEnd   + dOff;
-      if (cur >= dEnd) continue;
+      const dOff = bDay * 1440;
+      const dEnd = res.shiftEnd + dOff;
+      if (res.shiftStart + dOff >= dEnd) continue;
 
+      const segEnds = circular && res._shiftBreaks?.length
+        ? [...res._shiftBreaks.map(b => b + dOff), dEnd]
+        : [dEnd];
+
+      let cur     = res.shiftStart + dOff;
       let lLat    = eDepot ? eDepot.lat : null;
       let lLng    = eDepot ? eDepot.lng : null;
       let fromDep = !!eDepot;
+      let anchor  = eDepot;
       let sinceB  = 0;
 
-      let pi = 0;
-      while (pi < sortedQueues[i].length) {
-        const task = sortedQueues[i][pi];
-        const dur  = task.duracion || 15;
+      for (const segEnd of segEnds) {
+        let pi = 0;
+        while (pi < sortedQueues[i].length) {
+          const task = sortedQueues[i][pi];
+          const dur  = task.duracion || 15;
 
-        if (breakAfter > 0 && breakDur > 0 && sinceB >= breakAfter && cur + breakDur <= dEnd) {
-          res.assignments.push({ _break: true, _start: cur, _end: cur + breakDur, duracion: breakDur });
-          cur += breakDur; sinceB = 0;
+          if (breakAfter > 0 && breakDur > 0 && sinceB >= breakAfter && cur + breakDur <= segEnd) {
+            res.assignments.push({ _break: true, _start: cur, _end: cur + breakDur, duracion: breakDur });
+            cur += breakDur; sinceB = 0;
+          }
+
+          let tMin = 0, tKm = 0;
+          if (hasCoords(lLat, lLng) && hasCoords(task.lat, task.lng)) {
+            tKm = haversineKm(lLat, lLng, task.lat, task.lng);
+            if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
+          }
+
+          if (cur + tMin + dur > segEnd) { pi++; continue; }
+
+          if (tMin > 0) {
+            const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
+            if (fromDep) blk._depot_exit = true;
+            res.assignments.push(blk);
+            cur += tMin; res.totalKm += tKm;
+          }
+          fromDep = false;
+          res.assignments.push({ ...task, _start: cur, _end: cur + dur });
+          cur += dur; sinceB += dur;
+          if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
+          if (circular && !eDepot && !anchor) anchor = { lat: lLat, lng: lLng };
+          sortedQueues[i].splice(pi, 1); // remove assigned task; pi stays (next shifts down)
         }
 
-        let tMin = 0, tKm = 0;
-        if (hasCoords(lLat, lLng) && hasCoords(task.lat, task.lng)) {
-          tKm = haversineKm(lLat, lLng, task.lat, task.lng);
-          if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
+        if (anchor && hasCoords(lLat, lLng) && (lLat !== anchor.lat || lLng !== anchor.lng)) {
+          const rKm = haversineKm(lLat, lLng, anchor.lat, anchor.lng);
+          if (rKm >= 0.05) {
+            const rMin = Math.max(1, Math.ceil(rKm / TRAVEL_SPEED_KMH * 60));
+            res.assignments.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rMin, duracion: rMin, km: +rKm.toFixed(3) });
+            cur += rMin; res.totalKm += rKm;
+          }
         }
 
-        if (cur + tMin + dur > dEnd) { pi++; continue; }
-
-        if (tMin > 0) {
-          const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
-          if (fromDep) blk._depot_exit = true;
-          res.assignments.push(blk);
-          cur += tMin; res.totalKm += tKm;
-        }
-        fromDep = false;
-        res.assignments.push({ ...task, _start: cur, _end: cur + dur });
-        cur += dur; sinceB += dur;
-        if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
-        sortedQueues[i].splice(pi, 1); // remove assigned task; pi stays (next shifts down)
-      }
-
-      if (eDepot && hasCoords(lLat, lLng) && (lLat !== eDepot.lat || lLng !== eDepot.lng)) {
-        const rKm = haversineKm(lLat, lLng, eDepot.lat, eDepot.lng);
-        if (rKm >= 0.05) {
-          const rMin = Math.max(1, Math.ceil(rKm / TRAVEL_SPEED_KMH * 60));
-          res.assignments.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rMin, duracion: rMin, km: +rKm.toFixed(3) });
-          res.totalKm += rKm;
-        }
+        if (anchor) { lLat = anchor.lat; lLng = anchor.lng; fromDep = true; }
+        cur = Math.max(cur, segEnd);
       }
     }
   }
@@ -670,64 +703,75 @@ async function generateScenario(tasks, resources, constraints) {
         const res   = state[i];
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
+        const dayEnd = res.shiftEnd + dayOffset;
+        const segEnds = circular && res._shiftBreaks?.length
+          ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+          : [dayEnd];
+
         let cursor     = res.shiftStart + dayOffset;
-        const dayEnd   = res.shiftEnd   + dayOffset;
         let sinceBreak = 0;
         let lastLat    = depot ? depot.lat : null;
         let lastLng    = depot ? depot.lng : null;
         let fromDepot  = !!depot;
+        let anchor     = depot;
 
-        // Scan every remaining pool task; assign what fits, skip what doesn't.
-        // No retBuffer check here — depot return is appended after the loop and
-        // may slightly overshoot dayEnd, which is acceptable for the mop-up.
-        let pi = 0;
-        while (pi < pool.length) {
-          const task = pool[pi];
-          const dur  = task.duracion || 15;
+        for (const segEnd of segEnds) {
+          // Scan every remaining pool task; assign what fits, skip what doesn't.
+          // No retBuffer check here — the return-to-anchor leg is appended after
+          // the loop and may slightly overshoot segEnd, acceptable for the mop-up.
+          let pi = 0;
+          while (pi < pool.length) {
+            const task = pool[pi];
+            const dur  = task.duracion || 15;
 
-          if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= dayEnd) {
-            res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
-            cursor += breakDur; sinceBreak = 0;
+            if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= segEnd) {
+              res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
+              cursor += breakDur; sinceBreak = 0;
+            }
+
+            let travelMin = 0, travelKm = 0;
+            if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
+              travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
+              if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+            }
+
+            const workSoFar = cursor - (res.shiftStart + dayOffset);
+            const fitsShift   = maxShiftMin <= 0 || workSoFar + travelMin + dur <= maxShiftMin;
+            const fitsSeg     = cursor + travelMin + dur <= segEnd;
+
+            if (!fitsShift || !fitsSeg) {
+              pi++; // skip this task for now; it stays in pool for later vehicles/days
+              continue;
+            }
+
+            // Assign
+            if (travelMin > 0) {
+              const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
+              if (fromDepot) block._depot_exit = true;
+              res.assignments.push(block);
+              cursor += travelMin; res.totalKm += travelKm;
+            }
+            fromDepot = false;
+            res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
+            cursor += dur; sinceBreak += dur;
+            if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
+            if (circular && !depot && !anchor) anchor = { lat: lastLat, lng: lastLng };
+            pool.splice(pi, 1); // remove from pool; pi now points to next element
+            anyMop = true;
           }
 
-          let travelMin = 0, travelKm = 0;
-          if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
-            travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-            if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+          // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
+          if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
+            const retKm = haversineKm(lastLat, lastLng, anchor.lat, anchor.lng);
+            if (retKm >= 0.05) {
+              const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+              res.assignments.push({ _travel: true, _depot_return: true, _start: cursor, _end: cursor + retMin, duracion: retMin, km: +retKm.toFixed(3) });
+              cursor += retMin; res.totalKm += retKm;
+            }
           }
 
-          const workSoFar = cursor - (res.shiftStart + dayOffset);
-          const fitsShift   = maxShiftMin <= 0 || workSoFar + travelMin + dur <= maxShiftMin;
-          const fitsDay     = cursor + travelMin + dur <= dayEnd;
-
-          if (!fitsShift || !fitsDay) {
-            pi++; // skip this task for now; it stays in pool for later vehicles/days
-            continue;
-          }
-
-          // Assign
-          if (travelMin > 0) {
-            const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
-            if (fromDepot) block._depot_exit = true;
-            res.assignments.push(block);
-            cursor += travelMin; res.totalKm += travelKm;
-          }
-          fromDepot = false;
-          res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
-          cursor += dur; sinceBreak += dur;
-          if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
-          pool.splice(pi, 1); // remove from pool; pi now points to next element
-          anyMop = true;
-        }
-
-        // Return to depot
-        if (depot && hasCoords(lastLat, lastLng) && (lastLat !== depot.lat || lastLng !== depot.lng)) {
-          const retKm = haversineKm(lastLat, lastLng, depot.lat, depot.lng);
-          if (retKm >= 0.05) {
-            const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
-            res.assignments.push({ _travel: true, _depot_return: true, _start: cursor, _end: cursor + retMin, duracion: retMin, km: +retKm.toFixed(3) });
-            res.totalKm += retKm;
-          }
+          if (anchor) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
+          cursor = Math.max(cursor, segEnd);
         }
       }
 
@@ -1465,6 +1509,13 @@ function ConstraintsPanel({ c, onChange }) {
       style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }}
     />
   );
+  const checkbox = (key) => (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <input type="checkbox" checked={!!c[key]} onChange={e => set(key, e.target.checked)}
+        style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }}
+      />
+    </label>
+  );
 
   return (
     <div style={{
@@ -1481,11 +1532,19 @@ function ConstraintsPanel({ c, onChange }) {
         {row("Ventana: hora de inicio", timeInput("startMin"))}
         {row("Ventana: hora de fin", timeInput("endMin"))}
         {row("Días máximos de escenario (0 = automático)", numInput("maxDays", 0, 365, "días"))}
+        {row("Circularidad (vuelve donde empieza)", checkbox("circular"))}
       </div>
       {c.maxDays > 0 && (
         <div style={{ marginTop: 10, fontSize: 11, color: C.dim }}>
           Si con la flota actual no caben todas las paradas en {c.maxDays} día{c.maxDays === 1 ? "" : "s"},
           se añadirán automáticamente los vehículos y conductores necesarios ("Vehículo necesario 1", "Conductor necesario 1"…) para cumplir el límite.
+        </div>
+      )}
+      {c.circular && (
+        <div style={{ marginTop: 10, fontSize: 11, color: C.dim }}>
+          Cada vehículo (y cada conductor, si hay relevo de turno en el mismo vehículo) termina su recorrido
+          en el mismo punto donde lo empezó: el depósito si el vehículo tiene uno configurado, o si no,
+          la ubicación de su primera parada del día.
         </div>
       )}
     </div>
@@ -2018,7 +2077,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [showC,        setShowC]       = useState(false);
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
-    startMin: 360, endMin: 1320, days: 1, maxDays: 0,
+    startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
@@ -2178,10 +2237,20 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       const vehiclesForVRP = vehiclesWithDepot.map(v => {
         const linked = workers.filter(w => w.vehiculoId === (v._id || v.id));
         if (!linked.length) return v;
-        const wins = linked.map(w => turnoWindow(w.turno, constraints.startMin, constraints.endMin));
+        const wins = linked.map(w => turnoWindow(w.turno, constraints.startMin, constraints.endMin))
+          .sort((a, b) => a.start - b.start);
         const effStart = Math.min(...wins.map(w => w.start));
         const effEnd   = Math.max(...wins.map(w => w.end));
-        return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd };
+        // Circularidad por conductor: cada relevo entre conductores vinculados
+        // a este vehículo (fin del turno de uno = inicio del siguiente) es un
+        // punto donde, si "circular" está activo, el vehículo debe volver al
+        // anchor del día antes de que empiece el siguiente conductor. El fin
+        // del último turno YA es effEnd (el regreso de fin de jornada existe
+        // siempre), así que solo hacen falta los bordes intermedios.
+        const shiftBreaks = [...new Set(wins.slice(0, -1).map(w => w.end))]
+          .filter(b => b > effStart && b < effEnd)
+          .sort((a, b) => a - b);
+        return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd, _shiftBreaks: shiftBreaks };
       });
 
       // ── Step 1: Vehicle VRP ──────────────────────────────────────
@@ -2268,8 +2337,15 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const myAssignments = vehicleRow.assignments.filter(a => {
           const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
           const tStart = a._start - dayOffset;
-          // Depot return: assign to the last worker of the vehicle (latest shift end)
+          // Depot/anchor return: normally owned by whichever peer's window
+          // contains its start (with circularidad hay una vuelta por cada
+          // relevo, no solo una al final del día). Si el tramo cae fuera de
+          // todas las ventanas (p.ej. la vuelta de cierre de jornada se sale
+          // unos minutos del turno), se atribuye al último conductor del día
+          // como red de seguridad.
           if (a._depot_return) {
+            const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
+            if (owner) return (owner._id || owner.id) === wId;
             const last = peers.reduce((best, p) => !best || p._tw.end > best._tw.end ? p : best, null);
             return last && (last._id || last.id) === wId;
           }
