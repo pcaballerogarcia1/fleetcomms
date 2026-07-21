@@ -352,7 +352,7 @@ async function enrichWithOSRM(schedule) {
 const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 async function generateScenario(tasks, resources, constraints) {
-  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular } = constraints;
+  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular, optimizeWeight } = constraints;
   const dayCap = maxDays > 0 ? maxDays : MAX_AUTO_DAYS;
 
   if (!resources.length) return { schedule: [], unassigned: [...tasks], daysUsed: 1 };
@@ -389,23 +389,42 @@ async function generateScenario(tasks, resources, constraints) {
 
       // Rebalance: fix both empty clusters AND severely undersized ones.
       // k-means can produce a cluster with only 70 tasks out of 44 000 when
-      // data has fewer natural groups than k. We bring every cluster up to at
-      // least 50 % of the average size by stealing from the largest cluster.
-      const avgSize = Math.floor(withCoords.length / k);
-      const minSize = Math.max(1, Math.floor(avgSize * 0.5));
+      // data has fewer natural groups than k. We bring every cluster up to a
+      // minimum load by stealing from the most loaded cluster.
+      //
+      // "Priorizar turnos" (optimizeWeight, 0=km · 100=turnos) blends the
+      // balancing target between raw task COUNT (tight geographic clusters —
+      // today's default, favors short routes even if some vehicles end up
+      // with more work than others) and estimated WORK TIME (equalizes total
+      // duration per vehicle so no single vehicle becomes the bottleneck that
+      // drags out the whole scenario's day count, at the cost of handing some
+      // tasks to a vehicle that isn't its closest geographic match). At
+      // weight=0 this reproduces the exact previous behavior (count-only,
+      // 50% floor) — zero change for existing scenarios.
+      const optT = Math.max(0, Math.min(100, optimizeWeight || 0)) / 100;
+      const totalDur   = withCoords.reduce((s, t) => s + (t.duracion || 15), 0);
+      const avgTaskDur = totalDur / withCoords.length;
+      const clusterLoad = cl => {
+        if (optT === 0) return cl.length;
+        const dur = cl.reduce((s, t) => s + (t.duracion || 15), 0);
+        return (1 - optT) * cl.length + optT * (dur / avgTaskDur);
+      };
+      const avgLoad     = withCoords.length / k;
+      const minFraction = 0.5 + optT * 0.4; // 50% (solo evita clusters vacíos) → 90% (reparto casi igualado)
+      const minLoad     = Math.max(1, avgLoad * minFraction);
       let rebalChanged = true;
       while (rebalChanged) {
         rebalChanged = false;
         for (let ci = 0; ci < k; ci++) {
-          if (rawClusters[ci].length >= minSize) continue;      // big enough
+          if (clusterLoad(rawClusters[ci]) >= minLoad) continue;  // big enough
           let maxCi = 0;
           for (let cj = 1; cj < k; cj++) {
-            if (rawClusters[cj].length > rawClusters[maxCi].length) maxCi = cj;
+            if (clusterLoad(rawClusters[cj]) > clusterLoad(rawClusters[maxCi])) maxCi = cj;
           }
           const donor = rawClusters[maxCi];
-          if (donor.length > minSize) {                          // donor has surplus
-            const take = Math.min(minSize - rawClusters[ci].length,
-                                  Math.floor(donor.length / 2));
+          if (clusterLoad(donor) > minLoad) {                      // donor has surplus
+            const deficit = minLoad - clusterLoad(rawClusters[ci]);
+            const take = Math.min(Math.max(1, Math.ceil(deficit)), Math.floor(donor.length / 2));
             if (take > 0) {
               rawClusters[ci].push(...donor.splice(donor.length - take, take));
               rebalChanged = true;
@@ -1534,6 +1553,26 @@ function ConstraintsPanel({ c, onChange }) {
         {row("Días máximos de escenario (0 = automático)", numInput("maxDays", 0, 365, "días"))}
         {row("Circularidad (vuelve donde empieza)", checkbox("circular"))}
       </div>
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+          <span style={{ fontSize: 11, color: C.muted }}>Priorizar optimización</span>
+          <span style={{ fontSize: 11, color: C.blueText, fontFamily: mono }}>
+            {c.optimizeWeight > 0 ? `${c.optimizeWeight}% turnos` : "kilómetros"}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>Kilómetros</span>
+          <input type="range" min={0} max={100} step={5} value={c.optimizeWeight || 0}
+            onChange={e => set("optimizeWeight", parseInt(e.target.value))}
+            style={{ flex: 1, accentColor: C.blue, cursor: "pointer" }}
+          />
+          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>Turnos</span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11, color: C.dim }}>
+          Hacia "Kilómetros": rutas más compactas por vehículo, aunque la carga de trabajo quede desigual entre ellos.
+          Hacia "Turnos": reparte el trabajo por tiempo estimado para evitar que un solo vehículo alargue los días del escenario, a costa de más km totales.
+        </div>
+      </div>
       {c.maxDays > 0 && (
         <div style={{ marginTop: 10, fontSize: 11, color: C.dim }}>
           Si con la flota actual no caben todas las paradas en {c.maxDays} día{c.maxDays === 1 ? "" : "s"},
@@ -2078,6 +2117,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
     startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
+    optimizeWeight: 0,
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
