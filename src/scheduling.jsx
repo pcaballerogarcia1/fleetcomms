@@ -818,6 +818,14 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   let result = await generateScenario(tasks, resources, constraints);
   let added = 0;
 
+  // Jornada máxima de los conductores/vehículos añadidos automáticamente
+  // (constraints.virtualShiftMin, 0 = sin límite = jornada completa, igual
+  // que antes). Sin esto, "Jornada completa" cae en toda la ventana del
+  // escenario (p.ej. 06:00-22:00, 16h) — realista para un turno ya definido
+  // a mano, pero no para un conductor que el sistema inventa sobre la marcha
+  // solo para que quepan las paradas en los días fijados.
+  const virtualShiftMin = constraints.virtualShiftMin > 0 ? constraints.virtualShiftMin : null;
+
   while (result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES) {
     const assigned    = tasks.length - result.unassigned.length;
     const perVehicle   = Math.max(1, assigned / resources.length);
@@ -827,7 +835,7 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
 
     const extra = Array.from({ length: batch }, (_, i) => {
       const n = added + i + 1;
-      return {
+      const veh = {
         _id: `virtual_veh_${n}`, id: `virtual_veh_${n}`,
         nombre: `Vehículo necesario ${n}`, matricula: "",
         tipo: template.tipo || "Camión lateral",
@@ -835,6 +843,11 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
         depotLat: template.depotLat ?? null, depotLng: template.depotLng ?? null,
         _virtual: true,
       };
+      if (virtualShiftMin) {
+        veh._effectiveStart = constraints.startMin;
+        veh._effectiveEnd   = Math.min(constraints.endMin, constraints.startMin + virtualShiftMin);
+      }
+      return veh;
     });
 
     resources = [...resources, ...extra];
@@ -1574,9 +1587,12 @@ function ConstraintsPanel({ c, onChange }) {
         </div>
       </div>
       {c.maxDays > 0 && (
-        <div style={{ marginTop: 10, fontSize: 11, color: C.dim }}>
-          Si con la flota actual no caben todas las paradas en {c.maxDays} día{c.maxDays === 1 ? "" : "s"},
-          se añadirán automáticamente los vehículos y conductores necesarios ("Vehículo necesario 1", "Conductor necesario 1"…) para cumplir el límite.
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 10 }}>
+            Si con la flota actual no caben todas las paradas en {c.maxDays} día{c.maxDays === 1 ? "" : "s"},
+            se añadirán automáticamente los vehículos y conductores necesarios ("Vehículo necesario 1", "Conductor necesario 1"…) para cumplir el límite.
+          </div>
+          {row("Jornada máx. de los añadidos (0 = jornada completa)", numInput("virtualShiftMin", 0, 1440, "min"))}
         </div>
       )}
       {c.circular && (
@@ -2117,7 +2133,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
     startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
-    optimizeWeight: 0,
+    optimizeWeight: 0, virtualShiftMin: 0,
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
@@ -2336,18 +2352,26 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // turno window covers that time slot (earliest-start wins on overlap).
       // Workers without a valid vehiculoId appear with empty assignments.
 
-      // Virtual drivers to pair with any virtual "Vehículo necesario N" added by autoScaleFleet
+      // Virtual drivers to pair with any virtual "Vehículo necesario N" added by
+      // autoScaleFleet — heredan la jornada acotada del vehículo (si
+      // constraints.virtualShiftMin la fijó) en vez de "Jornada completa" a
+      // toda la ventana del escenario.
       const virtualWorkers = addedVehicles.map((v, i) => ({
         _id: `virtual_wrk_${i + 1}`, id: `virtual_wrk_${i + 1}`,
         nombre: `Conductor necesario ${i + 1}`, apellidos: "",
         turno: "Jornada completa", rol: "conductor",
         vehiculoId: v._id, _virtual: true,
+        ...(v._effectiveStart != null ? { _effectiveStart: v._effectiveStart, _effectiveEnd: v._effectiveEnd } : {}),
       }));
 
-      // Pre-compute turno window for every worker (real + virtual)
+      // Pre-compute turno window for every worker (real + virtual). Un
+      // conductor virtual con jornada acotada usa esa ventana directamente
+      // en vez de resolverla por turno.
       const workersWithTw = [...workers, ...virtualWorkers].map(w => ({
         ...w,
-        _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
+        _tw: w._effectiveStart != null
+          ? { start: w._effectiveStart, end: w._effectiveEnd }
+          : turnoWindow(w.turno, constraints.startMin, constraints.endMin),
       }));
 
       // Group workers by vehiculoId so we can resolve ownership per vehicle
