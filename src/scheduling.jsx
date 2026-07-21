@@ -2518,17 +2518,30 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         return { ...w, assignments: myAssignments, totalKm: myKm };
       });
 
-      setSchedules({ vehicles: vehicleSchedule, workers: workerRows });
+      // Un conductor virtual sin ninguna asignación (el turno de tarde de un
+      // vehículo cuyo cluster ya se agotó en la mañana) no aporta nada —
+      // existe solo porque cada vehículo virtual se empareja con
+      // mañana+tarde por defecto, sin saber de antemano si va a hacer falta
+      // la tarde. Quitarlo del recuento es seguro: el vehículo en sí sigue
+      // contando (si tuviera cero paradas en TODOS sus turnos, la búsqueda
+      // binaria de autoScaleFleet ya lo habría excluido de la flota). Los
+      // conductores reales nunca se filtran, aunque ese día no tengan nada
+      // asignado — son personas reales, no un hueco de turno inventado.
+      const usedWorkerRows = workerRows.filter(w =>
+        !w._virtual || w.assignments.some(a => !a._break && !a._travel));
+
+      setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
+      const usedVirtualWorkerCount = usedWorkerRows.filter(w => w._virtual).length;
       setScaleInfo(addedVehicles.length > 0
-        ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${virtualWorkers.length} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
+        ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
         : null);
 
       // Persist full schedule to IndexedDB (too large for Firestore)
       if (activeProject?._id) {
-        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: workerRows });
+        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows });
       }
 
       // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
@@ -2540,7 +2553,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         await onProjectUpdate({
           scheduling: {
             vehicleCount: vehicleSchedule.length,
-            workerCount:  workerRows.length,
+            workerCount:  usedWorkerRows.length,
             constraints:  { ...constraints, days: newDays },
             daysUsed: newDays, totalKm, totalStops,
             generatedAt: new Date().toISOString(),
