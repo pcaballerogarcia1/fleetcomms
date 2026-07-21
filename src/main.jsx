@@ -1,13 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
-import App from "./App.jsx";
-import SuperAdminApp from "./superadmin.jsx";
-import { PlanningPage } from "./planning.jsx";
-import { LoginScheduling, TabProyectos, SchedulingModuleWrapper } from "./scheduling.jsx";
-import { RosteringPage } from "./rostering.jsx";
-import { ControlPage } from "./control.jsx";
+// Lazy: cada uno de estos es su propio chunk grande (App = app de
+// conductores, SuperAdminApp, y los 4 módulos del workspace) que solo se
+// descarga si el usuario realmente lo visita, en vez de forzar a todo el
+// mundo a bajar los ~1.7MB de todos los módulos juntos.
+const App            = lazy(() => import("./App.jsx"));
+const SuperAdminApp  = lazy(() => import("./superadmin.jsx"));
+const PlanningPageLazy   = lazy(() => import("./planning.jsx").then(m => ({ default: m.PlanningPage })));
+const TabProyectosLazy   = lazy(() => import("./scheduling.jsx").then(m => ({ default: m.TabProyectos })));
+const SchedulingModuleWrapperLazy = lazy(() => import("./scheduling.jsx").then(m => ({ default: m.SchedulingModuleWrapper })));
+const RosteringPageLazy  = lazy(() => import("./rostering.jsx").then(m => ({ default: m.RosteringPage })));
+const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ default: m.ControlPage })));
+// LoginScheduling vive en su propio archivo diminuto (sin tirar de
+// Scheduling/Planning/Rostering) — se importa normal porque hace falta
+// de inmediato en /login.
+import { LoginScheduling } from "./login-scheduling.jsx";
 import { db, auth } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc, getDocFromServer } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -19,6 +28,14 @@ const C = {
   blue: "#5c9bff",
 };
 const font = '"Inter","Segoe UI",system-ui,sans-serif';
+
+function LazyFallback() {
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
+      <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div>
+    </div>
+  );
+}
 
 function readLS(key) {
   try { return JSON.parse(localStorage.getItem(key)) ?? null; } catch { return null; }
@@ -236,7 +253,9 @@ function WorkspaceRouter() {
         {/* /projects — unmounts when leaving (no heavy state to preserve) */}
         {path === "/projects" && (
           <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
-            <TabProyectos activeProject={activeProject} onOpenProject={openProject} orgId={sesion?.org_id} isSuperAdmin={sesion?.rol === "superadmin"} />
+            <Suspense fallback={<LazyFallback />}>
+              <TabProyectosLazy activeProject={activeProject} onOpenProject={openProject} orgId={sesion?.org_id} isSuperAdmin={sesion?.rol === "superadmin"} />
+            </Suspense>
           </div>
         )}
 
@@ -249,10 +268,12 @@ function WorkspaceRouter() {
             visibility: path === "/planning" ? "visible" : "hidden",
             pointerEvents: path === "/planning" ? "auto" : "none",
           }}>
-            <PlanningPage
-              sesion={sesion} onLogout={logout}
-              projectId={activeProject._id} embedded
-            />
+            <Suspense fallback={<LazyFallback />}>
+              <PlanningPageLazy
+                sesion={sesion} onLogout={logout}
+                projectId={activeProject._id} embedded
+              />
+            </Suspense>
           </div>
         )}
 
@@ -263,12 +284,14 @@ function WorkspaceRouter() {
             visibility: path === "/scheduling" ? "visible" : "hidden",
             pointerEvents: path === "/scheduling" ? "auto" : "none",
           }}>
-            <SchedulingModuleWrapper
-              vehicles={vehicles} workers={workers}
-              loadingV={loadingV} loadingW={loadingW}
-              activeProject={activeProject} onProjectUpdate={updateProject}
-              orgId={effectiveOrgId}
-            />
+            <Suspense fallback={<LazyFallback />}>
+              <SchedulingModuleWrapperLazy
+                vehicles={vehicles} workers={workers}
+                loadingV={loadingV} loadingW={loadingW}
+                activeProject={activeProject} onProjectUpdate={updateProject}
+                orgId={effectiveOrgId}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -281,7 +304,9 @@ function WorkspaceRouter() {
             visibility: path === "/rostering" ? "visible" : "hidden",
             pointerEvents: path === "/rostering" ? "auto" : "none",
           }}>
-            <RosteringPage sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
+            <Suspense fallback={<LazyFallback />}>
+              <RosteringPageLazy sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
+            </Suspense>
           </div>
         )}
 
@@ -296,7 +321,9 @@ function WorkspaceRouter() {
             visibility: path === "/control" ? "visible" : "hidden",
             pointerEvents: path === "/control" ? "auto" : "none",
           }}>
-            <ControlPage sesion={sesion} orgId={effectiveOrgId} embedded />
+            <Suspense fallback={<LazyFallback />}>
+              <ControlPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />
+            </Suspense>
           </div>
         )}
 
@@ -336,6 +363,16 @@ const isFleetApp    = initPath.startsWith("/incidencias") ||
                       initPath.startsWith("/rutas") || initPath.startsWith("/inventario");
 const isSuperAdmin  = initPath.startsWith("/superadmin");
 
+function RootFallback() {
+  return (
+    <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
+      <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div>
+    </div>
+  );
+}
+
 createRoot(document.getElementById("root")).render(
-  isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />
+  <Suspense fallback={<RootFallback />}>
+    {isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />}
+  </Suspense>
 );

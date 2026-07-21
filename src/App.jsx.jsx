@@ -3,7 +3,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveCo
 import { db, auth, secondaryAuth } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, query, where, setDoc, getDoc, getDocFromServer,
+  doc, serverTimestamp, query, where, orderBy, limit, setDoc, getDoc, getDocFromServer,
 } from "firebase/firestore";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
@@ -20,14 +20,19 @@ const CATS = [
 const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
-function useCollection(colName, orderField = "fecha", orgId = null, superAdmin = false) {
+function useCollection(colName, orderField = "fecha", orgId = null, superAdmin = false, limitN = null) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     if (!orgId && !superAdmin) { setData([]); setLoading(false); return; }
-    const q = orgId
-      ? query(collection(db, colName), where("org_id", "==", orgId))
-      : collection(db, colName);
+    // fechaSubida/fecha son número (Date.now()) o Timestamp de servidor
+    // siempre presentes desde la creación del doc, así que orderBy no
+    // deja fuera documentos antiguos por falta del campo.
+    const clauses = [
+      ...(orgId ? [where("org_id", "==", orgId)] : []),
+      ...(limitN ? [orderBy(orderField, "desc"), limit(limitN)] : []),
+    ];
+    const q = clauses.length ? query(collection(db, colName), ...clauses) : collection(db, colName);
     const unsub = onSnapshot(q, snap => {
       const docs = snap.docs
         .map(d => ({ ...d.data(), _id: d.id }))
@@ -41,7 +46,7 @@ function useCollection(colName, orderField = "fecha", orgId = null, superAdmin =
       setData(docs); setLoading(false);
     }, err => { console.error(colName, err); setLoading(false); });
     return () => unsub();
-  }, [colName, orgId, superAdmin]);
+  }, [colName, orgId, superAdmin, limitN]);
   return { data, loading };
 }
 
@@ -2098,7 +2103,10 @@ export default function App(){
   },[sesion?.org_id]);
 
   const isSA = sesion?.rol === "superadmin";
-  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id, isSA);
+  // limitN=300: sin esto, cada conductor descarga y decodifica TODO el
+  // histórico de planes de su org en cada apertura de la app — mismo
+  // problema (y mismo límite) que ya se arregló en Control.
+  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id, isSA, 300);
 
   async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
   async function updatePlan(plan){ await fbUpdate("planes",plan._id,plan); }
