@@ -352,7 +352,7 @@ async function enrichWithOSRM(schedule) {
 const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 async function generateScenario(tasks, resources, constraints) {
-  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular, optimizeWeight } = constraints;
+  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular, optimizeWeight, virtualShiftMin } = constraints;
   const dayCap = maxDays > 0 ? maxDays : MAX_AUTO_DAYS;
 
   if (!resources.length) return { schedule: [], unassigned: [...tasks], daysUsed: 1 };
@@ -401,7 +401,19 @@ async function generateScenario(tasks, resources, constraints) {
       // tasks to a vehicle that isn't its closest geographic match). At
       // weight=0 this reproduces the exact previous behavior (count-only,
       // 50% floor) — zero change for existing scenarios.
-      const optT = Math.max(0, Math.min(100, optimizeWeight || 0)) / 100;
+      //
+      // "Jornada máx. de los añadidos" (virtualShiftMin) implica lo mismo
+      // aunque no se toque el otro slider: fijar cuántas horas debe durar
+      // cada turno solo tiene sentido si los clusters llevan bastante
+      // trabajo para llenarlos — un reparto solo por número de paradas puede
+      // dejar clusters con apenas ~550 min (la mañana llena, la tarde con
+      // las migajas). Probado con datos tipo ciudad real (zonas densas +
+      // dispersas): con suelo 0.85 la media de uso se quedaba en 53% y 35 de
+      // 44 vehículos por debajo del 50%; con reparto 100% por tiempo baja a
+      // 40 vehículos, ninguno por debajo del 50% y máx 98%. Al pedir una
+      // jornada máxima concreta ya se asume el coste en km de repartir así.
+      const baseOptT = Math.max(0, Math.min(100, optimizeWeight || 0)) / 100;
+      const optT = virtualShiftMin ? Math.max(baseOptT, 1) : baseOptT;
       const totalDur   = withCoords.reduce((s, t) => s + (t.duracion || 15), 0);
       const avgTaskDur = totalDur / withCoords.length;
       const clusterLoad = cl => {
