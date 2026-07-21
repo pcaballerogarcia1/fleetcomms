@@ -877,7 +877,7 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
     result = await generateScenario(tasks, resources, constraints);
   }
 
-  // ── Shrink pass ──────────────────────────────────────────────────
+  // ── Shrink pass (búsqueda binaria) ──────────────────────────────
   // El bucle de arriba añade vehículos por lotes estimando la productividad
   // media hasta el momento, y con turnos emparejados (mañana+tarde) cada
   // vehículo tiene mucha más capacidad de la que el clustering geográfico
@@ -885,34 +885,40 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   // el resultado eran decenas de vehículos con la tarde casi vacía (1-2
   // paradas sueltas) en vez de menos vehículos usando esa tarde de verdad.
   //
-  // Con todo ya asignado, calcula cuántos vehículos harían falta si cada uno
-  // trabajara cerca de su capacidad real (minutos de trabajo+viaje totales /
-  // capacidad por vehículo, con margen), salta ahí de golpe si sigue
-  // encajando todo, y afina quitando vehículos de uno en uno (re-simulando
-  // cada vez) hasta que quitar el siguiente deje paradas sin asignar.
+  // Busca el menor tamaño de flota (entre la base y el resultado ya
+  // encajado) que sigue asignando el 100% de las paradas. Antes se hacía
+  // con una estimación por capacidad + ajuste fino quitando uno a uno con un
+  // tope de intentos — con flotas grandes (90+ vehículos) ese tope se
+  // alcanzaba antes de llegar al mínimo real y se quedaba a medias. La
+  // búsqueda binaria llega siempre al mínimo (asumiendo que más vehículos
+  // nunca perjudica, razonable aquí) en O(log n) simulaciones en vez de
+  // O(n) — para 90 vehículos son ~7 intentos, no 30.
   if (added > 0) {
-    const totalWorkMin = result.schedule.reduce((s, r) =>
-      s + r.assignments.reduce((ss, a) => ss + (a._break ? 0 : (a.duracion || 0)), 0), 0);
-    const perVehicleCapacity = Math.max(1, virtualShiftMin ? shiftsPerVehicle * virtualShiftMin : winSpan);
-    const estimate = Math.max(baseResources.length, Math.ceil((totalWorkMin / perVehicleCapacity) * 1.15));
+    const cache = new Map(); // tamaño de flota -> { result, resources } ya simulados
+    cache.set(resources.length, { result, resources });
 
-    if (estimate < resources.length) {
-      const trial = resources.slice(0, estimate);
+    async function tryFleetSize(size) {
+      if (cache.has(size)) return cache.get(size);
+      const trial = resources.slice(0, size);
       const trialResult = await generateScenario(tasks, trial, constraints);
-      if (trialResult.unassigned.length === 0) {
-        resources = trial; result = trialResult; added = estimate - baseResources.length;
-      }
+      const entry = { result: trialResult, resources: trial };
+      cache.set(size, entry);
+      return entry;
     }
 
-    const MAX_SHRINK_TRIES = 30; // acota el coste — cada intento es una simulación completa
-    let tries = 0;
-    while (resources.length > baseResources.length && tries < MAX_SHRINK_TRIES) {
-      const trial = resources.slice(0, -1);
-      const trialResult = await generateScenario(tasks, trial, constraints);
-      tries++;
-      if (trialResult.unassigned.length > 0) break; // quitar este ya no encaja — parar
-      resources = trial; result = trialResult; added -= 1;
+    let lo = baseResources.length;
+    let hi = resources.length; // conocido: encaja todo (es el resultado ya crecido)
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const { result: midResult } = await tryFleetSize(mid);
+      if (midResult.unassigned.length === 0) hi = mid; // mid ya vale — busca algo aún menor
+      else lo = mid + 1;                                // mid no llega — hace falta más
     }
+
+    const best = cache.get(hi);
+    resources = best.resources;
+    result = best.result;
+    added = resources.length - baseResources.length;
   }
 
   return { result, resources, addedCount: added };
