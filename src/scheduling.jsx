@@ -886,14 +886,23 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   // paradas sueltas) en vez de menos vehículos usando esa tarde de verdad.
   //
   // Busca el menor tamaño de flota (entre la base y el resultado ya
-  // encajado) que sigue asignando el 100% de las paradas. Antes se hacía
-  // con una estimación por capacidad + ajuste fino quitando uno a uno con un
-  // tope de intentos — con flotas grandes (90+ vehículos) ese tope se
-  // alcanzaba antes de llegar al mínimo real y se quedaba a medias. La
-  // búsqueda binaria llega siempre al mínimo (asumiendo que más vehículos
-  // nunca perjudica, razonable aquí) en O(log n) simulaciones en vez de
-  // O(n) — para 90 vehículos son ~7 intentos, no 30.
+  // encajado) que sigue asignando el 100% de las paradas. La versión previa
+  // (ajuste fino quitando uno a uno) se quedaba a medias en flotas grandes;
+  // la de después (búsqueda binaria pura desde el rango completo) siempre
+  // llegaba al mínimo pero tardaba mucho — cada intento es una simulación
+  // completa de 1400 paradas, y buscar en todo el rango [base, crecido]
+  // cuando crecido es grande (90+) sigue siendo caro aunque sean pocos pasos.
+  //
+  // Combina las dos ideas: un salto inicial a la estimación por capacidad
+  // (recorta el rango de búsqueda de entrada, así que hacen falta muchos
+  // menos intentos en el caso normal) + un tope de tiempo real (no de
+  // número de intentos) para que "Generar escenario" nunca se dispare por
+  // mucho que crezca la flota — si se agota el tiempo, se queda con el
+  // mejor tamaño encontrado hasta ese momento (siempre válido, nunca deja
+  // paradas sin asignar).
   if (added > 0) {
+    const shrinkStart = Date.now();
+    const SHRINK_TIME_BUDGET_MS = 15000;
     const cache = new Map(); // tamaño de flota -> { result, resources } ya simulados
     cache.set(resources.length, { result, resources });
 
@@ -906,9 +915,21 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
       return entry;
     }
 
+    const totalWorkMin = result.schedule.reduce((s, r) =>
+      s + r.assignments.reduce((ss, a) => ss + (a._break ? 0 : (a.duracion || 0)), 0), 0);
+    const perVehicleCapacity = Math.max(1, virtualShiftMin ? shiftsPerVehicle * virtualShiftMin : winSpan);
+    const estimate = Math.min(resources.length, Math.max(baseResources.length,
+      Math.ceil((totalWorkMin / perVehicleCapacity) * 1.15)));
+
     let lo = baseResources.length;
     let hi = resources.length; // conocido: encaja todo (es el resultado ya crecido)
-    while (lo < hi) {
+    if (estimate < hi) {
+      const { result: estResult } = await tryFleetSize(estimate);
+      if (estResult.unassigned.length === 0) hi = estimate; // la estimación ya vale — recorta el máximo
+      else lo = estimate + 1;                                 // no llega — recorta el mínimo
+    }
+
+    while (lo < hi && Date.now() - shrinkStart < SHRINK_TIME_BUDGET_MS) {
       const mid = Math.floor((lo + hi) / 2);
       const { result: midResult } = await tryFleetSize(mid);
       if (midResult.unassigned.length === 0) hi = mid; // mid ya vale — busca algo aún menor
