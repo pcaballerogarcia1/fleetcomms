@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { db, auth } from "./firebase.js";
+import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { useRostering, workerCodeOnDay, isUnavailable, SHIFT_META } from "./rostering.jsx";
 import { PlanningPage, idbGet } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
-  doc, serverTimestamp, query, where, getDoc, getDocFromServer, setDoc, getDocs, limit,
+  doc, serverTimestamp, query, where, getDoc, setDoc, getDocs, limit,
 } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { LoginScheduling } from "./login-scheduling.jsx";
@@ -2796,6 +2796,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   async function publishToRoutes(tipo, mes) {
     const vehicleSchedule = schedules.vehicles;
     if (!vehicleSchedule) return;
+    // Sin org_id, cada plan se creaba igualmente pero SIN el campo org_id —
+    // ninguna consulta real (Control, Rutas del conductor) filtra nunca por
+    // "sin org_id", así que los planes quedaban invisibles en todas partes
+    // sin ningún error visible. Mejor parar aquí que publicar en el vacío.
+    if (!orgId) { alert("No se puede publicar sin organización — este proyecto no tiene una asignada."); return; }
     setPublishing(true);
     const startMin = constraints.startMin;
     const col = collection(db, "planes");
@@ -2851,7 +2856,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             ubicaciones, recorrido,
             fechaSubida: Date.now(),
             origenVRP: true,
-            ...(orgId ? { org_id: orgId } : {}),
+            org_id: orgId,
           });
         }
       }
@@ -3485,7 +3490,14 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     const nombre = newModal.nombre.trim();
     const desc   = newModal.descripcion?.trim() || "";
     const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
-    const projectOrgId = newModal.orgId || effectiveOrgId || docId;
+    const projectOrgId = newModal.orgId || effectiveOrgId;
+    // Nunca caer en `docId` como org_id: un proyecto "huérfano" con su propio
+    // id de documento como org_id parece crearse bien (no da ningún error),
+    // pero todo lo que cuelga de él (vehículos, planes publicados en Rutas...)
+    // queda invisible para siempre — ninguna consulta real filtra por ese
+    // valor. El botón ya se desactiva en este caso, pero esto es la última
+    // barrera por si algo lo evita (Enter en el formulario, etc.).
+    if (!projectOrgId) { alert("No se puede crear el proyecto sin organización. Selecciona una."); return; }
 
     // Close modal and navigate immediately (optimistic)
     setNewModal(null);
@@ -3987,7 +3999,7 @@ export default function SchedulingApp() {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
+          const snap = await getUserProfileSafe(user.uid);
           if (snap.exists() && snap.data().activo !== false) {
             setSesion({ uid: user.uid, ...snap.data() });
           } else { await signOut(auth); setSesion(null); }

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { db, auth, secondaryAuth, secondaryDb } from "./firebase.js";
+import { db, auth, secondaryAuth, secondaryDb, getUserProfileSafe } from "./firebase.js";
 import {
   collection, query, where, limit, getDocs,
-  doc, getDocFromServer, setDoc, serverTimestamp,
+  doc, setDoc, serverTimestamp,
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
@@ -59,9 +59,10 @@ export function LoginScheduling({ onLogin }) {
     setLoading(true); setErr("");
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      // getDocFromServer: recién autenticado, la caché local puede no tener
-      // aún este documento y devolver "no existe" antes de sincronizar.
-      const snap = await getDocFromServer(doc(db, "usuarios", cred.user.uid));
+      // getUserProfileSafe: recién autenticado, la caché local puede no
+      // tener aún este documento y devolver "no existe" antes de
+      // sincronizar — pero con timeout, para no colgarse en mala cobertura.
+      const snap = await getUserProfileSafe(cred.user.uid);
       if (!snap.exists() || snap.data().activo === false) {
         await signOut(auth); setErr("Usuario inactivo o sin perfil."); setLoading(false); return;
       }

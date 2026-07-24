@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager,
   collection, onSnapshot, addDoc, updateDoc,
-  deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc,
+  deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc, getDoc, getDocFromServer,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
@@ -40,6 +40,26 @@ export const COL = {
   planningDepots:   "planning_depots",
   planningSettings: "planning_settings",
 };
+
+// getDocFromServer fuerza ida y vuelta al servidor (evita leer de una caché
+// local que aún no ha sincronizado justo tras iniciar sesión, que cerraba
+// la sesión recién abierta creyendo que no había perfil). Pero sin límite
+// de tiempo, en una conexión mala (muy típica de un conductor en la calle)
+// esa promesa puede quedarse colgada para siempre — la pantalla de login se
+// queda "cargando" sin entrar nunca. Con timeout: si el servidor no
+// responde a tiempo, cae a getDoc (caché local si existe, o lo que
+// Firestore consiga) en vez de colgarse.
+export async function getUserProfileSafe(uid, timeoutMs = 8000) {
+  const ref = doc(db, "usuarios", uid);
+  try {
+    return await Promise.race([
+      getDocFromServer(ref),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeoutMs)),
+    ]);
+  } catch {
+    return await getDoc(ref);
+  }
+}
 
 // ── HELPERS ───────────────────────────────────────────────────────
 

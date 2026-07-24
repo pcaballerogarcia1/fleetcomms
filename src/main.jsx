@@ -18,8 +18,8 @@ const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ defau
 // Scheduling/Planning/Rostering) — se importa normal porque hace falta
 // de inmediato en /login.
 import { LoginScheduling } from "./login-scheduling.jsx";
-import { db, auth } from "./firebase.js";
-import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query, getDoc, getDocFromServer } from "firebase/firestore";
+import { db, auth, getUserProfileSafe } from "./firebase.js";
+import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 const C = {
@@ -152,17 +152,17 @@ function WorkspaceRouter() {
   }, []);
 
   // Firebase Auth — escuchar sesión.
-  // getDocFromServer (no getDoc): justo después de iniciar sesión, la caché
-  // local de Firestore puede no tener aún este documento — getDoc podría
-  // devolver "no existe" desde una caché vacía/desactualizada antes de que
+  // getUserProfileSafe: justo después de iniciar sesión, la caché local de
+  // Firestore puede no tener aún este documento — getDoc podría devolver
+  // "no existe" desde una caché vacía/desactualizada antes de que
   // sincronice, cerrando la sesión que se acaba de abrir. Forzar servidor
-  // evita esa carrera (se notaba como "solo funciona con las DevTools
-  // abiertas", que ralentizan lo suficiente para que la caché ya sincronice).
+  // evita esa carrera, pero con timeout — sin él, en mala cobertura la
+  // pantalla de login se queda cargando para siempre.
   useEffect(() => {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
+          const snap = await getUserProfileSafe(user.uid);
           if (snap.exists()) {
             const profile = { uid: user.uid, ...snap.data() };
             setSesion(profile);

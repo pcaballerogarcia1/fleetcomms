@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { db, auth, secondaryAuth } from "./firebase.js";
+import { db, auth, secondaryAuth, getUserProfileSafe } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, query, where, orderBy, limit, setDoc, getDoc, getDocFromServer,
@@ -2079,10 +2079,11 @@ export default function App(){
     return onAuthStateChanged(auth,async user=>{
       if(user){
         try{
-          // getDocFromServer, no getDoc: evita leer de una caché local que
-          // aún no ha sincronizado justo tras iniciar sesión (cerraba la
-          // sesión recién abierta creyendo que no había perfil).
-          const snap=await getDocFromServer(doc(db,"usuarios",user.uid));
+          // getUserProfileSafe: fuerza servidor para evitar caché
+          // desactualizada justo tras iniciar sesión, pero con timeout —
+          // en mala cobertura (muy típico de un conductor en la calle) ya
+          // no se queda cargando para siempre.
+          const snap=await getUserProfileSafe(user.uid);
           if(snap.exists()&&snap.data().activo!==false){
             setSesion({uid:user.uid,id:user.uid,...snap.data()});
           }else{

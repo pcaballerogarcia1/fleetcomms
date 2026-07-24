@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
 import * as XLSX from "xlsx";
-import { db, auth } from "./firebase.js";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, getDocFromServer, writeBatch, getDocs } from "firebase/firestore";
+import { db, auth, getUserProfileSafe } from "./firebase.js";
+import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
 // ── IndexedDB para markers grandes (evita límite 1MB de Firestore) ──
@@ -2787,7 +2787,7 @@ export default function PlanningApp() {
     return onAuthStateChanged(auth, async user => {
       if (user) {
         try {
-          const snap = await getDocFromServer(doc(db, "usuarios", user.uid));
+          const snap = await getUserProfileSafe(user.uid);
           if (snap.exists() && snap.data().activo !== false) {
             setSesion({ uid: user.uid, ...snap.data() });
           } else { await signOut(auth); setSesion(null); }
