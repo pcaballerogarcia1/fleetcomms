@@ -908,8 +908,87 @@ async function generateScenario(tasks, resources, constraints) {
       mopDay++;
     }
 
+    // ── Reparación de huérfanos de franja horaria ──────────────────
+    // El clustering es puramente geográfico: una tarea con franja horaria
+    // muy ajustada puede caer en el vehículo "equivocado" (uno cuya ruta
+    // natural llega tarde o pronto a su ventana) sin que añadir más flota
+    // arregle nada — es cuestión de a qué vehículo le tocó, no de cuántos
+    // haya. En vez de dejarla sin asignar, se prueba a insertarla en
+    // CUALQUIER otro vehículo/día, al principio o al final de su jornada
+    // (reconstruyendo ese día entero para que viajes/esperas/descansos
+    // sigan siendo consistentes), y se usa la que menos km añade.
+    // No cubre reordenar en mitad de una ruta ya asignada (demasiado riesgo
+    // de romper la consistencia) ni turnos circulares con relevos (vuelta a
+    // depósito a mitad de jornada) — en esos casos, si no cabe al
+    // principio/final, se queda sin asignar como antes.
+    function layOutDay(orderedTasks, depot, dayStart, dayEnd, dayOffset) {
+      const blocks = [];
+      let cur = dayStart, lLat = depot?.lat ?? null, lLng = depot?.lng ?? null;
+      let fromDep = !!depot, sinceB = 0, km = 0;
+      for (const task of orderedTasks) {
+        const dur = task.duracion || 15;
+        if (breakAfter > 0 && breakDur > 0 && sinceB >= breakAfter && cur + breakDur <= dayEnd) {
+          blocks.push({ _break: true, _start: cur, _end: cur + breakDur, duracion: breakDur });
+          cur += breakDur; sinceB = 0;
+        }
+        let tMin = 0, tKm = 0;
+        if (hasCoords(lLat, lLng) && hasCoords(task.lat, task.lng)) {
+          tKm = haversineKm(lLat, lLng, task.lat, task.lng);
+          if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
+        }
+        const wait = windowWait(task, cur + tMin, dayOffset);
+        if (wait == null || cur + tMin + wait + dur > dayEnd) return null;
+        if (tMin > 0) {
+          const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
+          if (fromDep) blk._depot_exit = true;
+          blocks.push(blk); cur += tMin; km += tKm;
+        }
+        fromDep = false;
+        if (wait > 0) { blocks.push({ _wait: true, _start: cur, _end: cur + wait, duracion: wait }); cur += wait; }
+        blocks.push({ ...task, _start: cur, _end: cur + dur });
+        cur += dur; sinceB += dur;
+        if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
+      }
+      return { blocks, km };
+    }
+
+    function tryInsertOrphan(task) {
+      if (circular) return false;
+      let best = null, bestKm = Infinity;
+      for (let i = 0; i < k; i++) {
+        const res = state[i];
+        const depot = (res.depotLat && res.depotLng) ? { lat: +res.depotLat, lng: +res.depotLng } : null;
+        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        daysUsedSet.add(0);
+        for (const d of daysUsedSet) {
+          const dOff = d * 1440;
+          const dayStart = res.shiftStart + dOff, dayEnd = res.shiftEnd + dOff;
+          if (dayStart >= dayEnd) continue;
+          const dayRealOld = res.assignments
+            .filter(a => !a._break && !a._travel && !a._wait && Math.floor(a._start / 1440) === d)
+            .sort((a, b) => a._start - b._start);
+          for (const order of [[task, ...dayRealOld], [...dayRealOld, task]]) {
+            const laid = layOutDay(order, depot, dayStart, dayEnd, dOff);
+            if (laid && laid.km < bestKm) { bestKm = laid.km; best = { i, d, blocks: laid.blocks }; }
+          }
+        }
+      }
+      if (!best) return false;
+      const res = state[best.i];
+      res.assignments = res.assignments.filter(a => Math.floor(a._start / 1440) !== best.d);
+      res.assignments.push(...best.blocks);
+      res.assignments.sort((a, b) => a._start - b._start);
+      res.totalKm = res.assignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
+      return true;
+    }
+
+    const stillUnassigned = [];
+    for (const task of pool) {
+      if (task.windowStart == null || !tryInsertOrphan(task)) stillUnassigned.push(task);
+    }
+
     const daysUsed = Math.max(1, mopDay);
-    return { schedule: state, unassigned: pool, daysUsed };
+    return { schedule: state, unassigned: stillUnassigned, daysUsed };
   }
 
   const daysUsed = Math.max(1, day);
@@ -943,6 +1022,23 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   const winSpan          = constraints.endMin - constraints.startMin;
   const shiftsPerVehicle = virtualShiftMin ? Math.max(1, Math.floor(winSpan / virtualShiftMin)) : 1;
 
+  // Cuántas rondas seguidas sin BATIR el mínimo de sin-asignar visto hasta
+  // ahora toleramos antes de rendirnos. Una tarea con franja horaria muy
+  // ajustada (p.ej. 5-15 min) puede caer, según cómo el clustering geográfico
+  // la reparta, en un vehículo cuya ruta no llega a tiempo — y eso depende
+  // del azar del reparto, no de cuántos vehículos haya. Sin este freno, el
+  // bucle seguía añadiendo un vehículo por ronda durante 20+ rondas con la
+  // esperanza de que el reparto "acertara" alguna vez, multiplicando la
+  // flota final por 3-4x para intentar colar 1-2 tareas casi imposibles.
+  const STAGNANT_ROUNDS_LIMIT = 3;
+  let bestUnassigned = result.unassigned.length;
+  let roundsSinceImprovement = 0;
+  // La ronda que se rinde por estancamiento puede ser PEOR que la mejor ya
+  // vista (p.ej. 3 rondas probando distintos repartos con mala suerte) — hay
+  // que quedarse con el mejor intento real, no con el último.
+  let bestResources = resources;
+  let bestResult = result;
+
   while (result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES) {
     const assigned    = tasks.length - result.unassigned.length;
     const perVehicle   = Math.max(1, assigned / resources.length);
@@ -974,7 +1070,21 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
     resources = [...resources, ...extra];
     added += batch;
     result = await generateScenario(tasks, resources, constraints);
+
+    // Se comprueba el resultado DE ESTA ronda (no el de antes de crecer) —
+    // si se comprobara antes de intentar, la mejora de la última ronda antes
+    // de salir del bucle nunca quedaría registrada en bestUnassigned.
+    if (result.unassigned.length < bestUnassigned) {
+      bestUnassigned = result.unassigned.length;
+      bestResources = resources;
+      bestResult = result;
+      roundsSinceImprovement = 0;
+    } else if (++roundsSinceImprovement >= STAGNANT_ROUNDS_LIMIT) {
+      break; // probablemente franjas horarias imposibles de encajar, no falta de capacidad
+    }
   }
+  resources = bestResources;
+  result = bestResult;
 
   // ── Shrink pass (búsqueda binaria) ──────────────────────────────
   // El bucle de arriba añade vehículos por lotes estimando la productividad
@@ -997,8 +1107,15 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   // menos intentos en el caso normal) + un tope de tiempo real (no de
   // número de intentos) para que "Generar escenario" nunca se dispare por
   // mucho que crezca la flota — si se agota el tiempo, se queda con el
-  // mejor tamaño encontrado hasta ese momento (siempre válido, nunca deja
-  // paradas sin asignar).
+  // mejor tamaño encontrado hasta ese momento.
+  //
+  // El criterio de "vale" es sin-asignar <= bestUnassigned (lo mejor que
+  // logró el crecimiento de arriba), no sin-asignar === 0: si ese bucle se
+  // rindió con 1-2 tareas de franja horaria imposible, exigir aquí un 0
+  // perfecto haría fallar TODOS los tamaños por la misma razón (esas tareas
+  // no dependen del tamaño de flota, sino del azar del reparto geográfico) y
+  // la búsqueda binaria acabaría quedándose con el tamaño más grande posible
+  // en vez del más pequeño que ya logra el mismo resultado.
   if (added > 0) {
     const shrinkStart = Date.now();
     // Cada intento es una simulación completa (clustering + rutas de todas
@@ -1030,15 +1147,15 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
     let hi = resources.length; // conocido: encaja todo (es el resultado ya crecido)
     if (estimate < hi) {
       const { result: estResult } = await tryFleetSize(estimate);
-      if (estResult.unassigned.length === 0) hi = estimate; // la estimación ya vale — recorta el máximo
-      else lo = estimate + 1;                                 // no llega — recorta el mínimo
+      if (estResult.unassigned.length <= bestUnassigned) hi = estimate; // la estimación ya vale — recorta el máximo
+      else lo = estimate + 1;                                            // no llega — recorta el mínimo
     }
 
     while (lo < hi && Date.now() - shrinkStart < SHRINK_TIME_BUDGET_MS) {
       const mid = Math.floor((lo + hi) / 2);
       const { result: midResult } = await tryFleetSize(mid);
-      if (midResult.unassigned.length === 0) hi = mid; // mid ya vale — busca algo aún menor
-      else lo = mid + 1;                                // mid no llega — hace falta más
+      if (midResult.unassigned.length <= bestUnassigned) hi = mid; // mid ya vale — busca algo aún menor
+      else lo = mid + 1;                                            // mid no llega — hace falta más
     }
 
     const best = cache.get(hi);
