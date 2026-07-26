@@ -558,24 +558,26 @@ async function generateScenario(tasks, resources, constraints) {
       for (const segEnd of segEnds) {
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
         // del anchor para volver a tiempo, o su franja horaria ya no se puede
-        // cumplir), busca hasta 15 tareas por delante y adelanta la primera
-        // viable a la posición actual. Antes esto solo se llamaba UNA VEZ al
-        // empezar el tramo — con ventanas horarias, una sola tarea que dejara
-        // de encajar a mitad del día paraba el recurso el resto de la jornada
-        // aunque quedaran horas y tareas libres de sobra (esa era la queja:
-        // un vehículo esperando casi todo el día por 2 paradas). Ahora se
-        // reintenta cada vez que la cabeza de cola deja de ser viable, no
-        // solo al principio. El criterio de viabilidad es idéntico al del
-        // bucle de abajo (mismo maxShiftMin/segEnd/ventana) para que, si
-        // encuentra una tarea, el bucle la acepte siempre al re-evaluarla —
-        // si no, un desajuste entre ambos criterios podría reintentar sin
-        // avanzar nunca.
+        // cumplir), busca hasta 40 tareas por delante y adelanta la que MENOS
+        // espera exija a la posición actual — no la primera que "encaje" a
+        // secas. Antes se aceptaba la primera tarea viable en orden de cola,
+        // aunque encajara solo porque el turno tenía margen de sobra para
+        // absorber una espera de horas — así una parada con franja lejana en
+        // cabeza de cola bloqueaba al vehículo en una espera larga aunque la
+        // siguiente tarea de la cola fuera libre y se pudiera hacer ya mismo.
+        // Ahora prioriza espera=0 (parar en cuanto la encuentra) y, si no hay
+        // ninguna, la de menor espera. También se reintenta cada vez que la
+        // cabeza de cola deja de ser viable, no solo al empezar el tramo. El
+        // criterio de viabilidad es idéntico al del bucle de abajo (mismo
+        // maxShiftMin/segEnd/ventana) para que, si encuentra una tarea, el
+        // bucle la acepte siempre al re-evaluarla — si no, un desajuste entre
+        // ambos criterios podría reintentar sin avanzar nunca.
         function tryLookaheadSwap() {
           if (queueIdx[i] >= queue.length) return false;
-          const LOOK = Math.min(15, queue.length - queueIdx[i]);
+          const LOOK = Math.min(40, queue.length - queueIdx[i]);
           const tWorkSoFar = cursor - (res.shiftStart + dayOffset);
-          let swapTo = -1;
-          for (let li = 0; li < LOOK && swapTo === -1; li++) {
+          let swapTo = -1, bestWait = Infinity;
+          for (let li = 0; li < LOOK; li++) {
             const t = queue[queueIdx[i] + li];
             const tdur = t.duracion || 15;
             let ttMin = 0;
@@ -584,7 +586,7 @@ async function generateScenario(tasks, resources, constraints) {
               if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(tkm / TRAVEL_SPEED_KMH * 60));
             }
             const tWait = windowWait(t, cursor + ttMin, dayOffset);
-            if (tWait == null) continue; // franja horaria ya inviable hoy — prueba la siguiente
+            if (tWait == null || tWait >= bestWait) continue; // inviable hoy, o ya hay algo igual o mejor
             let tRet = 0;
             if (anchor && hasCoords(t.lat, t.lng)) {
               const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
@@ -592,13 +594,17 @@ async function generateScenario(tasks, resources, constraints) {
             }
             const fits = cursor + ttMin + tWait + tdur + tRet <= segEnd
               && !(maxShiftMin > 0 && tWorkSoFar + ttMin + tWait + tdur + tRet > maxShiftMin);
-            if (fits) swapTo = li;
+            if (fits) {
+              swapTo = li; bestWait = tWait;
+              if (tWait === 0) break; // no se puede mejorar una espera de 0
+            }
           }
           if (swapTo > 0) {
             const [best] = queue.splice(queueIdx[i] + swapTo, 1);
             queue.splice(queueIdx[i], 0, best);
+            return true;
           }
-          return swapTo !== -1;
+          return false; // la cabeza ya era la mejor opción disponible (o no hay ninguna) — nada que cambiar
         }
 
         tryLookaheadSwap();
@@ -623,7 +629,19 @@ async function generateScenario(tasks, resources, constraints) {
           // Franja horaria (Timetable de Planning): si se llega antes de que
           // abra, espera; si ya no se puede llegar a tiempo, esta tarea en
           // concreto no es viable ahora mismo (se intenta otra más abajo).
-          const wait = windowWait(task, cursor + travelMin, dayOffset);
+          let wait = windowWait(task, cursor + travelMin, dayOffset);
+
+          // Si esta tarea exige esperar (o directamente no es viable), antes
+          // de comprometerse con esa espera comprueba si hay algo con menos
+          // espera (o sin ninguna) un poco más adelante en la cola — si no,
+          // una parada con franja lejana en cabeza de cola se aceptaba tal
+          // cual con horas de espera aunque la siguiente tarea fuera libre y
+          // se pudiera hacer ya mismo.
+          if (wait == null || wait > 0) {
+            if (tryLookaheadSwap()) continue; // encontró algo mejor — reevalúa con la cola reordenada
+            if (wait == null) break;          // ni la cabeza ni ninguna alternativa son viables hoy
+            // si no: wait > 0 pero es la mejor opción disponible — se acepta con esa espera
+          }
 
           let retBuffer = 0;
           if (anchor) {
