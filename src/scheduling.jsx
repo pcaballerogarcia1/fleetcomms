@@ -81,6 +81,21 @@ function turnoWindow(turno, fallbackStart, fallbackEnd) {
   return { start, end };
 }
 
+// Ventana horaria de una tarea (task.windowStart/windowEnd, minuto del día,
+// vienen del Timetable de Planning — "hora inicio" u "franja horaria")
+// contra una hora de llegada dada (ya con dayOffset sumado). Sin ventana,
+// libertad total (null → 0, nunca bloquea). Devuelve el tiempo de espera
+// necesario si se llega pronto, o null si ya no se puede cumplir ese día
+// (se llegaría tarde) — la tarea se deja para otro día/vehículo, igual que
+// cualquier otra restricción de tiempo que ya existía.
+function windowWait(task, arrival, dayOffset) {
+  if (task.windowStart == null) return 0;
+  const winStart = task.windowStart + dayOffset;
+  const winEnd   = (task.windowEnd ?? task.windowStart) + dayOffset;
+  if (arrival > winEnd) return null;
+  return arrival < winStart ? winStart - arrival : 0;
+}
+
 // Código de turno (M/T/N) a partir de la hora de inicio real de un
 // trabajador — agnóstico al texto de "turno" (que en los conductores
 // virtuales de autoScaleFleet siempre es "Jornada completa", nunca
@@ -296,7 +311,7 @@ async function enrichWithOSRM(schedule) {
   // causing fetch to hang regardless of the timeout signal in some environments.
   const OSRM_MAX_STOPS = 80;
   const maxStopsAny = Math.max(0, ...schedule.map(row =>
-    row.assignments.filter(a => !a._travel && !a._break).length
+    row.assignments.filter(a => !a._travel && !a._break && !a._wait).length
   ));
   if (maxStopsAny > OSRM_MAX_STOPS) return schedule;
 
@@ -308,7 +323,7 @@ async function enrichWithOSRM(schedule) {
     const waypoints = []; // {lng, lat, assignmentIdx | null}
     if (depot) waypoints.push({ lng: depot.lng, lat: depot.lat, idx: null, isDepot: true });
     row.assignments.forEach((a, i) => {
-      if (!a._travel && !a._break && hasCoords(a.lat, a.lng))
+      if (!a._travel && !a._break && !a._wait && hasCoords(a.lat, a.lng))
         waypoints.push({ lng: +a.lng, lat: +a.lat, idx: i, isDepot: false });
     });
     if (depot) waypoints.push({ lng: depot.lng, lat: depot.lat, idx: null, isDepot: true, isReturn: true });
@@ -555,12 +570,14 @@ async function generateScenario(tasks, resources, constraints) {
               const tkm = haversineKm(lastLat, lastLng, t.lat, t.lng);
               if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(tkm / TRAVEL_SPEED_KMH * 60));
             }
+            const tWait = windowWait(t, cursor + ttMin, dayOffset);
+            if (tWait == null) continue; // franja horaria ya inviable hoy — prueba la siguiente
             let tRet = 0;
             if (anchor && hasCoords(t.lat, t.lng)) {
               const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
               if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
             }
-            if (cursor + ttMin + tdur + tRet <= segEnd) swapTo = li;
+            if (cursor + ttMin + tWait + tdur + tRet <= segEnd) swapTo = li;
           }
           if (swapTo > 0) {
             const [best] = queue.splice(queueIdx[i] + swapTo, 1);
@@ -585,6 +602,13 @@ async function generateScenario(tasks, resources, constraints) {
             if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
           }
 
+          // Franja horaria (Timetable de Planning): si se llega antes de que
+          // abra, espera; si ya no se puede llegar a tiempo, deja la tarea
+          // para otro día/vehículo (igual que cualquier otra restricción de
+          // tiempo — el lookahead de arriba ya intentó evitar este caso).
+          const wait = windowWait(task, cursor + travelMin, dayOffset);
+          if (wait == null) break;
+
           let retBuffer = 0;
           if (anchor) {
             const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
@@ -596,8 +620,8 @@ async function generateScenario(tasks, resources, constraints) {
           }
 
           const workSoFar = cursor - (res.shiftStart + dayOffset);
-          if (maxShiftMin > 0 && workSoFar + travelMin + dur + retBuffer > maxShiftMin) break;
-          if (cursor + travelMin + dur + retBuffer > segEnd) break;
+          if (maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin) break;
+          if (cursor + travelMin + wait + dur + retBuffer > segEnd) break;
 
           if (travelMin > 0) {
             const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
@@ -606,6 +630,10 @@ async function generateScenario(tasks, resources, constraints) {
             cursor += travelMin; res.totalKm += travelKm;
           }
           fromDepot = false;
+          if (wait > 0) {
+            res.assignments.push({ _wait: true, _start: cursor, _end: cursor + wait, duracion: wait });
+            cursor += wait;
+          }
           res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
           cursor += dur; sinceBreak += dur;
           if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
@@ -689,7 +717,9 @@ async function generateScenario(tasks, resources, constraints) {
             if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
           }
 
-          if (cur + tMin + dur > segEnd) { pi++; continue; }
+          const tWait = windowWait(task, cur + tMin, dOff);
+          if (tWait == null) { pi++; continue; } // franja ya inviable — prueba otra tarea
+          if (cur + tMin + tWait + dur > segEnd) { pi++; continue; }
 
           if (tMin > 0) {
             const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
@@ -698,6 +728,10 @@ async function generateScenario(tasks, resources, constraints) {
             cur += tMin; res.totalKm += tKm;
           }
           fromDep = false;
+          if (tWait > 0) {
+            res.assignments.push({ _wait: true, _start: cur, _end: cur + tWait, duracion: tWait });
+            cur += tWait;
+          }
           res.assignments.push({ ...task, _start: cur, _end: cur + dur });
           cur += dur; sinceB += dur;
           if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
@@ -723,7 +757,7 @@ async function generateScenario(tasks, resources, constraints) {
   // DEBUG — remove after diagnosis
   console.group("[VRP] After main loop + backfill");
   for (let i = 0; i < k; i++) {
-    const stops = state[i].assignments.filter(a => !a._travel && !a._break).length;
+    const stops = state[i].assignments.filter(a => !a._travel && !a._break && !a._wait).length;
     console.log(`  vehicle="${state[i].nombre||state[i].matricula||i}"  assignments=${state[i].assignments.length}  stops=${stops}  queueRemaining=${sortedQueues[i].length - queueIdx[i]}`);
   }
   console.groupEnd();
@@ -783,9 +817,10 @@ async function generateScenario(tasks, resources, constraints) {
               if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
             }
 
+            const wait = windowWait(task, cursor + travelMin, dayOffset);
             const workSoFar = cursor - (res.shiftStart + dayOffset);
-            const fitsShift   = maxShiftMin <= 0 || workSoFar + travelMin + dur <= maxShiftMin;
-            const fitsSeg     = cursor + travelMin + dur <= segEnd;
+            const fitsShift   = wait != null && (maxShiftMin <= 0 || workSoFar + travelMin + wait + dur <= maxShiftMin);
+            const fitsSeg     = wait != null && cursor + travelMin + wait + dur <= segEnd;
 
             if (!fitsShift || !fitsSeg) {
               pi++; // skip this task for now; it stays in pool for later vehicles/days
@@ -800,6 +835,10 @@ async function generateScenario(tasks, resources, constraints) {
               cursor += travelMin; res.totalKm += travelKm;
             }
             fromDepot = false;
+            if (wait > 0) {
+              res.assignments.push({ _wait: true, _start: cursor, _end: cursor + wait, duracion: wait });
+              cursor += wait;
+            }
             res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
             cursor += dur; sinceBreak += dur;
             if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
@@ -997,7 +1036,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
         const dep = dayA.find(a => a._depot_exit);
         return dep ? dep._start : (dayA.length ? dayA[0]._start : Infinity);
       } else {
-        const stop = dayA.find(a => !a._travel && !a._break);
+        const stop = dayA.find(a => !a._travel && !a._break && !a._wait);
         return stop ? stop._start : Infinity;
       }
     };
@@ -1206,7 +1245,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   const fullName = [row.nombre, row.apellidos].filter(Boolean).join(" ") || row.name || "?";
                   const letter = fullName[0].toUpperCase();
                   const dayAssignments = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
-                  const stopCount = dayAssignments.filter(a => !a._break && !a._travel).length;
+                  const stopCount = dayAssignments.filter(a => !a._break && !a._travel && !a._wait).length;
                   const dayKm = dayAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
 
                   // Actual shift times from real assignments
@@ -1317,6 +1356,16 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                       position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
                       background: "repeating-linear-gradient(45deg,rgba(251,146,60,0.15) 0,rgba(251,146,60,0.15) 4px,transparent 4px,transparent 8px)",
                       border: "1px dashed rgba(251,146,60,0.4)", borderRadius: 3,
+                    }} />
+                  );
+
+                  // Wait block — llegó antes de que abriera la franja horaria de la
+                  // siguiente parada y tiene que esperar in situ.
+                  if (task._wait) return (
+                    <div key={`w${ti}`} title={`Espera franja horaria · ${dur} min`} style={{
+                      position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
+                      background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)",
+                      border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3,
                     }} />
                   );
 
@@ -2208,6 +2257,31 @@ async function loadTasksFromLayers(projectId) {
     });
   });
 
+  // Franja horaria del Timetable (Planning) → ventana horaria del VRP.
+  // "Hora inicio" (un único valor) es una hora exacta obligatoria: ventana
+  // de un solo instante [h, h]. "Franja horaria" es un rango [inicio, fin]
+  // y manda si está puesta. Sin ninguno de los dos, la tarea sigue libre —
+  // el algoritmo la coloca donde le convenga, como hasta ahora.
+  try {
+    const ttSnap = await getDocs(collection(db, "scheduling_projects", projectId, "timetable"));
+    const byPunto = new Map(ttSnap.docs.map(d => [d.id, d.data()]));
+    if (byPunto.size) {
+      for (const t of allTasks) {
+        const e = byPunto.get(t._id);
+        if (!e) continue;
+        let windowStart = null, windowEnd = null;
+        if (e.franjaInicio) {
+          windowStart = timeToMin(e.franjaInicio);
+          windowEnd   = e.franjaFin ? timeToMin(e.franjaFin) : windowStart;
+        } else if (e.horaInicio) {
+          windowStart = windowEnd = timeToMin(e.horaInicio);
+        }
+        if (windowStart != null) { t.windowStart = windowStart; t.windowEnd = windowEnd; }
+        if (e.duracion != null && t.duracion == null) t.duracion = e.duracion;
+      }
+    }
+  } catch { /* sin timetable — las tareas siguen sin ventana, comportamiento de siempre */ }
+
   // Apply default duration from project settings (set in Timetable tab)
   try {
     const settingsSnap = await getDoc(doc(db, "planning_settings", projectId));
@@ -2291,7 +2365,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       if (!linked.length) continue;
       const byDay = {};
       for (const a of row.assignments) {
-        if (a._break || a._travel) continue;
+        if (a._break || a._travel || a._wait) continue;
         const d = Math.floor((a._start - constraints.startMin) / 1440) + 1;
         byDay[d] = true;
       }
@@ -2551,7 +2625,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // conductores reales nunca se filtran, aunque ese día no tengan nada
       // asignado — son personas reales, no un hueco de turno inventado.
       const usedWorkerRows = workerRows.filter(w =>
-        !w._virtual || w.assignments.some(a => !a._break && !a._travel));
+        !w._virtual || w.assignments.some(a => !a._break && !a._travel && !a._wait));
 
       setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
@@ -2572,7 +2646,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       if (activeProject && onProjectUpdate) {
         const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
         const totalStops = vehicleSchedule.reduce((s, v) =>
-          s + v.assignments.filter(a => !a._break && !a._travel).length, 0);
+          s + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0);
         await onProjectUpdate({
           scheduling: {
             vehicleCount: vehicleSchedule.length,
@@ -2616,7 +2690,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               dd.start = Math.min(dd.start, a._start);
               dd.end   = Math.max(dd.end, a._end);
               if (a._travel) dd.km += a.km || 0;
-              else if (!a._break) dd.stops += 1;
+              else if (!a._break && !a._wait) dd.stops += 1;
             }
             const dayNums = Object.keys(byDay).map(Number).sort((a, b) => a - b);
             if (dayNums.length) {
@@ -2696,13 +2770,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       const mat  = v.matricula || "";
       for (const a of v.assignments) {
         const day   = Math.floor(a._start / 1440) + 1;
-        const type  = a._break ? "Descanso" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
+        const type  = a._break ? "Descanso" : a._wait ? "Espera" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
         rows.push([
           name, mat, day,
           minToTime(a._start % 1440), minToTime(a._end % 1440),
           type,
-          a._break || a._travel ? "" : (a.nombre || a.name || ""),
-          a._break || a._travel ? "" : (a.direccion || a.address || ""),
+          a._break || a._travel || a._wait ? "" : (a.nombre || a.name || ""),
+          a._break || a._travel || a._wait ? "" : (a.direccion || a.address || ""),
           a.barrio || "",
           a.lat ?? "", a.lng ?? "",
           a.duracion || (a._end - a._start),
@@ -2728,13 +2802,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       const vehNm  = veh ? (veh.nombre || veh.matricula || "") : "";
       for (const a of w.assignments) {
         const day  = Math.floor(a._start / 1440) + 1;
-        const type = a._break ? "Descanso" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
+        const type = a._break ? "Descanso" : a._wait ? "Espera" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
         rows.push([
           name, turno, vehNm, day,
           minToTime(a._start % 1440), minToTime(a._end % 1440),
           type,
-          a._break || a._travel ? "" : (a.nombre || a.name || ""),
-          a._break || a._travel ? "" : (a.direccion || a.address || ""),
+          a._break || a._travel || a._wait ? "" : (a.nombre || a.name || ""),
+          a._break || a._travel || a._wait ? "" : (a.direccion || a.address || ""),
           a.duracion || (a._end - a._start),
           a.km ? +a.km.toFixed(3) : "",
         ]);
@@ -2859,7 +2933,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // Build all plan documents first, then write concurrently in chunks
       const docs = [];
       for (const row of vehicleSchedule) {
-        const allStops = row.assignments.filter(a => !a._break && !a._travel);
+        const allStops = row.assignments.filter(a => !a._break && !a._travel && !a._wait);
         if (allStops.length === 0) continue;
 
         const byDay = {};
@@ -2937,7 +3011,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   }
 
   const canGenerate  = (vehicles.length > 0 || workers.length > 0) && tasks.length > 0 && !generating;
-  const totalAssigned = schedule ? schedule.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel).length, 0) : 0;
+  const totalAssigned = schedule ? schedule.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0) : 0;
   const totalKm       = schedule ? schedule.reduce((s, r) => s + (r.totalKm || 0), 0) : 0;
 
   // Scenario-wide summary (independent of the vehicles/workers mode toggle)
@@ -2945,13 +3019,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const workerRows      = schedules.workers || [];
   const summaryKm        = vehicleRows.length ? vehicleRows.reduce((s, r) => s + (r.totalKm || 0), 0) : totalKm;
   const summaryAssigned  = vehicleRows.length
-    ? vehicleRows.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel).length, 0)
+    ? vehicleRows.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0)
     : totalAssigned;
-  const vehiclesUsed     = vehicleRows.filter(r => r.assignments.some(a => !a._break && !a._travel)).length;
-  const workersUsed      = workerRows.filter(r => r.assignments.some(a => !a._break && !a._travel)).length;
+  const vehiclesUsed     = vehicleRows.filter(r => r.assignments.some(a => !a._break && !a._travel && !a._wait)).length;
+  const workersUsed      = workerRows.filter(r => r.assignments.some(a => !a._break && !a._travel && !a._wait)).length;
   const stopsPerDay   = schedule ? (() => {
     const counts = {};
-    schedule.forEach(r => r.assignments.filter(a => !a._break && !a._travel).forEach(a => {
+    schedule.forEach(r => r.assignments.filter(a => !a._break && !a._travel && !a._wait).forEach(a => {
       const d = Math.floor((a._start - constraints.startMin) / 1440);
       counts[d] = (counts[d] || 0) + 1;
     }));

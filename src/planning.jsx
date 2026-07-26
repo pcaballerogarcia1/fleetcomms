@@ -1530,9 +1530,13 @@ function timeToMin(t) {
 function TimetableRow({ entry, onUpdate, onDelete }) {
   const [localStart, setLocalStart] = useState(entry.horaInicio || "");
   const [localDur,   setLocalDur]   = useState(entry.duracion != null ? String(entry.duracion) : "");
+  const [franjaIni,  setFranjaIni]  = useState(entry.franjaInicio || "");
+  const [franjaFin,  setFranjaFin]  = useState(entry.franjaFin || "");
 
   useEffect(() => { setLocalStart(entry.horaInicio || ""); },                          [entry.horaInicio]);
   useEffect(() => { setLocalDur(entry.duracion != null ? String(entry.duracion) : ""); }, [entry.duracion]);
+  useEffect(() => { setFranjaIni(entry.franjaInicio || ""); },                          [entry.franjaInicio]);
+  useEffect(() => { setFranjaFin(entry.franjaFin || ""); },                             [entry.franjaFin]);
 
   const camposRows = Object.entries(entry.campos || {})
     .filter(([k, v]) => k.toLowerCase() !== "barrio" && v !== "" && v != null);
@@ -1572,6 +1576,7 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
           value={localStart}
           onChange={e => setLocalStart(e.target.value)}
           onBlur={e => onUpdate({ horaInicio: e.target.value || null })}
+          title="Hora exacta obligatoria — si además hay franja horaria, la franja manda"
           style={{
             width: "100%", background: "rgba(255,255,255,0.04)",
             border: `1px solid ${localStart ? C.blue + "55" : C.border}`,
@@ -1580,6 +1585,41 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
             fontFamily: mono, outline: "none", cursor: "pointer",
           }}
         />
+      </td>
+
+      {/* Franja horaria */}
+      <td style={{ padding: "10px 8px", verticalAlign: "middle", width: 148 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <input
+            type="time"
+            value={franjaIni}
+            onChange={e => setFranjaIni(e.target.value)}
+            onBlur={e => onUpdate({ franjaInicio: e.target.value || null })}
+            title="Franja horaria: la parada solo puede hacerse dentro de este rango — el vehículo espera si llega antes, y no se asigna ese día si llegaría tarde"
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${franjaIni ? C.green + "55" : C.border}`,
+              color: franjaIni ? C.green : C.muted,
+              padding: "6px 6px", borderRadius: 6, fontSize: 11,
+              fontFamily: mono, outline: "none", cursor: "pointer",
+            }}
+          />
+          <span style={{ color: C.dim, fontSize: 10, flexShrink: 0 }}>–</span>
+          <input
+            type="time"
+            value={franjaFin}
+            onChange={e => setFranjaFin(e.target.value)}
+            onBlur={e => onUpdate({ franjaFin: e.target.value || null })}
+            title="Fin de la franja horaria"
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${franjaFin ? C.green + "55" : C.border}`,
+              color: franjaFin ? C.green : C.muted,
+              padding: "6px 6px", borderRadius: 6, fontSize: 11,
+              fontFamily: mono, outline: "none", cursor: "pointer",
+            }}
+          />
+        </div>
       </td>
 
       {/* Duración */}
@@ -1804,6 +1844,8 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
         "Barrio":         e.barrio || "",
         "Coordenadas":    `${e.lat?.toFixed(5)},${e.lng?.toFixed(5)}`,
         "Hora inicio":    e.horaInicio || "",
+        "Franja inicio":  e.franjaInicio || "",
+        "Franja fin":     e.franjaFin || "",
         "Duración (min)": e.duracion ?? "",
       };
       campoKeys.forEach(k => { row[k] = e.campos?.[k] ?? ""; });
@@ -2078,6 +2120,7 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
                 <tr>
                   <th style={thS}>Punto</th>
                   <th style={{ ...thS, width: 116 }}>Hora inicio</th>
+                  <th style={{ ...thS, width: 148 }}>Franja horaria</th>
                   <th style={{ ...thS, width: 106 }}>Duración</th>
                   <th style={{ ...thS, width: 36 }}></th>
                 </tr>
