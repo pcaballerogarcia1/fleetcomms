@@ -1672,6 +1672,8 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
   const [durInput,         setDurInput]         = useState("");
   const [showDurPanel,     setShowDurPanel]     = useState(false);
   const [applyingDur,      setApplyingDur]      = useState(false);
+  const [importing,        setImporting]        = useState(false);
+  const importInputRef = useRef(null);
 
   const totalMarkers = layers.reduce((s, l) => s + (l.markers?.length ?? 0), 0);
   const isLarge = totalMarkers > 2000;
@@ -1864,6 +1866,69 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     XLSX.writeFile(wb, barrioFiltro ? `timetable_${barrioFiltro.replace(/\s+/g, "_")}.xlsx` : "timetable.xlsx");
   }
 
+  // Importa un Excel con el mismo formato que exportToExcel (editado fuera y
+  // vuelto a subir). Empareja cada fila con su parada por la columna
+  // "Coordenadas" (mismo puntoKey que usa el resto de la app,
+  // lat/lng con 5 decimales) y solo toca los 4 campos editables del
+  // Timetable — Nombre/Barrio/Coordenadas se ignoran al importar porque
+  // vienen del layer original, no son campos que este formulario edite.
+  async function importFromExcel(file) {
+    setImporting(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+
+      const validKeys = new Set(effectiveEntries.map(e => e._id));
+      const updates = [];
+      let notFound = 0, invalid = 0;
+
+      for (const r of rows) {
+        const coord = r["Coordenadas"];
+        const [latStr, lngStr] = coord ? String(coord).split(",") : [];
+        const lat = parseFloat(latStr), lng = parseFloat(lngStr);
+        if (!isFinite(lat) || !isFinite(lng)) { invalid++; continue; }
+        const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
+        if (!validKeys.has(puntoKey)) { notFound++; continue; }
+
+        const horaInicio   = r["Hora inicio"]   != null ? String(r["Hora inicio"]).trim()   : "";
+        const franjaInicio = r["Franja inicio"] != null ? String(r["Franja inicio"]).trim() : "";
+        const franjaFin    = r["Franja fin"]    != null ? String(r["Franja fin"]).trim()    : "";
+        const changes = {
+          horaInicio: horaInicio || null,
+          franjaInicio: franjaInicio || null,
+          franjaFin: franjaFin || null,
+          updatedAt: serverTimestamp(),
+        };
+        const durRaw = r["Duración (min)"];
+        if (durRaw != null && String(durRaw).trim() !== "") {
+          const d = parseInt(durRaw, 10);
+          changes.duracion = isFinite(d) && d > 0 ? d : null;
+        }
+        updates.push({ puntoKey, changes });
+      }
+
+      if (updates.length === 0) {
+        alert(`No se importó ninguna fila.${invalid ? ` ${invalid} sin coordenadas válidas.` : ""}${notFound ? ` ${notFound} no coinciden con ninguna parada de este proyecto.` : ""}`);
+        return;
+      }
+
+      const BATCH = 499;
+      for (let i = 0; i < updates.length; i += BATCH) {
+        const batch = writeBatch(db);
+        updates.slice(i, i + BATCH).forEach(u => batch.set(doc(timetableCol, u.puntoKey), u.changes, { merge: true }));
+        await batch.commit();
+      }
+
+      alert(`${updates.length} paradas actualizadas.`
+        + (notFound ? ` ${notFound} filas no coincidían con ninguna parada de este proyecto.` : "")
+        + (invalid ? ` ${invalid} filas sin coordenadas válidas.` : ""));
+    } catch (e) {
+      alert("Error al importar: " + e.message);
+    }
+    setImporting(false);
+  }
+
   const thS = {
     padding: "8px 14px", fontSize: 10, color: C.dim, fontWeight: 600,
     letterSpacing: 1, textTransform: "uppercase",
@@ -1949,6 +2014,36 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Excel
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: "none" }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) importFromExcel(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              title="Importar Excel con el mismo formato que se descarga (empareja por Coordenadas)"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 7, cursor: importing ? "default" : "pointer",
+                background: "rgba(79,142,247,0.08)", border: `1px solid rgba(79,142,247,0.25)`,
+                color: C.blueText, fontSize: 12, fontWeight: 500,
+                fontFamily: font, transition: "all .15s", opacity: importing ? 0.6 : 1,
+              }}
+              onMouseEnter={e => { if (!importing) e.currentTarget.style.background = "rgba(79,142,247,0.14)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(79,142,247,0.08)"; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              {importing ? "Importando…" : "Importar"}
             </button>
             <a href="/scheduling" style={{
               display: "flex", alignItems: "center", gap: 6,
