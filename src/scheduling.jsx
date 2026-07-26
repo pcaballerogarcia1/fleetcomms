@@ -2661,6 +2661,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       // ── Step 1: Vehicle VRP ──────────────────────────────────────
       // generateScenario preserves resource order: vr.schedule[i] ↔ vehiclesForSchedule[i]
+      console.time("[PERF] vrp+autoscale");
       let vr = { schedule: [], unassigned: [...tasks], daysUsed: 1 };
       let vehiclesForSchedule = vehiclesForVRP;
       let addedVehicles = [];
@@ -2676,6 +2677,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           addedVehicles = scaled.resources.slice(vehiclesForVRP.length);
         }
       }
+      console.timeEnd("[PERF] vrp+autoscale");
       const vehicleScheduleRaw = vehiclesForSchedule.map((v, i) => ({
         ...v,
         assignments: vr.schedule[i]?.assignments || [],
@@ -2687,11 +2689,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // Enrich travel block km with real road distances via OSRM
       setGenPhase("osrm");
       setOsrmRunning(true);
+      console.time("[PERF] osrm");
       const vehicleSchedule = await enrichWithOSRM(vehicleScheduleRaw);
+      console.timeEnd("[PERF] osrm");
       setOsrmRunning(false);
 
       // ── Step 2: Worker schedule ──────────────────────────────────
       setGenPhase("workers");
+      console.time("[PERF] worker-rows");
       await new Promise(resolve => setTimeout(resolve, 0));
       // Routes come ONLY from vehicles. Workers are human assignments
       // on top of a vehicle route — they never generate routes on their own.
@@ -2792,7 +2797,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // asignado — son personas reales, no un hueco de turno inventado.
       const usedWorkerRows = workerRows.filter(w =>
         !w._virtual || w.assignments.some(a => !a._break && !a._travel && !a._wait));
+      console.timeEnd("[PERF] worker-rows");
 
+      const totalBlocks = vehicleSchedule.reduce((s, v) => s + (v.assignments?.length || 0), 0);
+      console.log(`[PERF] setSchedules — vehicles=${vehicleSchedule.length} workers=${usedWorkerRows.length} totalBlocks=${totalBlocks}`);
+      const t_setSchedules = performance.now();
       setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
@@ -2801,6 +2810,9 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setScaleInfo(addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
         : null);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        console.log(`[PERF] pintado tras setSchedules: ${(performance.now() - t_setSchedules).toFixed(0)}ms`);
+      }));
 
       // Persist full schedule to IndexedDB (too large for Firestore)
       if (activeProject?._id) {
@@ -2809,6 +2821,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
       setGenPhase("saving");
+      console.time("[PERF] firestore-save");
       if (activeProject && onProjectUpdate) {
         const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
         const totalStops = vehicleSchedule.reduce((s, v) =>
@@ -2886,6 +2899,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           });
         } catch { /* non-critical */ }
       }
+      console.timeEnd("[PERF] firestore-save");
 
     } catch (e) {
       console.error("generateScenario error:", e);
