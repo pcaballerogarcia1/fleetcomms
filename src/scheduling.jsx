@@ -983,8 +983,14 @@ async function generateScenario(tasks, resources, constraints) {
     }
 
     const stillUnassigned = [];
+    let orphanAttempts = 0;
     for (const task of pool) {
-      if (task.windowStart == null || !tryInsertOrphan(task)) stillUnassigned.push(task);
+      if (task.windowStart == null) { stillUnassigned.push(task); continue; }
+      if (!tryInsertOrphan(task)) stillUnassigned.push(task);
+      // tryInsertOrphan recorre todos los vehículos/días — con muchas paradas
+      // de franja horaria esto suma bastante trabajo síncrono. Cede el hilo
+      // cada pocos intentos para que la pestaña no se quede "sin responder".
+      if (++orphanAttempts % 5 === 0) await _yield();
     }
 
     const daysUsed = Math.max(1, mopDay);
