@@ -2590,6 +2590,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         try {
           const turnoByWorker = {};
           const daysWorked    = {};
+          // Resumen por trabajador+día (paradas, km, horario, vehículo) para
+          // el popup de "resumen del turno" en Rostering (clic derecho en una
+          // celda). Solo números pequeños, no las paradas completas — eso sí
+          // superaría el límite de 1MB de Firestore con escenarios grandes.
+          const dailyDetail = {};
           for (const wRow of workerRows) {
             const wId = wRow._id || wRow.id;
             // Antes se sacaba el código M/T/N con una regex sobre el texto
@@ -2603,12 +2608,32 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             // trabajador, real o virtual) es agnóstico al texto del turno.
             const code = wRow._tw ? shiftCodeFromStart(wRow._tw.start) : null;
             if (code) turnoByWorker[wId] = code;
-            const dSet = new Set();
+
+            const byDay = {}; // dayNum -> { stops, km, start, end }
             for (const a of (wRow.assignments ?? [])) {
-              if (a._break || a._travel) continue;
-              dSet.add(Math.floor((a._start - constraints.startMin) / 1440) + 1);
+              const dayNum = Math.floor((a._start - constraints.startMin) / 1440) + 1;
+              const dd = byDay[dayNum] ?? (byDay[dayNum] = { stops: 0, km: 0, start: a._start, end: a._end });
+              dd.start = Math.min(dd.start, a._start);
+              dd.end   = Math.max(dd.end, a._end);
+              if (a._travel) dd.km += a.km || 0;
+              else if (!a._break) dd.stops += 1;
             }
-            if (dSet.size) daysWorked[wId] = [...dSet].sort((a, b) => a - b);
+            const dayNums = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+            if (dayNums.length) {
+              daysWorked[wId] = dayNums;
+              const vehicleRow = wRow.vehiculoId
+                ? vehicleSchedule.find(v => (v._id || v.id) === wRow.vehiculoId)
+                : null;
+              const vehiculo = vehicleRow ? (vehicleRow.nombre || vehicleRow.matricula || "") : "";
+              dailyDetail[wId] = {};
+              for (const dn of dayNums) {
+                const dd = byDay[dn];
+                dailyDetail[wId][dn] = {
+                  stops: dd.stops, km: +dd.km.toFixed(1),
+                  start: dd.start, end: dd.end, vehiculo,
+                };
+              }
+            }
           }
           await setDoc(doc(db, "scheduling_roster", activeProject._id), {
             projectId: activeProject._id,
@@ -2616,6 +2641,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             mes: activeProject.mes ?? "",   // "YYYY-MM" — schedule starts on day 1 of this month
             turnoByWorker,
             daysWorked,
+            dailyDetail,
             generatedAt: new Date().toISOString(),
           });
         } catch { /* non-critical */ }

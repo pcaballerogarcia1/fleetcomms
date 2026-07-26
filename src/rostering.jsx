@@ -32,6 +32,14 @@ const MONTH_NAMES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
+// dailyDetail guarda minutos absolutos (pueden pasar de 1440 en turnos de
+// noche que cruzan medianoche) — %1440 para la hora de reloj.
+function fmtClock(min) {
+  if (min == null) return "--:--";
+  const m = ((min % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
 // ── PUBLIC HOOK ────────────────────────────────────────────────────
 // Used by scheduling.jsx to load rostering data for a given month.
 export function useRostering(orgId, year, month) {
@@ -125,6 +133,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // Selection range: anchor + active corner of the rectangle
   const [selStart, setSelStart] = useState(null); // { wIdx, dIdx }
   const [selEnd,   setSelEnd]   = useState(null); // { wIdx, dIdx }
+
+  // Resumen del turno (clic derecho en una celda) — el borrado por clic
+  // derecho ya era redundante con Supr/Retroceso sobre la selección, así
+  // que se libera el botón derecho para esto en vez de quitar la manera de
+  // borrar.
+  const [summaryCell, setSummaryCell] = useState(null); // { workerId, day, x, y }
 
   const docId = orgId
     ? `${orgId}_${year}_${String(month).padStart(2, "0")}`
@@ -236,23 +250,6 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     pendingRef.current = newGrid;
     clearTimeout(debounceRef.current._batch);
     debounceRef.current._batch = setTimeout(() => {
-      if (!docId || !pendingRef.current) return;
-      setDoc(doc(db, "rostering", docId), {
-        org_id: orgId, year, month, grid: pendingRef.current, updatedAt: serverTimestamp(),
-      });
-    }, 400);
-  }
-
-  function clearCell(workerId, day, e) {
-    e.preventDefault();
-    const key   = String(day);
-    const wGrid = { ...(grid[workerId] ?? {}) };
-    delete wGrid[key];
-    const newGrid = { ...grid, [workerId]: wGrid };
-    setGrid(newGrid);
-    pendingRef.current = newGrid;
-    clearTimeout(debounceRef.current[workerId]);
-    debounceRef.current[workerId] = setTimeout(() => {
       if (!docId || !pendingRef.current) return;
       setDoc(doc(db, "rostering", docId), {
         org_id: orgId, year, month, grid: pendingRef.current, updatedAt: serverTimestamp(),
@@ -607,7 +604,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                           onMouseDown={e => handleCellMouseDown(e, wi, dIdx)}
                           onMouseEnter={e => { handleCellMouseEnter(wi, dIdx); e.currentTarget.style.filter = "brightness(1.35)"; }}
                           onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; }}
-                          onContextMenu={e => clearCell(w._id, d, e)}
+                          onContextMenu={e => {
+                            e.preventDefault();
+                            setSummaryCell({ workerId: w._id, day: d, x: e.clientX, y: e.clientY });
+                          }}
                           title={shift
                             ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[shift].label}`
                             : sched
@@ -728,9 +728,96 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                 <span>Clic o arrastra para seleccionar · <b style={{color:C.muted}}>Shift+clic</b> para extender</span>
                 <span>Escribe <b style={{color:C.muted}}>M T N L G B D</b> · <b style={{color:C.muted}}>Supr</b> para borrar · Flechas para navegar</span>
                 <span>Botones M/T/N en el nombre → rellenar mes completo</span>
+                <span>Clic derecho → resumen del turno</span>
               </>
             )}
           </div>
+        );
+      })()}
+
+      {/* ── RESUMEN DEL TURNO (clic derecho en una celda) ──────────── */}
+      {summaryCell && (() => {
+        const w = workers.find(w => w._id === summaryCell.workerId);
+        if (!w) return null;
+        const { day } = summaryCell;
+        const shift  = grid[w._id]?.[String(day)] ?? "";
+        const sched  = scheduledCode(w._id, day);
+        const code   = shift || sched;
+        const meta   = code ? SHIFT_META[code] : null;
+        const dayNum = schedDayFor(day);
+        const detail = dayNum ? schedRoster?.dailyDetail?.[w._id]?.[String(dayNum)] : null;
+        const dow    = DAY_NAMES[getDow(day)];
+
+        // Clamp near viewport edges so el popup no se salga de la pantalla
+        const PW = 260, PH = 260;
+        const left = Math.min(summaryCell.x, window.innerWidth  - PW - 12);
+        const top  = Math.min(summaryCell.y, window.innerHeight - PH - 12);
+
+        return (
+          <>
+            <div onClick={() => setSummaryCell(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 998 }} />
+            <div style={{
+              position: "fixed", left, top, zIndex: 999, width: PW,
+              background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+              boxShadow: "0 12px 36px rgba(0,0,0,.5)", padding: 14, fontFamily: font,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                  {[w.nombre, w.apellidos].filter(Boolean).join(" ") || "Trabajador"}
+                </div>
+                <button onClick={() => setSummaryCell(null)} style={{
+                  background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14, lineHeight: 1,
+                }}>×</button>
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+                {dow} {day} de {MONTH_NAMES[month - 1]} {year}
+              </div>
+
+              {meta ? (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
+                  background: meta.bg, border: `1px solid ${meta.text}44`, borderRadius: 6,
+                  padding: "3px 9px",
+                }}>
+                  <span style={{ color: meta.text, fontWeight: 700, fontSize: 12 }}>{code}</span>
+                  <span style={{ color: meta.text, fontSize: 11 }}>{meta.label}</span>
+                  {!shift && sched && <span style={{ color: C.dim, fontSize: 10 }}>(planificado)</span>}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: C.dim, marginBottom: 10 }}>Sin turno asignado.</div>
+              )}
+
+              {detail ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: C.dim }}>Horario</span>
+                    <span style={{ color: C.text, fontFamily: "'JetBrains Mono','Courier New',monospace" }}>
+                      {fmtClock(detail.start)} – {fmtClock(detail.end)}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: C.dim }}>Paradas</span>
+                    <span style={{ color: C.text }}>{detail.stops}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: C.dim }}>Km</span>
+                    <span style={{ color: C.text }}>{detail.km}</span>
+                  </div>
+                  {detail.vehiculo && (
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: C.dim }}>Vehículo</span>
+                      <span style={{ color: C.text }}>{detail.vehiculo}</span>
+                    </div>
+                  )}
+                </div>
+              ) : sched ? (
+                <div style={{ fontSize: 10, color: C.dim }}>
+                  Sin detalle de paradas/km guardado — regenera el escenario en Scheduling para verlo aquí.
+                </div>
+              ) : null}
+            </div>
+          </>
         );
       })()}
     </div>
