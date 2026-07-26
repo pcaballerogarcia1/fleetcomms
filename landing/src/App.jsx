@@ -612,16 +612,38 @@ function NavBar({ lang, setLang, t }) {
   );
 }
 
-// ── APP MOCKUP (browser chrome + gantt) ──────────────────────────
+// ── APP MOCKUP (browser chrome + gantt) ─────────────────────────
+// Réplica del layout real de app.operanzia.com/scheduling (nav superior,
+// barra de stats, toolbar, filas densas de paradas) — no es una captura
+// real (evita mostrar datos de un cliente concreto), pero reproduce la
+// estructura y densidad visual reales en vez de un mockup genérico.
+function genStopBlocks(seed, startPct, endPct, colorMain, colorAlt) {
+  let s = seed;
+  const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const blocks = [];
+  let cursor = startPct + rand() * 0.6;
+  while (cursor < endPct - 1) {
+    const w = 1.3 + rand() * 1.4;
+    blocks.push({ l: cursor, w, color: rand() < 0.78 ? colorMain : colorAlt });
+    cursor += w + (rand() < 0.12 ? 1.2 + rand() * 1.8 : 0.25 + rand() * 0.35);
+  }
+  return blocks;
+}
+
 function MockupGantt() {
   const rows = [
-    { name: "Carlos León",   color: "#3b82f6", blocks: [{l:8,w:18},{l:30,w:10},{l:44,w:20},{l:68,w:11}] },
-    { name: "Paco Pérez",    color: "#8b5cf6", blocks: [{l:5,w:24},{l:34,w:14},{l:53,w:17},{l:74,w:8}] },
-    { name: "Andrés Muñoz",  color: "#10b981", blocks: [{l:11,w:13},{l:28,w:19},{l:51,w:15},{l:70,w:14}] },
-    { name: "Juan Álvarez",  color: "#f59e0b", blocks: [{l:6,w:28},{l:38,w:11},{l:54,w:22}] },
-    { name: "María Torres",  color: "#ec4899", blocks: [{l:13,w:21},{l:39,w:16},{l:60,w:19}] },
+    { name: "Carlos León",   range: "06:00–14:04", stats: "7h54 · 44p · 12.2km", start: 0,    end: 50.4, main: "#3b82f6", alt: "#22d3ee", seed: 11 },
+    { name: "Paco Pérez",    range: "06:00–14:08", stats: "8h02 · 47p · 9.6km",  start: 0,    end: 50.8, main: "#8b5cf6", alt: "#a78bfa", seed: 29 },
+    { name: "Andrés Muñoz",  range: "14:04–22:00", stats: "7h56 · 45p · 9.4km",  start: 50.4, end: 100,  main: "#10b981", alt: "#34d399", seed: 47 },
+    { name: "Juan Álvarez",  range: "06:00–14:00", stats: "8h00 · 41p · 14.9km", start: 0,    end: 50,   main: "#f59e0b", alt: "#fbbf24", seed: 63 },
+    { name: "María Torres",  range: "14:01–21:54", stats: "7h51 · 44p · 9.6km",  start: 50.1, end: 99.6, main: "#ec4899", alt: "#f472b6", seed: 81 },
+  ].map(r => ({ ...r, blocks: genStopBlocks(r.seed, r.start, r.end, r.main, r.alt) }));
+
+  const navItems = [
+    { l: "Proyectos",  active: false }, { l: "MADRID", active: false, dim: false },
+    { l: "Planning",   active: false }, { l: "Scheduling", active: true },
+    { l: "Rostering",  active: false }, { l: "Control", active: false },
   ];
-  const sideItems = ["P","S","R","I","Inv","A"];
 
   return (
     <div style={{
@@ -655,106 +677,104 @@ function MockupGantt() {
         </div>
       </div>
 
-      {/* App layout */}
-      <div style={{ display: "flex", background: "#0c1525" }}>
-        {/* Sidebar */}
+      {/* App layout — nav superior, como la app real (sin sidebar lateral) */}
+      <div style={{ background: "#0c1525" }}>
+        {/* Barra de navegación */}
         <div style={{
-          width: 48, background: "#080f1e", borderRight: "1px solid rgba(255,255,255,0.05)",
-          display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 0", gap: 4,
+          height: 38, display: "flex", alignItems: "center", padding: "0 16px", gap: 14,
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 7, marginBottom: 12,
-            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 11, fontWeight: 900, color: "#fff",
-          }}>O</div>
-          {sideItems.map((l, i) => (
-            <div key={l} style={{
-              width: 32, height: 32, borderRadius: 7,
-              background: l === "S" ? "rgba(59,130,246,0.18)" : "transparent",
-              border: l === "S" ? "1px solid rgba(59,130,246,0.35)" : "1px solid transparent",
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <div style={{
+              width: 17, height: 17, borderRadius: 5,
+              background: "linear-gradient(135deg, #2563eb, #7c3aed)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 9.5, color: l === "S" ? "#60a5fa" : "rgba(255,255,255,0.18)",
-              fontWeight: 700, letterSpacing: "0.02em",
-            }}>{l}</div>
+              fontSize: 9, fontWeight: 900, color: "#fff",
+            }}>O</div>
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.08em", color: "rgba(255,255,255,0.45)" }}>OPERANZIA</span>
+          </div>
+          <div style={{ width: 1, height: 13, background: "rgba(255,255,255,0.1)", flexShrink: 0 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 13, fontSize: 10, whiteSpace: "nowrap" }}>
+            {navItems.map(n => (
+              <span key={n.l} style={{
+                color: n.active ? "#60a5fa" : "rgba(255,255,255,0.32)",
+                fontWeight: n.active ? 700 : 500,
+              }}>{n.l}</span>
+            ))}
+          </div>
+          <div style={{
+            marginLeft: "auto", width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+            background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
+          }} />
+        </div>
+
+        {/* Toolbar */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "7px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.05)", flexWrap: "wrap",
+        }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: "#34d399", whiteSpace: "nowrap",
+            background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)",
+            borderRadius: 6, padding: "3px 8px",
+          }}>✓ 1.847 paradas</span>
+          <span style={{ fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>1.847 asig. · 6 días · 3.204 kmØ</span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            <div style={{
+              padding: "4px 10px", borderRadius: 6, fontSize: 9, fontWeight: 600, whiteSpace: "nowrap",
+              color: "#64748b", border: "1px solid rgba(255,255,255,0.08)",
+            }}>Restricciones</div>
+            <div style={{
+              padding: "4px 10px", borderRadius: 6, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap",
+              color: "#fff", background: "#2563eb",
+            }}>Generar escenario</div>
+          </div>
+        </div>
+
+        {/* Barra de stats */}
+        <div style={{
+          display: "flex", gap: 24, padding: "9px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.05)",
+        }}>
+          {[["3.204","km totales"],["6","días"],["1.847","asig."],["12","conductores"],["10","vehículos"]].map(([n, l]) => (
+            <div key={l}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0", lineHeight: 1.15 }}>{n}</div>
+              <div style={{ fontSize: 7.5, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{l}</div>
+            </div>
           ))}
         </div>
 
-        {/* Main area */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* App header */}
-          <div style={{
-            height: 44, display: "flex", alignItems: "center", padding: "0 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.05)", gap: 12,
+        {/* Regla horaria */}
+        <div style={{
+          display: "flex", paddingLeft: 122,
+          background: "rgba(0,0,0,0.25)", borderBottom: "1px solid rgba(255,255,255,0.04)",
+        }}>
+          {["06:00","09:00","12:00","15:00","18:00","21:00"].map(h => (
+            <div key={h} style={{ flex: 1, padding: "4px 0", fontSize: 8.5, color: "#334155", fontWeight: 500, textAlign: "center" }}>{h}</div>
+          ))}
+        </div>
+
+        {/* Filas — muchas paradas pequeñas, como el uso real, no 3-4 bloques anchos */}
+        {rows.map((row, ri) => (
+          <div key={ri} style={{
+            display: "flex", alignItems: "center", height: 40,
+            borderBottom: "1px solid rgba(255,255,255,0.025)",
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Scheduling</span>
-            <span style={{
-              fontSize: 10.5, color: "#475569", padding: "2px 8px",
-              background: "rgba(255,255,255,0.04)", borderRadius: 5, border: "1px solid rgba(255,255,255,0.06)",
-            }}>Semana 26 · 2025</span>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 7 }}>
-              {["Exportar", "Publicar"].map((btn, i) => (
-                <div key={btn} style={{
-                  padding: "5px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "default",
-                  background: i === 1 ? "#2563eb" : "rgba(255,255,255,0.05)",
-                  color: i === 1 ? "#fff" : "#64748b",
-                  border: i === 1 ? "none" : "1px solid rgba(255,255,255,0.07)",
-                }}>{btn}</div>
+            <div style={{ width: 122, padding: "0 12px", flexShrink: 0, overflow: "hidden" }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</div>
+              <div style={{ fontSize: 8, color: "#3b82f6", fontWeight: 500 }}>{row.range}</div>
+              <div style={{ fontSize: 7.5, color: "#475569" }}>{row.stats}</div>
+            </div>
+            <div style={{ flex: 1, position: "relative", height: "calc(100% - 14px)" }}>
+              {row.blocks.map((b, bi) => (
+                <div key={bi} style={{
+                  position: "absolute", left: `${b.l}%`, width: `${b.w}%`, top: 0, bottom: 0,
+                  background: b.color, borderRadius: 2, opacity: 0.88,
+                }} />
               ))}
             </div>
           </div>
-
-          {/* Time ruler */}
-          <div style={{
-            display: "flex", paddingLeft: 116,
-            background: "rgba(0,0,0,0.25)", borderBottom: "1px solid rgba(255,255,255,0.04)",
-          }}>
-            {["06:00","08:00","10:00","12:00","14:00","16:00"].map(h => (
-              <div key={h} style={{ flex: 1, padding: "5px 0", fontSize: 9, color: "#334155", fontWeight: 500, textAlign: "center" }}>{h}</div>
-            ))}
-          </div>
-
-          {/* Rows */}
-          {rows.map((row, ri) => (
-            <div key={ri} style={{
-              display: "flex", alignItems: "center", height: 38,
-              borderBottom: "1px solid rgba(255,255,255,0.025)",
-              background: ri === 1 ? "rgba(59,130,246,0.035)" : "transparent",
-            }}>
-              <div style={{
-                width: 116, padding: "0 14px", fontSize: 10.5, fontWeight: 500,
-                color: "#4b5563", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden",
-              }}>{row.name}</div>
-              <div style={{ flex: 1, position: "relative", height: "100%", padding: "6px 0" }}>
-                {row.blocks.map((b, bi) => (
-                  <div key={bi} style={{
-                    position: "absolute", left: `${b.l}%`, width: `${b.w}%`,
-                    height: "calc(100% - 12px)",
-                    background: `${row.color}1a`, border: `1px solid ${row.color}50`,
-                    borderLeft: `2px solid ${row.color}cc`,
-                    borderRadius: "0 4px 4px 0",
-                    display: "flex", alignItems: "center", paddingLeft: 6,
-                  }}>
-                    <div style={{ width: 4, height: 4, borderRadius: "50%", background: row.color, opacity: 0.75 }} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Status bar */}
-          <div style={{
-            padding: "7px 14px 7px 130px", display: "flex", gap: 18, alignItems: "center",
-            borderTop: "1px solid rgba(255,255,255,0.04)", background: "rgba(0,0,0,0.18)",
-          }}>
-            {[["#10b981","5 turnos activos"],["#f59e0b","1 conflicto"],["#3b82f6","96% cobertura"]].map(([c, l]) => (
-              <div key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: c }} />
-                <span style={{ fontSize: 9.5, color: "#475569", fontWeight: 500 }}>{l}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
