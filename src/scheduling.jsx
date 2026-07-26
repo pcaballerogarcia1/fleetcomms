@@ -81,6 +81,23 @@ function turnoWindow(turno, fallbackStart, fallbackEnd) {
   return { start, end };
 }
 
+// Código de turno (M/T/N) a partir de la hora de inicio real de un
+// trabajador — agnóstico al texto de "turno" (que en los conductores
+// virtuales de autoScaleFleet siempre es "Jornada completa", nunca
+// "Mañana (06-14)"). Compara contra los 3 arranques estándar (06/14/22h)
+// en un reloj circular de 24h y se queda con el más cercano.
+function shiftCodeFromStart(startMin) {
+  if (startMin == null) return null;
+  const m = ((startMin % 1440) + 1440) % 1440;
+  const anchors = [[360, "M"], [840, "T"], [1320, "N"]];
+  let best = null, bestDist = Infinity;
+  for (const [anchor, code] of anchors) {
+    const d = Math.min(Math.abs(m - anchor), 1440 - Math.abs(m - anchor));
+    if (d < bestDist) { bestDist = d; best = code; }
+  }
+  return best;
+}
+
 // Haversine distance in km — returns 0 for invalid/missing coordinates
 function haversineKm(lat1, lng1, lat2, lng2) {
   lat1 = +lat1; lng1 = +lng1; lat2 = +lat2; lng2 = +lng2;
@@ -2575,8 +2592,16 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           const daysWorked    = {};
           for (const wRow of workerRows) {
             const wId = wRow._id || wRow.id;
-            const t   = wRow.turno ?? "";
-            const code = /06.?14/i.test(t) ? "M" : /14.?22/i.test(t) ? "T" : /22.?06/i.test(t) ? "N" : null;
+            // Antes se sacaba el código M/T/N con una regex sobre el texto
+            // del turno ("Mañana (06-14)"...) — funciona para trabajadores
+            // reales, pero los conductores virtuales (autoScaleFleet) tienen
+            // turno:"Jornada completa" siempre, así que nunca hacían match y
+            // se quedaban sin código: "Optimizar" en Rostering los saltaba
+            // en silencio (parecía no hacer nada con escenarios grandes,
+            // donde la mayoría de conductores son virtuales). Usar la
+            // ventana horaria real (_tw.start, ya calculada para cada
+            // trabajador, real o virtual) es agnóstico al texto del turno.
+            const code = wRow._tw ? shiftCodeFromStart(wRow._tw.start) : null;
             if (code) turnoByWorker[wId] = code;
             const dSet = new Set();
             for (const a of (wRow.assignments ?? [])) {

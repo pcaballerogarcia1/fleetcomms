@@ -325,16 +325,32 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   // ── Optimizar: auto-assign scheduled shifts respecting availability ──
   function optimizar() {
-    if (!schedRoster) return;
+    // Antes esto no avisaba de nada si no había escenario generado para
+    // este proyecto/mes — el botón "no hacía nada" en silencio y parecía
+    // roto. Ahora explica por qué, en vez de quedarse callado.
+    if (!activeProject) {
+      alert("Abre un proyecto con un escenario generado en Scheduling primero.");
+      return;
+    }
+    if (!schedRoster) {
+      alert("Este proyecto todavía no tiene un escenario generado en Scheduling — no hay turnos que asignar.");
+      return;
+    }
+    if (schedRoster.mes && schedRoster.mes !== `${year}-${String(month).padStart(2, "0")}`) {
+      alert(`El escenario generado es de ${schedRoster.mes}, pero estás viendo ${year}-${String(month).padStart(2, "0")} — cambia el mes del calendario para verlo.`);
+      return;
+    }
+
     const BLOCKED = new Set(["L", "B"]);     // can't override
     const MANUAL  = new Set(["M","T","N","G"]); // already manually set, skip
 
     const newGrid = { ...grid };
+    let assignedCount = 0, skippedNoCode = 0;
     for (const w of workers) {
       const wId  = w._id;
       const code = schedRoster.turnoByWorker?.[wId];
-      if (!code) continue;
       const scheduledDays = new Set(schedRoster.daysWorked?.[wId] ?? []);
+      if (!code) { if (scheduledDays.size) skippedNoCode++; continue; }
       const wGrid = { ...(newGrid[wId] ?? {}) };
       for (const d of days) {
         const dayNum = schedDayFor(d);
@@ -342,6 +358,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         const cur = wGrid[String(d)] ?? "";
         if (BLOCKED.has(cur) || MANUAL.has(cur)) continue;
         wGrid[String(d)] = code;
+        assignedCount++;
       }
       newGrid[wId] = wGrid;
     }
@@ -350,6 +367,14 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     if (docId) setDoc(doc(db, "rostering", docId), {
       org_id: orgId, year, month, grid: newGrid, updatedAt: serverTimestamp(),
     });
+
+    if (assignedCount === 0) {
+      alert(skippedNoCode > 0
+        ? "No se ha asignado ningún turno nuevo — las celdas ya estaban marcadas manualmente (M/T/N/G), libres o de baja."
+        : "No se ha asignado ningún turno — regenera el escenario en Scheduling para este proyecto/mes.");
+    } else {
+      alert(`Se han asignado ${assignedCount} turno(s).${skippedNoCode > 0 ? ` ${skippedNoCode} trabajador(es) con paradas asignadas no tenían un turno reconocible.` : ""}`);
+    }
   }
 
   // ── Totals ────────────────────────────────────────────────────
