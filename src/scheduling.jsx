@@ -557,10 +557,23 @@ async function generateScenario(tasks, resources, constraints) {
 
       for (const segEnd of segEnds) {
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
-        // del anchor para volver a tiempo), busca hasta 15 tareas por delante y
-        // adelanta la primera viable para no bloquear el recurso en un outlier.
-        if (queueIdx[i] < queue.length) {
+        // del anchor para volver a tiempo, o su franja horaria ya no se puede
+        // cumplir), busca hasta 15 tareas por delante y adelanta la primera
+        // viable a la posición actual. Antes esto solo se llamaba UNA VEZ al
+        // empezar el tramo — con ventanas horarias, una sola tarea que dejara
+        // de encajar a mitad del día paraba el recurso el resto de la jornada
+        // aunque quedaran horas y tareas libres de sobra (esa era la queja:
+        // un vehículo esperando casi todo el día por 2 paradas). Ahora se
+        // reintenta cada vez que la cabeza de cola deja de ser viable, no
+        // solo al principio. El criterio de viabilidad es idéntico al del
+        // bucle de abajo (mismo maxShiftMin/segEnd/ventana) para que, si
+        // encuentra una tarea, el bucle la acepte siempre al re-evaluarla —
+        // si no, un desajuste entre ambos criterios podría reintentar sin
+        // avanzar nunca.
+        function tryLookaheadSwap() {
+          if (queueIdx[i] >= queue.length) return false;
           const LOOK = Math.min(15, queue.length - queueIdx[i]);
+          const tWorkSoFar = cursor - (res.shiftStart + dayOffset);
           let swapTo = -1;
           for (let li = 0; li < LOOK && swapTo === -1; li++) {
             const t = queue[queueIdx[i] + li];
@@ -577,19 +590,24 @@ async function generateScenario(tasks, resources, constraints) {
               const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
               if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
             }
-            if (cursor + ttMin + tWait + tdur + tRet <= segEnd) swapTo = li;
+            const fits = cursor + ttMin + tWait + tdur + tRet <= segEnd
+              && !(maxShiftMin > 0 && tWorkSoFar + ttMin + tWait + tdur + tRet > maxShiftMin);
+            if (fits) swapTo = li;
           }
           if (swapTo > 0) {
             const [best] = queue.splice(queueIdx[i] + swapTo, 1);
             queue.splice(queueIdx[i], 0, best);
           }
+          return swapTo !== -1;
         }
+
+        tryLookaheadSwap();
 
         while (queueIdx[i] < queue.length) {
           const task = queue[queueIdx[i]];
           const dur  = task.duracion || 15;
 
-          if (maxStops > 0 && dayStops[i] >= maxStops) break;
+          if (maxStops > 0 && dayStops[i] >= maxStops) break; // tope duro — cambiar de tarea no ayuda
 
           if (breakAfter > 0 && breakDur > 0 && sinceBreak >= breakAfter && cursor + breakDur <= segEnd) {
             res.assignments.push({ _break: true, _start: cursor, _end: cursor + breakDur, duracion: breakDur });
@@ -603,11 +621,9 @@ async function generateScenario(tasks, resources, constraints) {
           }
 
           // Franja horaria (Timetable de Planning): si se llega antes de que
-          // abra, espera; si ya no se puede llegar a tiempo, deja la tarea
-          // para otro día/vehículo (igual que cualquier otra restricción de
-          // tiempo — el lookahead de arriba ya intentó evitar este caso).
+          // abra, espera; si ya no se puede llegar a tiempo, esta tarea en
+          // concreto no es viable ahora mismo (se intenta otra más abajo).
           const wait = windowWait(task, cursor + travelMin, dayOffset);
-          if (wait == null) break;
 
           let retBuffer = 0;
           if (anchor) {
@@ -620,8 +636,17 @@ async function generateScenario(tasks, resources, constraints) {
           }
 
           const workSoFar = cursor - (res.shiftStart + dayOffset);
-          if (maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin) break;
-          if (cursor + travelMin + wait + dur + retBuffer > segEnd) break;
+          const feasible = wait != null
+            && !(maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin)
+            && (cursor + travelMin + wait + dur + retBuffer <= segEnd);
+
+          if (!feasible) {
+            // Antes de rendirse por el resto del día, busca otra tarea de las
+            // próximas 15 que sí encaje ahora mismo — esta se deja para el
+            // backfill/mop-up (otro día/vehículo), no bloquea las demás.
+            if (tryLookaheadSwap()) continue;
+            break;
+          }
 
           if (travelMin > 0) {
             const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
