@@ -982,10 +982,24 @@ async function generateScenario(tasks, resources, constraints) {
       return true;
     }
 
+    // Tope de tiempo real para toda la reparación, no solo cesión de hilo
+    // entre intentos. tryInsertOrphan es O(vehículos × días) por huérfano, y
+    // con cientos de paradas de franja horaria (no un puñado) puede haber
+    // cientos de huérfanos a la vez — el total puede tardar minutos en vez de
+    // milisegundos aunque cada cesión individual sea rápida. Pasado el tope,
+    // el resto se deja sin asignar en vez de seguir intentando.
+    const ORPHAN_REPAIR_BUDGET_MS = 5000;
+    const orphanRepairStart = Date.now();
     const stillUnassigned = [];
     let orphanAttempts = 0;
+    let orphanBudgetExceeded = false;
     for (const task of pool) {
       if (task.windowStart == null) { stillUnassigned.push(task); continue; }
+      if (orphanBudgetExceeded || Date.now() - orphanRepairStart > ORPHAN_REPAIR_BUDGET_MS) {
+        orphanBudgetExceeded = true;
+        stillUnassigned.push(task);
+        continue;
+      }
       if (!tryInsertOrphan(task)) stillUnassigned.push(task);
       // tryInsertOrphan recorre todos los vehículos/días — con muchas paradas
       // de franja horaria esto suma bastante trabajo síncrono. Cede el hilo
