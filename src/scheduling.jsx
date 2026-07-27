@@ -1045,7 +1045,21 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
   let bestResources = resources;
   let bestResult = result;
 
-  while (result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES) {
+  // Tope de tiempo real, no solo de rondas — con muchas paradas de franja
+  // horaria (cientos, no un puñado) cada ronda es una simulación completa y
+  // el nº de rondas necesarias para converger crece mucho; sin esto,
+  // "Generar escenario" podía quedarse calculando varios minutos sin que el
+  // usuario tuviera forma de saber si seguía vivo o se había colgado. Igual
+  // que el shrink pass de más abajo: si se agota el tiempo, se queda con el
+  // mejor resultado encontrado hasta ese momento en vez de seguir.
+  const GROWTH_TIME_BUDGET_MS = 90000;
+  const growthStart = Date.now();
+
+  while (
+    result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES &&
+    Date.now() - growthStart < GROWTH_TIME_BUDGET_MS
+  ) {
+    await _yield(); // deja respirar al navegador entre rondas, aunque generateScenario tarde
     const assigned    = tasks.length - result.unassigned.length;
     const perVehicle   = Math.max(1, assigned / resources.length);
     const needed       = Math.max(1, Math.ceil(result.unassigned.length / perVehicle));
