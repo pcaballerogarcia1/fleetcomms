@@ -44,7 +44,18 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
 // ── HELPERS ───────────────────────────────────────────────────────
 function timeToMin(t) {
   if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
+  const s = String(t).trim();
+  // Red de seguridad: un valor sin ":" que sea un decimal entre 0 y 1 es casi
+  // siempre un número de serie de Excel sin convertir (fracción del día —
+  // 0.5 = 12:00), colado por alguna vía de importación que no pidió el texto
+  // formateado. Sin esto se interpretaba como "0.41 minutos" en vez de las
+  // 10:00 reales, generando franjas horarias absurdas agrupadas cerca de
+  // medianoche.
+  if (!s.includes(":") && /^0?\.\d+$/.test(s)) {
+    const frac = Number(s);
+    if (frac > 0 && frac < 1) return Math.round(frac * 1440);
+  }
+  const [h, m] = s.split(":").map(Number);
   return isNaN(h) ? null : h * 60 + (m || 0);
 }
 function minToTime(m) {
@@ -617,7 +628,17 @@ async function generateScenario(tasks, resources, constraints) {
 
         tryLookaheadSwap();
 
+        // Cesión de hilo dentro del bucle de UN vehículo, no solo entre
+        // vehículos: con pocos recursos (p.ej. k=1, la primera pasada antes
+        // de auto-escalar) toda la cola puede ser de cientos de tareas, y con
+        // muchas de franja horaria cada una puede disparar tryLookaheadSwap
+        // (hasta 40 candidatos) una o dos veces. Sin esto, un único vehículo
+        // con una cola larga bloqueaba el hilo entero sin que la cesión
+        // "cada 5 vehículos" de más arriba llegara siquiera a activarse.
+        let taskIterations = 0;
+
         while (queueIdx[i] < queue.length) {
+          if (++taskIterations % 25 === 0) await _yield();
           const task = queue[queueIdx[i]];
           const dur  = task.duracion || 15;
 
@@ -754,7 +775,9 @@ async function generateScenario(tasks, resources, constraints) {
 
       for (const segEnd of segEnds) {
         let pi = 0;
+        let backfillIterations = 0;
         while (pi < sortedQueues[i].length) {
+          if (++backfillIterations % 25 === 0) await _yield();
           const task = sortedQueues[i][pi];
           const dur  = task.duracion || 15;
 
@@ -855,7 +878,9 @@ async function generateScenario(tasks, resources, constraints) {
           // No retBuffer check here — the return-to-anchor leg is appended after
           // the loop and may slightly overshoot segEnd, acceptable for the mop-up.
           let pi = 0;
+          let mopIterations = 0;
           while (pi < pool.length) {
+            if (++mopIterations % 25 === 0) await _yield();
             const task = pool[pi];
             const dur  = task.duracion || 15;
 

@@ -1877,7 +1877,13 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+      // raw:false — sin esto, una celda de Excel con formato de hora (p.ej.
+      // "10:00") se lee como el número de serie interno de Excel (fracción
+      // del día, 0.41666...) en vez del texto formateado. Sale de aquí como
+      // texto plausible ("0.4166666666666667"), así que no salta ningún
+      // error, pero produce franjas horarias sin sentido al interpretarse
+      // más tarde como "0.41 minutos" en vez de las 10:00 reales.
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null, raw: false });
 
       const validKeys = new Set(effectiveEntries.map(e => e._id));
       const updates = [];
