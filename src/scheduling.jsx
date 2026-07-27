@@ -530,6 +530,14 @@ async function generateScenario(tasks, resources, constraints) {
     dayStops.fill(0);
 
     for (let i = 0; i < k; i++) {
+      // Con maxDays=1 este bucle es la ÚNICA pasada del día — el único yield
+      // de abajo (una vez por día) no basta cuando k es grande (decenas de
+      // vehículos, p.ej. por auto-escalado): todo el trabajo de ese día se
+      // hacía de un tirón, y con suficientes vehículos eso solo ya podía
+      // superar los segundos que el navegador tolera antes de avisar de que
+      // la pestaña "no responde". Cede el hilo cada pocos vehículos.
+      if (i > 0 && i % 5 === 0) await _yield();
+
       const res   = state[i];
       const queue = sortedQueues[i];
       if (queueIdx[i] >= queue.length) continue; // all tasks for this resource done
@@ -720,6 +728,7 @@ async function generateScenario(tasks, resources, constraints) {
   // days as the other vehicles, using continue (not break) so tasks are skipped
   // individually rather than killing the whole day.
   for (let i = 0; i < k; i++) {
+    if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
     if (state[i].assignments.length > 0) continue;          // already has work
     if (queueIdx[i] >= sortedQueues[i].length) continue;    // queue exhausted
 
@@ -825,6 +834,7 @@ async function generateScenario(tasks, resources, constraints) {
       const dayOffset = mopDay * 1440;
 
       for (let i = 0; i < k && pool.length > 0; i++) {
+        if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
         const res   = state[i];
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
