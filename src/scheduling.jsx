@@ -35,6 +35,7 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
     @keyframes sched-fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
     @keyframes sched-spin{to{transform:rotate(360deg)}}
     @keyframes sched-shimmer{0%,100%{opacity:1}50%{opacity:.6}}
+    @keyframes sched-pulse{0%,100%{opacity:.55}50%{opacity:1}}
     .sched-block{transition:filter .1s,box-shadow .1s;}
     .sched-block:hover{filter:brightness(1.15);box-shadow:0 2px 8px rgba(0,0,0,.4);}
   `;
@@ -139,6 +140,118 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // Returns true only for valid numeric coordinates
 function hasCoords(lat, lng) {
   return isFinite(+lat) && isFinite(+lng) && (+lat !== 0 || +lng !== 0);
+}
+
+// ── Reasignación manual de paradas en el Gantt ────────────────────
+// Al mover una parada de un vehículo/trabajador a otro (drag&drop o panel
+// lateral), estas funciones calculan dónde encaja de verdad — sin retrasar
+// la siguiente parada ya asignada (solape) y respetando su franja horaria
+// si la tiene — y reconstruyen los bloques de viaje/espera del hueco
+// afectado. No dependen de React: se reutilizan tanto para la vista previa
+// (huecos resaltados al hacer clic) como para aplicar el movimiento.
+
+// Huecos candidatos de `row` en el día que empieza en `dayOffset` (0, 1440,
+// 2880...) donde `task` podría insertarse. Un hueco solo se ofrece si no
+// empuja la siguiente parada real (evitaría solaparla) y si la propia
+// tarea puede cumplir su franja horaria desde ahí. Los huecos que
+// contienen una pausa programada se descartan para no partirla.
+function computeCandidateSlots(task, row, dayOffset) {
+  const dayStart = dayOffset + (row._tw?.start ?? row.shiftStart ?? 0);
+  const dayEnd   = dayOffset + (row._tw?.end   ?? row.shiftEnd   ?? 1440);
+
+  const dayItems = (row.assignments || [])
+    .filter(a => a._start >= dayOffset && a._start < dayOffset + 1440)
+    .sort((a, b) => a._start - b._start);
+  const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
+  const hasBreakIn = (from, to) => dayItems.some(a => a._break && a._start >= from && a._start < to);
+
+  const depotLat = row.depotLat, depotLng = row.depotLng;
+  const slots = [];
+  for (let g = 0; g <= stops.length; g++) {
+    const prev = g === 0 ? null : stops[g - 1];
+    const next = g === stops.length ? null : stops[g];
+    const prevEnd    = prev ? prev._end   : dayStart;
+    const prevLat    = prev ? prev.lat    : depotLat;
+    const prevLng    = prev ? prev.lng    : depotLng;
+    const nextStart  = next ? next._start : dayEnd;
+    const nextLat    = next ? next.lat    : depotLat;
+    const nextLng    = next ? next.lng    : depotLng;
+    if (prevEnd > nextStart || hasBreakIn(prevEnd, nextStart)) continue;
+
+    const inKm  = haversineKm(prevLat, prevLng, task.lat, task.lng);
+    const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(inKm / TRAVEL_SPEED_KMH * 60)) : 0;
+    const earliestArrival = prevEnd + inMin;
+    const wait = windowWait(task, earliestArrival, dayOffset);
+    if (wait === null) continue; // se llegaría después de que cierre su franja
+    const arrival = earliestArrival + wait;
+    const taskEnd = arrival + (task.duracion || 15);
+
+    const outKm  = haversineKm(task.lat, task.lng, nextLat, nextLng);
+    const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(outKm / TRAVEL_SPEED_KMH * 60)) : 0;
+    if (taskEnd + outMin > nextStart) continue; // solaparía la siguiente parada / fin de turno
+
+    const originalDirectKm = haversineKm(prevLat, prevLng, nextLat, nextLng);
+    slots.push({
+      prevStop: prev, nextStop: next, prevEnd, nextStart,
+      inKm, inMin, outKm, outMin, wait, arrival, taskEnd,
+      kmDelta: +((inKm + outKm) - originalDirectKm).toFixed(3),
+    });
+  }
+  return slots;
+}
+
+// Aplica un movimiento ya validado por computeCandidateSlots. Devuelve los
+// nuevos arrays de assignments para la fila origen y destino (quita la
+// tarea y cierra su hueco antiguo con un viaje directo; la inserta en el
+// hueco elegido con sus nuevos bloques de viaje/espera alrededor).
+function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
+  const sameRow = (fromRow._id || fromRow.id) === (toRow._id || toRow.id);
+  const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+
+  const fromItems = [...(fromRow.assignments || [])].sort((a, b) => a._start - b._start);
+  const fromDayStops = fromItems.filter(a => a !== task && !a._travel && !a._break && !a._wait && dayS(a));
+  const afterIdx  = fromDayStops.findIndex(a => a._start > task._start);
+  const origPrev  = afterIdx === -1 ? (fromDayStops.length ? fromDayStops[fromDayStops.length - 1] : null) : (afterIdx > 0 ? fromDayStops[afterIdx - 1] : null);
+  const origNext  = afterIdx === -1 ? null : fromDayStops[afterIdx];
+  const origDayStart = dayOffset + (fromRow._tw?.start ?? fromRow.shiftStart ?? 0);
+  const origDayEnd   = dayOffset + (fromRow._tw?.end   ?? fromRow.shiftEnd   ?? 1440);
+  const gapStart = origPrev ? origPrev._end   : origDayStart;
+  const gapEnd   = origNext ? origNext._start : origDayEnd;
+
+  let closingBlock = null;
+  if (origPrev && origNext) {
+    const km = haversineKm(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
+    if (km >= 0.05) {
+      const min = Math.max(1, Math.ceil(km / TRAVEL_SPEED_KMH * 60));
+      closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + min, duracion: min, km: +km.toFixed(3) };
+    }
+  }
+  const newFromAssignments = fromItems
+    .filter(a => a !== task && !(dayS(a) && a._start >= gapStart && a._start < gapEnd))
+    .concat(closingBlock ? [closingBlock] : []);
+
+  const movedTask = { ...task, _start: slot.arrival, _end: slot.taskEnd };
+  const newBlocks = [];
+  if (slot.inKm >= 0.05) {
+    newBlocks.push({ _travel: true, _start: slot.prevEnd, _end: slot.prevEnd + slot.inMin, duracion: slot.inMin, km: +slot.inKm.toFixed(3), ...(slot.prevStop ? {} : { _depot_exit: true }) });
+  }
+  if (slot.wait > 0) {
+    newBlocks.push({ _wait: true, _start: slot.arrival - slot.wait, _end: slot.arrival, duracion: slot.wait });
+  }
+  newBlocks.push(movedTask);
+  if (slot.outKm >= 0.05) {
+    newBlocks.push({ _travel: true, _start: slot.taskEnd, _end: slot.taskEnd + slot.outMin, duracion: slot.outMin, km: +slot.outKm.toFixed(3), ...(slot.nextStop ? {} : { _depot_return: true }) });
+  }
+
+  const toItems = sameRow ? newFromAssignments : [...(toRow.assignments || [])].sort((a, b) => a._start - b._start);
+  const newToAssignments = toItems
+    .filter(a => !(dayS(a) && a._start >= slot.prevEnd && a._start < slot.nextStart))
+    .concat(newBlocks)
+    .sort((a, b) => a._start - b._start);
+
+  return sameRow
+    ? { newFromAssignments: newToAssignments, newToAssignments }
+    : { newFromAssignments, newToAssignments };
 }
 
 // ── IndexedDB: persist full VRP schedule across page reloads ─────
@@ -1254,6 +1367,48 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [dropRowId,    setDropRowId]    = useState(null);
   const [stackPanel,   setStackPanel]   = useState(null); // { task, row }
   const [ganttSort,    setGanttSort]    = useState("default"); // "default" | "salida_asc" | "salida_desc" | "servicio_asc" | "servicio_desc"
+  const [movePreview,  setMovePreview]  = useState(null); // { task, fromRow, dayOffset, slotsByRowId }
+
+  const closePanel = () => { setStackPanel(null); setMovePreview(null); };
+
+  const openTaskPanel = (task, row) => {
+    if (stackPanel?.task === task) { closePanel(); return; }
+    setStackPanel({ task, row });
+    if (!onScheduleChange) return;
+    const dayOffset = Math.floor(task._start / 1440) * 1440;
+    const slotsByRowId = new Map();
+    rows.forEach(r => {
+      if ((r._id || r.id) === (row._id || row.id)) return;
+      const slots = computeCandidateSlots(task, r, dayOffset);
+      if (slots.length) slotsByRowId.set(r._id || r.id, slots);
+    });
+    setMovePreview({ task, fromRow: row, dayOffset, slotsByRowId });
+  };
+
+  // Intenta ejecutar un movimiento ya validado (slot factible). Si la
+  // tarea tiene franja horaria, pide confirmación explícita antes de
+  // aplicarlo — moverla de vehículo puede cambiar la hora de llegada.
+  const attemptMove = (task, fromRow, toRow, slot, dayOffset) => {
+    const commit = () => {
+      onScheduleChange({ task, fromRowId: fromRow._id || fromRow.id, toRowId: toRow._id || toRow.id, slot, dayOffset });
+      closePanel();
+    };
+    if (task.windowStart != null) {
+      const winTxt  = `${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}`;
+      const waitTxt = slot.wait > 0 ? ` (con ${slot.wait} min de espera)` : "";
+      const destName = [toRow.nombre, toRow.apellidos].filter(Boolean).join(" ") || toRow.matricula || "este recurso";
+      const ok = window.confirm(
+        `Esta parada tiene franja horaria ${winTxt}.\nSe colocaría a las ${minToTime(slot.arrival % 1440)}${waitTxt}.\n\n¿Confirmas el traslado a ${destName}?`
+      );
+      if (!ok) return;
+    }
+    commit();
+  };
+
+  // Sin hueco factible: aviso de solape/franja imposible, no se mueve nada.
+  const rejectMove = () => {
+    window.alert("No se puede colocar esta parada ahí: se solaparía con otra parada existente o no llegaría a tiempo dentro de su franja horaria.");
+  };
 
   const sortedRows = useMemo(() => {
     if (ganttSort === "default") return rows;
@@ -1425,7 +1580,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       </div>
 
       {/* ── Scrollable Gantt ── */}
-      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={() => setStackPanel(null)}>
+      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
         <div style={{ display: "inline-block", minWidth: LABEL_W + chartW, minHeight: "100%" }}>
 
           {/* Time axis header */}
@@ -1539,9 +1694,18 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   e.preventDefault(); setDropRowId(null);
                   if (!dragging || !onScheduleChange) return;
                   const toRowId = row._id || row.id;
-                  if (dragging.fromRowId === toRowId) return;
-                  onScheduleChange({ task: dragging.task, fromRowId: dragging.fromRowId, toRowId });
+                  const task = dragging.task;
                   setDragging(null);
+                  if (dragging.fromRowId === toRowId) return;
+                  const fromRow = rows.find(r => (r._id || r.id) === dragging.fromRowId);
+                  if (!fromRow) return;
+                  const dayOffset = Math.floor(task._start / 1440) * 1440;
+                  const slots = computeCandidateSlots(task, row, dayOffset);
+                  if (!slots.length) { rejectMove(); return; }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const dropMin = dayOffset + (e.clientX - rect.left) / pxPerMin;
+                  const best = slots.reduce((a, b) => Math.abs(b.arrival - dropMin) < Math.abs(a.arrival - dropMin) ? b : a);
+                  attemptMove(task, fromRow, row, best, dayOffset);
                 }}
               >
                 {ticks.map(({ h, x }) => (
@@ -1667,7 +1831,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                         setTooltip(null);
                       }}
                       onDragEnd={() => setDragging(null)}
-                      onClick={e => { e.stopPropagation(); setStackPanel(p => p?.task === task ? null : { task, row }); setTooltip(null); }}
+                      onClick={e => { e.stopPropagation(); openTaskPanel(task, row); setTooltip(null); }}
                       onMouseEnter={e => !dragging && setTooltip({ task, row, x: e.clientX, y: e.clientY })}
                       onMouseMove={e => !dragging && setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
                       onMouseLeave={() => setTooltip(null)}
@@ -1693,6 +1857,25 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                         </>
                       )}
                     </div>
+                  );
+                })}
+
+                {/* Huecos válidos resaltados — visibles tras hacer clic en una
+                    parada, solo en su propio día. Clicar coloca la parada ahí. */}
+                {movePreview && movePreview.dayOffset === selectedDay * 1440 && movePreview.slotsByRowId.get(row._id || row.id)?.map((slot, si) => {
+                  const left = (slot.arrival - selectedDay * 1440) * pxPerMin;
+                  const w    = Math.max((slot.taskEnd - slot.arrival) * pxPerMin - 2, 6);
+                  const color = slot.wait > 0 ? "#f59e0b" : "#34d399";
+                  return (
+                    <div key={`slot${si}`}
+                      title={`Colocar aquí a las ${minToTime(slot.arrival % 1440)} · ${slot.kmDelta >= 0 ? "+" : ""}${slot.kmDelta.toFixed(2)} km${slot.wait > 0 ? ` · espera ${slot.wait} min` : ""}`}
+                      onClick={e => { e.stopPropagation(); attemptMove(movePreview.task, movePreview.fromRow, row, slot, movePreview.dayOffset); }}
+                      style={{
+                        position: "absolute", left, top: 5, height: ROW_H - 10, width: w, zIndex: 6,
+                        background: `${color}30`, border: `2px dashed ${color}`, borderRadius: 4,
+                        cursor: "pointer", animation: "sched-pulse 1.2s ease-in-out infinite",
+                      }}
+                    />
                   );
                 })}
               </div>
@@ -1798,7 +1981,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 </div>
                 {stackPanel.task.barrio && <div style={{ fontSize: 10, color: C.muted }}>{stackPanel.task.barrio}</div>}
               </div>
-              <button onClick={() => setStackPanel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
+              <button onClick={closePanel} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
             </div>
 
             {/* Time + assigned resource */}
@@ -1823,34 +2006,47 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               </div>
             </div>
 
-            {/* Reasignar */}
+            {/* Reasignar — huecos calculados por openTaskPanel; también se
+                pueden ver y elegir directamente sobre el Gantt (resaltado). */}
             {onScheduleChange && rows.length > 1 && (
               <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Mover a</div>
+                <div style={{ fontSize: 9.5, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>
+                  Los huecos válidos también se resaltan en el Gantt — haz clic ahí para elegir un momento concreto.
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {rows.filter(r => (r._id || r.id) !== (stackPanel.row._id || stackPanel.row.id)).map(r => (
-                    <button key={r._id || r.id} onClick={() => {
-                      onScheduleChange({ task: stackPanel.task, fromRowId: stackPanel.row._id || stackPanel.row.id, toRowId: r._id || r.id });
-                      setStackPanel(null);
-                    }} style={{
-                      display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
-                      background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7,
-                      cursor: "pointer", textAlign: "left", transition: "border-color .1s",
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-                    >
-                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.surface2, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: C.muted, fontWeight: 700 }}>
-                        {(r.nombre || "?")[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>
-                          {[r.nombre, r.apellidos].filter(Boolean).join(" ") || r.matricula || "?"}
+                  {rows.filter(r => (r._id || r.id) !== (stackPanel.row._id || stackPanel.row.id)).map(r => {
+                    const slots = movePreview?.slotsByRowId.get(r._id || r.id) || [];
+                    const best = slots.length ? slots.reduce((a, b) => b.kmDelta < a.kmDelta ? b : a) : null;
+                    return (
+                      <button key={r._id || r.id} disabled={!best} onClick={() => {
+                        if (!best) { rejectMove(); return; }
+                        attemptMove(stackPanel.task, stackPanel.row, r, best, movePreview.dayOffset);
+                      }} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+                        background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7,
+                        cursor: best ? "pointer" : "not-allowed", textAlign: "left", transition: "border-color .1s",
+                        opacity: best ? 1 : 0.45,
+                      }}
+                        onMouseEnter={e => best && (e.currentTarget.style.borderColor = C.blue)}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+                      >
+                        <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.surface2, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                          {(r.nombre || "?")[0].toUpperCase()}
                         </div>
-                        <div style={{ fontSize: 10, color: C.dim }}>{r.turno || r.matricula || ""}</div>
-                      </div>
-                    </button>
-                  ))}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>
+                            {[r.nombre, r.apellidos].filter(Boolean).join(" ") || r.matricula || "?"}
+                          </div>
+                          <div style={{ fontSize: 10, color: C.dim }}>
+                            {best
+                              ? `${best.kmDelta >= 0 ? "+" : ""}${best.kmDelta.toFixed(2)} km${best.wait > 0 ? ` · espera ${best.wait} min` : ""}`
+                              : "Sin hueco disponible"}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3658,13 +3854,20 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               mode={mode}
               allWorkers={workers}
               allVehicles={vehicles}
-              onScheduleChange={({ task, fromRowId, toRowId }) => {
+              onScheduleChange={({ task, fromRowId, toRowId, slot, dayOffset }) => {
                 setSchedules(prev => {
                   const key = mode === "vehicles" ? "vehicles" : "workers";
-                  const rows = (prev[key] || []).map(r => {
+                  const rowsArr = prev[key] || [];
+                  const fromRow = rowsArr.find(r => (r._id || r.id) === fromRowId);
+                  const toRow   = rowsArr.find(r => (r._id || r.id) === toRowId);
+                  if (!fromRow || !toRow || !slot) return prev; // sin hueco validado, no se mueve nada
+                  const { newFromAssignments, newToAssignments } = applyTaskMove(task, fromRow, toRow, slot, dayOffset);
+                  const rows = rowsArr.map(r => {
                     const rid = r._id || r.id;
-                    if (rid === fromRowId) return { ...r, assignments: r.assignments.filter(a => a !== task) };
-                    if (rid === toRowId)   return { ...r, assignments: [...r.assignments, task] };
+                    const isFrom = rid === fromRowId, isTo = rid === toRowId;
+                    if (isFrom && isTo) return { ...r, assignments: newToAssignments };
+                    if (isFrom) return { ...r, assignments: newFromAssignments };
+                    if (isTo)   return { ...r, assignments: newToAssignments };
                     return r;
                   });
                   return { ...prev, [key]: rows };
