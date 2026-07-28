@@ -1352,7 +1352,9 @@ async function autoScaleFleet(tasks, baseResources, constraints) {
 // ── GANTT CHART ───────────────────────────────────────────────────
 const ROW_H    = 52;
 const HEADER_H = 44;
-const LABEL_W  = 210;
+const LABEL_W_DEFAULT = 210;
+const LABEL_W_MIN = 150;
+const LABEL_W_MAX = 480;
 const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8];
 
 const DAY_OPTIONS = [1, 2, 3, 5, 7, 14];
@@ -1368,6 +1370,28 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [stackPanel,   setStackPanel]   = useState(null); // { task, row }
   const [ganttSort,    setGanttSort]    = useState("default"); // "default" | "salida_asc" | "salida_desc" | "servicio_asc" | "servicio_desc"
   const [movePreview,  setMovePreview]  = useState(null); // { task, fromRow, dayOffset, slotsByRowId }
+  const [labelW,       setLabelW]       = useState(LABEL_W_DEFAULT);
+  const resizingRef = useRef(null);
+
+  // Arrastrar el borde derecho de la columna "Recurso" para ensancharla —
+  // los nombres largos de vehículo/trabajador se cortaban ("Vehículo ...").
+  const startResizeLabel = e => {
+    e.preventDefault(); e.stopPropagation();
+    resizingRef.current = { startX: e.clientX, startW: labelW };
+    const onMove = ev => {
+      if (!resizingRef.current) return;
+      const { startX, startW } = resizingRef.current;
+      const w = Math.min(LABEL_W_MAX, Math.max(LABEL_W_MIN, startW + (ev.clientX - startX)));
+      setLabelW(w);
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   const closePanel = () => { setStackPanel(null); setMovePreview(null); };
 
@@ -1581,7 +1605,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
 
       {/* ── Scrollable Gantt ── */}
       <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
-        <div style={{ display: "inline-block", minWidth: LABEL_W + chartW, minHeight: "100%" }}>
+        <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%" }}>
 
           {/* Time axis header */}
           <div style={{
@@ -1590,11 +1614,23 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
             background: C.card, borderBottom: `1px solid ${C.border2}`,
           }}>
             <div style={{
-              width: LABEL_W, flexShrink: 0, position: "sticky", left: 0, zIndex: 12,
+              width: labelW, flexShrink: 0, position: "sticky", left: 0, zIndex: 12,
               background: C.card, borderRight: `1px solid ${C.border}`,
               display: "flex", alignItems: "flex-end", padding: "0 16px 8px",
             }}>
               <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>
+              {/* Asa de redimensión — arrastrar para ensanchar la columna */}
+              <div
+                onMouseDown={startResizeLabel}
+                title="Arrastrar para ensanchar"
+                style={{
+                  position: "absolute", top: 0, right: -3, bottom: 0, width: 7,
+                  cursor: "col-resize", zIndex: 13,
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ position: "absolute", top: 0, bottom: 0, left: 3, width: 1, background: C.border2 }} />
+              </div>
             </div>
             <div style={{ position: "relative", width: chartW, flexShrink: 0 }}>
               {/* Inactive-hours shading in header */}
@@ -1620,7 +1656,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
             <div key={row._id || row.id || ri} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}` }}>
               {/* Label */}
               <div style={{
-                width: LABEL_W, flexShrink: 0, position: "sticky", left: 0, zIndex: 3,
+                width: labelW, flexShrink: 0, position: "sticky", left: 0, zIndex: 3,
                 background: ri % 2 === 0 ? C.card : C.surface2,
                 borderRight: `1px solid ${C.border}`,
                 display: "flex", alignItems: "center", padding: "0 14px", gap: 10,
@@ -1883,7 +1919,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           ))}
 
           {rows.length === 0 && (
-            <div style={{ padding: "48px 0", textAlign: "center", color: C.dim, fontSize: 13, width: LABEL_W + chartW }}>Sin recursos asignados</div>
+            <div style={{ padding: "48px 0", textAlign: "center", color: C.dim, fontSize: 13, width: labelW + chartW }}>Sin recursos asignados</div>
           )}
         </div>
 
