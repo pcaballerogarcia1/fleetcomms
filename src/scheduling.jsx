@@ -250,8 +250,37 @@ function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
     .sort((a, b) => a._start - b._start);
 
   return sameRow
-    ? { newFromAssignments: newToAssignments, newToAssignments }
-    : { newFromAssignments, newToAssignments };
+    ? { newFromAssignments: newToAssignments, newToAssignments, movedTask }
+    : { newFromAssignments, newToAssignments, movedTask };
+}
+
+// A partir de la posición ACTUAL de `task` dentro de `row` (justo antes de
+// moverla), calcula el slot exacto que la devolvería a su sitio si el
+// movimiento se deshace — reutilizando los bloques de viaje/espera ya
+// existentes (no recalculados con haversine), para que "volver atrás"
+// reproduzca la posición original al minuto y al km exactos.
+function computeReverseSlot(task, row, dayOffset) {
+  const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+  const items = [...(row.assignments || [])].sort((a, b) => a._start - b._start);
+  const dayStops = items.filter(a => a !== task && !a._travel && !a._break && !a._wait && dayS(a));
+  const afterIdx = dayStops.findIndex(a => a._start > task._start);
+  const prevStop = afterIdx === -1 ? (dayStops.length ? dayStops[dayStops.length - 1] : null) : (afterIdx > 0 ? dayStops[afterIdx - 1] : null);
+  const nextStop = afterIdx === -1 ? null : dayStops[afterIdx];
+
+  const waitBlock = items.find(a => a._wait && a._end === task._start);
+  const inBlock   = items.find(a => a._travel && a._end === (waitBlock ? waitBlock._start : task._start));
+  const outBlock  = items.find(a => a._travel && a._start === task._end);
+
+  const prevEnd   = prevStop ? prevStop._end   : dayOffset + (row._tw?.start ?? row.shiftStart ?? 0);
+  const nextStart = nextStop ? nextStop._start : dayOffset + (row._tw?.end   ?? row.shiftEnd   ?? 1440);
+
+  return {
+    prevStop, nextStop, prevEnd, nextStart,
+    inKm: inBlock ? (inBlock.km || 0) : 0, inMin: inBlock ? inBlock.duracion : 0,
+    outKm: outBlock ? (outBlock.km || 0) : 0, outMin: outBlock ? outBlock.duracion : 0,
+    wait: waitBlock ? waitBlock.duracion : 0,
+    arrival: task._start, taskEnd: task._end,
+  };
 }
 
 // ── IndexedDB: persist full VRP schedule across page reloads ─────
@@ -1371,6 +1400,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [ganttSort,    setGanttSort]    = useState("default"); // "default" | "salida_asc" | "salida_desc" | "servicio_asc" | "servicio_desc"
   const [movePreview,  setMovePreview]  = useState(null); // { task, fromRow, dayOffset, slotsByRowId }
   const [labelW,       setLabelW]       = useState(LABEL_W_DEFAULT);
+  const [lastMove,     setLastMove]     = useState(null); // { task, fromRowId, toRowId, slot, dayOffset, label } — inverso del último movimiento aplicado
   const resizingRef = useRef(null);
 
   // Arrastrar el borde derecho de la columna "Recurso" para ensancharla —
@@ -1409,18 +1439,41 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     setMovePreview({ task, fromRow: row, dayOffset, slotsByRowId });
   };
 
+  const describeRow = r => [r?.nombre, r?.apellidos].filter(Boolean).join(" ") || r?.matricula || r?.turno || "recurso";
+
+  // Aplica un movimiento ya validado y guarda su inverso exacto (con los
+  // bloques de viaje/espera reales, no recalculados) en lastMove — así
+  // "Deshacer" siempre existe para el último movimiento hecho, sea uno
+  // nuevo o el propio deshacer (permite ir y volver).
+  const performMove = (task, fromRow, toRow, slot, dayOffset) => {
+    const reverseSlot = computeReverseSlot(task, fromRow, dayOffset);
+    const { newFromAssignments, newToAssignments, movedTask } = applyTaskMove(task, fromRow, toRow, slot, dayOffset);
+    onScheduleChange({ fromRowId: fromRow._id || fromRow.id, toRowId: toRow._id || toRow.id, newFromAssignments, newToAssignments });
+    setLastMove({
+      task: movedTask,
+      fromRowId: toRow._id || toRow.id, toRowId: fromRow._id || fromRow.id,
+      slot: reverseSlot, dayOffset,
+      label: `Movido a ${describeRow(toRow)}`,
+    });
+  };
+
+  const undoLastMove = () => {
+    if (!lastMove) return;
+    const curFrom = rows.find(r => (r._id || r.id) === lastMove.fromRowId);
+    const curTo   = rows.find(r => (r._id || r.id) === lastMove.toRowId);
+    if (!curFrom || !curTo) { setLastMove(null); return; }
+    performMove(lastMove.task, curFrom, curTo, lastMove.slot, lastMove.dayOffset);
+  };
+
   // Intenta ejecutar un movimiento ya validado (slot factible). Si la
   // tarea tiene franja horaria, pide confirmación explícita antes de
   // aplicarlo — moverla de vehículo puede cambiar la hora de llegada.
   const attemptMove = (task, fromRow, toRow, slot, dayOffset) => {
-    const commit = () => {
-      onScheduleChange({ task, fromRowId: fromRow._id || fromRow.id, toRowId: toRow._id || toRow.id, slot, dayOffset });
-      closePanel();
-    };
+    const commit = () => { performMove(task, fromRow, toRow, slot, dayOffset); closePanel(); };
     if (task.windowStart != null) {
       const winTxt  = `${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}`;
       const waitTxt = slot.wait > 0 ? ` (con ${slot.wait} min de espera)` : "";
-      const destName = [toRow.nombre, toRow.apellidos].filter(Boolean).join(" ") || toRow.matricula || "este recurso";
+      const destName = describeRow(toRow);
       const ok = window.confirm(
         `Esta parada tiene franja horaria ${winTxt}.\nSe colocaría a las ${minToTime(slot.arrival % 1440)}${waitTxt}.\n\n¿Confirmas el traslado a ${destName}?`
       );
@@ -2105,6 +2158,26 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Deshacer último movimiento — permite devolver la pieza a su sitio */}
+        {lastMove && (
+          <div style={{
+            position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)",
+            background: C.card, border: `1px solid ${C.border2}`, borderRadius: 999,
+            padding: "8px 8px 8px 16px", display: "flex", alignItems: "center", gap: 10,
+            boxShadow: "0 8px 28px rgba(0,0,0,.5)", zIndex: 2500, fontSize: 12, color: C.text,
+            animation: "sched-fadein .15s ease both",
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <span>{lastMove.label}</span>
+            <button onClick={undoLastMove} style={{
+              background: C.blueDim, color: C.blueText, border: "none", borderRadius: 999,
+              padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+            }}>↩ Deshacer</button>
+            <button onClick={() => setLastMove(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 16, cursor: "pointer", padding: "0 4px", lineHeight: 1 }}>×</button>
           </div>
         )}
       </div>
@@ -3890,14 +3963,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               mode={mode}
               allWorkers={workers}
               allVehicles={vehicles}
-              onScheduleChange={({ task, fromRowId, toRowId, slot, dayOffset }) => {
+              onScheduleChange={({ fromRowId, toRowId, newFromAssignments, newToAssignments }) => {
                 setSchedules(prev => {
                   const key = mode === "vehicles" ? "vehicles" : "workers";
                   const rowsArr = prev[key] || [];
-                  const fromRow = rowsArr.find(r => (r._id || r.id) === fromRowId);
-                  const toRow   = rowsArr.find(r => (r._id || r.id) === toRowId);
-                  if (!fromRow || !toRow || !slot) return prev; // sin hueco validado, no se mueve nada
-                  const { newFromAssignments, newToAssignments } = applyTaskMove(task, fromRow, toRow, slot, dayOffset);
                   const rows = rowsArr.map(r => {
                     const rid = r._id || r.id;
                     const isFrom = rid === fromRowId, isTo = rid === toRowId;
