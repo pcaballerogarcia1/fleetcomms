@@ -125,8 +125,13 @@ function shiftCodeFromStart(startMin) {
   return best;
 }
 
-// Haversine distance in km — returns 0 for invalid/missing coordinates
+// Haversine distance in km — returns 0 for invalid/missing coordinates.
+// null/undefined must be checked BEFORE the +x coercion: +null is 0 (a
+// finite number), so without this a missing depot (depotLat/depotLng null,
+// normal for a virtual vehicle with no fixed depot) would silently compute
+// a real distance against lat=0,lng=0 instead of being treated as "no depot".
 function haversineKm(lat1, lng1, lat2, lng2) {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return 0;
   lat1 = +lat1; lng1 = +lng1; lat2 = +lat2; lng2 = +lng2;
   if (!isFinite(lat1) || !isFinite(lat2) || !isFinite(lng1) || !isFinite(lng2)) return 0;
   const R = 6371;
