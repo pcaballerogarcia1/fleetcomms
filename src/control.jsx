@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, getDocs, limit } from "firebase/firestore";
+import { useLang, t } from "./i18n.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -768,6 +769,7 @@ function ActivityFeed({ events, usuarios }) {
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
 export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
+  const lang = useLang();
   const orgId = orgIdProp ?? sesion?.org_id ?? null;
   const isSuperAdmin = sesion?.rol === "superadmin";
 
@@ -928,7 +930,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["planes", "Planes"], ["flota", "Mapa de flota"], ["fichajes", "Fichajes"]].map(([k, l]) => (
+              {[["planes", t("planes", lang)], ["flota", t("mapaFlota", lang)], ["fichajes", t("fichajes", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? C.blue : "none",

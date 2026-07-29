@@ -22,6 +22,7 @@ import { LoginScheduling } from "./login-scheduling.jsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { useLang, setLang, t } from "./i18n.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -52,6 +53,7 @@ function go(path) {
 
 // ── Shared header ─────────────────────────────────────────────────
 function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
+  const lang = useLang();
   const initials = ((sesion?.nombre?.[0] ?? "") + (sesion?.apellidos?.[0] ?? "")).toUpperCase();
   const crumb = (label, href, active) => (
     <button onClick={() => go(href)} style={{
@@ -76,18 +78,18 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Operanzia</span>
         <span style={{ color: C.dim, margin: "0 4px" }}>/</span>
-        {crumb("Proyectos", "/projects", path === "/projects")}
+        {crumb(t("proyectos", lang), "/projects", path === "/projects")}
         {activeProject && <>
           <span style={{ color: C.dim, fontSize: 12 }}>/</span>
           <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 4px" }}>
             {activeProject.nombre}
           </span>
           <span style={{ color: C.dim, fontSize: 12 }}>/</span>
-          {crumb("Planning",    "/planning",    path === "/planning")}
-          {crumb("Scheduling",  "/scheduling",  path === "/scheduling")}
-          {crumb("Rostering",   "/rostering",   path === "/rostering")}
-          {crumb("Control",     "/control",     path === "/control")}
-          {crumb("Analytics",   "/analytics",   path === "/analytics")}
+          {crumb(t("planning", lang),   "/planning",    path === "/planning")}
+          {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
+          {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
+          {crumb(t("control", lang),    "/control",     path === "/control")}
+          {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -95,8 +97,20 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion?.rol}</div>
         </div>
+        <button
+          onClick={() => setLang(lang === "es" ? "en" : "es")}
+          title="ES / EN"
+          style={{
+            padding: "4px 9px", borderRadius: 7, background: C.surface2,
+            border: `1px solid ${C.border}`, color: C.muted, cursor: "pointer",
+            fontSize: 10, fontWeight: 700, fontFamily: font, letterSpacing: .5,
+            transition: "all .15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+        >{lang.toUpperCase()}</button>
         {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics") && (
-          <button onClick={onFullscreen} title="Pantalla completa" style={{
+          <button onClick={onFullscreen} title={t("fullscreen", lang)} style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s",
@@ -110,7 +124,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
             </svg>
           </button>
         )}
-        <button onClick={onLogout} title="Cerrar sesión" style={{
+        <button onClick={onLogout} title={t("logout", lang)} style={{
           width: 30, height: 30, borderRadius: "50%", background: C.surface2,
           border: `1px solid ${C.border}`, color: C.muted, fontSize: 10, fontWeight: 700,
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
@@ -139,6 +153,7 @@ function stripUndef(v) {
 
 // ── Router ────────────────────────────────────────────────────────
 function WorkspaceRouter() {
+  const lang = useLang();
   const [path,          setPath]          = useState(window.location.pathname);
   const [sesion,        setSesion]        = useState(undefined); // undefined=cargando
   const [activeProject, setActiveProject] = useState(() => readLS("fc_active_project"));
@@ -348,7 +363,7 @@ function WorkspaceRouter() {
         {fullscreen && (
           <button
             onClick={() => setFullscreen(false)}
-            title="Salir de pantalla completa"
+            title={t("exitFullscreen", lang)}
             style={{
               position: "absolute", top: 10, right: 10, zIndex: 9999,
               background: "rgba(22,27,39,0.85)", border: `1px solid ${C.border2}`,
@@ -365,7 +380,7 @@ function WorkspaceRouter() {
               <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
               <path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
             </svg>
-            Salir de pantalla completa
+            {t("exitFullscreen", lang)}
           </button>
         )}
 

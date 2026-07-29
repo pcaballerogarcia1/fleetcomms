@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { useLang, t } from "./i18n.js";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -69,6 +70,7 @@ const tooltipStyle = { background: C.surface2, border: `1px solid ${C.border2}`,
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────
 export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
+  const lang = useLang();
   const orgId = orgIdProp ?? sesion?.org_id ?? null;
   const isSuperAdmin = sesion?.rol === "superadmin";
 
@@ -229,7 +231,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["produccion", "Producción"], ["personal", "Personal"], ["varios", "Varios"]].map(([k, l]) => (
+              {[["produccion", t("produccion", lang)], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? C.blue : "none",

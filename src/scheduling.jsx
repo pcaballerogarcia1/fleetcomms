@@ -13,6 +13,7 @@ import {
   timeToMin, minToTime, turnoWindow, shiftCodeFromStart, hasCoords,
   computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet,
 } from "./vrp-engine.js";
+import { useLang, t } from "./i18n.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -969,8 +970,41 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
 }
 
 // ── CONSTRAINTS PANEL ─────────────────────────────────────────────
-function ConstraintsPanel({ c, onChange }) {
+function ConstraintsPanel({ c, onChange, orgId }) {
+  const lang = useLang();
   const set = (key, val) => onChange({ ...c, [key]: val });
+
+  // ── Plantillas de restricciones reutilizables entre proyectos ──
+  const [templates, setTemplates] = useState([]);
+  const [selectedTpl, setSelectedTpl] = useState("");
+
+  useEffect(() => {
+    if (!orgId) return;
+    return onSnapshot(
+      query(collection(db, "scheduling_constraint_templates"), where("org_id", "==", orgId)),
+      snap => setTemplates(snap.docs.map(d => ({ _id: d.id, ...d.data() })).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""))),
+      () => {}
+    );
+  }, [orgId]);
+
+  async function guardarPlantilla() {
+    const nombre = window.prompt("Nombre para esta plantilla de restricciones:");
+    if (!nombre || !nombre.trim()) return;
+    await addDoc(collection(db, "scheduling_constraint_templates"), {
+      org_id: orgId, nombre: nombre.trim(), constraints: c, createdAt: serverTimestamp(),
+    });
+  }
+  function cargarPlantilla(id) {
+    setSelectedTpl(id);
+    const tpl = templates.find(x => x._id === id);
+    if (tpl) onChange({ ...c, ...tpl.constraints });
+  }
+  async function borrarPlantillaActual() {
+    if (!selectedTpl) return;
+    if (!window.confirm("¿Eliminar esta plantilla? No afecta a los proyectos donde ya se usó.")) return;
+    await deleteDoc(doc(db, "scheduling_constraint_templates", selectedTpl));
+    setSelectedTpl("");
+  }
   const row = (label, children) => (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
       <label style={{ fontSize: 11, color: C.muted, width: 200, flexShrink: 0 }}>{label}</label>
@@ -1007,7 +1041,30 @@ function ConstraintsPanel({ c, onChange }) {
       padding: "14px 20px", flexShrink: 0,
       animation: "sched-fadein .15s ease both",
     }}>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>Restricciones</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>{t("restricciones", lang)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase" }}>{t("plantillas", lang)}</span>
+          <select
+            value={selectedTpl}
+            onChange={e => e.target.value ? cargarPlantilla(e.target.value) : setSelectedTpl("")}
+            style={{ background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 8px", fontSize: 11, fontFamily: font, cursor: "pointer", outline: "none", maxWidth: 160 }}
+          >
+            <option value="">— ninguna —</option>
+            {templates.map(tpl => <option key={tpl._id} value={tpl._id}>{tpl.nombre}</option>)}
+          </select>
+          {selectedTpl && (
+            <button onClick={borrarPlantillaActual} title="Eliminar esta plantilla" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1 }}>×</button>
+          )}
+          <button onClick={guardarPlantilla} style={{
+            padding: "4px 9px", background: "none", border: `1px solid ${C.border}`, color: C.muted,
+            borderRadius: 6, fontSize: 10.5, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >Guardar como plantilla</button>
+        </div>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         {row("Duración máxima de turno (0 = sin límite)", numInput("maxShiftMin", 0, 1440, "min"))}
         {row("Máximo de paradas (0 = sin límite)", numInput("maxStops", 0, 500, "paradas"))}
@@ -1591,6 +1648,7 @@ async function loadTasksFromLayers(projectId) {
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId }) {
+  const lang = useLang();
   const [tasks,        setTasks]       = useState([]);
   const [loadingTasks, setLoadingTasks]= useState(false);
 
@@ -1607,6 +1665,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [importing,    setImporting]   = useState(false);
   const [mode,         setMode]        = useState("vehicles");
   const [showC,        setShowC]       = useState(false);
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [scenarioHistory, setScenarioHistory] = useState([]);
+  const [showSimulador, setShowSimulador] = useState(false);
+  const [simDelta,     setSimDelta]     = useState(1);
+  const [simRunning,   setSimRunning]   = useState(false);
+  const [simResult,    setSimResult]    = useState(null);
+  const [simError,     setSimError]     = useState(null);
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
     startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
@@ -1759,6 +1824,21 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?._id]);
+
+  // Historial de versiones del escenario (solo métricas — ver comentario
+  // junto a addDoc en runGenerate) — últimas 20, más reciente primero.
+  useEffect(() => {
+    if (!activeProject?._id) { setScenarioHistory([]); return; }
+    return onSnapshot(
+      query(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), limit(100)),
+      snap => {
+        const rows = snap.docs.map(d => ({ _id: d.id, ...d.data() }))
+          .sort((a, b) => (b.generatedAt?.toMillis?.() ?? 0) - (a.generatedAt?.toMillis?.() ?? 0));
+        setScenarioHistory(rows.slice(0, 20));
+      },
+      () => {}
+    );
   }, [activeProject?._id]);
 
   async function importFromPlanning() {
@@ -2019,6 +2099,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           },
           status: "schedulado",
         });
+        // Historial de versiones — solo métricas (no las assignments, muy
+        // grandes para Firestore), para poder comparar "esta semana vs la
+        // anterior" sin tener que rehacer el escenario.
+        if (activeProject._id) {
+          addDoc(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), {
+            vehicleCount: vehicleSchedule.length, workerCount: usedWorkerRows.length,
+            unassigned: vr.unassigned.length, daysUsed: newDays,
+            totalKm: +totalKm.toFixed(1), totalStops,
+            generatedAt: serverTimestamp(),
+          }).catch(() => {});
+        }
       }
 
       // Save worker–day roster so Rostering can display scheduled shifts
@@ -2090,6 +2181,83 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     } finally {
       setGenerating(false);
       setGenPhase(null);
+    }
+  }
+
+  // ── Simulador "qué pasaría si" ────────────────────────────────────
+  // Corre el VRP en memoria con la flota real +/- N vehículos, sin tocar
+  // schedules/Firestore — solo para comparar métricas. No pasa por OSRM
+  // (estimación por distancia en línea recta, más rápida) ni por el paso
+  // de conductores — es una previsión de vehículos/km/días, no un
+  // escenario publicable.
+  async function runSimulation() {
+    if (!tasks.length || !vehicles.length) return;
+    setSimRunning(true);
+    setSimError(null);
+    setSimResult(null);
+    try {
+      let planningDepot = null;
+      try {
+        if (activeProject?._id) {
+          const snap = await getDoc(doc(db, "planning_depots", activeProject._id));
+          if (snap.exists()) {
+            const list = snap.data().depots ?? [];
+            if (list.length > 0) planningDepot = { lat: +list[0].lat, lng: +list[0].lng };
+          }
+        }
+      } catch { /* ignore */ }
+
+      const vehiclesWithDepot = vehicles.map(v => {
+        if (v.depotLat && v.depotLng) return v;
+        if (!planningDepot) return v;
+        return { ...v, depotLat: planningDepot.lat, depotLng: planningDepot.lng };
+      });
+      const vehiclesForVRP = vehiclesWithDepot.map(v => {
+        const linked = workers.filter(w => w.vehiculoId === (v._id || v.id));
+        if (!linked.length) return v;
+        const wins = linked.map(w => turnoWindow(w.turno, constraints.startMin, constraints.endMin))
+          .sort((a, b) => a.start - b.start);
+        return { ...v, _effectiveStart: Math.min(...wins.map(w => w.start)), _effectiveEnd: Math.max(...wins.map(w => w.end)) };
+      });
+
+      // Aplica el delta sobre la flota real: +N clona la plantilla del primer
+      // vehículo (igual que autoScaleFleet con "Vehículo necesario N"), -N
+      // quita los últimos N de la lista.
+      let simVehicles = vehiclesForVRP;
+      if (simDelta > 0) {
+        const template = vehiclesForVRP[0] || {};
+        const extra = Array.from({ length: simDelta }, (_, i) => ({
+          ...template,
+          _id: `sim_veh_${i + 1}`, id: `sim_veh_${i + 1}`,
+          nombre: `Simulado ${i + 1}`, matricula: "", _virtual: true,
+        }));
+        simVehicles = [...vehiclesForVRP, ...extra];
+      } else if (simDelta < 0) {
+        simVehicles = vehiclesForVRP.slice(0, Math.max(0, vehiclesForVRP.length + simDelta));
+      }
+
+      if (simVehicles.length === 0) {
+        setSimResult({ vehicleCount: 0, unassigned: tasks.length, totalKm: 0, daysUsed: 0 });
+        return;
+      }
+
+      let vr = await generateScenario(tasks, simVehicles, constraints);
+      let finalVehicleCount = simVehicles.length;
+      if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
+        const scaled = await autoScaleFleet(tasks, simVehicles, constraints);
+        vr = scaled.result;
+        finalVehicleCount = scaled.resources.length;
+      }
+      const totalKm = vr.schedule.reduce((s, v) => s + (v.totalKm || 0), 0);
+      setSimResult({
+        vehicleCount: finalVehicleCount, unassigned: vr.unassigned.length,
+        totalKm: +totalKm.toFixed(1), daysUsed: vr.daysUsed,
+      });
+    } catch (e) {
+      console.error("Simulación error:", e);
+      setSimError(e.message || "Error al simular");
+    } finally {
+      setSimRunning(false);
     }
   }
 
@@ -2424,7 +2592,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
         {/* Mode toggle */}
         <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
-          {[["vehicles","Vehículos"],["workers","Trabajadores"]].map(([v, l]) => (
+          {[["vehicles",t("vehiculos", lang)],["workers",t("trabajadores", lang)]].map(([v, l]) => (
             <button key={v} onClick={() => setMode(v)} style={{
               padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer",
               background: mode === v ? C.blue : "none",
@@ -2436,7 +2604,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         </div>
 
         {/* Constraints toggle */}
-        <button onClick={() => setShowC(!showC)} title="Restricciones" style={{
+        <button onClick={() => setShowC(!showC)} title={t("restricciones", lang)} style={{
           padding: "5px 10px", background: showC ? C.surface2 : "none",
           border: `1px solid ${showC ? C.border2 : C.border}`, color: showC ? C.text : C.muted,
           borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
@@ -2445,8 +2613,40 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
           </svg>
-          Restricciones
+          {t("restricciones", lang)}
         </button>
+
+        {activeProject && (
+          <button onClick={() => setShowHistorial(true)} title="Historial de versiones del escenario" style={{
+            padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted,
+            borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
+            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l4 2"/>
+            </svg>
+            {t("historial", lang)}
+          </button>
+        )}
+
+        {schedule && (
+          <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} title="Simular +/- vehículos sin tocar el escenario actual" style={{
+            padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted,
+            borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
+            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18M3 9v10a2 2 0 0 0 2 2h4"/>
+            </svg>
+            {t("simulador", lang)}
+          </button>
+        )}
 
         {/* Inline KPI chips — only when schedule exists */}
         {schedule && <>
@@ -2478,7 +2678,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               <button onClick={() => xlsxUploadRef.current?.click()} title="Importar vehicle scheduling o crew scheduling desde Excel"
                 style={{ padding: "5px 10px", background: "rgba(92,155,255,.08)", border: `1px solid rgba(92,155,255,.3)`, color: C.blue, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Importar
+                {t("importar", lang)}
               </button>
               <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
               <button
@@ -2490,7 +2690,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 }}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Publicar en Rutas
+                {t("publicarRutas", lang)}
               </button>
 
               {/* Deshacer / rehacer movimientos manuales del Gantt (tipo Excel) */}
@@ -2550,10 +2750,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             opacity: canGenerate ? 1 : .6,
           }}>
             {osrmRunning
-              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Calculando km…</>
+              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {t("calculandoKm", lang)}</>
               : generating
-              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Generando…</>
-              : "Generar escenario"
+              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {t("generando", lang)}</>
+              : t("generarEscenario", lang)
             }
           </button>
           {schedule && (
@@ -2632,7 +2832,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       })()}
 
       {/* Constraints panel */}
-      {!focusMode && showC && <ConstraintsPanel c={constraints} onChange={setConstraints} />}
+      {!focusMode && showC && <ConstraintsPanel c={constraints} onChange={setConstraints} orgId={orgId} />}
 
       {/* Progress bar */}
       {generating && (
@@ -2935,6 +3135,148 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 }
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Historial de versiones del escenario */}
+      {showHistorial && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
+        }} onClick={() => setShowHistorial(false)}>
+          <div style={{
+            background: C.card, borderRadius: 12, padding: "24px 24px 20px",
+            width: 620, maxHeight: "80vh", overflowY: "auto",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: `1px solid ${C.border}`,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Historial de versiones</div>
+              <button onClick={() => setShowHistorial(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
+              Cada vez que generas un escenario se guarda un resumen aquí — compara esta semana con la anterior sin tener que volver a generar nada.
+            </div>
+            {scenarioHistory.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 0", color: C.dim, fontSize: 13 }}>
+                Todavía no hay historial — se empezará a guardar la próxima vez que generes un escenario.
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {["Fecha", "Vehículos", "Trabajadores", "Días", "Km", "Paradas", "Sin asig."].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.dim, fontSize: 10, letterSpacing: .5, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenarioHistory.map((h, i) => {
+                    const prev = scenarioHistory[i + 1];
+                    const delta = (key, decimals = 0) => {
+                      if (!prev || prev[key] == null || h[key] == null) return null;
+                      const d = +(h[key] - prev[key]).toFixed(decimals);
+                      if (d === 0) return null;
+                      const up = d > 0;
+                      return <span style={{ fontSize: 9, marginLeft: 4, color: up ? C.orange : C.green }}>{up ? "▲" : "▼"}{Math.abs(d)}</span>;
+                    };
+                    const fecha = h.generatedAt?.toDate ? h.generatedAt.toDate() : (h.generatedAt?.toMillis ? new Date(h.generatedAt.toMillis()) : null);
+                    return (
+                      <tr key={h._id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: "7px 10px", color: C.muted, fontFamily: mono, fontSize: 11 }}>
+                          {fecha ? fecha.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </td>
+                        <td style={{ padding: "7px 10px", color: C.text, fontFamily: mono }}>{h.vehicleCount}{delta("vehicleCount")}</td>
+                        <td style={{ padding: "7px 10px", color: C.text, fontFamily: mono }}>{h.workerCount}{delta("workerCount")}</td>
+                        <td style={{ padding: "7px 10px", color: C.blueText, fontFamily: mono }}>{h.daysUsed}{delta("daysUsed")}</td>
+                        <td style={{ padding: "7px 10px", color: C.amber, fontFamily: mono }}>{h.totalKm?.toFixed?.(0) ?? h.totalKm}{delta("totalKm")}</td>
+                        <td style={{ padding: "7px 10px", color: C.muted, fontFamily: mono }}>{h.totalStops}{delta("totalStops")}</td>
+                        <td style={{ padding: "7px 10px", fontFamily: mono, color: h.unassigned > 0 ? C.red : C.green }}>{h.unassigned ?? 0}{delta("unassigned")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Simulador "qué pasaría si" */}
+      {showSimulador && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
+        }} onClick={() => !simRunning && setShowSimulador(false)}>
+          <div style={{
+            background: C.card, borderRadius: 12, padding: "24px 24px 22px",
+            width: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: `1px solid ${C.border}`,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Simulador "qué pasaría si"</div>
+              {!simRunning && <button onClick={() => setShowSimulador(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
+              Prueba a añadir o quitar vehículos sobre tu flota real y compara el resultado con el escenario actual — no se guarda nada hasta que tú lo decidas.
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, color: C.muted }}>Vehículos</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button onClick={() => setSimDelta(d => d - 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>−</button>
+                <span style={{ width: 46, textAlign: "center", fontFamily: mono, fontSize: 14, fontWeight: 700, color: simDelta > 0 ? C.green : simDelta < 0 ? C.red : C.muted }}>
+                  {simDelta > 0 ? `+${simDelta}` : simDelta}
+                </span>
+                <button onClick={() => setSimDelta(d => d + 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>+</button>
+              </div>
+              <span style={{ fontSize: 10, color: C.dim }}>respecto a los {vehicles.length} actuales</span>
+            </div>
+
+            <button onClick={runSimulation} disabled={simRunning || vehicles.length + simDelta <= 0} style={{
+              width: "100%", padding: "9px", background: C.blue, border: "none", color: "#fff",
+              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: simRunning ? "wait" : "pointer",
+              fontFamily: font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              opacity: vehicles.length + simDelta <= 0 ? 0.5 : 1, marginBottom: 16,
+            }}>
+              {simRunning
+                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Simulando…</>
+                : "Simular"
+              }
+            </button>
+
+            {simError && <div style={{ fontSize: 11, color: C.red, marginBottom: 12 }}>{simError}</div>}
+
+            {simResult && (() => {
+              const actual = { vehicleCount: schedules.vehicles?.length || 0, unassigned: unassigned.length, totalKm, daysUsed: constraints.days || 1 };
+              const rows = [
+                ["Vehículos", actual.vehicleCount, simResult.vehicleCount],
+                ["Días", actual.daysUsed, simResult.daysUsed],
+                ["Km totales", actual.totalKm.toFixed(0), simResult.totalKm.toFixed(0)],
+                ["Sin asignar", actual.unassigned, simResult.unassigned],
+              ];
+              return (
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: C.surface2, padding: "7px 12px" }}>
+                    <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase" }}></span>
+                    <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", textAlign: "right" }}>Actual</span>
+                    <span style={{ fontSize: 10, color: C.blueText, textTransform: "uppercase", textAlign: "right" }}>Simulado</span>
+                  </div>
+                  {rows.map(([label, a, s]) => {
+                    const numA = +a, numS = +s;
+                    const better = label === "Sin asignar" || label === "Km totales" || label === "Días" ? numS < numA : null;
+                    const worse  = label === "Sin asignar" || label === "Km totales" || label === "Días" ? numS > numA : null;
+                    const color = numS === numA ? C.text : better ? C.green : worse ? C.orange : C.text;
+                    return (
+                      <div key={label} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
+                        <span style={{ fontSize: 12, color: C.muted }}>{label}</span>
+                        <span style={{ fontSize: 12, color: C.muted, fontFamily: mono, textAlign: "right" }}>{a}</span>
+                        <span style={{ fontSize: 12, color, fontFamily: mono, fontWeight: 700, textAlign: "right" }}>{s}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
