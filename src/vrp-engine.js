@@ -522,7 +522,35 @@ export async function generateScenario(tasks, resources, constraints) {
       let fromDepot  = !!depot;
       let anchor     = depot; // null hasta que circular fije la primera parada del día
 
-      for (const segEnd of segEnds) {
+      // Reparto proporcional de la jornada entre tramos (p.ej. mañana + tarde
+      // con relevo de conductor a mitad de turno): sin esto, el primer tramo
+      // consumía la cola vorazmente hasta llenarse del todo (llegaba a
+      // usar 84-94% de sus horas) y el resto se quedaba con las migajas —
+      // en datos reales, turnos de tarde con menos de un tercio de
+      // ocupación mientras la mañana iba casi llena, aunque el trabajo
+      // total del vehículo ni de lejos llenara los dos tramos completos.
+      // Se estima el trabajo pendiente por la duración de servicio de las
+      // tareas en cola (sin simular la ruta entera por adelantado) y se
+      // reparte esa estimación entre los tramos según su peso — el ÚLTIMO
+      // tramo nunca se limita, para no dejar trabajo real sin asignar si
+      // la estimación (que no cuenta bien tramos largos en coche) se queda corta.
+      let segTargets = null;
+      if (segEnds.length > 1) {
+        const dayStart0 = res.shiftStart + dayOffset;
+        const segStarts = [dayStart0, ...segEnds.slice(0, -1)];
+        const segCaps   = segEnds.map((se, idx) => se - segStarts[idx]);
+        const totalCap  = segCaps.reduce((s, c) => s + c, 0);
+        const estService = queue.slice(queueIdx[i]).reduce((s, t) => s + (t.duracion || 15), 0);
+        const estTotal = Math.min(totalCap, estService * 1.15); // +15% de margen para viajes
+        segTargets = segCaps.map((cap, idx) => {
+          if (idx === segCaps.length - 1) return segEnds[idx];
+          return segStarts[idx] + Math.min(cap, estTotal * (cap / totalCap));
+        });
+      }
+
+      for (let segIdx = 0; segIdx < segEnds.length; segIdx++) {
+        const segEnd = segEnds[segIdx];
+        const effSegEnd = segTargets ? segTargets[segIdx] : segEnd;
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
         // del anchor para volver a tiempo, o su franja horaria ya no se puede
         // cumplir), busca hasta 40 tareas por delante y adelanta la que MENOS
@@ -559,7 +587,7 @@ export async function generateScenario(tasks, resources, constraints) {
               const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
               if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
             }
-            const fits = cursor + ttMin + tWait + tdur + tRet <= segEnd
+            const fits = cursor + ttMin + tWait + tdur + tRet <= effSegEnd
               && !(maxShiftMin > 0 && tWorkSoFar + ttMin + tWait + tdur + tRet > maxShiftMin);
             if (fits) {
               swapTo = li; bestWait = tWait;
@@ -633,12 +661,14 @@ export async function generateScenario(tasks, resources, constraints) {
           const workSoFar = cursor - (res.shiftStart + dayOffset);
           const feasible = wait != null
             && !(maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin)
-            && (cursor + travelMin + wait + dur + retBuffer <= segEnd);
+            && (cursor + travelMin + wait + dur + retBuffer <= effSegEnd);
 
           if (!feasible) {
-            // Antes de rendirse por el resto del día, busca otra tarea de las
-            // próximas 15 que sí encaje ahora mismo — esta se deja para el
-            // backfill/mop-up (otro día/vehículo), no bloquea las demás.
+            // Antes de rendirse por el resto del día (o del tramo, si el
+            // reparto proporcional de arriba cortó aquí), busca otra tarea de
+            // las próximas 15 que sí encaje ahora mismo — si es el reparto
+            // proporcional el que frena, la tarea actual sigue en cabeza de
+            // cola y pasará al siguiente tramo (mañana → tarde) tal cual.
             if (tryLookaheadSwap()) continue;
             break;
           }

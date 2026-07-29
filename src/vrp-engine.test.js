@@ -368,3 +368,53 @@ describe("autoScaleFleet", () => {
     expect(result.unassigned).toHaveLength(0);
   });
 });
+
+// ── Reparto proporcional entre tramos de un mismo vehículo (turnos) ──
+// Regresión del caso real de PALMA DE MALLORCA: con circular=true y
+// virtualShiftMin fijo, un vehículo con relevo de turno (mañana + tarde)
+// rellenaba el primer tramo vorazmente hasta el límite y el segundo se
+// quedaba con las migajas, aunque el trabajo total ni de lejos llenara los
+// dos — en datos reales, 25 de 32 turnos de tarde con menos de 15 paradas
+// mientras la mañana iba casi llena al 90%. Tras el reparto proporcional
+// por estimación de carga, bajó a 1 de 32.
+describe("generateScenario — reparto entre tramos (turnos)", () => {
+  it("reparte el trabajo entre mañana y tarde en vez de vaciar el primer tramo y dejar el segundo casi vacío", async () => {
+    // 1 vehículo, turno partido en 2 tramos de 4h (240min) vía
+    // virtualShiftMin — 20 tareas de 15min (300min de servicio) caben de
+    // sobra en las 8h totales, pero NO en un único tramo de 4h (240min
+    // solo da para ~16). Sin el reparto proporcional, casi todas caerían
+    // en el primer tramo.
+    const tasks = Array.from({ length: 20 }, (_, i) =>
+      mkTask(`t${i}`, 43.30 + i * 0.001, -3.80 + i * 0.001));
+    const vehicle = {
+      _id: "v1", nombre: "V1", turno: "Jornada completa",
+      depotLat: null, depotLng: null,
+      _effectiveStart: 360, _effectiveEnd: 840, _shiftBreaks: [600], // 06-10 / 10-14
+    };
+    const constraints = {
+      ...BASE_CONSTRAINTS, circular: true, endMin: 840, virtualShiftMin: 240,
+    };
+    const r = await generateScenario(tasks, [vehicle], constraints);
+    expect(r.unassigned).toHaveLength(0);
+
+    const stops = r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait);
+    const tramo1 = stops.filter(a => a._start < 600).length;
+    const tramo2 = stops.filter(a => a._start >= 600).length;
+    expect(tramo1).toBeGreaterThan(0);
+    expect(tramo2).toBeGreaterThan(0);
+    // Ningún tramo debería quedarse con menos de un tercio del total
+    // (20/3 ≈ 6.7) — antes del reparto proporcional, el segundo tramo se
+    // quedaba con muchas menos.
+    expect(Math.min(tramo1, tramo2)).toBeGreaterThanOrEqual(6);
+  });
+
+  it("el reparto proporcional no afecta a un vehículo con un único tramo (sin relevo)", async () => {
+    // Sin _shiftBreaks (segEnds.length === 1), segTargets no debe entrar
+    // en juego — mismo comportamiento de siempre.
+    const tasks = Array.from({ length: 10 }, (_, i) => mkTask(`t${i}`, 43.30 + i * 0.001, -3.80));
+    const vehicle = mkVehicle(1, 43.30, -3.80);
+    const r = await generateScenario(tasks, [vehicle], BASE_CONSTRAINTS);
+    expect(r.unassigned).toHaveLength(0);
+    expect(r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait)).toHaveLength(10);
+  });
+});
