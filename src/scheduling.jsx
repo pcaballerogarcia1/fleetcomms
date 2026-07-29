@@ -61,6 +61,12 @@ function barrioColor(b) {
   return (_barrioCache[b] = BARRIO_PALETTE[h % BARRIO_PALETTE.length]);
 }
 
+// Minutos -> "8h" / "8h30" — mismo formato que ya se usa en cada fila del Gantt
+function fmtDurHM(min) {
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return `${h}h${m > 0 ? String(m).padStart(2, "0") : ""}`;
+}
+
 const VEHICLE_TYPES = ["Camión lateral","Camión trasero","Furgón","Barredora","Cisterna","Otro"];
 const TURNO_TYPES   = ["Mañana (06-14)","Tarde (14-22)","Noche (22-06)","Jornada completa"];
 
@@ -289,6 +295,24 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       return asc ? ka - kb : kb - ka;
     });
   }, [rows, ganttSort, selectedDay]);
+
+  // Jornada media del día seleccionado — duración real (primera parada a
+  // última) de cada fila con trabajo ese día, promediada. Sirve para ver
+  // de un vistazo si los turnos están descompensados (p.ej. el fallo real
+  // que hubo con mañana llena y tarde casi vacía en Palma de Mallorca).
+  const jornadaStats = useMemo(() => {
+    const dayOffset = selectedDay * 1440;
+    const durations = rows.map(r => {
+      const dayA = (r.assignments || []).filter(a => a._start >= dayOffset && a._start < dayOffset + 1440);
+      if (!dayA.length) return null;
+      const start = Math.min(...dayA.map(a => a._start));
+      const end   = Math.max(...dayA.map(a => a._end));
+      return end - start;
+    }).filter(d => d != null && d > 0);
+    if (!durations.length) return null;
+    const avg = durations.reduce((s, d) => s + d, 0) / durations.length;
+    return { avg, min: Math.min(...durations), max: Math.max(...durations), count: durations.length };
+  }, [rows, selectedDay]);
 
   // Night-shift support: extend chart width beyond 24h if any row has shiftEnd > 1440
   // Memoized: rows can be dozens of workers with per-day assignments, and this
@@ -941,6 +965,30 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           </div>
         )}
       </div>
+
+      {/* ── Jornada media del día — indicador rápido para detectar turnos
+          descompensados (p.ej. mañana llena y tarde casi vacía) de un
+          vistazo, sin tener que abrir cada fila una a una. ── */}
+      {jornadaStats && (
+        <div style={{
+          flexShrink: 0, background: C.card, borderTop: `1px solid ${C.border}`,
+          padding: "8px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Jornada media</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.blueText, fontFamily: mono }}>{fmtDurHM(jornadaStats.avg)}</span>
+          <span style={{ fontSize: 11, color: C.dim, fontFamily: mono }}>
+            mín {fmtDurHM(jornadaStats.min)} · máx {fmtDurHM(jornadaStats.max)}
+          </span>
+          <span style={{ fontSize: 11, color: C.muted }}>
+            {jornadaStats.count} turno{jornadaStats.count !== 1 ? "s" : ""} con paradas
+          </span>
+          {jornadaStats.max - jornadaStats.min > 120 && (
+            <span style={{ fontSize: 10.5, color: C.amber, display: "flex", alignItems: "center", gap: 4 }} title="Hay más de 2h de diferencia entre el turno más corto y el más largo del día">
+              ⚠ turnos descompensados
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Barrio legend (collapsible) ── */}
       {barrios.length > 0 && (
