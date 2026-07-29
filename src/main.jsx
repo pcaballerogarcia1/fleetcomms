@@ -162,6 +162,23 @@ function WorkspaceRouter() {
   const [loadingV,        setLoadingV]        = useState(true);
   const [loadingW,        setLoadingW]        = useState(true);
 
+  // Cada módulo se queda montado (visibility:hidden, no unmount) una vez
+  // visitado, para que cambiar de pestaña sea instantáneo y no se pierda
+  // estado — pero eso significa que TODOS sus listeners de Firestore (y,
+  // en el caso de Analytics, todo el bundle de recharts) se cargaban y
+  // quedaban corriendo en cuanto se abría un proyecto, aunque esa pestaña
+  // no se llegara a visitar nunca en la sesión. Con 5 módulos a la vez
+  // (Planning/Scheduling/Rostering/Control/Analytics) eso se notaba como
+  // lentitud general de toda la app. Ahora cada uno se monta la PRIMERA
+  // vez que se visita de verdad, y a partir de ahí se queda montado igual
+  // que antes — Planning cuenta como visitado desde el principio porque
+  // openProject() navega directamente ahí.
+  const [visitedTabs, setVisitedTabs] = useState({ planning: true });
+  useEffect(() => {
+    const key = path.slice(1);
+    setVisitedTabs(v => (v[key] ? v : { ...v, [key]: true }));
+  }, [path]);
+
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
     window.addEventListener("popstate", onPop);
@@ -295,8 +312,8 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /scheduling — kept mounted to preserve generated scenario state */}
-        {activeProject && (
+        {/* /scheduling — mounted on first visit, then kept mounted to preserve generated scenario state */}
+        {activeProject && visitedTabs.scheduling && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/scheduling" ? "visible" : "hidden",
@@ -313,10 +330,10 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /rostering — kept mounted like Planning/Scheduling/Control so its
-            listeners stay connected instead of reconnecting from scratch
-            every time you navigate back here. */}
-        {activeProject && (
+        {/* /rostering — mounted on first visit, then kept mounted like the
+            others so its listeners stay connected instead of reconnecting
+            from scratch every time you navigate back here. */}
+        {activeProject && visitedTabs.rostering && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/rostering" ? "visible" : "hidden",
@@ -328,12 +345,13 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /control — kept mounted like Planning/Scheduling so its Firestore
-            listeners (planes, usuarios, ubicaciones_activas) stay connected
-            in the background instead of tearing down and reconnecting from
-            scratch — with hundreds of plans, that reconnect was the multi-
-            second "blank screen" every time you navigated back here. */}
-        {activeProject && (
+        {/* /control — mounted on first visit, then kept mounted so its
+            Firestore listeners (planes, usuarios, ubicaciones_activas) stay
+            connected in the background instead of tearing down and
+            reconnecting from scratch — with hundreds of plans, that
+            reconnect was the multi-second "blank screen" every time you
+            navigated back here. */}
+        {activeProject && visitedTabs.control && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/control" ? "visible" : "hidden",
@@ -345,9 +363,11 @@ function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /analytics — kept mounted like Control so its Firestore listeners
-            (planes, fichajes, incidencias) stay connected in the background. */}
-        {activeProject && (
+        {/* /analytics — mounted on first visit (not eagerly like before):
+            its own planes/fichajes/incidencias listeners plus the whole
+            recharts bundle were loading for every project open even when
+            nobody ever clicked into Analytics. */}
+        {activeProject && visitedTabs.analytics && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/analytics" ? "visible" : "hidden",
