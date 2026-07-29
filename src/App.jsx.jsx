@@ -19,6 +19,16 @@ const CATS = [
 ];
 const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
 
+// Haversine distance in km — usado para detectar si el conductor se ha
+// movido de verdad entre dos lecturas de GPS (no solo ruido del sensor).
+function haversineKm(lat1,lng1,lat2,lng2){
+  if(lat1==null||lng1==null||lat2==null||lng2==null) return 0;
+  const R=6371, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
 function useCollection(colName, orderField = "fecha", orgId = null, superAdmin = false, limitN = null) {
   const [data, setData] = useState([]);
@@ -1053,25 +1063,40 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // aquí; si lo deniega, simplemente no comparte (sin romper nada). Las
   // escrituras se limitan a 1 cada ~20s para no gastar batería/datos ni
   // saturar Firestore.
+  //
+  // planId + lastMovedAt: para las alertas de Control (parada prolongada
+  // fuera de programa / fuera de zona) hace falta saber a qué plan de hoy
+  // pertenece esta ubicación y desde cuándo el vehículo lleva parado de
+  // verdad (no solo el ruido normal del GPS) — lastMovedAt solo avanza si
+  // la posición se mueve más de MOVE_THRESHOLD_KM respecto a la última
+  // escritura, así Control puede calcular "cuánto lleva parado" sin
+  // necesitar guardar un historial completo de posiciones.
   useEffect(()=>{
     if(!navigator.geolocation || !sesion?.id) return;
     const uid = sesion.id;
     const ref = doc(db,"ubicaciones_activas",uid);
+    const planId = planActivo?._id ?? null;
     let lastWrite = 0;
+    let lastPos = null;
+    let lastMovedAt = Date.now();
     const MIN_INTERVAL_MS = 20000;
+    const MOVE_THRESHOLD_KM = 0.03; // 30m — evita que el ruido del GPS parado cuente como movimiento
 
     const watchId = navigator.geolocation.watchPosition(
       pos=>{
         const now = Date.now();
         if(now - lastWrite < MIN_INTERVAL_MS) return;
         lastWrite = now;
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if(!lastPos || haversineKm(lastPos.lat, lastPos.lng, lat, lng) > MOVE_THRESHOLD_KM) lastMovedAt = now;
+        lastPos = { lat, lng };
         setDoc(ref,{
           uid, org_id: sesion.org_id ?? null, // Firestore rejects `undefined` outright (silent no-op otherwise)
           nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
-          lat: pos.coords.latitude, lng: pos.coords.longitude,
-          activo: true, updatedAt: now,
+          lat, lng, planId,
+          activo: true, updatedAt: now, lastMovedAt,
         },{merge:true}).then(
-          ()=>console.log("[ubicación] guardada", pos.coords.latitude, pos.coords.longitude),
+          ()=>console.log("[ubicación] guardada", lat, lng),
           e=>console.error("[ubicación] error al guardar:", e)
         );
       },
@@ -1083,7 +1108,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
       navigator.geolocation.clearWatch(watchId);
       setDoc(ref,{activo:false},{merge:true}).catch(e=>console.error("[ubicación] error al marcar inactivo:", e));
     };
-  },[sesion?.id, sesion?.org_id]);
+  },[sesion?.id, sesion?.org_id, planActivo?._id]);
 
   // Separar planes KML de tareas correctivo
   const planesKML   = planes.filter(p=>p.tipo!=="corr");

@@ -45,6 +45,57 @@ function userName(uid, usuarios) {
   return `${u.nombre ?? ""} ${(u.apellidos ?? "")[0] ?? ""}`.trim() || uid?.slice(0, 6);
 }
 
+// Haversine distance in km
+function haversineKm(lat1, lng1, lat2, lng2) {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return 0;
+  const R = 6371, toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── ALERTAS DE FLOTA ────────────────────────────────────────────────
+// A partir de la posición en vivo de un conductor (ubicaciones_activas) y
+// el plan de hoy al que está vinculado (planId, ver App.jsx.jsx), calcula
+// dos alertas sin necesitar sensores ni hardware adicional:
+//  · parada: lleva parado más de UMBRAL_PARADA_MS y no está cerca de
+//    ninguna parada pendiente de su plan — puede ser una parada no
+//    programada (avería, descanso fuera de sitio, desvío).
+//  · zona: su posición actual queda fuera del área que cubren las paradas
+//    de su plan de hoy (con un margen), como un geofence calculado sobre
+//    la marcha en vez de dibujado a mano.
+const UMBRAL_PARADA_MS = 10 * 60 * 1000;  // 10 min parado sin estar en una parada programada
+const RADIO_PARADA_KM  = 0.15;             // 150m — se considera "en la parada" dentro de este radio
+const MARGEN_ZONA_KM   = 1.5;              // margen alrededor del área de las paradas del plan
+
+function computeFleetAlerts(driver, planes, now) {
+  const plan = driver.planId ? planes.find(p => p._id === driver.planId) : null;
+  if (!plan || !driver.lat || !driver.lng) return { parada: false, zona: false, distanciaParada: null };
+
+  const stops = (plan.ubicaciones || []).filter(u => u.lat && u.lng);
+  const pendientes = stops.filter(u => !u.realizado);
+
+  const distanciaParada = pendientes.length
+    ? Math.min(...pendientes.map(s => haversineKm(driver.lat, driver.lng, s.lat, s.lng)))
+    : null;
+  const stationaryMs = now - (driver.lastMovedAt || driver.updatedAt || now);
+  const parada = stationaryMs > UMBRAL_PARADA_MS && (distanciaParada === null || distanciaParada > RADIO_PARADA_KM);
+
+  let zona = false;
+  if (stops.length > 0) {
+    const lats = stops.map(s => s.lat), lngs = stops.map(s => s.lng);
+    const minLat = Math.min(...lats) , maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    // Margen en grados — aproximación suficiente a esta escala (no cruza el ecuador/meridiano 180)
+    const dLat = MARGEN_ZONA_KM / 111;
+    const dLng = MARGEN_ZONA_KM / (111 * Math.cos(((minLat + maxLat) / 2) * Math.PI / 180) || 1);
+    zona = driver.lat < minLat - dLat || driver.lat > maxLat + dLat
+        || driver.lng < minLng - dLng || driver.lng > maxLng + dLng;
+  }
+
+  return { parada, zona, distanciaParada };
+}
+
 // ── LEAFLET MINI-MAP (read-only, updates on ubicaciones change) ────
 // Stops are drawn on a single canvas overlay instead of one Leaflet DOM
 // marker per stop — with hundreds of paradas, recreating a DOM divIcon for
@@ -183,13 +234,23 @@ function MapaControl({ ubicaciones, recorrido, height = 280 }) {
 const DRIVER_STALE_MS = 3 * 60 * 1000;   // grey out / "desconectado" past this
 const DRIVER_WARN_MS  = 90 * 1000;        // amber past this
 
-function MapaFlota({ orgId, isSuperAdmin }) {
+if (typeof document !== "undefined" && !document.getElementById("control-styles")) {
+  const s = document.createElement("style");
+  s.id = "control-styles";
+  s.textContent = `@keyframes control-pulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,0.55)}70%{box-shadow:0 0 0 10px rgba(248,113,113,0)}100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}}`;
+  document.head.appendChild(s);
+}
+
+function MapaFlota({ orgId, isSuperAdmin, planes }) {
   const divRef      = useRef(null);
   const mapRef      = useRef(null);
   const markersRef  = useRef(new Map()); // uid -> Leaflet marker
   const firstFitRef = useRef(false);
   const [drivers, setDrivers] = useState([]);
-  const [tick, setTick] = useState(0); // forces re-color as markers age, even with no new writes
+  // "now" congelado en estado (no Date.now() directo en el render, que React
+  // considera impuro) — se refresca cada 30s para que los marcadores y las
+  // alertas envejezcan aunque no llegue ninguna escritura nueva.
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
@@ -203,7 +264,7 @@ function MapaFlota({ orgId, isSuperAdmin }) {
   }, [orgId, isSuperAdmin]);
 
   useEffect(() => {
-    const t = setInterval(() => setTick(x => x + 1), 30000);
+    const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -233,19 +294,28 @@ function MapaFlota({ orgId, isSuperAdmin }) {
     const L = window.L;
     if (!L || !mapRef.current) return;
     const map = mapRef.current;
-    const now = Date.now();
     const seen = new Set();
 
     drivers.forEach(d => {
       if (!d.lat || !d.lng) return;
       seen.add(d.uid);
       const age   = now - (d.updatedAt || 0);
-      const color = age > DRIVER_STALE_MS ? C.dim : age > DRIVER_WARN_MS ? C.orange : C.green;
-      const label = age > DRIVER_STALE_MS ? `${d.nombre || "?"} · desconectado` : (d.nombre || "?");
+      const stale = age > DRIVER_STALE_MS;
+      const alerts = stale ? { parada: false, zona: false } : computeFleetAlerts(d, planes || [], now);
+      const alerted = alerts.parada || alerts.zona;
+
+      const color = alerted ? C.red : stale ? C.dim : age > DRIVER_WARN_MS ? C.orange : C.green;
+      const sufijo = stale ? " · desconectado"
+        : alerts.parada && alerts.zona ? " · parada + fuera de zona"
+        : alerts.parada ? " · parada sin programar"
+        : alerts.zona ? " · fuera de zona"
+        : "";
+      const label = `${d.nombre || "?"}${sufijo}`;
+      const pulse = alerted ? "animation:control-pulse 1.6s infinite;" : "";
 
       const html = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none;">
-        <div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>
-        <div style="margin-top:3px;padding:2px 7px;border-radius:5px;background:${C.card};border:1px solid ${C.border};color:${C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${label}</div>
+        <div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5);${pulse}"></div>
+        <div style="margin-top:3px;padding:2px 7px;border-radius:5px;background:${alerted ? "rgba(248,113,113,0.15)" : C.card};border:1px solid ${alerted ? C.red : C.border};color:${alerted ? "#fff" : C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${label}</div>
       </div>`;
       const icon = L.divIcon({ className: "", html, iconSize: [16, 16], iconAnchor: [8, 8] });
 
@@ -273,13 +343,20 @@ function MapaFlota({ orgId, isSuperAdmin }) {
 
   useEffect(() => {
     ensureLeaflet(() => { if (!mapRef.current) initMap(); drawDrivers(); });
-  }, [drivers, tick]);
+  }, [drivers, now, planes]);
 
   useEffect(() => () => {
     if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
   }, []);
 
-  const activeCount = drivers.filter(d => Date.now() - (d.updatedAt || 0) < DRIVER_STALE_MS).length;
+  const activeCount = drivers.filter(d => now - (d.updatedAt || 0) < DRIVER_STALE_MS).length;
+
+  const alertedDrivers = useMemo(() => {
+    return drivers
+      .filter(d => now - (d.updatedAt || 0) < DRIVER_STALE_MS)
+      .map(d => ({ d, alerts: computeFleetAlerts(d, planes || [], now) }))
+      .filter(x => x.alerts.parada || x.alerts.zona);
+  }, [drivers, planes, now]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -288,10 +365,39 @@ function MapaFlota({ orgId, isSuperAdmin }) {
           <span style={{ color: C.green, fontWeight: 700, fontFamily: mono }}>{activeCount}</span>{" "}
           conductor{activeCount !== 1 ? "es" : ""} compartiendo ubicación ahora
         </span>
+        {alertedDrivers.length > 0 && (
+          <span style={{ fontSize: 12, color: C.red, display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "control-pulse 1.6s infinite" }} />
+            <span style={{ fontWeight: 700, fontFamily: mono }}>{alertedDrivers.length}</span> alerta{alertedDrivers.length !== 1 ? "s" : ""} activa{alertedDrivers.length !== 1 ? "s" : ""}
+          </span>
+        )}
         {drivers.length === 0 && (
           <span style={{ fontSize: 11, color: C.dim }}>Nadie está compartiendo ubicación todavía — se activa al entrar en Rutas y aceptar el permiso</span>
         )}
       </div>
+
+      {alertedDrivers.length > 0 && (
+        <div style={{ padding: "8px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0, background: "rgba(248,113,113,0.05)" }}>
+          {alertedDrivers.map(({ d, alerts }) => {
+            const stationaryMin = Math.round((now - (d.lastMovedAt || d.updatedAt || now)) / 60000);
+            const motivos = [
+              alerts.parada && `parado ${stationaryMin} min fuera de una parada programada`,
+              alerts.zona && "fuera de la zona de su ruta",
+            ].filter(Boolean).join(" · ");
+            return (
+              <div key={d.uid} style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
+                background: C.card, border: `1px solid ${C.red}55`, borderRadius: 7,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.red, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{d.nombre || "?"}</span>
+                <span style={{ fontSize: 10, color: C.muted }}>{motivos}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div ref={divRef} style={{ flex: 1, background: "#131e35" }} />
     </div>
   );
@@ -890,7 +996,7 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
       {/* ── Body ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {vista === "flota" ? (
-        <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} />
+        <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} planes={planes} />
         ) : vista === "fichajes" ? (
         <PanelFichajes orgId={orgId} isSuperAdmin={isSuperAdmin} usuarios={usuarios} />
         ) : (
