@@ -932,6 +932,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
   const [manualLng, setManualLng] = useState("");
   const [manualName, setManualName] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [savingManualDepot, setSavingManualDepot] = useState(false);
   const [openUpload,      setOpenUpload]      = useState(true);
   const [openManualPt,    setOpenManualPt]    = useState(false);
   const [openDepots,      setOpenDepots]      = useState(true);
@@ -1098,13 +1099,35 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
             />
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                onClick={() => {
-                  const lat = parseFloat(manualLat), lng = parseFloat(manualLng);
-                  if (isNaN(lat) || isNaN(lng)) return;
+                disabled={savingManualDepot}
+                onClick={async () => {
+                  // parseFloat("40,4168") = 40 (se para en la coma) — con
+                  // coma decimal (muy normal al escribir coordenadas en
+                  // español) el depot se creaba en un sitio completamente
+                  // distinto sin ningún aviso. Normaliza antes de parsear.
+                  const lat = parseFloat(String(manualLat).trim().replace(",", "."));
+                  const lng = parseFloat(String(manualLng).trim().replace(",", "."));
+                  if (isNaN(lat) || isNaN(lng)) {
+                    window.alert("Latitud y longitud tienen que ser números (ej. 40.4168 y -3.7038).");
+                    return;
+                  }
+                  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                    window.alert("Coordenadas fuera de rango — revisa que no estén cambiadas de sitio (latitud entre -90 y 90, longitud entre -180 y 180).");
+                    return;
+                  }
                   const newDepot = { id: Date.now() + Math.random(), lat, lng, nombre: manualName.trim() || `Depot ${depots.length + 1}`, fields: {} };
                   if (projectId) {
+                    setSavingManualDepot(true);
                     const merged = [...depots, newDepot];
-                    setDoc(doc(db, "planning_depots", projectId), { depots: merged, projectId, orgId, updatedAt: serverTimestamp() });
+                    try {
+                      await setDoc(doc(db, "planning_depots", projectId), { depots: merged, projectId, orgId, updatedAt: serverTimestamp() }, { merge: true });
+                    } catch (e) {
+                      console.error("Error al guardar el depot:", e);
+                      window.alert("No se ha podido guardar el depot: " + (e.message || "error desconocido"));
+                      setSavingManualDepot(false);
+                      return;
+                    }
+                    setSavingManualDepot(false);
                   } else {
                     setDepots(prev => [...prev, newDepot]);
                   }
@@ -1113,13 +1136,14 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                 style={{
                   flex: 1, padding: "6px", background: "rgba(251,146,60,0.12)",
                   border: "1px solid rgba(251,146,60,0.35)", color: "#fb923c",
-                  borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  fontFamily: font, transition: "all .12s",
+                  borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: savingManualDepot ? "wait" : "pointer",
+                  fontFamily: font, transition: "all .12s", opacity: savingManualDepot ? 0.6 : 1,
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(251,146,60,0.22)"}
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(251,146,60,0.12)"}
-              >Añadir</button>
+              >{savingManualDepot ? "Guardando…" : "Añadir"}</button>
               <button
+                disabled={savingManualDepot}
                 onClick={() => { setShowManual(false); setManualLat(""); setManualLng(""); setManualName(""); }}
                 style={{
                   padding: "6px 10px", background: "none", border: `1px solid ${C.border}`,
@@ -1181,7 +1205,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                   onClick={() => {
                     if (projectId) {
                       const filtered = depots.filter(x => x.id !== d.id);
-                      setDoc(doc(db, "planning_depots", projectId), { depots: filtered, projectId, orgId, updatedAt: serverTimestamp() });
+                      setDoc(doc(db, "planning_depots", projectId), { depots: filtered, projectId, orgId, updatedAt: serverTimestamp() }, { merge: true })
+                        .catch(e => { console.error("Error al borrar el depot:", e); window.alert("No se ha podido borrar el depot: " + (e.message || "error desconocido")); });
                     } else {
                       setDepots(prev => prev.filter(x => x.id !== d.id));
                     }
