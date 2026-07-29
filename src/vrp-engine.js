@@ -913,93 +913,70 @@ export async function generateScenario(tasks, resources, constraints) {
       mopDay++;
     }
 
-    // ── Reparación de huérfanos de franja horaria ──────────────────
-    // El clustering es puramente geográfico: una tarea con franja horaria
-    // muy ajustada puede caer en el vehículo "equivocado" (uno cuya ruta
-    // natural llega tarde o pronto a su ventana) sin que añadir más flota
-    // arregle nada — es cuestión de a qué vehículo le tocó, no de cuántos
-    // haya. En vez de dejarla sin asignar, se prueba a insertarla en
-    // CUALQUIER otro vehículo/día, al principio o al final de su jornada
-    // (reconstruyendo ese día entero para que viajes/esperas/descansos
-    // sigan siendo consistentes), y se usa la que menos km añade.
-    // No cubre reordenar en mitad de una ruta ya asignada (demasiado riesgo
-    // de romper la consistencia) ni turnos circulares con relevos (vuelta a
-    // depósito a mitad de jornada) — en esos casos, si no cabe al
-    // principio/final, se queda sin asignar como antes.
-    function layOutDay(orderedTasks, depot, dayStart, dayEnd, dayOffset) {
-      const blocks = [];
-      let cur = dayStart, lLat = depot?.lat ?? null, lLng = depot?.lng ?? null;
-      let fromDep = !!depot, sinceB = 0, km = 0;
-      for (const task of orderedTasks) {
-        const dur = task.duracion || 15;
-        if (breakAfter > 0 && breakDur > 0 && sinceB >= breakAfter && cur + breakDur <= dayEnd) {
-          blocks.push({ _break: true, _start: cur, _end: cur + breakDur, duracion: breakDur });
-          cur += breakDur; sinceB = 0;
-        }
-        let tMin = 0, tKm = 0;
-        if (hasCoords(lLat, lLng) && hasCoords(task.lat, task.lng)) {
-          tKm = haversineKm(lLat, lLng, task.lat, task.lng);
-          if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
-        }
-        const wait = windowWait(task, cur + tMin, dayOffset);
-        if (wait == null || cur + tMin + wait + dur > dayEnd) return null;
-        if (tMin > 0) {
-          const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
-          if (fromDep) blk._depot_exit = true;
-          blocks.push(blk); cur += tMin; km += tKm;
-        }
-        fromDep = false;
-        if (wait > 0) { blocks.push({ _wait: true, _start: cur, _end: cur + wait, duracion: wait }); cur += wait; }
-        blocks.push({ ...task, _start: cur, _end: cur + dur });
-        cur += dur; sinceB += dur;
-        if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
+    // ── Reparación de huérfanos ──────────────────────────────────────
+    // El clustering es puramente geográfico: una tarea (con franja horaria
+    // o sin ella) puede caer en el vehículo "equivocado" — uno cuya ruta
+    // natural no le deja hueco — sin que añadir más flota arregle nada, es
+    // cuestión de a qué vehículo le tocó, no de cuántos haya. En vez de
+    // dejarla sin asignar, se prueba a insertarla en CUALQUIER hueco de
+    // CUALQUIER otro vehículo/día (no solo al principio/final de la
+    // jornada) con computeCandidateSlots/insertAtSlot — las mismas
+    // funciones que usa el movimiento manual del Gantt, así que funcionan
+    // igual de bien con turnos circulares con relevo (mañana+tarde) que
+    // sin ellos, sin necesitar lógica aparte para cada caso. Se usa el
+    // hueco que menos km añade.
+    function insertAtSlot(res, task, slot, dayOffset) {
+      const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+      const movedTask = { ...task, _start: slot.arrival, _end: slot.taskEnd };
+      const newBlocks = [];
+      if (slot.inKm >= 0.05) {
+        newBlocks.push({ _travel: true, _start: slot.prevEnd, _end: slot.prevEnd + slot.inMin, duracion: slot.inMin, km: +slot.inKm.toFixed(3), ...(slot.prevStop ? {} : { _depot_exit: true }) });
       }
-      return { blocks, km };
+      if (slot.wait > 0) {
+        newBlocks.push({ _wait: true, _start: slot.arrival - slot.wait, _end: slot.arrival, duracion: slot.wait });
+      }
+      newBlocks.push(movedTask);
+      if (slot.outKm >= 0.05) {
+        newBlocks.push({ _travel: true, _start: slot.taskEnd, _end: slot.taskEnd + slot.outMin, duracion: slot.outMin, km: +slot.outKm.toFixed(3), ...(slot.nextStop ? {} : { _depot_return: true }) });
+      }
+      const items = [...(res.assignments || [])].sort((a, b) => a._start - b._start);
+      res.assignments = items
+        .filter(a => !(dayS(a) && a._start >= slot.prevEnd && a._start < slot.nextStart))
+        .concat(newBlocks)
+        .sort((a, b) => a._start - b._start);
+      res.totalKm = res.assignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
     }
 
     function tryInsertOrphan(task) {
-      if (circular) return false;
-      let best = null, bestKm = Infinity;
+      let best = null, bestKm = Infinity, bestDayOffset = null;
       for (let i = 0; i < k; i++) {
         const res = state[i];
-        const depot = (res.depotLat && res.depotLng) ? { lat: +res.depotLat, lng: +res.depotLng } : null;
         const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
-          const dayStart = res.shiftStart + dOff, dayEnd = res.shiftEnd + dOff;
-          if (dayStart >= dayEnd) continue;
-          const dayRealOld = res.assignments
-            .filter(a => !a._break && !a._travel && !a._wait && Math.floor(a._start / 1440) === d)
-            .sort((a, b) => a._start - b._start);
-          for (const order of [[task, ...dayRealOld], [...dayRealOld, task]]) {
-            const laid = layOutDay(order, depot, dayStart, dayEnd, dOff);
-            if (laid && laid.km < bestKm) { bestKm = laid.km; best = { i, d, blocks: laid.blocks }; }
+          for (const slot of computeCandidateSlots(task, res, dOff)) {
+            if (slot.kmDelta < bestKm) { bestKm = slot.kmDelta; best = { i, slot }; bestDayOffset = dOff; }
           }
         }
       }
       if (!best) return false;
-      const res = state[best.i];
-      res.assignments = res.assignments.filter(a => Math.floor(a._start / 1440) !== best.d);
-      res.assignments.push(...best.blocks);
-      res.assignments.sort((a, b) => a._start - b._start);
-      res.totalKm = res.assignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
+      insertAtSlot(state[best.i], task, best.slot, bestDayOffset);
       return true;
     }
 
     // Tope de tiempo real para toda la reparación, no solo cesión de hilo
     // entre intentos. tryInsertOrphan es O(vehículos × días) por huérfano, y
-    // con cientos de paradas de franja horaria (no un puñado) puede haber
-    // cientos de huérfanos a la vez — el total puede tardar minutos en vez de
-    // milisegundos aunque cada cesión individual sea rápida. Pasado el tope,
-    // el resto se deja sin asignar en vez de seguir intentando.
+    // con cientos de paradas pendientes (no un puñado) puede haber cientos
+    // de huérfanos a la vez — el total puede tardar minutos en vez de
+    // milisegundos aunque cada intento individual sea rápido. Pasado el
+    // tope, el resto se deja sin asignar en vez de seguir intentando.
     const ORPHAN_REPAIR_BUDGET_MS = 5000;
     const orphanRepairStart = Date.now();
     const stillUnassigned = [];
     let orphanAttempts = 0;
     let orphanBudgetExceeded = false;
     for (const task of pool) {
-      if (task.windowStart == null) { stillUnassigned.push(task); continue; }
       if (orphanBudgetExceeded || Date.now() - orphanRepairStart > ORPHAN_REPAIR_BUDGET_MS) {
         orphanBudgetExceeded = true;
         stillUnassigned.push(task);
