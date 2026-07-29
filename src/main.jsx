@@ -14,6 +14,7 @@ const TabProyectosLazy   = lazy(() => import("./scheduling.jsx").then(m => ({ de
 const SchedulingModuleWrapperLazy = lazy(() => import("./scheduling.jsx").then(m => ({ default: m.SchedulingModuleWrapper })));
 const RosteringPageLazy  = lazy(() => import("./rostering.jsx").then(m => ({ default: m.RosteringPage })));
 const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ default: m.ControlPage })));
+const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ default: m.AnalyticsPage })));
 // LoginScheduling vive en su propio archivo diminuto (sin tirar de
 // Scheduling/Planning/Rostering) — se importa normal porque hace falta
 // de inmediato en /login.
@@ -86,6 +87,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           {crumb("Scheduling",  "/scheduling",  path === "/scheduling")}
           {crumb("Rostering",   "/rostering",   path === "/rostering")}
           {crumb("Control",     "/control",     path === "/control")}
+          {crumb("Analytics",   "/analytics",   path === "/analytics")}
         </>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -93,7 +95,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion?.rol}</div>
         </div>
-        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control") && (
+        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics") && (
           <button onClick={onFullscreen} title="Pantalla completa" style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -182,7 +184,7 @@ function WorkspaceRouter() {
     if (!sesion && path !== "/login")  { go("/login"); return; }
     if (sesion  && path === "/login")  { go("/projects"); return; }
     if (sesion  && path === "/")       { go("/projects"); return; }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control")) {
+    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics")) {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
@@ -324,6 +326,20 @@ function WorkspaceRouter() {
           }}>
             <Suspense fallback={<LazyFallback />}>
               <ControlPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />
+            </Suspense>
+          </div>
+        )}
+
+        {/* /analytics — kept mounted like Control so its Firestore listeners
+            (planes, fichajes, incidencias) stay connected in the background. */}
+        {activeProject && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === "/analytics" ? "visible" : "hidden",
+            pointerEvents: path === "/analytics" ? "auto" : "none",
+          }}>
+            <Suspense fallback={<LazyFallback />}>
+              <AnalyticsPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />
             </Suspense>
           </div>
         )}
