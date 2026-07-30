@@ -104,7 +104,12 @@ export function hasCoords(lat, lng) {
 // 2880...) donde `task` podría insertarse. Un hueco solo se ofrece si no
 // empuja la siguiente parada real (evitaría solaparla) y si la propia
 // tarea puede cumplir su franja horaria desde ahí. Los huecos que
-// contienen una pausa programada se descartan para no partirla.
+// contienen una pausa programada se descartan para no partirla, y los que
+// cruzan un relevo de conductor (row._shiftBreaks, turno partido) también
+// — si no, el bloque de viaje que rellena el hueco quedaría a caballo
+// entre los dos turnos (empieza antes del relevo, termina después), y al
+// repartir esas paradas por conductor ese tramo de viaje se atribuiría al
+// turno equivocado (o inflaría su jornada más allá de su propio horario).
 export function computeCandidateSlots(task, row, dayOffset) {
   const dayStart = dayOffset + (row._tw?.start ?? row.shiftStart ?? 0);
   const dayEnd   = dayOffset + (row._tw?.end   ?? row.shiftEnd   ?? 1440);
@@ -114,6 +119,8 @@ export function computeCandidateSlots(task, row, dayOffset) {
     .sort((a, b) => a._start - b._start);
   const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
   const hasBreakIn = (from, to) => dayItems.some(a => a._break && a._start >= from && a._start < to);
+  const shiftBoundaries = (row._shiftBreaks || []).map(b => b + dayOffset).filter(b => b > dayStart && b < dayEnd);
+  const crossesShiftBoundary = (from, to) => shiftBoundaries.some(b => b > from && b < to);
 
   const depotLat = row.depotLat, depotLng = row.depotLng;
   const slots = [];
@@ -126,7 +133,7 @@ export function computeCandidateSlots(task, row, dayOffset) {
     const nextStart  = next ? next._start : dayEnd;
     const nextLat    = next ? next.lat    : depotLat;
     const nextLng    = next ? next.lng    : depotLng;
-    if (prevEnd > nextStart || hasBreakIn(prevEnd, nextStart)) continue;
+    if (prevEnd > nextStart || hasBreakIn(prevEnd, nextStart) || crossesShiftBoundary(prevEnd, nextStart)) continue;
 
     const inKm  = haversineKm(prevLat, prevLng, task.lat, task.lng);
     const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(inKm / TRAVEL_SPEED_KMH * 60)) : 0;

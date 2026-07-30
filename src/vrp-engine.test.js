@@ -214,6 +214,30 @@ describe("computeCandidateSlots", () => {
     const slots = computeCandidateSlots(task, row, 0);
     expect(slots.find(s => s.prevStop?.id === "A" && s.nextStop?.id === "B")).toBeUndefined();
   });
+
+  it("regresión: no ofrece un hueco que cruza un relevo de conductor (turno partido)", () => {
+    // Vehículo circular con relevo a las 840 (14:00, mañana/tarde). Un
+    // hueco entre una parada que acaba en 820 (mañana) y otra que empieza
+    // a las 860 (tarde) NO debe ofrecerse: el viaje que rellenaría ese
+    // hueco quedaría a caballo entre los dos turnos — parte antes del
+    // relevo, parte después — y al repartir las paradas por conductor ese
+    // tramo de viaje se atribuiría mal o inflaría la jornada de uno de los
+    // dos más allá de su propio horario (turnos "de más de 8h" reales).
+    const task = mkStop("T6", 600, 15, 40.12, -3.72);
+    const row = {
+      _id: "v1", depotLat: null, depotLng: null, shiftStart: 360, shiftEnd: 1320,
+      _shiftBreaks: [840],
+      assignments: [
+        mkStop("manana", 800, 15, 40.10, -3.70), // acaba a las 815, antes del relevo
+        mkStop("tarde", 860, 15, 40.14, -3.74),   // empieza a las 860, después del relevo
+      ],
+    };
+    const slots = computeCandidateSlots(task, row, 0);
+    expect(slots.find(s => s.prevStop?.id === "manana" && s.nextStop?.id === "tarde")).toBeUndefined();
+    // Pero sí debe seguir ofreciendo huecos que NO cruzan el relevo (antes
+    // del todo, o al principio de la tarde tras la última parada).
+    expect(slots.length).toBeGreaterThan(0);
+  });
 });
 
 describe("applyTaskMove", () => {
