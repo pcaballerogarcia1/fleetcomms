@@ -1982,9 +1982,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     setHistoryIndex(i => i + 1);
     applyVehicleWorkerState(afterVehicles, afterWorkers);
     if (unassignedTask) {
+      // Identidad por referencia, no por id: las tareas que vienen de
+      // Planning solo traen _id (puntoKey), no id — comparar por .id
+      // comparaba undefined === undefined y vaciaba el stack entero en vez
+      // de solo la pieza colocada.
       setUnassigneds(prev => ({
-        vehicles: (prev.vehicles || []).filter(t => t.id !== unassignedTask.id),
-        workers:  (prev.workers  || []).filter(t => t.id !== unassignedTask.id),
+        vehicles: (prev.vehicles || []).filter(t => t !== unassignedTask),
+        workers:  (prev.workers  || []).filter(t => t !== unassignedTask),
       }));
     }
   };
@@ -2074,8 +2078,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     applyVehicleWorkerState(entry.afterVehicles, entry.afterWorkers);
     if (entry.unassignedTask) {
       setUnassigneds(prev => ({
-        vehicles: (prev.vehicles || []).filter(t => t.id !== entry.unassignedTask.id),
-        workers:  (prev.workers  || []).filter(t => t.id !== entry.unassignedTask.id),
+        vehicles: (prev.vehicles || []).filter(t => t !== entry.unassignedTask),
+        workers:  (prev.workers  || []).filter(t => t !== entry.unassignedTask),
       }));
     }
     setHistoryIndex(i => i + 1);
