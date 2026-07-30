@@ -189,10 +189,31 @@ const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8];
 
 const DAY_OPTIONS = [1, 2, 3, 5, 7, 14];
 
-function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange }) {
+// Distintivo de "tiene franja horaria / hora fija" — antes era solo un
+// borde más oscuro en el bloque, pero con bloques de 15px de ancho entre
+// miles de paradas (aquí solo el 1-2% suele tener franja) era casi
+// imposible verlo a simple vista. Un reloj en la esquina destaca mucho
+// más aunque el bloque sea diminuto.
+function ClockBadge({ size = 11 }) {
+  return (
+    <div title="Tiene franja horaria / hora fija" style={{
+      position: "absolute", top: -4, right: -4, width: size, height: size, borderRadius: "50%",
+      background: "#fbbf24", border: "1.5px solid #000", zIndex: 6,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      boxShadow: "0 1px 3px rgba(0,0,0,.7)", pointerEvents: "none",
+    }}>
+      <svg width={size - 4} height={size - 4} viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3.2 2" />
+      </svg>
+    </div>
+  );
+}
+
+function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned }) {
   const [tooltip,      setTooltip]      = useState(null);
   const [pxPerMin,     setPxPerMin]     = useState(2);
-  const [legendOpen,   setLegendOpen]   = useState(false);
+  const [unassignedOpen, setUnassignedOpen] = useState(true);
   const [selectedDay,  setSelectedDay]  = useState(0);
   const [compactDayNav, setCompactDayNav] = useState(() => days > 10);
   const [dragging,     setDragging]     = useState(null); // { task, fromRowId }
@@ -262,6 +283,26 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       const destName = describeRow(toRow);
       const ok = window.confirm(
         `Esta parada tiene franja horaria ${winTxt}.\nSe colocaría a las ${minToTime(slot.arrival % 1440)}${waitTxt}.\n\n¿Confirmas el traslado a ${destName}?`
+      );
+      if (!ok) return;
+    }
+    commit();
+  };
+
+  // Igual que attemptMove pero para una tarea que viene del stack de "sin
+  // asignar" (nunca ha tenido fila ni _start) — no hay "fromRow" del que
+  // quitarla, solo se inserta en la fila destino.
+  const attemptPlace = (task, toRow, slot, dayOffset) => {
+    const commit = () => {
+      onPlaceUnassigned(task, toRow, slot, dayOffset);
+      closePanel();
+    };
+    if (task.windowStart != null) {
+      const winTxt  = `${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}`;
+      const waitTxt = slot.wait > 0 ? ` (con ${slot.wait} min de espera)` : "";
+      const destName = describeRow(toRow);
+      const ok = window.confirm(
+        `Esta parada tiene franja horaria ${winTxt}.\nSe colocaría a las ${minToTime(slot.arrival % 1440)}${waitTxt}.\n\n¿Confirmas colocarla en ${destName}?`
       );
       if (!ok) return;
     }
@@ -346,11 +387,6 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     // Right inactive: only when no night shifts (night extends past midnight)
     !hasNightShift && endMin < 1440 ? { x: endMin * pxPerMin, w: (1440 - endMin) * pxPerMin } : null,
   ].filter(Boolean);
-
-  // Collect unique barrios for legend
-  const barrios = useMemo(() => [...new Set(
-    rows.flatMap(r => (r.assignments || []).map(a => a.barrio).filter(Boolean))
-  )].sort(), [rows]);
 
   const zoomIn  = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i < ZOOM_STEPS.length - 1) setPxPerMin(ZOOM_STEPS[i + 1]); else setPxPerMin(Math.min(12, pxPerMin * 2)); };
   const zoomOut = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i > 0) setPxPerMin(ZOOM_STEPS[i - 1]); else setPxPerMin(Math.max(0.1, pxPerMin / 2)); };
@@ -585,10 +621,27 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropRowId(null); }}
                 onDrop={e => {
                   e.preventDefault(); setDropRowId(null);
-                  if (!dragging || !onScheduleChange) return;
+                  if (!dragging) return;
                   const toRowId = row._id || row.id;
                   const task = dragging.task;
                   setDragging(null);
+
+                  // Viene del stack de "sin asignar": nunca ha tenido fila
+                  // ni _start, así que no hay "fromRow" del que quitarla —
+                  // se coloca directamente en el día que se está viendo.
+                  if (dragging.fromRowId == null) {
+                    if (!onPlaceUnassigned) return;
+                    const dayOffset = selectedDay * 1440;
+                    const slots = computeCandidateSlots(task, row, dayOffset);
+                    if (!slots.length) { rejectMove(); return; }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const dropMin = dayOffset + (e.clientX - rect.left) / pxPerMin;
+                    const best = slots.reduce((a, b) => Math.abs(b.arrival - dropMin) < Math.abs(a.arrival - dropMin) ? b : a);
+                    attemptPlace(task, row, best, dayOffset);
+                    return;
+                  }
+
+                  if (!onScheduleChange) return;
                   if (dragging.fromRowId === toRowId) return;
                   const fromRow = rows.find(r => (r._id || r.id) === dragging.fromRowId);
                   if (!fromRow) return;
@@ -732,24 +785,27 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                       style={{
                         position: "absolute", left, top: 5, height: ROW_H - 10, width: w, zIndex: 4,
                         background: isActive ? color : color + "d0",
-                        border: hasWindow ? "2px solid rgba(0,0,0,0.85)" : `1px solid ${color}`,
+                        border: `1px solid ${color}`,
                         boxShadow: isActive ? `0 0 0 2px ${color}, 0 4px 12px rgba(0,0,0,.5)` : "none",
-                        borderRadius: 4, overflow: "hidden", cursor: "grab",
+                        borderRadius: 4, overflow: "visible", cursor: "grab",
                         display: "flex", alignItems: "center", gap: 3, padding: "0 4px",
                         opacity: dragging?.task === task ? 0.4 : 1,
                         transition: "box-shadow .1s, opacity .1s",
                       }}
                     >
-                      {w >= 14 && (
-                        <>
-                          <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
-                          {w >= 22 && (
-                            <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
-                              {w >= 60 ? label : label.slice(0, Math.max(2, Math.floor(w / 7)))}
-                            </span>
-                          )}
-                        </>
-                      )}
+                      {hasWindow && <ClockBadge />}
+                      <div style={{ position: "absolute", inset: 0, borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", gap: 3, padding: "0 4px" }}>
+                        {w >= 14 && (
+                          <>
+                            <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
+                            {w >= 22 && (
+                              <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                                {w >= 60 ? label : label.slice(0, Math.max(2, Math.floor(w / 7)))}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -991,25 +1047,40 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
         </div>
       )}
 
-      {/* ── Barrio legend (collapsible) ── */}
-      {barrios.length > 0 && (
+      {/* ── Sin asignar — stack arrastrable para colocarlas a mano ── */}
+      {unassigned.length > 0 && (
         <div style={{ flexShrink: 0, background: C.card, borderTop: `1px solid ${C.border}` }}>
-          <button onClick={() => setLegendOpen(o => !o)} style={{
+          <button onClick={() => setUnassignedOpen(o => !o)} style={{
             width: "100%", display: "flex", alignItems: "center", gap: 8,
             padding: "6px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
           }}>
-            <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Barrios</span>
-            <span style={{ fontSize: 10, color: C.muted, background: C.surface2, borderRadius: 10, padding: "1px 7px", border: `1px solid ${C.border}` }}>{barrios.length}</span>
-            <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{legendOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: 9, color: C.red, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
+            <span style={{ background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
+            <span style={{ fontSize: 10, color: C.dim }}>arrastra una parada a una fila para colocarla</span>
+            <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{unassignedOpen ? "▲" : "▼"}</span>
           </button>
-          {legendOpen && (
-            <div style={{ padding: "6px 16px 10px", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              {barrios.map(b => (
-                <div key={b} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: barrioColor(b), flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: C.muted }}>{b}</span>
-                </div>
-              ))}
+          {unassignedOpen && (
+            <div style={{ padding: "6px 16px 10px", display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 140, overflowY: "auto" }}>
+              {unassigned.map((task, i) => {
+                const hasWindow = task.windowStart != null;
+                const label = task.nombre || task.barrio || task.id || "?";
+                return (
+                  <div key={task.id || i}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ task, fromRowId: null }); }}
+                    onDragEnd={() => setDragging(null)}
+                    title={hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
+                    style={{
+                      position: "relative", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)",
+                      borderRadius: 5, padding: "3px 9px", fontSize: 10.5, color: C.red, fontFamily: mono,
+                      cursor: "grab", opacity: dragging?.task === task ? 0.4 : 1,
+                    }}
+                  >
+                    {hasWindow && <ClockBadge size={10} />}
+                    {label}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1736,7 +1807,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [genError,     setGenError]    = useState(null);
   const [scaleInfo,    setScaleInfo]   = useState(null);
   const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
-  const [showUnassigned, setShowUnassigned] = useState(true);
   const [focusMode,    setFocusMode]   = useState(false); // hide all panels except gantt
   const [elapsedSec,   setElapsedSec]  = useState(0);
   const genStartRef = useRef(null);
@@ -1837,19 +1907,61 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     applyRowAssignments(key, fromRowId, toRowId, newFromAssignments, newToAssignments);
   };
 
+  // Colocar a mano una parada del stack de "sin asignar" — a diferencia de
+  // handleScheduleChange no hay fila de origen (nunca tuvo _start), así que
+  // solo se toca la fila destino y además hay que sacarla de la lista de
+  // sin-asignar. Se reutiliza applyTaskMove con una "fromRow" vacía en vez
+  // de duplicar su lógica de inserción de huecos.
+  const placeUnassignedTask = (task, toRow, slot, dayOffset) => {
+    const key = mode === "vehicles" ? "vehicles" : "workers";
+    const rowsArr = schedules[key] || [];
+    const toRowId = toRow._id || toRow.id;
+    const toRowPrev = rowsArr.find(r => (r._id || r.id) === toRowId);
+    if (!toRowPrev) return;
+    const { newToAssignments } = applyTaskMove(task, { assignments: [] }, toRow, slot, dayOffset);
+    const entry = {
+      key, placed: true, toRowId, task,
+      beforeTo: toRowPrev.assignments, afterTo: newToAssignments,
+      label: `Colocado en ${[toRow.nombre, toRow.apellidos].filter(Boolean).join(" ") || toRow.matricula || "recurso"}`,
+    };
+    setMoveHistory(h => [...h.slice(0, historyIndex + 1), entry]);
+    setHistoryIndex(i => i + 1);
+    setSchedules(prev => ({
+      ...prev,
+      [key]: (prev[key] || []).map(r => (r._id || r.id) === toRowId ? { ...r, assignments: newToAssignments } : r),
+    }));
+    setUnassigneds(prev => ({ ...prev, [key]: (prev[key] || []).filter(t => t.id !== task.id) }));
+  };
+
   const canUndoMove = historyIndex >= 0;
   const canRedoMove = historyIndex < moveHistory.length - 1;
 
   const undoMove = () => {
     if (!canUndoMove) return;
     const entry = moveHistory[historyIndex];
-    applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.beforeFrom, entry.beforeTo);
+    if (entry.placed) {
+      setSchedules(prev => ({
+        ...prev,
+        [entry.key]: (prev[entry.key] || []).map(r => (r._id || r.id) === entry.toRowId ? { ...r, assignments: entry.beforeTo } : r),
+      }));
+      setUnassigneds(prev => ({ ...prev, [entry.key]: [...(prev[entry.key] || []), entry.task] }));
+    } else {
+      applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.beforeFrom, entry.beforeTo);
+    }
     setHistoryIndex(i => i - 1);
   };
   const redoMove = () => {
     if (!canRedoMove) return;
     const entry = moveHistory[historyIndex + 1];
-    applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.afterFrom, entry.afterTo);
+    if (entry.placed) {
+      setSchedules(prev => ({
+        ...prev,
+        [entry.key]: (prev[entry.key] || []).map(r => (r._id || r.id) === entry.toRowId ? { ...r, assignments: entry.afterTo } : r),
+      }));
+      setUnassigneds(prev => ({ ...prev, [entry.key]: (prev[entry.key] || []).filter(t => t.id !== entry.task.id) }));
+    } else {
+      applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.afterFrom, entry.afterTo);
+    }
     setHistoryIndex(i => i + 1);
   };
 
@@ -3065,55 +3177,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               allWorkers={workers}
               allVehicles={vehicles}
               onScheduleChange={handleScheduleChange}
+              unassigned={unassigned}
+              onPlaceUnassigned={placeUnassignedTask}
             />
           </div>
-
-          {/* ── Sin asignar — collapsible bottom drawer ───────────── */}
-          {unassigned.length > 0 && (
-            <div style={{ flexShrink: 0, borderTop: `1px solid ${C.border}`, background: C.card }}>
-              {/* Handle / toggle */}
-              <button
-                onClick={() => setShowUnassigned(v => !v)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 16px", background: "none", border: "none", cursor: "pointer",
-                  borderBottom: showUnassigned ? `1px solid ${C.border}` : "none",
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
-                  style={{ transform: showUnassigned ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                <span style={{ fontSize: 10, color: C.red, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700 }}>
-                  Sin asignar
-                </span>
-                <span style={{
-                  background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)",
-                  color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700,
-                }}>
-                  {unassigned.length.toLocaleString()}
-                </span>
-                <span style={{ marginLeft: "auto", fontSize: 10, color: C.dim }}>
-                  {showUnassigned ? "Ocultar" : "Mostrar"}
-                </span>
-              </button>
-              {/* Content */}
-              {showUnassigned && (
-                <div style={{ maxHeight: 120, overflowY: "auto", padding: "8px 16px 10px" }}>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {unassigned.map((t, i) => (
-                      <div key={i} style={{
-                        background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.2)",
-                        borderRadius: 4, padding: "2px 7px", fontSize: 10, color: C.red, fontFamily: mono,
-                      }}>
-                        {t.nombre || t.barrio || minToTime(timeToMin(t.horaInicio))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
