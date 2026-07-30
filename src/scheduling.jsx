@@ -715,6 +715,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                     || "";
                   const label = paCode || task.barrio || "";
                   const isActive = stackPanel?.task === task;
+                  const hasWindow = task.windowStart != null;
                   return (
                     <div key={ti} className="sched-block"
                       draggable
@@ -731,7 +732,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                       style={{
                         position: "absolute", left, top: 5, height: ROW_H - 10, width: w, zIndex: 4,
                         background: isActive ? color : color + "d0",
-                        border: `1px solid ${color}`,
+                        border: hasWindow ? "2px solid rgba(0,0,0,0.85)" : `1px solid ${color}`,
                         boxShadow: isActive ? `0 0 0 2px ${color}, 0 4px 12px rgba(0,0,0,.5)` : "none",
                         borderRadius: 4, overflow: "hidden", cursor: "grab",
                         display: "flex", alignItems: "center", gap: 3, padding: "0 4px",
