@@ -271,8 +271,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     const commit = () => {
       const { newFromAssignments, newToAssignments } = applyTaskMove(task, fromRow, toRow, slot, dayOffset);
       onScheduleChange({
-        fromRowId: fromRow._id || fromRow.id, toRowId: toRow._id || toRow.id,
-        newFromAssignments, newToAssignments,
+        fromRow, toRow, newFromAssignments, newToAssignments, dayOffset,
         label: `Movido a ${describeRow(toRow)}`,
       });
       closePanel();
@@ -1064,6 +1063,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               {unassigned.map((task, i) => {
                 const hasWindow = task.windowStart != null;
                 const label = task.nombre || task.barrio || task.id || "?";
+                const color = barrioColor(task.barrio);
                 return (
                   <div key={task.id || i}
                     draggable
@@ -1071,13 +1071,15 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                     onDragEnd={() => setDragging(null)}
                     title={hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
                     style={{
-                      position: "relative", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)",
-                      borderRadius: 5, padding: "3px 9px", fontSize: 10.5, color: C.red, fontFamily: mono,
-                      cursor: "grab", opacity: dragging?.task === task ? 0.4 : 1,
+                      position: "relative", height: ROW_H - 22, minWidth: 60, background: color + "d0",
+                      border: `1px solid ${color}`, borderRadius: 4, overflow: "visible", cursor: "grab",
+                      display: "flex", alignItems: "center", gap: 3, padding: "0 6px",
+                      opacity: dragging?.task === task ? 0.4 : 1,
                     }}
                   >
                     {hasWindow && <ClockBadge size={10} />}
-                    {label}
+                    <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
+                    <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{label}</span>
                   </div>
                 );
               })}
@@ -1766,6 +1768,51 @@ async function loadTasksFromLayers(projectId) {
   return allTasks;
 }
 
+// Reparte las assignments de UN vehículo entre los conductores vinculados a
+// él, según a qué ventana (turno) pertenece cada bloque — misma regla de
+// "dueño" que runGenerate (primer conductor cuya ventana contiene el inicio
+// del bloque; el regreso a depósito se atribuye a quien tenga esa hora
+// dentro de su ventana, o al último del día si cae justo fuera por el
+// redondeo). Se usa para volver a derivar la vista de conductores después
+// de un movimiento manual a nivel de vehículo, y para traducir un
+// movimiento hecho a nivel de conductor al vehículo real que lo sostiene
+// (turnos.jsx no tiene rutas propias, siempre son las del vehículo).
+function deriveWorkerRows(vehicleRow, peersIn, startMin) {
+  const peers = [...peersIn].sort((a, b) =>
+    a._tw.start !== b._tw.start ? a._tw.start - b._tw.start : (a.nombre || "").localeCompare(b.nombre || "")
+  );
+  return peers.map(w => {
+    const wId = w._id || w.id;
+    const myAssignments = (vehicleRow.assignments || []).filter(a => {
+      const dayOffset = Math.floor((a._start - startMin) / 1440) * 1440;
+      const tStart = a._start - dayOffset;
+      if (a._depot_return) {
+        const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
+        if (owner) return (owner._id || owner.id) === wId;
+        const last = peers.reduce((best, p) => !best || p._tw.end > best._tw.end ? p : best, null);
+        return last && (last._id || last.id) === wId;
+      }
+      const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
+      return owner && (owner._id || owner.id) === wId;
+    });
+    const myKm = myAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
+    return { ...w, assignments: myAssignments, totalKm: myKm };
+  });
+}
+
+// Sustituye, dentro de la lista completa de un vehículo, todo lo que cae en
+// la ventana (turno) de UN conductor por su nuevo contenido ya calculado —
+// así un movimiento hecho a nivel de conductor (fila más estrecha, ya
+// acotada a su propio turno) se traslada al vehículo (la lista completa,
+// fuente real de la ruta) sin arriesgarse a coger como vecina una parada de
+// OTRO conductor del mismo vehículo.
+function spliceWorkerWindowIntoVehicle(vehicleRow, worker, dayOffset, newWorkerAssignments) {
+  const wStart = dayOffset + worker._tw.start;
+  const wEnd   = dayOffset + worker._tw.end;
+  const rest = (vehicleRow.assignments || []).filter(a => !(a._start >= wStart && a._start < wEnd));
+  return [...rest, ...newWorkerAssignments].sort((a, b) => a._start - b._start);
+}
+
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId }) {
   const lang = useLang();
@@ -1798,7 +1845,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     optimizeWeight: 0, virtualShiftMin: 0,
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
-  const [moveHistory,  setMoveHistory] = useState([]); // { key, fromRowId, toRowId, beforeFrom, beforeTo, afterFrom, afterTo, label }
+  const [moveHistory,  setMoveHistory] = useState([]); // { beforeVehicles, afterVehicles, beforeWorkers, afterWorkers, unassignedTask, label }
   const [historyIndex, setHistoryIndex] = useState(-1); // -1 = nada aplicado todavía
   const [unassigneds,  setUnassigneds] = useState({ vehicles: [], workers: [] });
   const [showDayStrip, setShowDayStrip] = useState(true);
@@ -1872,65 +1919,138 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const activeDays = schedule?.length > 0 ? (constraints.days || 1) : 1;
 
   // Reasignación manual de paradas en el Gantt (mover de vehículo/trabajador)
-  // — historial tipo Excel: cada movimiento guarda el estado de las dos
-  // filas afectadas antes y después, así "atrás"/"adelante" es exacto sin
-  // tener que recalcular nada ni rastrear identidades de tareas.
-  const applyRowAssignments = (key, fromRowId, toRowId, fromAssignments, toAssignments) => {
-    setSchedules(prev => {
-      const rowsArr = prev[key] || [];
-      const rows = rowsArr.map(r => {
-        const rid = r._id || r.id;
-        const isFrom = rid === fromRowId, isTo = rid === toRowId;
-        if (isFrom && isTo) return { ...r, assignments: toAssignments };
-        if (isFrom) return { ...r, assignments: fromAssignments };
-        if (isTo)   return { ...r, assignments: toAssignments };
-        return r;
-      });
-      return { ...prev, [key]: rows };
-    });
-  };
+  // — historial tipo Excel: cada movimiento guarda el estado de TODOS los
+  // vehículos y conductores afectados (no solo la fila que se ve en el modo
+  // actual), así "atrás"/"adelante" es exacto y vehículos/conductores nunca
+  // se desincronizan entre sí.
+  //
+  // Los conductores nunca tienen ruta propia — son siempre un recorte por
+  // horario de la del vehículo (ver runGenerate/deriveWorkerRows) — así que
+  // el vehículo es la fuente de verdad. Cualquier cambio, se haga desde el
+  // modo "Vehículos" o desde "Trabajadores", se aplica primero al/los
+  // vehículo(s) afectado(s) y desde ahí se re-derivan sus conductores
+  // vinculados, para que las dos vistas nunca queden descoordinadas.
+  const describeRowLabel = r => [r?.nombre, r?.apellidos].filter(Boolean).join(" ") || r?.matricula || r?.turno || "recurso";
 
-  const handleScheduleChange = ({ fromRowId, toRowId, newFromAssignments, newToAssignments, label }) => {
-    const key = mode === "vehicles" ? "vehicles" : "workers";
-    const rowsArr = schedules[key] || [];
-    const fromRowPrev = rowsArr.find(r => (r._id || r.id) === fromRowId);
-    const toRowPrev   = rowsArr.find(r => (r._id || r.id) === toRowId);
-    if (!fromRowPrev || !toRowPrev) return;
-    const entry = {
-      key, fromRowId, toRowId,
-      beforeFrom: fromRowPrev.assignments, beforeTo: toRowPrev.assignments,
-      afterFrom: newFromAssignments, afterTo: newToAssignments,
-      label,
-    };
-    setMoveHistory(h => [...h.slice(0, historyIndex + 1), entry]);
-    setHistoryIndex(i => i + 1);
-    applyRowAssignments(key, fromRowId, toRowId, newFromAssignments, newToAssignments);
-  };
-
-  // Colocar a mano una parada del stack de "sin asignar" — a diferencia de
-  // handleScheduleChange no hay fila de origen (nunca tuvo _start), así que
-  // solo se toca la fila destino y además hay que sacarla de la lista de
-  // sin-asignar. Se reutiliza applyTaskMove con una "fromRow" vacía en vez
-  // de duplicar su lógica de inserción de huecos.
-  const placeUnassignedTask = (task, toRow, slot, dayOffset) => {
-    const key = mode === "vehicles" ? "vehicles" : "workers";
-    const rowsArr = schedules[key] || [];
-    const toRowId = toRow._id || toRow.id;
-    const toRowPrev = rowsArr.find(r => (r._id || r.id) === toRowId);
-    if (!toRowPrev) return;
-    const { newToAssignments } = applyTaskMove(task, { assignments: [] }, toRow, slot, dayOffset);
-    const entry = {
-      key, placed: true, toRowId, task,
-      beforeTo: toRowPrev.assignments, afterTo: newToAssignments,
-      label: `Colocado en ${[toRow.nombre, toRow.apellidos].filter(Boolean).join(" ") || toRow.matricula || "recurso"}`,
-    };
-    setMoveHistory(h => [...h.slice(0, historyIndex + 1), entry]);
-    setHistoryIndex(i => i + 1);
+  const applyVehicleWorkerState = (vehicleMap, workerMap) => {
     setSchedules(prev => ({
-      ...prev,
-      [key]: (prev[key] || []).map(r => (r._id || r.id) === toRowId ? { ...r, assignments: newToAssignments } : r),
+      vehicles: (prev.vehicles || []).map(v => {
+        const vid = v._id || v.id;
+        return vid in vehicleMap ? { ...v, assignments: vehicleMap[vid] } : v;
+      }),
+      workers: (prev.workers || []).map(w => {
+        const wid = w._id || w.id;
+        return wid in workerMap ? { ...w, assignments: workerMap[wid] } : w;
+      }),
     }));
-    setUnassigneds(prev => ({ ...prev, [key]: (prev[key] || []).filter(t => t.id !== task.id) }));
+  };
+
+  // vehicleUpdates: [{ vehicleId, newAssignments }]. Re-deriva los
+  // conductores vinculados a cada vehículo tocado y guarda un único paso de
+  // historial con el antes/después de vehículos + conductores + (si aplica)
+  // la tarea que entra o sale de "sin asignar".
+  const commitVehicleChange = (vehicleUpdates, { unassignedTask, label } = {}) => {
+    const vehiclesArr = schedules.vehicles || [];
+    const workersArr  = schedules.workers  || [];
+    const beforeVehicles = {}, afterVehicles = {};
+    const beforeWorkers  = {}, afterWorkers  = {};
+
+    let working = vehiclesArr;
+    for (const { vehicleId, newAssignments } of vehicleUpdates) {
+      const prevRow = vehiclesArr.find(v => (v._id || v.id) === vehicleId);
+      if (!prevRow) continue;
+      beforeVehicles[vehicleId] = prevRow.assignments;
+      afterVehicles[vehicleId]  = newAssignments;
+      working = working.map(v => (v._id || v.id) === vehicleId ? { ...v, assignments: newAssignments } : v);
+
+      const peers = workersArr.filter(w => w.vehiculoId === vehicleId);
+      if (peers.length) {
+        const updatedRow = working.find(v => (v._id || v.id) === vehicleId);
+        for (const w of deriveWorkerRows(updatedRow, peers, constraints.startMin)) {
+          const wid = w._id || w.id;
+          if (!(wid in beforeWorkers)) {
+            const prevW = workersArr.find(x => (x._id || x.id) === wid);
+            beforeWorkers[wid] = prevW ? prevW.assignments : [];
+          }
+          afterWorkers[wid] = w.assignments;
+        }
+      }
+    }
+
+    const entry = { beforeVehicles, afterVehicles, beforeWorkers, afterWorkers, unassignedTask: unassignedTask || null, label };
+    setMoveHistory(h => [...h.slice(0, historyIndex + 1), entry]);
+    setHistoryIndex(i => i + 1);
+    applyVehicleWorkerState(afterVehicles, afterWorkers);
+    if (unassignedTask) {
+      setUnassigneds(prev => ({
+        vehicles: (prev.vehicles || []).filter(t => t.id !== unassignedTask.id),
+        workers:  (prev.workers  || []).filter(t => t.id !== unassignedTask.id),
+      }));
+    }
+  };
+
+  const handleScheduleChange = ({ fromRow, toRow, newFromAssignments, newToAssignments, dayOffset, label }) => {
+    const fromRowId = fromRow._id || fromRow.id;
+    const toRowId   = toRow._id || toRow.id;
+
+    if (mode === "vehicles") {
+      const updates = fromRowId === toRowId
+        ? [{ vehicleId: toRowId, newAssignments: newToAssignments }]
+        : [{ vehicleId: fromRowId, newAssignments: newFromAssignments }, { vehicleId: toRowId, newAssignments: newToAssignments }];
+      commitVehicleChange(updates, { label });
+      return;
+    }
+
+    // mode === "workers": newFromAssignments/newToAssignments ya vienen
+    // acotados al turno de cada conductor (computeCandidateSlots usó su
+    // _tw) — se trasladan al vehículo real sustituyendo solo el contenido
+    // de esa ventana, no la ruta entera.
+    const fromVehicleRow = (schedules.vehicles || []).find(v => (v._id || v.id) === fromRow.vehiculoId);
+    const toVehicleRow   = (schedules.vehicles || []).find(v => (v._id || v.id) === toRow.vehiculoId);
+    if (!fromVehicleRow || !toVehicleRow) {
+      window.alert("No se puede reflejar este cambio en el vehículo: el conductor de origen o de destino no está vinculado a ningún vehículo. El movimiento se ha cancelado.");
+      return;
+    }
+    const fromVehicleId = fromVehicleRow._id || fromVehicleRow.id;
+    const toVehicleId   = toVehicleRow._id || toVehicleRow.id;
+    if (fromVehicleId === toVehicleId) {
+      let va = spliceWorkerWindowIntoVehicle(fromVehicleRow, fromRow, dayOffset, newFromAssignments);
+      va = spliceWorkerWindowIntoVehicle({ ...fromVehicleRow, assignments: va }, toRow, dayOffset, newToAssignments);
+      commitVehicleChange([{ vehicleId: fromVehicleId, newAssignments: va }], { label });
+    } else {
+      const vaFrom = spliceWorkerWindowIntoVehicle(fromVehicleRow, fromRow, dayOffset, newFromAssignments);
+      const vaTo   = spliceWorkerWindowIntoVehicle(toVehicleRow, toRow, dayOffset, newToAssignments);
+      commitVehicleChange([
+        { vehicleId: fromVehicleId, newAssignments: vaFrom },
+        { vehicleId: toVehicleId,   newAssignments: vaTo },
+      ], { label });
+    }
+  };
+
+  // Colocar a mano una parada del stack de "sin asignar". Si estamos en
+  // modo Trabajadores, se traduce igual que un movimiento: se calcula sobre
+  // la fila del conductor (acotada a su turno) y se traslada al vehículo
+  // real. Si el conductor no está vinculado a un vehículo, no hay dónde
+  // reflejarlo de verdad — se avisa con una alarma y no se coloca nada, en
+  // vez de dejar vehículo/conductor desincronizados.
+  const placeUnassignedTask = (task, toRow, slot, dayOffset) => {
+    if (mode === "vehicles") {
+      const { newToAssignments } = applyTaskMove(task, { assignments: [] }, toRow, slot, dayOffset);
+      commitVehicleChange([{ vehicleId: toRow._id || toRow.id, newAssignments: newToAssignments }], {
+        unassignedTask: task, label: `Colocado en ${describeRowLabel(toRow)}`,
+      });
+      return;
+    }
+    const vehicleRow = (schedules.vehicles || []).find(v => (v._id || v.id) === toRow.vehiculoId);
+    if (!vehicleRow) {
+      window.alert(`No se puede colocar esta parada: "${describeRowLabel(toRow)}" no está vinculado a ningún vehículo.`);
+      return;
+    }
+    const { newToAssignments: newWorkerAssignments } = applyTaskMove(task, { assignments: [] }, toRow, slot, dayOffset);
+    const newVehicleAssignments = spliceWorkerWindowIntoVehicle(vehicleRow, toRow, dayOffset, newWorkerAssignments);
+    commitVehicleChange([{ vehicleId: vehicleRow._id || vehicleRow.id, newAssignments: newVehicleAssignments }], {
+      unassignedTask: task, label: `Colocado en ${describeRowLabel(toRow)}`,
+    });
   };
 
   const canUndoMove = historyIndex >= 0;
@@ -1939,28 +2059,24 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const undoMove = () => {
     if (!canUndoMove) return;
     const entry = moveHistory[historyIndex];
-    if (entry.placed) {
-      setSchedules(prev => ({
-        ...prev,
-        [entry.key]: (prev[entry.key] || []).map(r => (r._id || r.id) === entry.toRowId ? { ...r, assignments: entry.beforeTo } : r),
+    applyVehicleWorkerState(entry.beforeVehicles, entry.beforeWorkers);
+    if (entry.unassignedTask) {
+      setUnassigneds(prev => ({
+        vehicles: [...(prev.vehicles || []), entry.unassignedTask],
+        workers:  [...(prev.workers  || []), entry.unassignedTask],
       }));
-      setUnassigneds(prev => ({ ...prev, [entry.key]: [...(prev[entry.key] || []), entry.task] }));
-    } else {
-      applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.beforeFrom, entry.beforeTo);
     }
     setHistoryIndex(i => i - 1);
   };
   const redoMove = () => {
     if (!canRedoMove) return;
     const entry = moveHistory[historyIndex + 1];
-    if (entry.placed) {
-      setSchedules(prev => ({
-        ...prev,
-        [entry.key]: (prev[entry.key] || []).map(r => (r._id || r.id) === entry.toRowId ? { ...r, assignments: entry.afterTo } : r),
+    applyVehicleWorkerState(entry.afterVehicles, entry.afterWorkers);
+    if (entry.unassignedTask) {
+      setUnassigneds(prev => ({
+        vehicles: (prev.vehicles || []).filter(t => t.id !== entry.unassignedTask.id),
+        workers:  (prev.workers  || []).filter(t => t.id !== entry.unassignedTask.id),
       }));
-      setUnassigneds(prev => ({ ...prev, [entry.key]: (prev[entry.key] || []).filter(t => t.id !== entry.task.id) }));
-    } else {
-      applyRowAssignments(entry.key, entry.fromRowId, entry.toRowId, entry.afterFrom, entry.afterTo);
     }
     setHistoryIndex(i => i + 1);
   };
