@@ -391,6 +391,32 @@ describe("autoScaleFleet", () => {
     expect(addedCount).toBe(0);
     expect(result.unassigned).toHaveLength(0);
   });
+
+  // Regresión del caso real de PALMA DE MALLORCA: el shrink pass exigía
+  // sin-asignar <= mejor histórico EXACTO, así que si unas pocas tareas
+  // quedaban sin poder encajar sin importar el tamaño de flota (franjas
+  // horarias irreconciliables entre sí, no falta de capacidad), el bucle de
+  // crecimiento seguía añadiendo vehículos persiguiéndolas y el shrink no
+  // los podía quitar aunque no rescataran nada — la flota final quedaba muy
+  // por encima de lo que las tareas SÍ asignables necesitaban de verdad.
+  it("no infla la flota por unas pocas tareas que no van a encajar nunca, tenga los vehículos que tenga", async () => {
+    // Núcleo: encaja exactamente en 4 vehículos (0 km de viaje, mismo punto),
+    // sin margen de sobra — capacidad 960min/turno ÷ 15min/tarea = 64 tareas
+    // por vehículo, 4×64 = 256.
+    const core = Array.from({ length: 256 }, (_, i) => mkTask(`core${i}`, 43.46, -3.80));
+    // Imposibles de verdad: la franja cierra antes de que empiece cualquier
+    // turno (0-5, turno arranca a las 06:00) — ningún tamaño de flota las
+    // arregla, es la misma dinámica que las franjas 09:00-10:00 de Palma
+    // repartidas en barrios a los que ningún vehículo llega a tiempo.
+    const impossible = Array.from({ length: 6 }, (_, i) => mkTask(`imposs${i}`, 43.50, -3.90, 0, 5));
+    const vehicles = [mkVehicle(1, 43.46, -3.80)];
+    const { result, resources } = await autoScaleFleet([...core, ...impossible], vehicles, BASE_CONSTRAINTS);
+    expect(result.unassigned).toHaveLength(6); // solo las imposibles
+    expect(result.unassigned.every(t => t.id.startsWith("imposs"))).toBe(true);
+    // El núcleo exige exactamente 4 vehículos — la flota final no debería
+    // quedarse muy por encima intentando en vano rescatar las 6 imposibles.
+    expect(resources.length).toBeLessThanOrEqual(6);
+  }, 20000);
 });
 
 // ── Reparto proporcional entre tramos de un mismo vehículo (turnos) ──

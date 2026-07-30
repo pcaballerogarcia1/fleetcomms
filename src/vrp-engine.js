@@ -1289,6 +1289,49 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
       else lo = mid + 1;                                            // mid no llega — hace falta más
     }
 
+    // ── Afinado post-binaria: exigir sin-asignar <= bestUnassigned EXACTO es
+    // un listón artificial. Con datos reales, el nº de sin-asignar frente al
+    // tamaño de flota no es monótono — tiene MESETAS (25, 26 y 27 vehículos
+    // pueden dejar exactamente los mismos huecos sin cubrir, casi siempre
+    // franjas horarias geográficamente imposibles de por sí, no falta de
+    // capacidad) seguidas de un salto real cuando de verdad falta capacidad.
+    // La binaria de arriba, al exigir igualdad exacta con el mejor histórico,
+    // aterriza en el extremo ALTO de la meseta (p. ej. 29 vehículos) en vez
+    // del extremo bajo (25) — mismos huecos sin cubrir, pero con la jornada
+    // de cada conductor diluida entre vehículos que apenas rescatan nada.
+    //
+    // Se afina con un barrido lineal hacia abajo desde `hi` (ya no vale la
+    // binaria: la función no es monótona en esta zona) mientras el tamaño
+    // siga siendo "igual de bueno". El criterio de "igual de bueno" es que
+    // duplicar el nº de sin-asignar respecto al mínimo visto en el barrido
+    // es la señal de que ahí empieza una pérdida real de capacidad, no un
+    // simple redondeo hacia abajo — verificado con datos reales (Palma de
+    // Mallorca): 25→23 sin asignar, 26→23, 27→23 (meseta, se sigue bajando),
+    // 24→41 (más del doble, salto real, se para ahí). Con SHRINK_PATIENCE se
+    // tolera una única subida aislada (ruido del clustering en ese tamaño
+    // concreto) antes de rendirse, igual que STAGNANT_ROUNDS_LIMIT arriba.
+    const ELBOW_FACTOR = 2;
+    const SHRINK_PATIENCE = 2;
+    let floorUnassigned = cache.get(hi).result.unassigned.length;
+    let refined = hi;
+    let missesInARow = 0;
+    // La binaria de arriba termina siempre con lo === hi (así converge
+    // cualquier búsqueda binaria) — usar ese `lo` como suelo aquí haría que
+    // este bucle nunca se ejecutara. El suelo real del afinado es el tamaño
+    // de la flota base, no el punto de convergencia de la binaria.
+    for (let s = hi - 1; s >= baseResources.length && Date.now() - shrinkStart < SHRINK_TIME_BUDGET_MS; s--) {
+      const { result: sResult } = await tryFleetSize(s);
+      const n = sResult.unassigned.length;
+      if (n <= Math.max(floorUnassigned * ELBOW_FACTOR, floorUnassigned + 1)) {
+        refined = s;
+        floorUnassigned = Math.min(floorUnassigned, n);
+        missesInARow = 0;
+      } else if (++missesInARow >= SHRINK_PATIENCE) {
+        break;
+      }
+    }
+    hi = refined;
+
     const best = cache.get(hi);
     resources = best.resources;
     result = best.result;

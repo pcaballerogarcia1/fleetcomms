@@ -395,7 +395,7 @@ function routeStats(pts) {
   return { km, minAt30: Math.round(km / 30 * 60) };
 }
 
-function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId }) {
+function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId, windowedKeys }) {
   const divRef    = useRef(null);
   const mapRef    = useRef(null);
   const tileRef          = useRef(null);
@@ -525,9 +525,12 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
           const barrio = getBarrio(m);
           const color  = barrio ? barrioColor(barrio, barrioColors) : layer.color;
           const size = 14;
+          const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
+          const hasWindow = windowedKeys?.has(puntoKey);
+          const border = hasWindow ? "3px solid rgba(0,0,0,0.85)" : "2px solid rgba(255,255,255,0.8)";
           const icon = L.divIcon({
             className: "",
-            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;transition:transform .15s;"></div>`,
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;transition:transform .15s;"></div>`,
             iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2],
           });
           const marker = L.marker([lat, lng], { icon })
@@ -603,7 +606,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       }
       map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [40, 40], maxZoom: 16 });
     }
-  }, [layers, depots, barrioColors]);
+  }, [layers, depots, barrioColors, windowedKeys]);
 
   // Draw / update selection polyline and numbered pins
   useEffect(() => {
@@ -2428,6 +2431,26 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
     return () => unsub();
   }, [projectId]);
 
+  // ── Franjas horarias: puntoKeys con horaInicio/franjaInicio en el timetable ──
+  // Vive en una colección aparte (scheduling_projects/{id}/timetable) de los
+  // marcadores del mapa (planning_layers) — sin este listener el mapa no
+  // tiene forma de saber qué puntos tienen franja para diferenciarlos.
+  const [windowedKeys, setWindowedKeys] = useState(new Set());
+  useEffect(() => {
+    const timetableCol = projectId
+      ? collection(db, "scheduling_projects", projectId, "timetable")
+      : collection(db, "planning_timetable");
+    const unsub = onSnapshot(timetableCol, snap => {
+      const keys = new Set();
+      snap.docs.forEach(d => {
+        const e = d.data();
+        if (e.horaInicio || e.franjaInicio) keys.add(e.puntoKey || d.id);
+      });
+      setWindowedKeys(keys);
+    }, () => {});
+    return () => unsub();
+  }, [projectId]);
+
   // ── IDB loader: fills markers for localOnly layers after onSnapshot sets them empty ──
   useEffect(() => {
     const toLoad = layers.filter(l => l.localOnly && l._docId && (!l.markers || l.markers.length === 0));
@@ -2791,7 +2814,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               contenedorFilter={contenedorFilter}
               setContenedorFilter={setContenedorFilter}
             />
-            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} />
+            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} />
           </>
         ) : (
           <TabTimetable layers={layers} projectId={projectId} />
