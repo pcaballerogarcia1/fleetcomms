@@ -813,6 +813,112 @@ export async function generateScenario(tasks, resources, constraints) {
     for (let j = queueIdx[i]; j < sortedQueues[i].length; j++) leftover.push(sortedQueues[i][j]);
   }
 
+  // ── Reequilibrado de carga entre vehículos ────────────────────────
+  // El clustering geográfico intenta igualar la carga por tiempo estimado,
+  // pero la geografía real no siempre coopera — algunos vehículos acaban
+  // con mucho menos trabajo que otros aunque en teoría el reparto fuera
+  // equilibrado. Busca, para cada vehículo por debajo del 75% de la media
+  // del día, paradas de vehículos por encima de la media que estén cerca
+  // de su zona y las reubica — mismo mecanismo que el movimiento manual
+  // del Gantt (computeCandidateSlots/applyTaskMove), así que respeta
+  // franjas horarias, turnos partidos y todo lo demás automáticamente.
+  // Acotado en tiempo: es una búsqueda local (greedy, por rondas), no hace
+  // falta encontrar el óptimo absoluto, solo acercarse tanto como el
+  // presupuesto de tiempo permita.
+  const REBALANCE_BUDGET_MS = 8000;
+  let _rebalanceIter = 0;
+  async function rebalanceLoad() {
+    const start = Date.now();
+
+    // La unidad de comparación es el TRAMO (turno: mañana o tarde), no el
+    // día completo — un vehículo con mañana llena y tarde casi vacía tiene
+    // un "día completo" que va de la primera parada de la mañana a la
+    // última de la tarde, así que medido por día parece lleno aunque la
+    // tarde esté prácticamente vacía. Se repite exactamente el mismo
+    // cálculo de segEnds/segStarts que usa el reparto principal para que
+    // "tramo" signifique lo mismo en los dos sitios.
+    function vehicleSegments(res) {
+      const dayOffsets = [...new Set((res.assignments || []).map(a => Math.floor(a._start / 1440) * 1440))];
+      const segs = [];
+      for (const dayOffset of dayOffsets) {
+        const dayEnd = res.shiftEnd + dayOffset;
+        const segEnds = circular && res._shiftBreaks?.length
+          ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+          : [dayEnd];
+        const segStarts = [res.shiftStart + dayOffset, ...segEnds.slice(0, -1)];
+        segEnds.forEach((segEnd, idx) => segs.push({ dayOffset, segStart: segStarts[idx], segEnd }));
+      }
+      return segs;
+    }
+    function segItems(res, seg) {
+      return (res.assignments || []).filter(a => a._start >= seg.segStart && a._start < seg.segEnd);
+    }
+    function segLoad(res, seg) {
+      const items = segItems(res, seg);
+      if (!items.length) return 0;
+      return Math.max(...items.map(a => a._end)) - Math.min(...items.map(a => a._start));
+    }
+    function segRealStops(res, seg) {
+      return segItems(res, seg).filter(a => !a._travel && !a._break && !a._wait);
+    }
+
+    // Todas las combinaciones (vehículo, tramo) con algo de trabajo — cada
+    // una es una unidad independiente a igualar contra las demás.
+    const units = [];
+    for (const res of state) for (const seg of vehicleSegments(res)) units.push({ res, seg });
+    if (units.length < 2) return;
+
+    let rounds = 0, improved = true;
+    while (improved && rounds++ < 40 && Date.now() - start < REBALANCE_BUDGET_MS) {
+      improved = false;
+      const loaded = units.map(u => ({ ...u, load: segLoad(u.res, u.seg) })).filter(u => u.load > 0);
+      if (loaded.length < 2) break;
+      const avgLoad = loaded.reduce((s, u) => s + u.load, 0) / loaded.length;
+      const underLoaded = loaded.filter(u => u.load < avgLoad * 0.75);
+      const overLoaded  = loaded.filter(u => u.load > avgLoad * 1.1);
+      if (!underLoaded.length || !overLoaded.length) break;
+
+      for (const under of underLoaded) {
+        if (Date.now() - start > REBALANCE_BUDGET_MS) break;
+        const underStops = segRealStops(under.res, under.seg);
+        const centroid = underStops.length
+          ? { lat: underStops.reduce((s, a) => s + a.lat, 0) / underStops.length, lng: underStops.reduce((s, a) => s + a.lng, 0) / underStops.length }
+          : (hasCoords(under.res.depotLat, under.res.depotLng) ? { lat: +under.res.depotLat, lng: +under.res.depotLng } : null);
+        if (!centroid) continue;
+
+        let bestMove = null, bestKmDelta = Infinity;
+        for (const over of overLoaded) {
+          if (over.res === under.res && over.seg === under.seg) continue;
+          if (over.seg.dayOffset !== under.seg.dayOffset) continue; // no mezclar días distintos
+          const candidates = segRealStops(over.res, over.seg)
+            .map(t => ({ t, d: haversineKm(centroid.lat, centroid.lng, t.lat, t.lng) }))
+            .sort((a, b) => a.d - b.d)
+            .slice(0, 8); // solo las más cercanas al hueco que se quiere llenar — acota el coste
+          for (const { t } of candidates) {
+            // computeCandidateSlots evalúa el día entero del vehículo
+            // destino — se filtra a solo los huecos que caen DENTRO del
+            // tramo infra-cargado, para no colar la tarea en otro tramo
+            // (p.ej. la mañana) sin querer.
+            const slots = computeCandidateSlots(t, under.res, under.seg.dayOffset)
+              .filter(s => s.arrival >= under.seg.segStart && s.taskEnd <= under.seg.segEnd);
+            if (!slots.length) continue;
+            const slot = slots.reduce((a, b) => b.kmDelta < a.kmDelta ? b : a);
+            if (slot.kmDelta < bestKmDelta) { bestKmDelta = slot.kmDelta; bestMove = { task: t, fromRow: over.res, slot }; }
+          }
+        }
+        if (bestMove) {
+          const { newFromAssignments, newToAssignments } = applyTaskMove(bestMove.task, bestMove.fromRow, under.res, bestMove.slot, under.seg.dayOffset);
+          bestMove.fromRow.assignments = newFromAssignments;
+          bestMove.fromRow.totalKm = newFromAssignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
+          under.res.assignments = newToAssignments;
+          under.res.totalKm = newToAssignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
+          improved = true;
+        }
+        if (++_rebalanceIter % 20 === 0) await _yield();
+      }
+    }
+  }
+
   // ── Mop-up pass: redistribute leftover tasks across ALL vehicles ──
   // Each vehicle scans the entire remaining pool and assigns what fits,
   // skipping tasks that don't fit (instead of breaking). This prevents
@@ -989,10 +1095,12 @@ export async function generateScenario(tasks, resources, constraints) {
       if (++orphanAttempts % 5 === 0) await _yield();
     }
 
+    await rebalanceLoad();
     const daysUsed = Math.max(1, mopDay);
     return { schedule: state, unassigned: stillUnassigned, daysUsed };
   }
 
+  await rebalanceLoad();
   const daysUsed = Math.max(1, day);
   return { schedule: state, unassigned: [], daysUsed };
 }

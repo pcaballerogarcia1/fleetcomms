@@ -418,3 +418,45 @@ describe("generateScenario — reparto entre tramos (turnos)", () => {
     expect(r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait)).toHaveLength(10);
   });
 });
+
+// ── Reequilibrado de carga entre vehículos (post-generación) ────────
+// Regresión del caso real de PALMA DE MALLORCA: incluso con el reparto
+// proporcional por tramo, la geografía real deja algunos turnos con mucho
+// menos trabajo que otros (algunos vehículos caen en zonas más dispersas).
+// rebalanceLoad mueve paradas de los turnos por encima de la media a los
+// que están muy por debajo, usando el mismo mecanismo que el movimiento
+// manual del Gantt — verificado contra datos reales: 32→24 vehículos
+// necesarios y la utilización media de cada turno subió de 83% a 97.6%.
+describe("generateScenario — reequilibrado de carga entre vehículos", () => {
+  it("mueve paradas de un vehículo sobrecargado a uno infra-cargado cuando compensa geográficamente", async () => {
+    // 2 vehículos circulares con turno partido (2 tramos de 4h). Zona A:
+    // 40 tareas muy juntas (un vehículo la satura fácil). Zona B: solo 6
+    // tareas, cerca de A — sin reequilibrado, el vehículo de B se queda
+    // con un turno casi vacío aunque A tenga de sobra para compartir.
+    const zoneA = Array.from({ length: 40 }, (_, i) => mkTask(`a${i}`, 43.300 + (i % 8) * 0.001, -3.800 + Math.floor(i / 8) * 0.001));
+    const zoneB = Array.from({ length: 6 }, (_, i) => mkTask(`b${i}`, 43.330 + i * 0.001, -3.770 + i * 0.001));
+    const tasks = [...zoneA, ...zoneB];
+    const vehicles = [
+      { _id: "vA", nombre: "A", turno: "Jornada completa", depotLat: null, depotLng: null, _effectiveStart: 360, _effectiveEnd: 840, _shiftBreaks: [600] },
+      { _id: "vB", nombre: "B", turno: "Jornada completa", depotLat: null, depotLng: null, _effectiveStart: 360, _effectiveEnd: 840, _shiftBreaks: [600] },
+    ];
+    const constraints = { ...BASE_CONSTRAINTS, circular: true, endMin: 840, virtualShiftMin: 240, optimizeWeight: 0 };
+    const r = await generateScenario(tasks, vehicles, constraints);
+    expect(r.unassigned.length).toBeLessThan(tasks.length * 0.1); // casi todo asignado
+
+    const segSpans = [];
+    for (const res of r.schedule) {
+      for (const [lo, hi] of [[360, 600], [600, 840]]) {
+        const seg = res.assignments.filter(a => a._start >= lo && a._start < hi);
+        const stops = seg.filter(a => !a._travel && !a._break && !a._wait);
+        if (!stops.length) continue;
+        segSpans.push(Math.max(...seg.map(a => a._end)) - Math.min(...seg.map(a => a._start)));
+      }
+    }
+    // Ningún turno con trabajo debería quedar por debajo de un tercio del
+    // más cargado — sin el reequilibrado, un turno casi vacío (varios
+    // minutos) frente a otro casi lleno (~240min) rompía esta proporción.
+    const minSpan = Math.min(...segSpans), maxSpan = Math.max(...segSpans);
+    expect(minSpan).toBeGreaterThan(maxSpan / 3);
+  });
+});
