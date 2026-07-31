@@ -1090,12 +1090,13 @@ export async function generateScenario(tasks, resources, constraints) {
     // individual ya es caro por sí solo — 5s bastaba para comprobar un
     // puñado de huérfanos contra una flota pequeña, pero contra 1000+
     // vehículos se agotaba casi al instante y dejaba cientos de huérfanos
-    // SIN NI SIQUIERA INTENTARLO, no porque no cupieran de verdad. Prioridad
-    // del usuario: asignar TODO, sin excepción salvo imposibilidad real
-    // (franjas horarias contradictorias entre sí) — el tiempo no es
-    // problema, así que este tope solo existe para no bloquear la pestaña
-    // de forma indefinida, no para recortar el intento.
-    const ORPHAN_REPAIR_BUDGET_MS = 5 * 60 * 1000;
+    // SIN NI SIQUIERA INTENTARLO, no porque no cupieran de verdad. Esto se
+    // ejecuta en CADA ronda de crecimiento (no solo en la final), así que
+    // subirlo mucho (se probó con 5min) multiplica el coste de cada ronda
+    // intermedia, no solo el de la que de verdad importa. 60s es un
+    // término medio: 12x más margen que el original, sin volver cada ronda
+    // intermedia carísima.
+    const ORPHAN_REPAIR_BUDGET_MS = 60000;
     const orphanRepairStart = Date.now();
     const stillUnassigned = [];
     let orphanAttempts = 0;
@@ -1172,10 +1173,12 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
   // toca a las tareas más difíciles varía de ronda en ronda — unas pocas
   // rondas seguidas sin mejorar puede ser solo ruido de ese re-agrupado, no
   // la señal real de "esto no tiene arreglo" que sí es fiable con pocas
-  // tareas. Prioridad del usuario: asignar todo, solo rendirse ante una
-  // imposibilidad real (fuerza mayor), así que se pide mucha más paciencia
-  // antes de darse por vencido.
-  const STAGNANT_ROUNDS_LIMIT = 25;
+  // tareas. Se pide algo más de paciencia que el original, pero SIN
+  // pasarse: subirlo mucho (se probó con 25) no arregla nada por sí solo
+  // si la estimación de cada ronda es mala — solo multiplica por 25 el
+  // coste de estar equivocado. El arreglo real es la productividad
+  // marginal de arriba; esto es solo el margen de seguridad.
+  const STAGNANT_ROUNDS_LIMIT = 6;
   let bestUnassigned = result.unassigned.length;
   let roundsSinceImprovement = 0;
   // La ronda que se rinde por estancamiento puede ser PEOR que la mejor ya
@@ -1200,15 +1203,36 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
   const GROWTH_TIME_BUDGET_MS = 20 * 60 * 1000;
   const growthStart = Date.now();
 
+  // Estimar cuántos vehículos añadir por ronda con la productividad MEDIA
+  // desde el principio (incluye las rondas fáciles del inicio, con las
+  // paradas más accesibles) se queda corta según el crecimiento avanza
+  // hacia las paradas más difíciles — y como cada ronda vuelve a reagrupar
+  // TODO desde cero, una mala estimación no cuesta una ronda de más, cuesta
+  // una ronda de más A UN k CADA VEZ MAYOR. Verificado con MADRID (44 000
+  // paradas): con la estimación por media histórica, el crecimiento seguía
+  // sin converger pasadas 4 HORAS. Se usa en su lugar la productividad
+  // MARGINAL de la última ronda (cuántas tareas rescató el último lote
+  // añadido, no la flota entera desde el principio), que refleja la
+  // dificultad ACTUAL, no la media de toda la historia.
+  let marginalPerVehicle = null;
+  // Tope al tamaño de un único salto — aunque la estimación (de cualquier
+  // tipo) se equivoque por mucho, ninguna ronda debe poder dispararse a un
+  // k enorme de golpe: eso es exactamente lo que dejó una sola ronda
+  // calculando durante horas. Con esto, el coste de CADA ronda queda
+  // acotado (medido: k≈400 tarda ~2.5min), y si hacen falta más vehículos
+  // de los que caben en un salto, se consigue en varias rondas moderadas
+  // en vez de una gigante.
+  const ROUND_BATCH_CAP = 400;
+
   while (
     result.unassigned.length > 0 && added < MAX_VIRTUAL_VEHICLES &&
     Date.now() - growthStart < GROWTH_TIME_BUDGET_MS
   ) {
     await _yield(); // deja respirar al navegador entre rondas, aunque generateScenario tarde
     const assigned    = tasks.length - result.unassigned.length;
-    const perVehicle   = Math.max(1, assigned / resources.length);
+    const perVehicle   = marginalPerVehicle ?? Math.max(1, assigned / resources.length);
     const needed       = Math.max(1, Math.ceil(result.unassigned.length / perVehicle));
-    const batch        = Math.min(needed, MAX_VIRTUAL_VEHICLES - added);
+    const batch        = Math.min(needed, MAX_VIRTUAL_VEHICLES - added, ROUND_BATCH_CAP);
     const template      = baseResources[0] || {};
 
     const extra = Array.from({ length: batch }, (_, i) => {
@@ -1235,6 +1259,13 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     resources = [...resources, ...extra];
     added += batch;
     result = await generateScenario(tasks, resources, constraints);
+
+    // Productividad marginal de ESTE lote (no de la flota entera) para
+    // afinar la estimación de la próxima ronda — cuántas tareas rescató
+    // específicamente el lote que se acaba de añadir.
+    const assignedAfter = tasks.length - result.unassigned.length;
+    const marginalGain = Math.max(1, assignedAfter - assigned);
+    marginalPerVehicle = Math.max(1, marginalGain / batch);
 
     // Se comprueba el resultado DE ESTA ronda (no el de antes de crecer) —
     // si se comprobara antes de intentar, la mejora de la última ronda antes
