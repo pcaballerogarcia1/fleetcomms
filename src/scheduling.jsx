@@ -186,6 +186,7 @@ const LABEL_W_DEFAULT = 210;
 const LABEL_W_MIN = 150;
 const LABEL_W_MAX = 480;
 const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8];
+const UNASSIGNED_RENDER_CAP = 300;
 
 const DAY_OPTIONS = [1, 2, 3, 5, 7, 14];
 
@@ -223,6 +224,26 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [movePreview,  setMovePreview]  = useState(null); // { task, fromRow, dayOffset, slotsByRowId }
   const [labelW,       setLabelW]       = useState(LABEL_W_DEFAULT);
   const resizingRef = useRef(null);
+
+  // ── Windowing de filas ──────────────────────────────────────────
+  // Con proyectos grandes (cientos de vehículos, decenas de miles de
+  // paradas) renderizar TODAS las filas de golpe — cada una con decenas de
+  // bloques de tarea/viaje — mete decenas de miles de nodos DOM en la
+  // página aunque el usuario solo vea 15 filas a la vez, y la pestaña se
+  // vuelve lentísima. Solo se pinta el contenido real de las filas
+  // visibles (+ margen); el resto deja un hueco vacío de la misma altura
+  // para que el scroll y el tamaño total no cambien.
+  const ganttScrollRef = useRef(null);
+  const [viewport, setViewport] = useState({ top: 0, height: 800 });
+  const handleGanttScroll = e => {
+    setViewport({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight });
+  };
+  useEffect(() => {
+    if (ganttScrollRef.current) setViewport(v => ({ ...v, height: ganttScrollRef.current.clientHeight }));
+  }, []);
+  const ROW_BUFFER = 10;
+  const firstVisibleRow = Math.max(0, Math.floor(viewport.top / ROW_H) - ROW_BUFFER);
+  const lastVisibleRow  = Math.ceil((viewport.top + viewport.height) / ROW_H) + ROW_BUFFER;
 
   // Arrastrar el borde derecho de la columna "Recurso" para ensancharla —
   // los nombres largos de vehículo/trabajador se cortaban ("Vehículo ...").
@@ -496,7 +517,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       </div>
 
       {/* ── Scrollable Gantt ── */}
-      <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
+      <div ref={ganttScrollRef} onScroll={handleGanttScroll} style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
         <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%" }}>
 
           {/* Time axis header */}
@@ -544,7 +565,11 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           </div>
 
           {/* Resource rows */}
-          {sortedRows.map((row, ri) => (
+          {sortedRows.map((row, ri) => {
+            if (ri < firstVisibleRow || ri > lastVisibleRow) {
+              return <div key={row._id || row.id || ri} style={{ height: ROW_H, borderBottom: `1px solid ${C.border}` }} />;
+            }
+            return (
             <div key={row._id || row.id || ri} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}` }}>
               {/* Label */}
               <div style={{
@@ -829,7 +854,8 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {rows.length === 0 && (
             <div style={{ padding: "48px 0", textAlign: "center", color: C.dim, fontSize: 13, width: labelW + chartW }}>Sin recursos asignados</div>
@@ -1060,7 +1086,12 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           </button>
           {unassignedOpen && (
             <div style={{ padding: "6px 16px 10px", display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 140, overflowY: "auto" }}>
-              {unassigned.map((task, i) => {
+              {/* Con proyectos grandes puede haber miles de paradas sin
+                  asignar — pintar todas de golpe (cada una arrastrable)
+                  mete miles de nodos DOM y vuelve la pestaña lentísima.
+                  Este stack es para colocar a mano las últimas que quedan,
+                  no para miles a la vez, así que se limita el pintado. */}
+              {unassigned.slice(0, UNASSIGNED_RENDER_CAP).map((task, i) => {
                 const hasWindow = task.windowStart != null;
                 const label = task.nombre || task.barrio || task.id || "?";
                 const color = barrioColor(task.barrio);
@@ -1083,6 +1114,11 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   </div>
                 );
               })}
+              {unassigned.length > UNASSIGNED_RENDER_CAP && (
+                <div style={{ display: "flex", alignItems: "center", padding: "0 8px", fontSize: 10.5, color: C.dim }}>
+                  +{(unassigned.length - UNASSIGNED_RENDER_CAP).toLocaleString()} más — coloca o filtra estas para ver el resto
+                </div>
+              )}
             </div>
           )}
         </div>

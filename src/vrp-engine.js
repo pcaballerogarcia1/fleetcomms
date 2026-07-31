@@ -1122,7 +1122,7 @@ export async function generateScenario(tasks, resources, constraints) {
 // cubrir ni la mitad de las paradas — decenas de miles quedaban sin
 // asignar no por falta de capacidad real, sino porque el propio tope lo
 // impedía.
-const MAX_VIRTUAL_VEHICLES = 600;
+const MAX_VIRTUAL_VEHICLES = 2000;
 
 export async function autoScaleFleet(tasks, baseResources, constraints) {
   let resources = baseResources;
@@ -1151,7 +1151,14 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
   // bucle seguía añadiendo un vehículo por ronda durante 20+ rondas con la
   // esperanza de que el reparto "acertara" alguna vez, multiplicando la
   // flota final por 3-4x para intentar colar 1-2 tareas casi imposibles.
-  const STAGNANT_ROUNDS_LIMIT = 3;
+  //
+  // Con proyectos grandes (decenas de miles de paradas) cada ronda
+  // re-agrupa TODO desde cero con un k distinto, así que el reparto que le
+  // toca a las tareas más difíciles varía de ronda en ronda — 3 rondas
+  // seguidas sin mejorar puede ser solo ruido de ese re-agrupado, no la
+  // señal real de "esto no tiene arreglo" que sí es fiable con pocas
+  // tareas. Se pide bastante más paciencia antes de rendirse.
+  const STAGNANT_ROUNDS_LIMIT = 10;
   let bestUnassigned = result.unassigned.length;
   let roundsSinceImprovement = 0;
   // La ronda que se rinde por estancamiento puede ser PEOR que la mejor ya
@@ -1167,7 +1174,13 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
   // usuario tuviera forma de saber si seguía vivo o se había colgado. Igual
   // que el shrink pass de más abajo: si se agota el tiempo, se queda con el
   // mejor resultado encontrado hasta ese momento en vez de seguir.
-  const GROWTH_TIME_BUDGET_MS = 90000;
+  //
+  // Con proyectos de decenas de miles de paradas un solo intento de
+  // clustering ya puede tardar 1-3 minutos (medido: ~60s a 100 vehículos,
+  // ~150s a 400), así que 90s no llegaba ni para completar UNA ronda con
+  // holgura, cortando el crecimiento mucho antes de converger. Prioridad
+  // del usuario: asignar todo, el tiempo no es problema.
+  const GROWTH_TIME_BUDGET_MS = 20 * 60 * 1000;
   const growthStart = Date.now();
 
   while (
@@ -1259,7 +1272,11 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     // Un tope bajo (15s) cortaba la búsqueda a medias antes de llegar al
     // mínimo real, dejando muchos más vehículos de los necesarios. Mejor
     // esperar más y llegar al número correcto que ser rápido con uno malo.
-    const SHRINK_TIME_BUDGET_MS = 90000;
+    // En proyectos de decenas de miles de paradas un solo intento ya puede
+    // tardar minutos (ver GROWTH_TIME_BUDGET_MS) — el afinado (que solo
+    // busca un tamaño MENOR sin perder cobertura real, gracias a
+    // ELBOW_ABS_TOLERANCE) no debería cortarse antes de tiempo tampoco.
+    const SHRINK_TIME_BUDGET_MS = 20 * 60 * 1000;
     const cache = new Map(); // tamaño de flota -> { result, resources } ya simulados
     cache.set(resources.length, { result, resources });
 
@@ -1306,15 +1323,22 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     //
     // Se afina con un barrido lineal hacia abajo desde `hi` (ya no vale la
     // binaria: la función no es monótona en esta zona) mientras el tamaño
-    // siga siendo "igual de bueno". El criterio de "igual de bueno" es que
-    // duplicar el nº de sin-asignar respecto al mínimo visto en el barrido
-    // es la señal de que ahí empieza una pérdida real de capacidad, no un
-    // simple redondeo hacia abajo — verificado con datos reales (Palma de
-    // Mallorca): 25→23 sin asignar, 26→23, 27→23 (meseta, se sigue bajando),
-    // 24→41 (más del doble, salto real, se para ahí). Con SHRINK_PATIENCE se
-    // tolera una única subida aislada (ruido del clustering en ese tamaño
-    // concreto) antes de rendirse, igual que STAGNANT_ROUNDS_LIMIT arriba.
-    const ELBOW_FACTOR = 2;
+    // siga siendo "igual de bueno". El criterio de "igual de bueno" es una
+    // tolerancia ABSOLUTA (no multiplicativa) sobre el nº de sin-asignar:
+    // un pequeño % del total de tareas, con un mínimo — verificado con
+    // datos reales (Palma de Mallorca, ~1400 tareas): 25→23 sin asignar,
+    // 26→23, 27→23 (meseta, se sigue bajando), 24→41 (salto real, se para
+    // ahí), diferencia real de solo 4 tareas.
+    //
+    // La primera versión de esto usaba un factor MULTIPLICATIVO (tolerar
+    // hasta doblar el sin-asignar) — con proyectos pequeños como Palma eso
+    // eran unas pocas tareas de margen, pero con un proyecto de 44 000
+    // paradas donde el "suelo" ya son varios miles de sin-asignar, doblarlo
+    // dejaba encoger la flota hasta sacrificar miles de tareas perfectamente
+    // asignables solo por eficiencia de flota — justo lo contrario de lo
+    // que se pedía. La tolerancia absoluta (proporcional al TOTAL de tareas,
+    // no al sin-asignar ya acumulado) no se dispara así.
+    const ELBOW_ABS_TOLERANCE = Math.max(5, Math.ceil(tasks.length * 0.01));
     const SHRINK_PATIENCE = 2;
     let floorUnassigned = cache.get(hi).result.unassigned.length;
     let refined = hi;
@@ -1326,7 +1350,7 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     for (let s = hi - 1; s >= baseResources.length && Date.now() - shrinkStart < SHRINK_TIME_BUDGET_MS; s--) {
       const { result: sResult } = await tryFleetSize(s);
       const n = sResult.unassigned.length;
-      if (n <= Math.max(floorUnassigned * ELBOW_FACTOR, floorUnassigned + 1)) {
+      if (n <= floorUnassigned + ELBOW_ABS_TOLERANCE) {
         refined = s;
         floorUnassigned = Math.min(floorUnassigned, n);
         missesInARow = 0;
