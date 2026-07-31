@@ -1129,11 +1129,15 @@ export async function generateScenario(tasks, resources, constraints) {
 // necesario N" units (cloned from the first real vehicle's depot/tipo, on a
 // full-day "Jornada completa" turno) and re-run the VRP, until everything
 // fits or a safety cap on extra vehicles is hit. Con proyectos grandes
-// (p.ej. 44 000+ paradas) el tope anterior (200) se alcanzaba antes de
-// cubrir ni la mitad de las paradas — decenas de miles quedaban sin
-// asignar no por falta de capacidad real, sino porque el propio tope lo
-// impedía.
-const MAX_VIRTUAL_VEHICLES = 2000;
+// (p.ej. 44 000+ paradas) topes anteriores (200, luego 2000) se alcanzaban
+// antes de cubrir todas las paradas — miles quedaban sin asignar no por
+// falta de capacidad real, sino porque el propio tope lo impedía. El
+// límite real de "cuándo parar" lo pone STAGNANT_ROUNDS_LIMIT (se ha
+// dejado de mejorar de verdad) y el presupuesto de tiempo, no este número
+// — este tope es solo una red de seguridad ante un bucle realmente
+// descontrolado, no debería llegar a ser el motivo de que algo se quede
+// sin asignar.
+const MAX_VIRTUAL_VEHICLES = 5000;
 
 export async function autoScaleFleet(tasks, baseResources, constraints) {
   let resources = baseResources;
