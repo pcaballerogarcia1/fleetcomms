@@ -1084,7 +1084,18 @@ export async function generateScenario(tasks, resources, constraints) {
     // de huérfanos a la vez — el total puede tardar minutos en vez de
     // milisegundos aunque cada intento individual sea rápido. Pasado el
     // tope, el resto se deja sin asignar en vez de seguir intentando.
-    const ORPHAN_REPAIR_BUDGET_MS = 5000;
+    //
+    // Con flotas grandes (cientos o miles de vehículos, p.ej. tras
+    // auto-escalar un proyecto de decenas de miles de paradas) cada intento
+    // individual ya es caro por sí solo — 5s bastaba para comprobar un
+    // puñado de huérfanos contra una flota pequeña, pero contra 1000+
+    // vehículos se agotaba casi al instante y dejaba cientos de huérfanos
+    // SIN NI SIQUIERA INTENTARLO, no porque no cupieran de verdad. Prioridad
+    // del usuario: asignar TODO, sin excepción salvo imposibilidad real
+    // (franjas horarias contradictorias entre sí) — el tiempo no es
+    // problema, así que este tope solo existe para no bloquear la pestaña
+    // de forma indefinida, no para recortar el intento.
+    const ORPHAN_REPAIR_BUDGET_MS = 5 * 60 * 1000;
     const orphanRepairStart = Date.now();
     const stillUnassigned = [];
     let orphanAttempts = 0;
@@ -1154,11 +1165,13 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
   //
   // Con proyectos grandes (decenas de miles de paradas) cada ronda
   // re-agrupa TODO desde cero con un k distinto, así que el reparto que le
-  // toca a las tareas más difíciles varía de ronda en ronda — 3 rondas
-  // seguidas sin mejorar puede ser solo ruido de ese re-agrupado, no la
-  // señal real de "esto no tiene arreglo" que sí es fiable con pocas
-  // tareas. Se pide bastante más paciencia antes de rendirse.
-  const STAGNANT_ROUNDS_LIMIT = 10;
+  // toca a las tareas más difíciles varía de ronda en ronda — unas pocas
+  // rondas seguidas sin mejorar puede ser solo ruido de ese re-agrupado, no
+  // la señal real de "esto no tiene arreglo" que sí es fiable con pocas
+  // tareas. Prioridad del usuario: asignar todo, solo rendirse ante una
+  // imposibilidad real (fuerza mayor), así que se pide mucha más paciencia
+  // antes de darse por vencido.
+  const STAGNANT_ROUNDS_LIMIT = 25;
   let bestUnassigned = result.unassigned.length;
   let roundsSinceImprovement = 0;
   // La ronda que se rinde por estancamiento puede ser PEOR que la mejor ya
@@ -1323,22 +1336,19 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     //
     // Se afina con un barrido lineal hacia abajo desde `hi` (ya no vale la
     // binaria: la función no es monótona en esta zona) mientras el tamaño
-    // siga siendo "igual de bueno". El criterio de "igual de bueno" es una
-    // tolerancia ABSOLUTA (no multiplicativa) sobre el nº de sin-asignar:
-    // un pequeño % del total de tareas, con un mínimo — verificado con
-    // datos reales (Palma de Mallorca, ~1400 tareas): 25→23 sin asignar,
-    // 26→23, 27→23 (meseta, se sigue bajando), 24→41 (salto real, se para
-    // ahí), diferencia real de solo 4 tareas.
-    //
-    // La primera versión de esto usaba un factor MULTIPLICATIVO (tolerar
-    // hasta doblar el sin-asignar) — con proyectos pequeños como Palma eso
-    // eran unas pocas tareas de margen, pero con un proyecto de 44 000
-    // paradas donde el "suelo" ya son varios miles de sin-asignar, doblarlo
-    // dejaba encoger la flota hasta sacrificar miles de tareas perfectamente
-    // asignables solo por eficiencia de flota — justo lo contrario de lo
-    // que se pedía. La tolerancia absoluta (proporcional al TOTAL de tareas,
-    // no al sin-asignar ya acumulado) no se dispara así.
-    const ELBOW_ABS_TOLERANCE = Math.max(5, Math.ceil(tasks.length * 0.01));
+    // siga siendo IGUAL DE BUENO — nunca peor. Sacrificar cobertura ya
+    // conseguida a cambio de menos vehículos es un cambio de política que
+    // afecta a un número que el usuario vigila directamente ("sin
+    // asignar"); no es una decisión que este afinado deba tomar en
+    // silencio. Versiones anteriores toleraban una pequeña degradación
+    // (multiplicativa primero, luego un % del total) para saltar mesetas
+    // de clustering (Palma: 25, 26 y 27 vehículos dejaban exactamente los
+    // mismos 23 huecos sin cubrir) — pero con un proyecto grande cualquier
+    // tolerancia > 0, aunque parezca pequeña en %, son tareas de verdad sin
+    // asignar sin necesidad. Tolerancia CERO: solo se acepta un tamaño
+    // menor si dejaría el mismo nº de sin-asignar (o menos) que el mejor ya
+    // encontrado — un empate real, no una degradación "aceptable".
+    const ELBOW_ABS_TOLERANCE = 0;
     const SHRINK_PATIENCE = 2;
     let floorUnassigned = cache.get(hi).result.unassigned.length;
     let refined = hi;
