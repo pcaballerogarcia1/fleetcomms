@@ -1117,8 +1117,12 @@ export async function generateScenario(tasks, resources, constraints) {
 // tasks within that many days, grow the fleet with virtual "Vehículo
 // necesario N" units (cloned from the first real vehicle's depot/tipo, on a
 // full-day "Jornada completa" turno) and re-run the VRP, until everything
-// fits or a safety cap on extra vehicles is hit.
-const MAX_VIRTUAL_VEHICLES = 200;
+// fits or a safety cap on extra vehicles is hit. Con proyectos grandes
+// (p.ej. 44 000+ paradas) el tope anterior (200) se alcanzaba antes de
+// cubrir ni la mitad de las paradas — decenas de miles quedaban sin
+// asignar no por falta de capacidad real, sino porque el propio tope lo
+// impedía.
+const MAX_VIRTUAL_VEHICLES = 600;
 
 export async function autoScaleFleet(tasks, baseResources, constraints) {
   let resources = baseResources;
