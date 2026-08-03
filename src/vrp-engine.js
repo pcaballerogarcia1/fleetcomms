@@ -1225,7 +1225,7 @@ export async function generateScenario(tasks, resources, constraints) {
     // el hueco a la que sí lo necesita. Si la desalojada tampoco encuentra
     // sitio en ningún otro vehículo, se deshace: mejor un hueco intacto
     // que dos tareas sin asignar en vez de una.
-    const EVICT_CANDIDATES = 6;
+    const EVICT_CANDIDATES = 15;
     function tryEvictAndInsertOrphan(task) {
       if (task.windowStart == null) return false; // sin franja, cualquier hueco libre ya le habría valido
       for (let i = 0; i < k; i++) {
@@ -1238,9 +1238,17 @@ export async function generateScenario(tasks, resources, constraints) {
             a._start >= dOff && a._start < dOff + 1440 &&
             !a._travel && !a._break && !a._wait && a.windowStart == null
           );
+          // Lo que de verdad determina si desalojar a "a" libera el hueco que
+          // hace falta es CUÁNDO está (si su horario cae cerca de la franja
+          // pedida), no lo lejos que esté geográficamente — dos paradas
+          // pueden estar a 8km pero ser las que de verdad ocupan ese tramo del
+          // día. Se ordena por cercanía temporal a la franja; el km de más
+          // que pueda añadir el detour ya se acepta (jornada de más de 8h
+          // preferible a dejar la tarea sin asignar).
+          const winMid = dOff + ((task.windowStart + (task.windowEnd ?? task.windowStart)) / 2);
           const candidates = evictable
-            .map(a => ({ a, dist: hasCoords(task.lat, task.lng) && hasCoords(a.lat, a.lng) ? haversineKm(task.lat, task.lng, a.lat, a.lng) : Infinity }))
-            .sort((x, y) => x.dist - y.dist)
+            .map(a => ({ a, timeDiff: Math.abs(a._start - winMid) }))
+            .sort((x, y) => x.timeDiff - y.timeDiff)
             .slice(0, EVICT_CANDIDATES);
 
           for (const { a: evictee } of candidates) {
@@ -1258,6 +1266,109 @@ export async function generateScenario(tasks, resources, constraints) {
 
             res.assignments = savedAssignments; // sin sitio para la desalojada — deshacer y probar otra
             res.totalKm = savedKm;
+          }
+        }
+      }
+      return false;
+    }
+
+    // Reparación por EMPUJE EN CASCADA — último recurso, para cuando ni el
+    // hueco libre ni el desalojo bastan porque el día entero de todos los
+    // vehículos está encadenado sin holgura (parada tras parada, sin
+    // margen). En vez de exigir que la tarea quepa SIN tocar nada más, se
+    // prueba a insertarla igualmente y retrasar en bloque todo lo que viene
+    // después ese mismo día lo justo para que quepa — el usuario prefiere
+    // jornadas más largas / con más desplazamiento a dejar tareas sin
+    // asignar. Solo se acepta si, tras el retraso, ninguna parada posterior
+    // con franja se sale de su ventana, no se cruza ningún corte de turno
+    // (relevo de conductor) y no se rebasa el fin de jornada.
+    // Alto a propósito: el caso de más valor es justo insertar a media
+    // mañana en un vehículo que YA pasa por la zona pero tiene decenas (o
+    // cientos) de paradas después ese mismo día — un tope bajo descartaba
+    // exactamente esos casos sin ni siquiera comprobar si el retraso era
+    // viable. El coste por candidato es O(paradas restantes del día), y esta
+    // función solo se prueba para las pocas huérfanas que ya fallaron los
+    // caminos baratos, así que un tope generoso sigue siendo rápido en la
+    // práctica y solo protege de flotas virtuales con miles de paradas en un
+    // único vehículo.
+    // Tope tanto de paradas totales del día como de cola a empujar: el coste
+    // es O(paradas del día) por hueco probado, así que sin este tope un
+    // vehículo con cientos/miles de paradas (normal en rondas tempranas de
+    // autoScaleFleet, con la flota aún pequeña) dispara el coste. Por eso
+    // esta reparación solo se prueba en el reintento acotado final (ver más
+    // abajo, con pocas huérfanas y la flota ya casi asentada), nunca en la
+    // pasada inicial sobre todo `pool`.
+    const PUSHBACK_MAX_DAY_STOPS = 400;
+    function tryPushbackInsertOrphan(task) {
+      if (task.windowStart == null) return false;
+      for (let i = 0; i < k; i++) {
+        const res = state[i];
+        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        daysUsedSet.add(0);
+        for (const d of daysUsedSet) {
+          const dOff = d * 1440;
+          const dayStart = dOff + (res._tw?.start ?? res.shiftStart ?? 0);
+          const dayEnd   = dOff + (res._tw?.end   ?? res.shiftEnd   ?? 1440);
+          const shiftBoundaries = (res._shiftBreaks || []).map(b => b + dOff).filter(b => b > dayStart && b < dayEnd);
+          const crosses = (from, to) => shiftBoundaries.some(b => b > from && b < to);
+          const dayItems = [...(res.assignments || [])].filter(a => a._start >= dOff && a._start < dOff + 1440).sort((a, b) => a._start - b._start);
+          if (dayItems.length > PUSHBACK_MAX_DAY_STOPS) continue;
+          const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
+          const depotLat = res.depotLat, depotLng = res.depotLng;
+          // Índice de cada parada dentro de dayItems, para poder tomar la
+          // "cola" a partir de una parada con un slice O(1) en vez de
+          // filtrar dayItems entero en cada hueco probado (evita coste
+          // cuadrático: paradas del día × huecos probados).
+          const idxInDay = new Map(dayItems.map((a, idx) => [a, idx]));
+
+          for (let g = 0; g < stops.length; g++) {
+            const prev = g === 0 ? null : stops[g - 1];
+            const next = stops[g];
+            const prevEnd = prev ? prev._end : dayStart;
+            const prevLat = prev ? prev.lat : depotLat;
+            const prevLng = prev ? prev.lng : depotLng;
+
+            const inKm  = haversineKm(prevLat, prevLng, task.lat, task.lng);
+            const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(inKm / TRAVEL_SPEED_KMH * 60)) : 0;
+            const earliestArrival = prevEnd + inMin;
+            const wait = windowWait(task, earliestArrival, dOff);
+            if (wait === null) continue;
+            const arrival = earliestArrival + wait;
+            const taskEnd = arrival + (task.duracion || 15);
+            if (crosses(prevEnd, taskEnd)) continue;
+
+            const outKm  = haversineKm(task.lat, task.lng, next.lat, next.lng);
+            const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(outKm / TRAVEL_SPEED_KMH * 60)) : 0;
+            const carry = (taskEnd + outMin) - next._start;
+            if (carry <= 0) continue; // cabría sin empujar nada — eso ya lo cubre tryInsertOrphan/tryEvictAndInsertOrphan
+
+            const tailItems = dayItems.slice(idxInDay.get(next));
+            if (tailItems.some(a => a._break)) continue;
+
+            let feasible = true;
+            for (const a of tailItems) {
+              const newStart = a._start + carry, newEnd = a._end + carry;
+              if (newEnd > dayEnd) { feasible = false; break; }
+              if (!a._travel && !a._wait && a.windowStart != null) {
+                const winEnd = (a.windowEnd ?? a.windowStart) + dOff;
+                if (newStart > winEnd) { feasible = false; break; }
+              }
+              if (crosses(a._start, newEnd)) { feasible = false; break; }
+            }
+            if (!feasible) continue;
+
+            // OJO: `next` está incluido en `tailItems` (empieza justo en su
+            // índice) — hay que capturar su nextStart ANTES de mutar, o si
+            // no se sumaría `carry` dos veces (una aquí, otra en el bucle).
+            const newNextStart = next._start + carry;
+            for (const a of tailItems) { a._start += carry; a._end += carry; }
+            const slot = {
+              prevStop: prev, nextStop: next, prevEnd, nextStart: newNextStart,
+              inKm, inMin, outKm, outMin, wait, arrival, taskEnd,
+              kmDelta: +((inKm + outKm) - haversineKm(prevLat, prevLng, next.lat, next.lng)).toFixed(3),
+            };
+            insertAtSlot(res, task, slot, dOff);
+            return true;
           }
         }
       }
@@ -1293,11 +1404,43 @@ export async function generateScenario(tasks, resources, constraints) {
         stillUnassigned.push(task);
         continue;
       }
+      // El empuje en cascada NO se prueba aquí a propósito: en las rondas
+      // tempranas de autoScaleFleet la flota todavía es pequeña y cada
+      // vehículo puede acumular cientos/miles de paradas, así que recorrer
+      // sus huecos para CADA huérfana de este `pool` (que en esas rondas
+      // puede tener miles) se dispara en coste — un benchmark sintético de
+      // 12k tareas se quedó más de 20min sin completar ni una ronda antes
+      // de mover esto solo al reintento acotado de más abajo. Al final de
+      // la reparación (con la flota ya casi asentada y pocas huérfanas) sí
+      // compensa, y ahí SÍ se prueba.
       if (!tryInsertOrphan(task) && !tryEvictAndInsertOrphan(task)) stillUnassigned.push(task);
       // tryInsertOrphan recorre todos los vehículos/días — con muchas paradas
       // de franja horaria esto suma bastante trabajo síncrono. Cede el hilo
       // cada pocos intentos para que la pestaña no se quede "sin responder".
       if (++orphanAttempts % 5 === 0) await _yield();
+    }
+
+    // Cada desalojo cambia lo que hay ocupado en cada vehículo — una tarea
+    // que en la primera pasada no encontró hueco (ni directo ni por
+    // desalojo) puede tenerlo después de que OTRA tarea, más adelante en
+    // `pool`, haya movido cosas de sitio. Con solo un puñado de huérfanas
+    // pendientes (el caso normal tras la reparación principal) esto es
+    // barato; se limita a pocas rondas y al mismo presupuesto de tiempo para
+    // no repetir el coste completo si quedan cientos sin colocar.
+    if (!orphanBudgetExceeded && stillUnassigned.length && stillUnassigned.length <= 200) {
+      for (let retryRound = 0; retryRound < 3 && stillUnassigned.length; retryRound++) {
+        let progressed = false;
+        for (let idx = stillUnassigned.length - 1; idx >= 0; idx--) {
+          if (Date.now() - orphanRepairStart > ORPHAN_REPAIR_BUDGET_MS) { orphanBudgetExceeded = true; break; }
+          const task = stillUnassigned[idx];
+          if (tryInsertOrphan(task) || tryEvictAndInsertOrphan(task) || tryPushbackInsertOrphan(task)) {
+            stillUnassigned.splice(idx, 1);
+            progressed = true;
+          }
+          if (++orphanAttempts % 5 === 0) await _yield();
+        }
+        if (orphanBudgetExceeded || !progressed) break;
+      }
     }
 
     await rebalanceLoad();

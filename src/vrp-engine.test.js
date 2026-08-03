@@ -458,6 +458,60 @@ describe("generateScenario — reparto de barrios sobre-suscritos entre vehícul
   });
 });
 
+// Último recurso de reparación de huérfanas: cuando el día de un vehículo
+// está encadenado sin holgura (parada tras parada) y ni el hueco libre ni
+// el desalojo bastan, se prueba a insertar igualmente y retrasar en
+// cascada todo lo que viene después ese mismo día. Caso real de Palma de
+// Mallorca: 3 tareas de CALA MAJOR quedaban sin asignar aunque cabían
+// aritméticamente en la franja porque las rutas ya estaban completamente
+// empaquetadas sin ningún hueco libre.
+describe("generateScenario — empuje en cascada como último recurso", () => {
+  it("asigna una tarea con franja empujando las paradas siguientes cuando no hay hueco libre ni desalojo posible", async () => {
+    // Un solo vehículo (sin desalojo posible: no hay otro sitio donde
+    // reubicar a la desalojada) con 20 tareas sin franja, pegadas unas a
+    // otras sin ningún hueco (mismas coordenadas, viaje 0). Una tarea con
+    // franja necesita insertarse justo en el hueco entre la 3ª y la 4ª —
+    // eso obliga a retrasar las 17 restantes.
+    const packed = Array.from({ length: 20 }, (_, i) => mkTask(`p${i}`, 40, -3));
+    const windowed = mkTask("w0", 40, -3, 405, 420); // debe entrar entre p2 (termina 405) y p3 (empieza 405)
+    const vehicles = [mkVehicle(1, 40, -3)];
+    const r = await generateScenario([...packed, windowed], vehicles, BASE_CONSTRAINTS);
+
+    expect(r.unassigned).toHaveLength(0);
+    const stops = r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait);
+    expect(stops).toHaveLength(21);
+    const w = stops.find(a => a.id === "w0");
+    expect(w._start).toBeGreaterThanOrEqual(405);
+    expect(w._start).toBeLessThanOrEqual(420);
+    // Las paradas empujadas siguen en orden y sin solaparse entre sí.
+    const sorted = [...stops].sort((a, b) => a._start - b._start);
+    for (let i = 1; i < sorted.length; i++) {
+      expect(sorted[i]._start).toBeGreaterThanOrEqual(sorted[i - 1]._end);
+    }
+  });
+
+  it("no empuja una tarea con franja fuera de su ventana solo para colocar a otra — como mucho una de las dos se queda sin asignar", async () => {
+    const t0 = mkTask("t0", 40, -3); // sin franja, 360-375
+    const td = mkTask("td", 40, -3, 390, 390); // franja exacta a las 390
+    // Franja 375-390 con duración larga (20min): estas dos tareas se pisan
+    // de verdad (cualquiera que se coloque primero ocupa el minuto 390 de
+    // la otra) — es imposible encajar ambas, así que como mucho una queda
+    // sin asignar. Lo importante es que NINGUNA parada realmente asignada
+    // acabe fuera de su propia ventana por culpa del empuje en cascada.
+    const windowed = { ...mkTask("w0", 40, -3, 375, 390), duracion: 20 };
+    const vehicles = [mkVehicle(1, 40, -3)];
+    const r = await generateScenario([t0, td, windowed], vehicles, BASE_CONSTRAINTS);
+
+    expect(r.unassigned.length).toBeLessThanOrEqual(1);
+    const stops = r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait);
+    for (const a of stops) {
+      if (a.windowStart == null) continue;
+      expect(a._start).toBeGreaterThanOrEqual(a.windowStart);
+      expect(a._start).toBeLessThanOrEqual(a.windowEnd);
+    }
+  });
+});
+
 describe("generateScenario", () => {
   it("asigna todas las tareas cuando hay margen de sobra (1 vehículo, pocas tareas cercanas)", async () => {
     const tasks = Array.from({ length: 10 }, (_, i) =>
