@@ -495,6 +495,31 @@ describe("generateScenario — reparto entre tramos (turnos)", () => {
     expect(r.unassigned).toHaveLength(0);
     expect(r.schedule[0].assignments.filter(a => !a._travel && !a._break && !a._wait)).toHaveLength(10);
   });
+
+  it("regresión: el ÚLTIMO tramo también respeta virtualShiftMin como tope duro — 480 minutos son 480, ni más ni menos", async () => {
+    // Antes, el último tramo de un turno partido no tenía tope (para no
+    // perder trabajo real si la estimación de trabajo pendiente se quedaba
+    // corta) — pero eso permitía que ese tramo se alargara más allá del
+    // límite configurado. Ahora el límite es absoluto para todos los
+    // tramos, el último incluido: lo que no quepa se queda sin asignar en
+    // vez de alargar el turno por encima de lo configurado.
+    const tasks = Array.from({ length: 60 }, (_, i) => mkTask(
+      `t${i}`,
+      43.30 + Math.sin(i * 12.9898) * 0.15,
+      -3.80 + Math.cos(i * 78.233) * 0.15,
+    ));
+    const vehicle = {
+      _id: "v1", nombre: "V1", turno: "Jornada completa",
+      depotLat: null, depotLng: null,
+      _effectiveStart: 360, _effectiveEnd: 840, _shiftBreaks: [600], // 06-10 / 10-14
+    };
+    const constraints = { ...BASE_CONSTRAINTS, circular: true, endMin: 840, virtualShiftMin: 240 };
+    const r = await generateScenario(tasks, [vehicle], constraints);
+    const seg2Items = r.schedule[0].assignments.filter(a => a._start >= 600 && a._start < 840);
+    expect(seg2Items.length).toBeGreaterThan(0); // el tramo sí se usa
+    const span = Math.max(...seg2Items.map(a => a._end)) - 600;
+    expect(span).toBeLessThanOrEqual(240);
+  });
 });
 
 // ── Reequilibrado de carga entre vehículos (post-generación) ────────

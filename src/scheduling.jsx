@@ -222,6 +222,13 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
   const [stackPanel,   setStackPanel]   = useState(null); // { task, row }
   const [ganttSort,    setGanttSort]    = useState("default"); // "default" | "salida_asc" | "salida_desc" | "servicio_asc" | "servicio_desc"
   const [movePreview,  setMovePreview]  = useState(null); // { task, fromRow, dayOffset, slotsByRowId }
+  // Línea vertical de referencia: clic en la regla de horas (arriba, donde
+  // salen 06:00, 07:00...) la pone a esa hora cruzando todas las filas;
+  // clic cerca de una ya puesta la quita, clic en otro sitio la mueve ahí.
+  // Minuto-de-día (mismo espacio que ticks/subTicks), se resetea al cambiar
+  // de día porque cada día es un contexto distinto.
+  const [vLineMin,     setVLineMin]     = useState(null);
+  useEffect(() => { setVLineMin(null); }, [selectedDay]);
   const [labelW,       setLabelW]       = useState(LABEL_W_DEFAULT);
   const resizingRef = useRef(null);
 
@@ -518,7 +525,23 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
 
       {/* ── Scrollable Gantt ── */}
       <div ref={ganttScrollRef} onScroll={handleGanttScroll} style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
-        <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%" }}>
+        <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%", position: "relative" }}>
+
+          {/* Línea vertical de referencia — cruza header + todas las filas */}
+          {vLineMin != null && (
+            <div style={{
+              position: "absolute", left: labelW + vLineMin * pxPerMin, top: 0, bottom: 0, width: 2,
+              background: C.blue, zIndex: 9, pointerEvents: "none", boxShadow: `0 0 6px ${C.blue}`,
+            }}>
+              <div style={{
+                position: "absolute", top: 2, left: 4, fontSize: 10, fontFamily: mono, fontWeight: 700,
+                color: C.blueText, background: C.card, padding: "1px 5px", borderRadius: 4,
+                border: `1px solid ${C.blue}`, whiteSpace: "nowrap",
+              }}>
+                {minToTime(((Math.round(vLineMin) % 1440) + 1440) % 1440)}
+              </div>
+            </div>
+          )}
 
           {/* Time axis header */}
           <div style={{
@@ -545,7 +568,19 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 <div style={{ position: "absolute", top: 0, bottom: 0, left: 3, width: 1, background: C.border2 }} />
               </div>
             </div>
-            <div style={{ position: "relative", width: chartW, flexShrink: 0 }}>
+            <div
+              onClick={e => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const clickMin = (e.clientX - rect.left) / pxPerMin;
+                const TOLERANCE_PX = 10;
+                setVLineMin(prev =>
+                  prev != null && Math.abs(prev - clickMin) * pxPerMin < TOLERANCE_PX ? null : clickMin
+                );
+              }}
+              title="Clic para poner/quitar una línea vertical de referencia"
+              style={{ position: "relative", width: chartW, flexShrink: 0, cursor: "crosshair" }}
+            >
               {/* Inactive-hours shading in header */}
               {inactiveBands.map(({ x, w }, i) => (
                 <div key={i} style={{ position: "absolute", left: x, top: 0, width: w, height: "100%", background: "rgba(0,0,0,0.30)", pointerEvents: "none" }} />

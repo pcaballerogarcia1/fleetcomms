@@ -546,13 +546,11 @@ export async function generateScenario(tasks, resources, constraints) {
       // total del vehículo ni de lejos llenara los dos tramos completos.
       // Se estima el trabajo pendiente por la duración de servicio de las
       // tareas en cola (sin simular la ruta entera por adelantado) y se
-      // reparte esa estimación entre los tramos según su peso — el ÚLTIMO
-      // tramo nunca se limita, para no dejar trabajo real sin asignar si
-      // la estimación (que no cuenta bien tramos largos en coche) se queda corta.
+      // reparte esa estimación entre los tramos según su peso.
+      const dayStart0 = res.shiftStart + dayOffset;
+      const segStarts = [dayStart0, ...segEnds.slice(0, -1)];
       let segTargets = null;
       if (segEnds.length > 1) {
-        const dayStart0 = res.shiftStart + dayOffset;
-        const segStarts = [dayStart0, ...segEnds.slice(0, -1)];
         const segCaps   = segEnds.map((se, idx) => se - segStarts[idx]);
         const totalCap  = segCaps.reduce((s, c) => s + c, 0);
         const estService = queue.slice(queueIdx[i]).reduce((s, t) => s + (t.duracion || 15), 0);
@@ -565,7 +563,17 @@ export async function generateScenario(tasks, resources, constraints) {
 
       for (let segIdx = 0; segIdx < segEnds.length; segIdx++) {
         const segEnd = segEnds[segIdx];
-        const effSegEnd = segTargets ? segTargets[segIdx] : segEnd;
+        const proportional = segTargets ? segTargets[segIdx] : segEnd;
+        // Tope duro de "jornada máx. de los añadidos" (virtualShiftMin): es
+        // un límite exacto, no una referencia — ningún tramo (ni siquiera el
+        // último, antes sin límite para no perder trabajo real por una
+        // estimación corta) puede acabar más tarde de su propio inicio +
+        // virtualShiftMin. Si algo no cabe dentro de eso, se queda sin
+        // asignar en vez de alargar el turno por encima del límite
+        // configurado — "480 minutos son 480 minutos, ni más ni menos".
+        const effSegEnd = virtualShiftMin
+          ? Math.min(proportional, segStarts[segIdx] + virtualShiftMin)
+          : proportional;
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
         // del anchor para volver a tiempo, o su franja horaria ya no se puede
         // cumplir), busca hasta 40 tareas por delante y adelanta la que MENOS
