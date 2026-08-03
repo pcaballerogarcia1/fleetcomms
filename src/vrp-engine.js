@@ -563,24 +563,18 @@ export async function generateScenario(tasks, resources, constraints) {
 
       for (let segIdx = 0; segIdx < segEnds.length; segIdx++) {
         const segEnd = segEnds[segIdx];
-        const proportional = segTargets ? segTargets[segIdx] : segEnd;
-        // Tope duro de "jornada máx. de los añadidos" (virtualShiftMin): es
-        // un límite exacto para los tramos de conductores VIRTUALES (los
-        // que crea el propio auto-escalado, ver autoScaleFleet) — ningún
-        // tramo suyo, ni siquiera el último, debe acabar más tarde de su
-        // propio inicio + virtualShiftMin.
-        //
-        // OJO: solo a los virtuales. Los tramos de un vehículo REAL salen
-        // de la ventana de SUS conductores vinculados de verdad (ver
-        // runGenerate en scheduling.jsx) — si un trabajador real tiene
-        // configurado un turno de, p.ej., 8h30, ese es su horario de
-        // verdad, no una jornada "de los añadidos". Aplicarle igualmente
-        // este tope le recortaba trabajo real que sí cabía, obligando a
-        // añadir muchos más vehículos de los necesarios para compensarlo
-        // (regresión real: 89→209+ vehículos en un proyecto de Madrid).
-        const effSegEnd = (virtualShiftMin && res._virtual)
-          ? Math.min(proportional, segStarts[segIdx] + virtualShiftMin)
-          : proportional;
+        // REVERTIDO (ver historial): se probó a poner un tope duro de
+        // virtualShiftMin en el último tramo (primero para todos los
+        // vehículos, luego solo para los virtuales) para que ningún turno
+        // superara los minutos configurados ni por unos pocos minutos. En
+        // datos reales de Madrid, incluso limitado solo a los conductores
+        // virtuales, disparó la flota necesaria de 89 a más de 200
+        // vehículos — un coste muchísimo mayor que el problema que
+        // arreglaba (turnos ~8 minutos por encima del límite). Se vuelve al
+        // comportamiento original: el último tramo no se limita, para no
+        // perder trabajo real que sí cabía por una estimación de reparto
+        // que se queda corta.
+        const effSegEnd = segTargets ? segTargets[segIdx] : segEnd;
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
         // del anchor para volver a tiempo, o su franja horaria ya no se puede
         // cumplir), busca hasta 40 tareas por delante y adelanta la que MENOS
