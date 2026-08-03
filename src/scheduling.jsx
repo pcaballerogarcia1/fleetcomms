@@ -1890,6 +1890,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [genError,     setGenError]    = useState(null);
   const [scaleInfo,    setScaleInfo]   = useState(null);
   const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
+  // Progreso real del auto-escalado (ronda, vehículos probados, sin
+  // asignar, tiempo de esa ronda) — sin esto, un cálculo largo en un
+  // proyecto grande es indistinguible de uno colgado.
+  const [scaleProgress, setScaleProgress] = useState(null);
   const [focusMode,    setFocusMode]   = useState(false); // hide all panels except gantt
   const [elapsedSec,   setElapsedSec]  = useState(0);
   const genStartRef = useRef(null);
@@ -2193,6 +2197,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     setGenerating(true);
     setGenError(null);
     setScaleInfo(null);
+    setScaleProgress(null);
     setGenPhase("vrp");
     await new Promise(resolve => setTimeout(resolve, 30)); // let React render the phase
 
@@ -2250,7 +2255,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         // Días máximos de escenario: si sobran paradas dentro de ese límite,
         // añade vehículos virtuales "Vehículo necesario N" hasta que quepan todas.
         if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-          const scaled = await autoScaleFleet(tasks, vehiclesForVRP, constraints);
+          const scaled = await autoScaleFleet(tasks, vehiclesForVRP, constraints, setScaleProgress);
           vr = scaled.result;
           vehiclesForSchedule = scaled.resources;
           addedVehicles = scaled.resources.slice(vehiclesForVRP.length);
@@ -3218,6 +3223,21 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               );
             })}
           </div>
+          {/* Progreso real del auto-escalado — sin esto, un proyecto grande
+              en fase "vrp" es indistinguible de uno colgado durante los
+              minutos (a veces bastantes) que tarda cada ronda. */}
+          {genPhase === "vrp" && scaleProgress && (
+            <div style={{ marginTop: 8, fontSize: 10.5, color: C.dim, fontFamily: "monospace", display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ color: C.blueText, fontWeight: 700 }}>
+                {scaleProgress.stage === "growth" ? `Ronda ${scaleProgress.round}` : `Afinando`}
+              </span>
+              <span>{scaleProgress.vehicles.toLocaleString()} vehículos</span>
+              <span style={{ color: scaleProgress.unassigned > 0 ? "#fbbf24" : C.green }}>
+                {scaleProgress.unassigned.toLocaleString()} sin asignar
+              </span>
+              <span>{(scaleProgress.roundMs / 1000).toFixed(1)}s esta prueba</span>
+            </div>
+          )}
         </div>
       )}
 

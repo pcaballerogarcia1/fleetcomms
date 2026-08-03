@@ -1148,10 +1148,18 @@ export async function generateScenario(tasks, resources, constraints) {
 // sin asignar.
 const MAX_VIRTUAL_VEHICLES = 5000;
 
-export async function autoScaleFleet(tasks, baseResources, constraints) {
+// onProgress(info) opcional — se llama tras cada ronda de crecimiento y
+// cada intento del afinado posterior, para que la interfaz pueda mostrar
+// progreso real (ronda, vehículos, sin asignar, tiempo) en vez de una
+// barra ciega. Sin esto, un cálculo largo en un proyecto grande es
+// indistinguible de uno colgado — no hay forma de saber si sigue vivo,
+// en qué ronda va, o cuánto le puede quedar.
+export async function autoScaleFleet(tasks, baseResources, constraints, onProgress) {
   let resources = baseResources;
   let result = await generateScenario(tasks, resources, constraints);
   let added = 0;
+  let roundNum = 0;
+  onProgress?.({ stage: "growth", round: roundNum, vehicles: resources.length, unassigned: result.unassigned.length });
 
   // Jornada máxima de los conductores añadidos automáticamente
   // (constraints.virtualShiftMin, 0 = sin límite = un solo conductor
@@ -1266,7 +1274,14 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
 
     resources = [...resources, ...extra];
     added += batch;
+    roundNum++;
+    const roundStart = Date.now();
     result = await generateScenario(tasks, resources, constraints);
+    onProgress?.({
+      stage: "growth", round: roundNum, batch, vehicles: resources.length,
+      unassigned: result.unassigned.length, roundMs: Date.now() - roundStart,
+      totalMs: Date.now() - growthStart,
+    });
 
     // Productividad marginal de ESTE lote (no de la flota entera) para
     // afinar la estimación de la próxima ronda — cuántas tareas rescató
@@ -1339,7 +1354,12 @@ export async function autoScaleFleet(tasks, baseResources, constraints) {
     async function tryFleetSize(size) {
       if (cache.has(size)) return cache.get(size);
       const trial = resources.slice(0, size);
+      const trialStart = Date.now();
       const trialResult = await generateScenario(tasks, trial, constraints);
+      onProgress?.({
+        stage: "shrink", vehicles: size, unassigned: trialResult.unassigned.length,
+        roundMs: Date.now() - trialStart, totalMs: Date.now() - shrinkStart,
+      });
       const entry = { result: trialResult, resources: trial };
       cache.set(size, entry);
       return entry;
