@@ -565,13 +565,20 @@ export async function generateScenario(tasks, resources, constraints) {
         const segEnd = segEnds[segIdx];
         const proportional = segTargets ? segTargets[segIdx] : segEnd;
         // Tope duro de "jornada máx. de los añadidos" (virtualShiftMin): es
-        // un límite exacto, no una referencia — ningún tramo (ni siquiera el
-        // último, antes sin límite para no perder trabajo real por una
-        // estimación corta) puede acabar más tarde de su propio inicio +
-        // virtualShiftMin. Si algo no cabe dentro de eso, se queda sin
-        // asignar en vez de alargar el turno por encima del límite
-        // configurado — "480 minutos son 480 minutos, ni más ni menos".
-        const effSegEnd = virtualShiftMin
+        // un límite exacto para los tramos de conductores VIRTUALES (los
+        // que crea el propio auto-escalado, ver autoScaleFleet) — ningún
+        // tramo suyo, ni siquiera el último, debe acabar más tarde de su
+        // propio inicio + virtualShiftMin.
+        //
+        // OJO: solo a los virtuales. Los tramos de un vehículo REAL salen
+        // de la ventana de SUS conductores vinculados de verdad (ver
+        // runGenerate en scheduling.jsx) — si un trabajador real tiene
+        // configurado un turno de, p.ej., 8h30, ese es su horario de
+        // verdad, no una jornada "de los añadidos". Aplicarle igualmente
+        // este tope le recortaba trabajo real que sí cabía, obligando a
+        // añadir muchos más vehículos de los necesarios para compensarlo
+        // (regresión real: 89→209+ vehículos en un proyecto de Madrid).
+        const effSegEnd = (virtualShiftMin && res._virtual)
           ? Math.min(proportional, segStarts[segIdx] + virtualShiftMin)
           : proportional;
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
