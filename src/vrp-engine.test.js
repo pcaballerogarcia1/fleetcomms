@@ -623,6 +623,28 @@ describe("autoScaleFleet", () => {
     // quedarse muy por encima intentando en vano rescatar las 6 imposibles.
     expect(resources.length).toBeLessThanOrEqual(6);
   }, 20000);
+
+  // Regresión real de PALMA DE MALLORCA (2026-08-03): el afinado de shrink
+  // tenía una tolerancia absoluta que aceptaba un tamaño de flota MENOR
+  // aunque dejara alguna tarea sin asignar que un vehículo más SÍ rescataba
+  // — es decir, cambiaba cobertura ya conseguida por menos vehículos. El
+  // usuario ha pedido explícita y repetidamente que asignar todo es la
+  // prioridad por encima de vehículos/km ("si hay que hacer más kms, pues
+  // se hacen más"): el shrink nunca debe aceptar un tamaño que empeore la
+  // cobertura ya demostrada.
+  it("no reduce la flota a costa de dejar sin asignar tareas que sí se asignaban con un vehículo más", async () => {
+    // Vehículo 1 lleno del todo (64 tareas, capacidad exacta); vehículo 2
+    // solo rescata 3 tareas más — muy por debajo de la vieja tolerancia
+    // (hasta 20 tareas), así que el bug SÍ se disparaba aquí: el afinado se
+    // quedaba con 1 vehículo y esas 3 sin asignar en vez de los 2 que sí
+    // las cubren.
+    const full = Array.from({ length: 64 }, (_, i) => mkTask(`full${i}`, 43.46, -3.80));
+    const extra = Array.from({ length: 3 }, (_, i) => mkTask(`extra${i}`, 43.46, -3.80));
+    const vehicles = [mkVehicle(1, 43.46, -3.80)];
+    const { result, resources } = await autoScaleFleet([...full, ...extra], vehicles, BASE_CONSTRAINTS);
+    expect(result.unassigned).toHaveLength(0);
+    expect(resources.length).toBeGreaterThanOrEqual(2);
+  }, 20000);
 });
 
 // ── Reparto proporcional entre tramos de un mismo vehículo (turnos) ──

@@ -1720,21 +1720,18 @@ export async function autoScaleFleet(tasks, baseResources, constraints, onProgre
     //
     // Se afina con un barrido lineal hacia abajo desde `hi` (ya no vale la
     // binaria: la función no es monótona en esta zona) mientras el tamaño
-    // siga siendo "casi igual de bueno". Sacrificar cobertura ya conseguida
-    // a cambio de menos vehículos es un cambio de política que afecta a un
-    // número que el usuario vigila directamente ("sin asignar") — pero la
-    // tolerancia CERO (probada) tiene su propio problema: en Palma de
-    // Mallorca hacía preferir 44 vehículos al 58% de uso medio (4h42) antes
-    // que 27 vehículos al 92%+ (7h27), solo por dejar unas pocas tareas
-    // menos sin asignar — carreras armamentísticas por 1-2 tareas a costa
-    // de duplicar la flota necesaria. Vuelve una tolerancia ABSOLUTA
-    // pequeña y con techo fijo (nunca más de 20 tareas, sea cual sea el
-    // tamaño del proyecto): suficiente para saltar mesetas de clustering
-    // (Palma: 25, 26 y 27 vehículos dejaban exactamente los mismos 23
-    // huecos sin cubrir) sin que la flota se dispare persiguiendo una
-    // mejora mínima en sin-asignar. Insignificante en proyectos grandes
-    // (20 de 13 000+ tareas).
-    const ELBOW_ABS_TOLERANCE = Math.min(20, Math.max(5, Math.ceil(tasks.length * 0.01)));
+    // siga cubriendo AL MENOS lo mismo que el mejor ya encontrado. Antes
+    // esto tenía una tolerancia absoluta (hasta 20 tareas) que aceptaba
+    // sacrificar cobertura YA CONSEGUIDA a cambio de menos vehículos — en
+    // Palma de Mallorca esto hacía que, tras demostrar que 28 vehículos
+    // asignaban el 100%, se quedara con 27 y 1 tarea sin asignar solo por
+    // ahorrar un vehículo. El usuario ha pedido explícita y repetidamente
+    // que asignar TODO es la prioridad, por encima de vehículos/km/jornada
+    // ("si hay que hacer más kms, pues se hacen más") — así que aquí no se
+    // sacrifica cobertura nunca: solo se acepta un tamaño menor si dejaba
+    // exactamente la misma cobertura (mesetas de clustering reales, p. ej.
+    // varios tamaños seguidos con las mismas franjas geográficamente
+    // imposibles) o mejor.
     const SHRINK_PATIENCE = 2;
     let floorUnassigned = cache.get(hi).result.unassigned.length;
     let refined = hi;
@@ -1746,9 +1743,9 @@ export async function autoScaleFleet(tasks, baseResources, constraints, onProgre
     for (let s = hi - 1; s >= baseResources.length && Date.now() - shrinkStart < SHRINK_TIME_BUDGET_MS; s--) {
       const { result: sResult } = await tryFleetSize(s);
       const n = sResult.unassigned.length;
-      if (n <= floorUnassigned + ELBOW_ABS_TOLERANCE) {
+      if (n <= floorUnassigned) {
         refined = s;
-        floorUnassigned = Math.min(floorUnassigned, n);
+        floorUnassigned = n;
         missesInARow = 0;
       } else if (++missesInARow >= SHRINK_PATIENCE) {
         break;
