@@ -110,7 +110,7 @@ export function hasCoords(lat, lng) {
 // entre los dos turnos (empieza antes del relevo, termina después), y al
 // repartir esas paradas por conductor ese tramo de viaje se atribuiría al
 // turno equivocado (o inflaría su jornada más allá de su propio horario).
-export function computeCandidateSlots(task, row, dayOffset) {
+export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
   const dayStart = dayOffset + (row._tw?.start ?? row.shiftStart ?? 0);
   const dayEnd   = dayOffset + (row._tw?.end   ?? row.shiftEnd   ?? 1440);
 
@@ -146,6 +146,14 @@ export function computeCandidateSlots(task, row, dayOffset) {
     const outKm  = haversineKm(task.lat, task.lng, nextLat, nextLng);
     const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(outKm / TRAVEL_SPEED_KMH * 60)) : 0;
     if (taskEnd + outMin > nextStart) continue; // solaparía la siguiente parada / fin de turno
+
+    // "Duración máxima de turno" (maxShiftMin): el reparto principal la
+    // respeta desde el primer día, pero esta función también la usan la
+    // reparación de huérfanos y el reequilibrado de carga — sin este
+    // control, cualquiera de los dos podía insertar una parada que alargara
+    // el turno más allá del límite configurado, dejando jornadas de más de
+    // 8h aunque el límite estuviera puesto.
+    if (maxShiftMin > 0 && (taskEnd - dayStart) > maxShiftMin) continue;
 
     const originalDirectKm = haversineKm(prevLat, prevLng, nextLat, nextLng);
     slots.push({
@@ -906,7 +914,7 @@ export async function generateScenario(tasks, resources, constraints) {
             // destino — se filtra a solo los huecos que caen DENTRO del
             // tramo infra-cargado, para no colar la tarea en otro tramo
             // (p.ej. la mañana) sin querer.
-            const slots = computeCandidateSlots(t, under.res, under.seg.dayOffset)
+            const slots = computeCandidateSlots(t, under.res, under.seg.dayOffset, maxShiftMin)
               .filter(s => s.arrival >= under.seg.segStart && s.taskEnd <= under.seg.segEnd);
             if (!slots.length) continue;
             const slot = slots.reduce((a, b) => b.kmDelta < a.kmDelta ? b : a);
@@ -1068,7 +1076,7 @@ export async function generateScenario(tasks, resources, constraints) {
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
-          for (const slot of computeCandidateSlots(task, res, dOff)) {
+          for (const slot of computeCandidateSlots(task, res, dOff, maxShiftMin)) {
             if (slot.kmDelta < bestKm) { bestKm = slot.kmDelta; best = { i, slot }; bestDayOffset = dOff; }
           }
         }

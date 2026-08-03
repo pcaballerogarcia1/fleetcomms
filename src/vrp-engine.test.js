@@ -238,6 +238,34 @@ describe("computeCandidateSlots", () => {
     // del todo, o al principio de la tarde tras la última parada).
     expect(slots.length).toBeGreaterThan(0);
   });
+
+  it("regresión: respeta maxShiftMin — no ofrece un hueco que alargue el turno más allá del límite", () => {
+    // El reparto principal ya respetaba maxShiftMin desde el primer día,
+    // pero computeCandidateSlots (reparación de huérfanos, reequilibrado de
+    // carga, movimiento manual) no lo comprobaba en absoluto — con miles de
+    // inserciones por esa vía en proyectos grandes, eso dejaba colar turnos
+    // por encima del límite configurado con total normalidad.
+    const maxShiftMin = 480; // 8h
+    const row = {
+      _id: "v1", depotLat: null, depotLng: null, shiftStart: 360, shiftEnd: 1320, // turno 06:00-22:00
+      // A acaba a las 810 → 450min desde el inicio del turno (360).
+      assignments: [mkStop("A", 795, 15, 40.05, -3.70)],
+    };
+    // Tarea cercana (viaje ~0min): terminaría sobre los 825 → 465min desde
+    // el inicio, por debajo del límite — debe seguir ofreciéndose.
+    const nearTask = mkStop("T7", 0, 15, 40.05, -3.70);
+    const nearSlots = computeCandidateSlots(nearTask, row, 0, maxShiftMin);
+    expect(nearSlots.find(s => s.prevStop?.id === "A")).toBeTruthy();
+
+    // Tarea lejana (~15km, ~31min de viaje): terminaría sobre los 856 →
+    // 496min desde el inicio, por encima del límite de 480 — NO debe
+    // ofrecerse con maxShiftMin, pero SÍ sin él (nada más lo impide aquí).
+    const farTask = mkStop("T8", 0, 15, 40.19, -3.70);
+    const farWithoutLimit = computeCandidateSlots(farTask, row, 0);
+    expect(farWithoutLimit.find(s => s.prevStop?.id === "A")).toBeTruthy();
+    const farWithLimit = computeCandidateSlots(farTask, row, 0, maxShiftMin);
+    expect(farWithLimit.find(s => s.prevStop?.id === "A")).toBeUndefined();
+  });
 });
 
 describe("applyTaskMove", () => {

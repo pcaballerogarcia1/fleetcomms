@@ -211,7 +211,7 @@ function ClockBadge({ size = 11 }) {
   );
 }
 
-function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned }) {
+function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0 }) {
   const [tooltip,      setTooltip]      = useState(null);
   const [pxPerMin,     setPxPerMin]     = useState(2);
   const [unassignedOpen, setUnassignedOpen] = useState(true);
@@ -275,7 +275,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     const slotsByRowId = new Map();
     rows.forEach(r => {
       if ((r._id || r.id) === (row._id || row.id)) return;
-      const slots = computeCandidateSlots(task, r, dayOffset);
+      const slots = computeCandidateSlots(task, r, dayOffset, maxShiftMin);
       if (slots.length) slotsByRowId.set(r._id || r.id, slots);
     });
     setMovePreview({ task, fromRow: row, dayOffset, slotsByRowId });
@@ -656,7 +656,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   if (dragging.fromRowId == null) {
                     if (!onPlaceUnassigned) return;
                     const dayOffset = selectedDay * 1440;
-                    const slots = computeCandidateSlots(task, row, dayOffset);
+                    const slots = computeCandidateSlots(task, row, dayOffset, maxShiftMin);
                     if (!slots.length) { rejectMove(); return; }
                     const rect = e.currentTarget.getBoundingClientRect();
                     const dropMin = dayOffset + (e.clientX - rect.left) / pxPerMin;
@@ -670,7 +670,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                   const fromRow = rows.find(r => (r._id || r.id) === dragging.fromRowId);
                   if (!fromRow) return;
                   const dayOffset = Math.floor(task._start / 1440) * 1440;
-                  const slots = computeCandidateSlots(task, row, dayOffset);
+                  const slots = computeCandidateSlots(task, row, dayOffset, maxShiftMin);
                   if (!slots.length) { rejectMove(); return; }
                   const rect = e.currentTarget.getBoundingClientRect();
                   const dropMin = dayOffset + (e.clientX - rect.left) / pxPerMin;
@@ -3335,6 +3335,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               onScheduleChange={handleScheduleChange}
               unassigned={unassigned}
               onPlaceUnassigned={placeUnassignedTask}
+              maxShiftMin={constraints.maxShiftMin}
             />
           </div>
         </div>
