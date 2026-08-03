@@ -527,16 +527,19 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       <div ref={ganttScrollRef} onScroll={handleGanttScroll} style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
         <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%", position: "relative" }}>
 
-          {/* Línea vertical de referencia — cruza header + todas las filas */}
+          {/* Línea vertical de referencia — cruza header + todas las filas.
+              zIndex por encima del header (10, sticky) — si no, la
+              etiqueta de la hora quedaba tapada detrás nada más pasar el
+              scroll, invisible en la práctica. */}
           {vLineMin != null && (
             <div style={{
               position: "absolute", left: labelW + vLineMin * pxPerMin, top: 0, bottom: 0, width: 2,
-              background: C.blue, zIndex: 9, pointerEvents: "none", boxShadow: `0 0 6px ${C.blue}`,
+              background: C.blue, zIndex: 14, pointerEvents: "none", boxShadow: `0 0 6px ${C.blue}`,
             }}>
               <div style={{
-                position: "absolute", top: 2, left: 4, fontSize: 10, fontFamily: mono, fontWeight: 700,
+                position: "sticky", top: 2, left: 4, fontSize: 10, fontFamily: mono, fontWeight: 700,
                 color: C.blueText, background: C.card, padding: "1px 5px", borderRadius: 4,
-                border: `1px solid ${C.blue}`, whiteSpace: "nowrap",
+                border: `1px solid ${C.blue}`, whiteSpace: "nowrap", width: "fit-content",
               }}>
                 {minToTime(((Math.round(vLineMin) % 1440) + 1440) % 1440)}
               </div>
