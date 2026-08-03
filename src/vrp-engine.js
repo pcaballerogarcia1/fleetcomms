@@ -360,6 +360,41 @@ export async function twoOpt(route) {
   return best;
 }
 
+// nnTSP/twoOpt/stripSort ordenan un clúster puramente por distancia — no
+// saben nada de franjas horarias. Una parada con franja podía acabar a
+// cientos de posiciones de donde hacía falta (el vecino más cercano no
+// tiene motivo para visitarla pronto si geográficamente encaja mejor
+// tarde), muy por encima de las 40 paradas que tryLookaheadSwap es capaz
+// de mirar hacia delante — y quedarse sin asignar aunque el vehículo
+// pasara físicamente al lado en algún otro momento del día (caso real:
+// Palma de Mallorca, paradas a 100-300m de otra del mismo vehículo pero
+// 5-9 horas más tarde).
+//
+// Reordena SOLO las paradas con franja dentro de la cola ya ordenada
+// geográficamente, insertándolas en la posición cuya hora estimada
+// (progreso lineal del turno a lo largo de la cola — una aproximación,
+// no una simulación real) esté más cerca de su franja. Las paradas
+// flexibles mantienen su orden geográfico entre sí; solo se les insertan
+// las de franja delante en el punto adecuado.
+export function reorderByWindowHint(queue, shiftStart, shiftEnd) {
+  const windowed = [], flexible = [];
+  for (const t of queue) (t.windowStart != null ? windowed : flexible).push(t);
+  if (!windowed.length || !flexible.length) return queue;
+  windowed.sort((a, b) => a.windowStart - b.windowStart);
+  const span = Math.max(1, shiftEnd - shiftStart);
+  const merged = [];
+  let wi = 0;
+  flexible.forEach((t, fi) => {
+    const estMin = shiftStart + (fi / flexible.length) * span;
+    while (wi < windowed.length && windowed[wi].windowStart <= estMin) {
+      merged.push(windowed[wi]); wi++;
+    }
+    merged.push(t);
+  });
+  while (wi < windowed.length) { merged.push(windowed[wi]); wi++; }
+  return merged;
+}
+
 // ── SCENARIO GENERATION ───────────────────────────────────────────
 // Phase 1 — k-means geographic clustering (one compact zone per resource)
 // Phase 2 — nearest-neighbor TSP + 2-opt per zone (minimize route km)
@@ -486,7 +521,8 @@ export async function generateScenario(tasks, resources, constraints) {
     const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
     const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
     const ordered = withC.length > 1500 ? stripSort(withC) : await twoOpt(nnTSP(withC, depot));
-    sortedQueues.push([...ordered, ...noC]);
+    const hinted = reorderByWindowHint(ordered, state[i].shiftStart, state[i].shiftEnd);
+    sortedQueues.push([...hinted, ...noC]);
     await _yield();
   }
 
@@ -1408,19 +1444,21 @@ export async function autoScaleFleet(tasks, baseResources, constraints, onProgre
     //
     // Se afina con un barrido lineal hacia abajo desde `hi` (ya no vale la
     // binaria: la función no es monótona en esta zona) mientras el tamaño
-    // siga siendo IGUAL DE BUENO — nunca peor. Sacrificar cobertura ya
-    // conseguida a cambio de menos vehículos es un cambio de política que
-    // afecta a un número que el usuario vigila directamente ("sin
-    // asignar"); no es una decisión que este afinado deba tomar en
-    // silencio. Versiones anteriores toleraban una pequeña degradación
-    // (multiplicativa primero, luego un % del total) para saltar mesetas
-    // de clustering (Palma: 25, 26 y 27 vehículos dejaban exactamente los
-    // mismos 23 huecos sin cubrir) — pero con un proyecto grande cualquier
-    // tolerancia > 0, aunque parezca pequeña en %, son tareas de verdad sin
-    // asignar sin necesidad. Tolerancia CERO: solo se acepta un tamaño
-    // menor si dejaría el mismo nº de sin-asignar (o menos) que el mejor ya
-    // encontrado — un empate real, no una degradación "aceptable".
-    const ELBOW_ABS_TOLERANCE = 0;
+    // siga siendo "casi igual de bueno". Sacrificar cobertura ya conseguida
+    // a cambio de menos vehículos es un cambio de política que afecta a un
+    // número que el usuario vigila directamente ("sin asignar") — pero la
+    // tolerancia CERO (probada) tiene su propio problema: en Palma de
+    // Mallorca hacía preferir 44 vehículos al 58% de uso medio (4h42) antes
+    // que 27 vehículos al 92%+ (7h27), solo por dejar unas pocas tareas
+    // menos sin asignar — carreras armamentísticas por 1-2 tareas a costa
+    // de duplicar la flota necesaria. Vuelve una tolerancia ABSOLUTA
+    // pequeña y con techo fijo (nunca más de 20 tareas, sea cual sea el
+    // tamaño del proyecto): suficiente para saltar mesetas de clustering
+    // (Palma: 25, 26 y 27 vehículos dejaban exactamente los mismos 23
+    // huecos sin cubrir) sin que la flota se dispare persiguiendo una
+    // mejora mínima en sin-asignar. Insignificante en proyectos grandes
+    // (20 de 13 000+ tareas).
+    const ELBOW_ABS_TOLERANCE = Math.min(20, Math.max(5, Math.ceil(tasks.length * 0.01)));
     const SHRINK_PATIENCE = 2;
     let floorUnassigned = cache.get(hi).result.unassigned.length;
     let refined = hi;

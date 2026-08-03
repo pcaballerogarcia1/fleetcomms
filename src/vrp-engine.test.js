@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   timeToMin, minToTime, turnoWindow, windowWait, haversineKm, hasCoords,
   computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet,
+  reorderByWindowHint,
 } from "./vrp-engine.js";
 
 // ── timeToMin / minToTime ──────────────────────────────────────────
@@ -333,6 +334,69 @@ const BASE_CONSTRAINTS = {
   startMin: 360, endMin: 1320, maxDays: 1, circular: false,
   optimizeWeight: 0, virtualShiftMin: 0,
 };
+
+// ── reorderByWindowHint ──────────────────────────────────────────
+// Regresión del caso real de Palma de Mallorca: nnTSP/twoOpt ordenan un
+// clúster solo por distancia, así que una parada con franja horaria podía
+// acabar a cientos de posiciones de donde hacía falta si el vecino más
+// cercano no tenía motivo geográfico para visitarla pronto — muy por
+// encima de las 40 paradas que tryLookaheadSwap mira hacia delante.
+// Confirmado con datos reales: paradas sin asignar a 100-300m de otra
+// parada del MISMO vehículo, pero 5-9 horas más tarde en su ruta.
+describe("reorderByWindowHint", () => {
+  it("mueve una parada con franja hacia la posición cronológica que le corresponde en la cola", () => {
+    // 20 paradas flexibles (sin franja) — una de ellas (la nº15, muy tarde
+    // en la cola) tiene franja horaria de PRINCIPIO de turno. Sin reordenar
+    // se quedaría atrapada en la posición 15; reordenada debe acabar cerca
+    // del principio.
+    const flexible = Array.from({ length: 20 }, (_, i) => mkTask(`f${i}`, 40, -3));
+    const early = mkTask("early", 40, -3, 400, 430); // franja 06:40-07:10, muy al principio del turno
+    const queue = [...flexible.slice(0, 15), early, ...flexible.slice(15)];
+    const reordered = reorderByWindowHint(queue, 360, 1320); // turno 06:00-22:00 (960min)
+    const idx = reordered.findIndex(t => t.id === "early");
+    // Con progreso lineal 360-1320 sobre 20 paradas flexibles, 400min caen
+    // sobre la posición ~1 de 20 — muy al principio, no en la 15 original.
+    expect(idx).toBeLessThan(4);
+  });
+
+  it("no toca el orden si no hay paradas con franja", () => {
+    const flexible = Array.from({ length: 10 }, (_, i) => mkTask(`f${i}`, 40, -3));
+    expect(reorderByWindowHint(flexible, 360, 1320)).toEqual(flexible);
+  });
+
+  it("no toca el orden si TODAS tienen franja (nada flexible con lo que intercalar)", () => {
+    const windowed = Array.from({ length: 5 }, (_, i) => mkTask(`w${i}`, 40, -3, 400 + i, 430 + i));
+    expect(reorderByWindowHint(windowed, 360, 1320)).toEqual(windowed);
+  });
+});
+
+describe("generateScenario — franjas horarias enterradas lejos de su hora en la cola", () => {
+  it("asigna paradas con franja aunque el orden geográfico puro las dejara muy lejos de su hora (caso real Palma)", async () => {
+    // Reproduce el caso real: un clúster grande y denso (una sola zona
+    // geográfica, como Cala Major) donde la mayoría de paradas son
+    // flexibles, pero un grupo pequeño tiene franja horaria de PRIMERA
+    // hora del turno. nnTSP puede recorrer la zona en cualquier orden
+    // interno — sin reorderByWindowHint, las de franja solo se salvan si
+    // caen por azar cerca del principio; con muchas paradas flexibles
+    // (aquí 80, muy por encima del margen de 40 de tryLookaheadSwap) antes
+    // en la ruta, se quedarían sin asignar.
+    const flexible = Array.from({ length: 80 }, (_, i) =>
+      mkTask(`f${i}`, 40.00 + (i % 10) * 0.001, -3.80 + Math.floor(i / 10) * 0.001));
+    // 4 paradas × 15min = 60min de servicio — caben justo en una franja de
+    // 70min (360-430) dejando algo de margen para el viaje entre ellas.
+    const windowed = Array.from({ length: 4 }, (_, i) =>
+      mkTask(`w${i}`, 40.00 + i * 0.001, -3.80, 360, 430)); // franja 06:00-07:10, arranque del turno
+    const vehicle = mkVehicle(1, null, null);
+    const constraints = { ...BASE_CONSTRAINTS, startMin: 360, endMin: 1320 };
+    const r = await generateScenario([...flexible, ...windowed], [vehicle], constraints);
+    const assignedWindowed = r.schedule[0].assignments.filter(a => windowed.some(w => w.id === a.id));
+    expect(assignedWindowed.length).toBe(4);
+    for (const a of assignedWindowed) {
+      expect(a._start).toBeGreaterThanOrEqual(360);
+      expect(a._start).toBeLessThanOrEqual(430);
+    }
+  });
+});
 
 describe("generateScenario", () => {
   it("asigna todas las tareas cuando hay margen de sobra (1 vehículo, pocas tareas cercanas)", async () => {
