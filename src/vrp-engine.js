@@ -498,6 +498,61 @@ export async function generateScenario(tasks, resources, constraints) {
       const centroids = rawClusters.map(cl => cl.length
         ? { lat: cl.reduce((s, t) => s + t.lat, 0) / cl.length, lng: cl.reduce((s, t) => s + t.lng, 0) / cl.length }
         : { lat: 0, lng: 0 });
+
+      // Grupos "sobre-suscritos": mismo barrio + misma franja horaria con
+      // más trabajo del que cabe en la propia ventana (p.ej. 6 tareas de
+      // 15min = 90min de servicio en una franja de 60min). Si el grupo
+      // entero cae en un solo clúster, NINGÚN reparto de flota, orden de
+      // ruta o reparación de huérfanos lo arregla — un solo vehículo no
+      // puede hacer más trabajo del que cabe en la ventana, así de
+      // simple (caso real: Palma de Mallorca). La única forma real de
+      // asignarlas todas es que dos vehículos atiendan el mismo barrio a
+      // la vez, así que aquí se reparte el excedente al clúster vecino
+      // más cercano ANTES de construir las rutas, en vez de dejar que
+      // cada barrio sea siempre de un único vehículo.
+      const windowGroups = new Map();
+      withCoords.forEach(t => {
+        if (t.windowStart == null || t.windowEnd == null || t.windowEnd <= t.windowStart || !t.barrio) return;
+        const key = `${t.barrio}|${t.windowStart}-${t.windowEnd}`;
+        if (!windowGroups.has(key)) windowGroups.set(key, []);
+        windowGroups.get(key).push(t);
+      });
+      for (const group of windowGroups.values()) {
+        if (group.length < 2) continue;
+        const windowSpan = group[0].windowEnd - group[0].windowStart;
+        const totalService = group.reduce((s, t) => s + (t.duracion || 15), 0);
+        if (totalService <= windowSpan) continue; // cabe de sobra en un solo vehículo
+
+        const groupSet = new Set(group);
+        const clustersWithGroup = [];
+        for (let ci = 0; ci < k; ci++) {
+          if (rawClusters[ci].some(t => groupSet.has(t))) clustersWithGroup.push(ci);
+        }
+        // Ya repartido entre varios (p.ej. por el rebalanceo de arriba) o
+        // vacío — no hay un único "dueño" del que repartir el excedente.
+        if (clustersWithGroup.length !== 1) continue;
+        const soleCi = clustersWithGroup[0];
+
+        const neededVehicles = Math.min(k, Math.ceil(totalService / windowSpan));
+        if (neededVehicles < 2) continue;
+
+        const gLat = group.reduce((s, t) => s + t.lat, 0) / group.length;
+        const gLng = group.reduce((s, t) => s + t.lng, 0) / group.length;
+        const neighborOrder = centroids
+          .map((c, ci) => ({ ci, d: ci === soleCi ? Infinity : haversineKm(gLat, gLng, c.lat, c.lng) }))
+          .sort((a, b) => a.d - b.d);
+
+        const perVehicle = Math.max(1, Math.ceil(group.length / neededVehicles));
+        let remaining = group.slice(perVehicle); // el primer bloque se queda en soleCi
+        for (const { ci: targetCi } of neighborOrder) {
+          if (!remaining.length) break;
+          const take = remaining.splice(0, perVehicle);
+          const takeSet = new Set(take);
+          rawClusters[soleCi] = rawClusters[soleCi].filter(t => !takeSet.has(t));
+          rawClusters[targetCi].push(...take);
+        }
+      }
+
       const clusterOrder = centroids.map((_, i) => i).sort((a, b) => centroids[a].lng - centroids[b].lng);
 
       // Assign clusters to resources by longitude order (west→east).
@@ -1131,6 +1186,84 @@ export async function generateScenario(tasks, resources, constraints) {
       return true;
     }
 
+    // Quita `task` de `res` (mismo día) cerrando su hueco con un viaje
+    // directo — misma lógica que el lado "from" de applyTaskMove, aparte
+    // porque aquí no hay todavía una posición nueva para ella (eso se
+    // decide después, para el hueco que deja libre).
+    function removeFromRow(res, task, dayOffset) {
+      const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+      const items = [...(res.assignments || [])].sort((a, b) => a._start - b._start);
+      const dayStops = items.filter(a => a !== task && !a._travel && !a._break && !a._wait && dayS(a));
+      const afterIdx = dayStops.findIndex(a => a._start > task._start);
+      const origPrev = afterIdx === -1 ? (dayStops.length ? dayStops[dayStops.length - 1] : null) : (afterIdx > 0 ? dayStops[afterIdx - 1] : null);
+      const origNext = afterIdx === -1 ? null : dayStops[afterIdx];
+      const origDayStart = dayOffset + (res._tw?.start ?? res.shiftStart ?? 0);
+      const origDayEnd   = dayOffset + (res._tw?.end   ?? res.shiftEnd   ?? 1440);
+      const gapStart = origPrev ? origPrev._end : origDayStart;
+      const gapEnd   = origNext ? origNext._start : origDayEnd;
+      let closingBlock = null;
+      if (origPrev && origNext) {
+        const cKm = haversineKm(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
+        if (cKm >= 0.05) {
+          const cMin = Math.max(1, Math.ceil(cKm / TRAVEL_SPEED_KMH * 60));
+          closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + cMin, duracion: cMin, km: +cKm.toFixed(3) };
+        }
+      }
+      return items
+        .filter(a => a !== task && !(dayS(a) && a._start >= gapStart && a._start < gapEnd))
+        .concat(closingBlock ? [closingBlock] : []);
+    }
+
+    // Reparación por DESALOJO — solo para huérfanas con franja horaria que
+    // tryInsertOrphan no consiguió colocar en ningún hueco LIBRE. El
+    // clustering geográfico es puramente por distancia (ver
+    // reorderByWindowHint más arriba) y aun así puede pasar que el sitio
+    // que necesita una franja concreta ya esté ocupado por una tarea SIN
+    // franja (a esa le vale cualquier hueco, así que "le tocó" ese por
+    // orden de cola, no por necesidad). Se prueba a mover esa tarea sin
+    // franja a otro sitio — aunque añada algún km de más — para dejarle
+    // el hueco a la que sí lo necesita. Si la desalojada tampoco encuentra
+    // sitio en ningún otro vehículo, se deshace: mejor un hueco intacto
+    // que dos tareas sin asignar en vez de una.
+    const EVICT_CANDIDATES = 6;
+    function tryEvictAndInsertOrphan(task) {
+      if (task.windowStart == null) return false; // sin franja, cualquier hueco libre ya le habría valido
+      for (let i = 0; i < k; i++) {
+        const res = state[i];
+        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        daysUsedSet.add(0);
+        for (const d of daysUsedSet) {
+          const dOff = d * 1440;
+          const evictable = res.assignments.filter(a =>
+            a._start >= dOff && a._start < dOff + 1440 &&
+            !a._travel && !a._break && !a._wait && a.windowStart == null
+          );
+          const candidates = evictable
+            .map(a => ({ a, dist: hasCoords(task.lat, task.lng) && hasCoords(a.lat, a.lng) ? haversineKm(task.lat, task.lng, a.lat, a.lng) : Infinity }))
+            .sort((x, y) => x.dist - y.dist)
+            .slice(0, EVICT_CANDIDATES);
+
+          for (const { a: evictee } of candidates) {
+            const withoutEvictee = removeFromRow(res, evictee, dOff);
+            const slots = computeCandidateSlots(task, { ...res, assignments: withoutEvictee }, dOff, maxShiftMin);
+            if (!slots.length) continue;
+            const slot = slots.reduce((a2, b2) => b2.kmDelta < a2.kmDelta ? b2 : a2);
+
+            const savedAssignments = res.assignments;
+            const savedKm = res.totalKm;
+            res.assignments = withoutEvictee;
+            insertAtSlot(res, task, slot, dOff);
+
+            if (tryInsertOrphan(evictee)) return true; // la desalojada encontró sitio — se queda el cambio
+
+            res.assignments = savedAssignments; // sin sitio para la desalojada — deshacer y probar otra
+            res.totalKm = savedKm;
+          }
+        }
+      }
+      return false;
+    }
+
     // Tope de tiempo real para toda la reparación, no solo cesión de hilo
     // entre intentos. tryInsertOrphan es O(vehículos × días) por huérfano, y
     // con cientos de paradas pendientes (no un puñado) puede haber cientos
@@ -1160,7 +1293,7 @@ export async function generateScenario(tasks, resources, constraints) {
         stillUnassigned.push(task);
         continue;
       }
-      if (!tryInsertOrphan(task)) stillUnassigned.push(task);
+      if (!tryInsertOrphan(task) && !tryEvictAndInsertOrphan(task)) stillUnassigned.push(task);
       // tryInsertOrphan recorre todos los vehículos/días — con muchas paradas
       // de franja horaria esto suma bastante trabajo síncrono. Cede el hilo
       // cada pocos intentos para que la pestaña no se quede "sin responder".

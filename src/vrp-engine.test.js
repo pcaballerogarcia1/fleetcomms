@@ -398,6 +398,66 @@ describe("generateScenario — franjas horarias enterradas lejos de su hora en l
   });
 });
 
+// ── Reparto de barrios "sobre-suscritos" entre varios vehículos ────
+// Regresión del caso real de Palma de Mallorca: un grupo de tareas del
+// mismo barrio con la misma franja horaria puede necesitar más servicio
+// del que cabe en la propia ventana (p.ej. 6 tareas de 15min = 90min en
+// una franja de 60min) — ningún reparto de flota, orden de ruta o
+// reparación de huérfanos lo arregla si el barrio entero es siempre de
+// un único vehículo. Se reparte el excedente al clúster vecino para que
+// dos vehículos puedan atender el mismo barrio a la vez.
+describe("generateScenario — reparto de barrios sobre-suscritos entre vehículos", () => {
+  it("divide un grupo de la misma franja+barrio entre dos vehículos cuando uno solo no llega", async () => {
+    // 6 tareas de 15min (90min) en una franja de 60min (540-600) — un solo
+    // vehículo solo puede hacer 4 como mucho (60min). Con reparto entre 2
+    // vehículos deberían caber las 6 (hasta 4 cada uno).
+    const barrioGroup = Array.from({ length: 6 }, (_, i) => ({
+      id: `barrio${i}`, nombre: `barrio${i}`, barrio: "ZONA CALIENTE",
+      lat: 40.000 + i * 0.0005, lng: -3.000, duracion: 15,
+      windowStart: 540, windowEnd: 600,
+    }));
+    // Relleno para que el clustering geográfico tenga dos zonas
+    // distinguibles pero cercanas — lo bastante separadas para que
+    // k-means las trate como dos clústeres, lo bastante cerca para que
+    // el vehículo "vecino" pueda desviarse de verdad hasta la zona
+    // caliente dentro de la franja (a diferencia de una distancia tipo
+    // 150km, que haría el desvío inviable por puro tiempo de viaje, no
+    // por falta de reparto).
+    const fillerNear = Array.from({ length: 8 }, (_, i) =>
+      mkTask(`fn${i}`, 40.001 + i * 0.001, -3.001));
+    const fillerFar = Array.from({ length: 8 }, (_, i) =>
+      mkTask(`ff${i}`, 40.050 + i * 0.001, -3.050));
+    const vehicles = [mkVehicle(1, null, null), mkVehicle(2, null, null)];
+    const constraints = { ...BASE_CONSTRAINTS, optimizeWeight: 0 };
+    const r = await generateScenario([...barrioGroup, ...fillerNear, ...fillerFar], vehicles, constraints);
+
+    const assignedGroup = r.schedule.flatMap(v => v.assignments.filter(a => a.barrio === "ZONA CALIENTE"));
+    // Más de lo que un solo vehículo podría hacer en la ventana (4 como
+    // mucho con 60min/15min) — solo es posible si se repartió entre dos.
+    expect(assignedGroup.length).toBeGreaterThan(4);
+
+    // Confirma que de verdad se usaron DOS vehículos distintos, no que
+    // todo cupo por azar en uno solo.
+    const usedByVehicle = new Set();
+    r.schedule.forEach(v => {
+      if (v.assignments.some(a => a.barrio === "ZONA CALIENTE")) usedByVehicle.add(v.nombre);
+    });
+    expect(usedByVehicle.size).toBe(2);
+  });
+
+  it("no toca un grupo que ya cabe en un solo vehículo (no sobre-suscrito)", async () => {
+    const barrioGroup = Array.from({ length: 3 }, (_, i) => ({
+      id: `b${i}`, nombre: `b${i}`, barrio: "ZONA TRANQUILA",
+      lat: 40.000 + i * 0.0005, lng: -3.000, duracion: 15,
+      windowStart: 540, windowEnd: 600, // 45min de servicio, cabe en 60min
+    }));
+    const vehicles = [mkVehicle(1, null, null)];
+    const r = await generateScenario(barrioGroup, vehicles, BASE_CONSTRAINTS);
+    expect(r.unassigned).toHaveLength(0);
+    expect(r.schedule[0].assignments.filter(a => !a._travel && !a._wait)).toHaveLength(3);
+  });
+});
+
 describe("generateScenario", () => {
   it("asigna todas las tareas cuando hay margen de sobra (1 vehículo, pocas tareas cercanas)", async () => {
     const tasks = Array.from({ length: 10 }, (_, i) =>
