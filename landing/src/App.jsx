@@ -236,7 +236,10 @@ const T = {
       tag: "Empresa",
       h2: "Construido por expertos en operaciones",
       sub: "Nacimos de la frustración de gestionar flotas con hojas de cálculo. Creamos la herramienta que nos hubiera gustado tener.",
-      mission: "Nuestra misión es digitalizar las operaciones de flotas urbanas para hacerlas más eficientes, sostenibles y fáciles de gestionar — para que los equipos puedan centrarse en lo que importa.",
+      visionLabel: "Visión",
+      vision: "Ser el sistema operativo de referencia mundial para organizaciones que mueven recursos en el territorio — liderando la digitalización de la gestión operativa urbana y convirtiéndonos en el estándar global para flotas de servicios.",
+      missionLabel: "Misión",
+      mission: "Unificar en una sola plataforma todo el ciclo operativo de flotas urbanas — desde la planificación hasta el operario en campo — eliminando la fragmentación entre sistemas y convirtiendo los datos operativos en decisiones accionables en tiempo real.",
       values: [
         { icon: "Target",   title: "Enfoque operativo", desc: "Cada funcionalidad nace de un problema real en calle." },
         { icon: "Speed",    title: "Velocidad",          desc: "Iteramos rápido junto a nuestros clientes." },
@@ -413,7 +416,10 @@ const T = {
       tag: "Company",
       h2: "Built by operations experts",
       sub: "We were born from the frustration of managing fleets with spreadsheets. We built the tool we wish we'd had.",
-      mission: "Our mission is to digitalize urban fleet operations to make them more efficient, sustainable and easier to manage — so teams can focus on what matters.",
+      visionLabel: "Vision",
+      vision: "To be the reference operating system worldwide for organizations that move resources across the territory — leading the digitalization of urban operations management and becoming the global standard for service fleets.",
+      missionLabel: "Mission",
+      mission: "To unify the entire operating cycle of urban fleets in a single platform — from planning to the field worker — eliminating fragmentation between systems and turning operational data into real-time, actionable decisions.",
       values: [
         { icon: "Target",   title: "Operations focus", desc: "Every feature comes from a real problem in the field." },
         { icon: "Speed",    title: "Speed",             desc: "We iterate fast, together with our customers." },
@@ -1133,8 +1139,25 @@ function AboutSection({ t }) {
               <span className="tag-light">{a.tag}</span>
             </div>
             <h2 className="reveal" style={{ fontSize: "clamp(26px,3.5vw,44px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 20, lineHeight: 1.15, transitionDelay: "0.1s" }}>{a.h2}</h2>
-            <p className="reveal" style={{ fontSize: 15, color: "#64748b", lineHeight: 1.8, marginBottom: 14, transitionDelay: "0.15s" }}>{a.sub}</p>
-            <p className="reveal" style={{ fontSize: 15, color: "#64748b", lineHeight: 1.8, transitionDelay: "0.2s" }}>{a.mission}</p>
+            <p className="reveal" style={{ fontSize: 15, color: "#64748b", lineHeight: 1.8, marginBottom: 24, transitionDelay: "0.15s" }}>{a.sub}</p>
+
+            <div className="reveal" style={{ transitionDelay: "0.2s", marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>{a.visionLabel}</div>
+              <p style={{
+                fontSize: 14.5, color: "#1e3a8a", lineHeight: 1.75, fontStyle: "italic",
+                background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10,
+                padding: "16px 18px", margin: 0,
+              }}>{a.vision}</p>
+            </div>
+
+            <div className="reveal" style={{ transitionDelay: "0.25s" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>{a.missionLabel}</div>
+              <p style={{
+                fontSize: 14.5, color: "#065f46", lineHeight: 1.75, fontStyle: "italic",
+                background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 10,
+                padding: "16px 18px", margin: 0,
+              }}>{a.mission}</p>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
