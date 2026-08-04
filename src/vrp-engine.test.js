@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   timeToMin, minToTime, turnoWindow, windowWait, haversineKm, hasCoords,
   computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet,
-  reorderByWindowHint,
+  reorderByWindowHint, shiftCodeFromStart, distSq, nnTSP, stripSort,
 } from "./vrp-engine.js";
 
 // ── timeToMin / minToTime ──────────────────────────────────────────
@@ -759,5 +759,100 @@ describe("generateScenario — reequilibrado de carga entre vehículos", () => {
     // minutos) frente a otro casi lleno (~240min) rompía esta proporción.
     const minSpan = Math.min(...segSpans), maxSpan = Math.max(...segSpans);
     expect(minSpan).toBeGreaterThan(maxSpan / 3);
+  });
+});
+
+// ── shiftCodeFromStart ───────────────────────────────────────────────
+describe("shiftCodeFromStart", () => {
+  it("clasifica un arranque exacto de mañana/tarde/noche", () => {
+    expect(shiftCodeFromStart(360)).toBe("M");  // 06:00
+    expect(shiftCodeFromStart(840)).toBe("T");  // 14:00
+    expect(shiftCodeFromStart(1320)).toBe("N"); // 22:00
+  });
+  it("se queda con el ancla más cercana para un arranque intermedio", () => {
+    expect(shiftCodeFromStart(400)).toBe("M");  // 06:40, más cerca de 06:00 que de 14:00
+    expect(shiftCodeFromStart(1000)).toBe("T"); // 16:40, más cerca de 14:00 que de 22:00
+  });
+  it("normaliza minutos fuera de rango (día siguiente) al reloj de 24h", () => {
+    expect(shiftCodeFromStart(1440 + 360)).toBe("M"); // día 2, 06:00
+  });
+  it("resuelve el cruce de medianoche en el reloj circular (23:50 -> Noche, no Mañana)", () => {
+    expect(shiftCodeFromStart(1430)).toBe("N"); // 23:50, a 110min de N (22:00) y 370min de M (06:00 del día siguiente)
+  });
+  it("devuelve null si no hay hora de arranque", () => {
+    expect(shiftCodeFromStart(null)).toBeNull();
+  });
+});
+
+// ── distSq ────────────────────────────────────────────────────────────
+describe("distSq", () => {
+  it("devuelve 0 para el mismo punto", () => {
+    expect(distSq({ lat: 43.3, lng: -3.8 }, { lat: 43.3, lng: -3.8 })).toBe(0);
+  });
+  it("calcula la distancia euclídea al cuadrado (sin sqrt)", () => {
+    expect(distSq({ lat: 0, lng: 0 }, { lat: 3, lng: 4 })).toBe(25); // 3-4-5
+  });
+});
+
+// ── nnTSP ─────────────────────────────────────────────────────────────
+describe("nnTSP", () => {
+  it("devuelve vacío o el único punto sin recorrer nada", () => {
+    expect(nnTSP([])).toEqual([]);
+    const single = [{ id: "a", lat: 1, lng: 1 }];
+    expect(nnTSP(single)).toEqual(single);
+  });
+  it("sin depósito, arranca por el primer elemento y visita siempre el vecino más cercano no visitado", () => {
+    // lat/lng (0,0) es un caso especial (hasCoords lo trata como "sin
+    // coordenadas", igual que un depósito no fijado) — se evita aquí para
+    // no mezclar ese caso con el de vecino-más-cercano que se quiere probar.
+    const stops = [
+      { id: "start", lat: 43.30, lng: -3.80 },
+      { id: "far", lat: 53.30, lng: 6.20 },
+      { id: "near", lat: 43.31, lng: -3.80 }, // claramente más cerca de "start" que "far"
+    ];
+    const route = nnTSP(stops);
+    expect(route.map(s => s.id)).toEqual(["start", "near", "far"]);
+  });
+  it("empieza por la parada más cercana al depósito cuando se indica uno", () => {
+    const stops = [
+      { id: "a", lat: 10, lng: 10 },
+      { id: "b", lat: 5, lng: 5 },
+    ];
+    const route = nnTSP(stops, { lat: 5.01, lng: 5 });
+    expect(route[0].id).toBe("b");
+  });
+  it("ignora un depósito sin coordenadas válidas (empieza por el primer elemento)", () => {
+    const stops = [
+      { id: "a", lat: 5, lng: 5 },
+      { id: "b", lat: 0, lng: 0 },
+    ];
+    const route = nnTSP(stops, { lat: null, lng: null });
+    expect(route[0].id).toBe("a");
+  });
+});
+
+// ── stripSort ─────────────────────────────────────────────────────────
+describe("stripSort", () => {
+  it("no reordena listas de menos de 2 paradas", () => {
+    const one = [{ lat: 1, lng: 1 }];
+    expect(stripSort(one)).toBe(one);
+  });
+  it("agrupa por franjas de latitud y hace zigzag en longitud", () => {
+    // Todas caen en la misma franja (rango de lat muy pequeño con 1 strip) ->
+    // strip 0 en las 4, orden por lng ascendente (índice de strip par)
+    const stops = [
+      { id: "d", lat: 0, lng: 4 },
+      { id: "b", lat: 0, lng: 2 },
+      { id: "a", lat: 0, lng: 1 },
+      { id: "c", lat: 0, lng: 3 },
+    ];
+    const sorted = stripSort(stops, 1);
+    expect(sorted.map(s => s.id)).toEqual(["a", "b", "c", "d"]);
+  });
+  it("no muta el array original", () => {
+    const stops = [{ lat: 1, lng: 2 }, { lat: 0, lng: 1 }];
+    const copy = [...stops];
+    stripSort(stops, 5);
+    expect(stops).toEqual(copy);
   });
 });
