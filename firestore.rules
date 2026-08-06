@@ -31,6 +31,14 @@ service cloud.firestore {
       return isSignedIn() && orgIdValue != null && orgIdValue == myOrgId();
     }
 
+    // Workspace de gestión (Planning/Scheduling/Rostering/Control/Analytics,
+    // más el planning de Rutas) — todo lo que no sea Field. superadmin ya
+    // tiene acceso total vía la regla comodín de más abajo, así que no hace
+    // falta repetirlo aquí.
+    function puedeWorkspace() {
+      return isSignedIn() && myProfile().rol in ['admin', 'intermedio'];
+    }
+
     // planning_layers / planning_depots / planning_settings / scheduling_roster
     // are scoped by projectId, not org_id directly — resolve the owning
     // org via the parent scheduling_projects doc.
@@ -74,7 +82,13 @@ service cloud.firestore {
         // Un admin de la misma org puede cambiar el rol de otros usuarios de
         // su org, pero nunca ascender a nadie a superadmin.
         (resource.data.org_id == myOrgId() && myProfile().rol in ['admin', 'superadmin'] &&
-          request.resource.data.rol != 'superadmin')
+          request.resource.data.rol != 'superadmin') ||
+        // Intermedio solo gestiona Field (activar/desactivar) — nunca puede
+        // tocar otro Intermedio/Admin, ni usar esto para ascender a un
+        // conductor a otro rol (el rol de destino tiene que seguir siendo
+        // 'conductor').
+        (resource.data.org_id == myOrgId() && myProfile().rol == 'intermedio' &&
+          resource.data.rol == 'conductor' && request.resource.data.rol == 'conductor')
       ) && request.resource.data.org_id == resource.data.org_id; // org_id no se puede reasignar en un update
 
       allow delete: if false;
@@ -105,34 +119,39 @@ service cloud.firestore {
     }
 
     // ── SCHEDULING ───────────────────────────────────────────────
+    // Datos del workspace de gestión — Field no tiene ningún caso de uso
+    // aquí (vive entero dentro de planes/incidencias/inventario/
+    // ubicaciones_activas/fichajes, sin tocar estas colecciones), así que
+    // además de sameOrg() se exige puedeWorkspace() (admin/intermedio;
+    // superadmin ya cubierto por la regla comodín de arriba).
     match /scheduling_vehicles/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
     match /scheduling_workers/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
     match /scheduling_projects/{projectId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow create: if sameOrg(request.resource.data.org_id);
-      allow update, delete: if sameOrg(resource.data.org_id);
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
 
       // Sin campos propios de tenant — el único límite es la ruta
       // (subcolección del proyecto), así que se resuelve el dueño vía el
       // documento padre.
       match /timetable/{entry} {
-        allow read, write: if sameOrg(projectOrg(projectId));
+        allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
       }
     }
 
     // ── PLANNING (campo orgId, camelCase, y siempre por projectId) ──
     match /planning_layers/{docId} {
-      allow read: if sameOrg(projectOrg(resource.data.projectId));
-      allow create: if sameOrg(projectOrg(request.resource.data.projectId));
-      allow update, delete: if sameOrg(projectOrg(resource.data.projectId));
+      allow read: if sameOrg(projectOrg(resource.data.projectId)) && puedeWorkspace();
+      allow create: if sameOrg(projectOrg(request.resource.data.projectId)) && puedeWorkspace();
+      allow update, delete: if sameOrg(projectOrg(resource.data.projectId)) && puedeWorkspace();
     }
     // planning_depots / planning_settings / scheduling_roster: siempre un
     // único documento cuyo ID ES el projectId (nunca se listan), así que
@@ -140,19 +159,19 @@ service cloud.firestore {
     // fiarse de que el campo orgId esté siempre presente (algunos guardados
     // parciales con merge:true no lo re-escriben).
     match /planning_depots/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
+      allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
     }
     match /planning_settings/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
+      allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
     }
     match /scheduling_roster/{projectId} {
-      allow read, write: if sameOrg(projectOrg(projectId));
+      allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
     }
 
     // ── ROSTERING (documento único por org+mes, campo org_id) ───────
     match /rostering/{docId} {
-      allow read: if sameOrg(resource.data.org_id);
-      allow write: if sameOrg(request.resource.data.org_id);
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
     }
 
     // ── UBICACIÓN EN VIVO DEL CONDUCTOR ─────────────────────────────
@@ -164,14 +183,14 @@ service cloud.firestore {
     }
 
     // ── FICHAJES (entrada/salida + kms de la jornada) ───────────────
-    // Lectura: el propio conductor (su historial), o un admin/superadmin
-    // de su misma organización (control horario/laboral). Escritura:
+    // Lectura: el propio conductor (su historial), o alguien con acceso al
+    // workspace (control horario/laboral, panel de Control). Escritura:
     // solo el propio conductor puede fichar o cerrar su propio fichaje —
     // nadie puede fichar en nombre de otro ni tocar fichajes ajenos.
     match /fichajes/{docId} {
       allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
-        (sameOrg(resource.data.org_id) && myProfile().rol in ['admin', 'superadmin'])
+        (sameOrg(resource.data.org_id) && puedeWorkspace())
       );
       allow create: if isSignedIn() &&
         request.resource.data.uid == request.auth.uid &&

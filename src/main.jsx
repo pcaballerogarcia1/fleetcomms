@@ -23,6 +23,7 @@ import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useLang, setLang, t } from "./i18n.js";
+import { puedeUsarWorkspace, roleLabel } from "./roles.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -95,7 +96,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
-          <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{sesion?.rol}</div>
+          <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
         </div>
         <button
           onClick={() => setLang(lang === "es" ? "en" : "es")}
@@ -216,6 +217,16 @@ function WorkspaceRouter() {
     if (!sesion && path !== "/login")  { go("/login"); return; }
     if (sesion  && path === "/login")  { go("/projects"); return; }
     if (sesion  && path === "/")       { go("/projects"); return; }
+    // Field (conductor) no tiene ningún caso de uso en este workspace — vive
+    // entero en /rutas /incidencias /inventario (App.jsx.jsx, otro árbol de
+    // componentes por completo). Redirección dura (no go()) porque main.jsx
+    // decide qué árbol montar (WorkspaceRouter/App/SuperAdminApp) una sola
+    // vez al cargar la página según la URL inicial — go() solo cambiaría el
+    // path dentro de este mismo árbol, sin llegar a montar App.jsx.jsx.
+    if (sesion && !puedeUsarWorkspace(sesion.rol) && path !== "/rutas") {
+      window.location.href = "/rutas";
+      return;
+    }
     if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics")) {
       go("/projects");
     }

@@ -9,6 +9,7 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
+import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -218,11 +219,11 @@ const CTip = ({active,payload,label}) => {
 
 // ── HELPERS ───────────────────────────────────────────────────────
 function timeAgo(ts){const d=(Date.now()-(ts?.toMillis?.()??ts))/1000;if(d<60)return"Ahora mismo";if(d<3600)return`Hace ${Math.floor(d/60)}min`;if(d<86400)return`Hace ${Math.floor(d/3600)}h`;return`Hace ${Math.floor(d/86400)}d`;}
-function avatarOf(u){return((u?.nombre?.[0]??"")+(u?.apellidos?.[0]??"")).toUpperCase();}
+export function avatarOf(u){return((u?.nombre?.[0]??"")+(u?.apellidos?.[0]??"")).toUpperCase();}
 function fmtMes(k){try{return new Date(k+"-01").toLocaleDateString("es-ES",{month:"long",year:"numeric"});}catch{return k;}}
 
 // Limpiar nombre de calle: "1-PONCIR-2" → "PONCIR", "2-MARE DE DEU-12" → "MARE DE DEU"
-function cleanCalle(raw) {
+export function cleanCalle(raw) {
   if (!raw || raw === "Sin calle") return raw;
   // Quitar número inicial: "1-" o "12-"
   let c = raw.replace(/^\d+-/, "");
@@ -232,7 +233,7 @@ function cleanCalle(raw) {
 }
 
 // ── KML PARSER ────────────────────────────────────────────────────
-function parseKML(rawText) {
+export function parseKML(rawText) {
   const ubicaciones = {};
   let recorrido = null;
   let docName = "";
@@ -906,7 +907,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
             <input value={comentario} onChange={e=>setCom(e.target.value)} onKeyDown={e=>e.key==="Enter"&&agregarCom()} placeholder="Añadir comentario..." style={{...S.input,flex:1,fontSize:12,padding:"7px 10px"}}/>
             <button onClick={agregarCom} style={{...S.btnSm}}>↑</button>
           </div>
-          {sesion.rol==="admin"&&<button onClick={onDelete} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f87171",width:"100%",padding:"7px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
+          {puedeGestionarRutasRol(sesion.rol)&&<button onClick={onDelete} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f87171",width:"100%",padding:"7px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
         </div>
       )}
     </div>
@@ -1056,7 +1057,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [mesFilter,setMesFilter]     = useState(null);
   const [formTarea,setFormTarea]     = useState({titulo:"",descripcion:"",vehiculo:"",estado:"pendiente"});
   const fileRef = useRef();
-  const esAdmin = sesion.rol==="admin";
+  // Intermedio tiene la misma gestión de Rutas que Administrador (subir
+  // KML, borrar planes, gestionar tareas) — solo Incidencias/Inventario/
+  // Usuarios quedan fuera de su alcance, filtrado más arriba en el árbol.
+  const esAdmin = puedeGestionarRutasRol(sesion.rol);
 
   // Compartir ubicación en vivo mientras se está en Rutas, para el mapa de
   // flota de Control. Pide permiso del navegador la primera vez que entra
@@ -1363,7 +1367,7 @@ function ModuloIncidencias({sesion,usuarios}){
     await fbUpdate("incidencias",inc._id,{estado:est});
   }
 
-  if(showAdmin) return <PanelAdmin usuarios={usuarios} orgId={sesion.org_id} onClose={()=>setShowAdmin(false)}/>;
+  if(showAdmin) return <PanelAdmin usuarios={usuarios} orgId={sesion.org_id} onClose={()=>setShowAdmin(false)} rolesCreables={rolesAsignablesPor(sesion.rol)}/>;
   if(showStats) return <PanelStats incidencias={incidencias} onClose={()=>setShowStats(false)}/>;
 
   return(
@@ -1479,11 +1483,15 @@ function PanelStats({incidencias,onClose}){
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────────
-function PanelAdmin({usuarios,orgId,onClose}){
+function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
   const [tab,setTab]=useState("lista");
-  const [form,setForm]=useState({nombre:"",apellidos:"",email:"",password:"",rol:"conductor"});
+  const [form,setForm]=useState({nombre:"",apellidos:"",email:"",password:"",rol:rolesCreables[0]});
   const [err,setErr]=useState("");
   const [saving,setSaving]=useState(false);
+  // Intermedio solo gestiona Field: la lista (y el toggle activo/inactivo,
+  // que usa el mismo endpoint) se limita a los roles que puede asignar, no
+  // a todos los usuarios de la org.
+  const usuariosVisibles = usuarios.filter(u=>rolesCreables.includes(u.rol));
 
   async function crear(){
     if(!form.nombre||!form.email||!form.password){setErr("Nombre, email y contraseña son obligatorios");return;}
@@ -1507,7 +1515,7 @@ function PanelAdmin({usuarios,orgId,onClose}){
         org_id:orgId,activo:true,createdAt:serverTimestamp(),
       });
       await secondaryAuth.signOut();
-      setForm({nombre:"",apellidos:"",email:"",password:"",rol:"conductor"});
+      setForm({nombre:"",apellidos:"",email:"",password:"",rol:rolesCreables[0]});
       setErr("");setTab("lista");
     }catch(e){
       const msgs={"auth/email-already-in-use":"Ese email ya está en uso","auth/invalid-email":"Email inválido","auth/weak-password":"Contraseña demasiado débil"};
@@ -1525,12 +1533,12 @@ function PanelAdmin({usuarios,orgId,onClose}){
       <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing:3,textTransform:"uppercase"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
       <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>{[["lista","Usuarios"],["nuevo","+ Nuevo"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...S.btnGhost,borderColor:tab===k?C.blue:C.border,color:tab===k?C.blueText:C.muted,background:tab===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
-        {tab==="lista"&&usuarios.map(u=>(
+        {tab==="lista"&&usuariosVisibles.map(u=>(
           <div key={u._id} style={{...S.card,opacity:u.activo?1:0.4}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{avatarOf(u)}</div>
-                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{u.rol}</span></div></div>
+                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{roleLabel(u.rol)}</span></div></div>
               </div>
               <button onClick={()=>toggleActivo(u)} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
             </div>
@@ -1541,7 +1549,7 @@ function PanelAdmin({usuarios,orgId,onClose}){
             {[["Nombre *","nombre","text"],["Apellidos","apellidos","text"],["Email *","email","email"],["Contraseña *","password","password"]].map(([lbl,key,type])=>(
               <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input} autoComplete={type==="password"?"new-password":"off"}/></div>
             ))}
-            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{[["conductor","Conductor"],["admin","Supervisor"]].map(([v,l])=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{l}</button>)}</div></div>
+            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{rolesCreables.map(v=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{roleLabel(v)}</button>)}</div></div>
             {err&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
             <button onClick={crear} disabled={saving} style={{...S.btn,width:"100%",opacity:saving?0.6:1}}>{saving?"Creando…":"CREAR USUARIO"}</button>
           </div>
@@ -1860,10 +1868,15 @@ function ModuloInventario({sesion,usuarios}){
 }
 
 // ── PANEL ADMIN RUTAS ─────────────────────────────────────────────
-function PanelAdminRutas({planes, usuarios, deletePlan}){
+function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [mesFiltro,  setMesFiltro]  = useState("");
   const [expandId,   setExpandId]   = useState(null);
+  // Usuarios vive aquí (y no solo dentro de Incidencias) porque Intermedio
+  // tiene acceso a esta pestaña "Admin" de Rutas pero no a Incidencias — sin
+  // esto, Intermedio no tendría ningún sitio desde el que dar de alta a
+  // Field, pese a que sí puede hacerlo (ver roles.js rolesAsignablesPor).
+  const [showUsuarios, setShowUsuarios] = useState(false);
 
   const TIPOS = TIPOS_TRABAJO;
   const meses = [...new Set(planes.map(p=>p.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
@@ -1898,6 +1911,8 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
     a.href = url; a.download = "operanzia-rutas.csv"; a.click();
     URL.revokeObjectURL(url);
   }
+
+  if (showUsuarios) return <PanelAdmin usuarios={usuarios} orgId={sesion.org_id} onClose={()=>setShowUsuarios(false)} rolesCreables={rolesAsignablesPor(sesion.rol)}/>;
 
   return (
     <div style={{paddingBottom:90}}>
@@ -1938,6 +1953,9 @@ function PanelAdminRutas({planes, usuarios, deletePlan}){
           </select>
           <button onClick={exportCSV} style={{...S.btnSm,background:C.greenDim,borderColor:`${C.green}44`,color:C.green,whiteSpace:"nowrap"}}>
             ⬇ CSV
+          </button>
+          <button onClick={()=>setShowUsuarios(true)} style={{...S.btnSm,whiteSpace:"nowrap"}}>
+            ⚙️ Usuarios
           </button>
         </div>
 
@@ -2147,11 +2165,18 @@ export default function App(){
 
   if(!sesion) return <Login/>;
 
-  const esAdmin=sesion.rol==="admin";
+  const esIntermedio = sesion.rol==="intermedio";
+  const esAdmin = puedeGestionarRutasRol(sesion.rol); // admin/intermedio/superadmin
+  // Intermedio solo tiene Rutas (gestión completa) + Admin (KPIs de rutas y
+  // Usuarios, ver PanelAdminRutas) — Incidencias/Inventario no están en su
+  // alcance (roles.js). Field/Admin/Superadmin siguen viendo esas dos tal
+  // cual las veían antes de este cambio.
   const TABS=[
     {key:"rutas",      icon:"🗺️", label:"Rutas"},
-    {key:"incidencias",icon:"📋", label:"Incidencias"},
-    {key:"inventario", icon:"📦", label:"Inventario"},
+    ...(esIntermedio ? [] : [
+      {key:"incidencias",icon:"📋", label:"Incidencias"},
+      {key:"inventario", icon:"📦", label:"Inventario"},
+    ]),
     ...(esAdmin?[{key:"admin",icon:"⚙️",label:"Admin"}]:[]),
   ];
   const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
@@ -2167,7 +2192,7 @@ export default function App(){
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
-            <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{sesion.rol}</div>
+            <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{roleLabel(sesion.rol)}</div>
           </div>
           <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
@@ -2180,7 +2205,7 @@ export default function App(){
       {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
       {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
-      {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan}/>}
+      {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan} sesion={sesion}/>}
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(22,27,39,0.97)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)"}}>
         {TABS.map(t=>{
