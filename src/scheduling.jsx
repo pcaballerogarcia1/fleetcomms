@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
-import { useRostering, workerCodeOnDay, isUnavailable, SHIFT_META } from "./rostering.jsx";
+import {
+  useRostering, workerCodeOnDay, isUnavailable, SHIFT_META,
+  useVehicleAvailability, vehicleCodeOnDay, isVehicleUnavailable, VEHICLE_STATUS_META,
+} from "./rostering.jsx";
 import { PlanningPage, idbGet } from "./planning.jsx";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
@@ -1963,30 +1966,53 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // ── Rostering integration ────────────────────────────────────
   const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
   const { grid: rosterGrid } = useRostering(orgId, schedYear || null, schedMonth || null);
+  const { grid: vehicleRosterGrid } = useVehicleAvailability(orgId, schedYear || null, schedMonth || null);
 
-  // Compute worker-day conflicts after VRP (L/B days assigned to routes)
+  // Compute worker-day conflicts after VRP (L/B days assigned to routes),
+  // más los vehículo-día marcados Taller/Avería/ITV en el cuadrante de
+  // Rostering → Vehículos con una ruta asignada ese día. Mismo tratamiento
+  // que los trabajadores: no bloquea la generación del VRP en sí (el
+  // escenario ya está calculado para todo el mes de una vez), pero avisa
+  // aquí y evita publicar ese día concreto a Rutas (ver publishToRoutes).
   const rosterConflicts = (() => {
-    if (!schedules.vehicles || !rosterGrid) return [];
+    if (!schedules.vehicles || (!rosterGrid && !vehicleRosterGrid)) return [];
     const conflicts = [];
     for (const row of schedules.vehicles) {
-      const linked = workers.filter(w => w.vehiculoId === (row._id || row.id));
-      if (!linked.length) continue;
       const byDay = {};
       for (const a of row.assignments) {
         if (a._break || a._travel || a._wait) continue;
         const d = Math.floor((a._start - constraints.startMin) / 1440) + 1;
         byDay[d] = true;
       }
-      for (const w of linked) {
-        for (const day of Object.keys(byDay).map(Number)) {
-          const code = workerCodeOnDay(rosterGrid, w._id, day);
-          if (isUnavailable(code)) {
+      const dayNums = Object.keys(byDay).map(Number);
+
+      if (vehicleRosterGrid) {
+        const vId = row._id || row.id;
+        for (const day of dayNums) {
+          const code = vehicleCodeOnDay(vehicleRosterGrid, vId, day);
+          if (isVehicleUnavailable(code)) {
             conflicts.push({
-              name: [w.nombre, w.apellidos].filter(Boolean).join(" "),
-              day,
-              code,
-              label: SHIFT_META[code]?.label ?? code,
+              name: row.nombre || row.matricula || "Vehículo",
+              day, code,
+              label: VEHICLE_STATUS_META[code]?.label ?? code,
             });
+          }
+        }
+      }
+
+      if (rosterGrid) {
+        const linked = workers.filter(w => w.vehiculoId === (row._id || row.id));
+        for (const w of linked) {
+          for (const day of dayNums) {
+            const code = workerCodeOnDay(rosterGrid, w._id, day);
+            if (isUnavailable(code)) {
+              conflicts.push({
+                name: [w.nombre, w.apellidos].filter(Boolean).join(" "),
+                day,
+                code,
+                label: SHIFT_META[code]?.label ?? code,
+              });
+            }
           }
         }
       }
@@ -2866,6 +2892,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           if (conductor) {
             const code = workerCodeOnDay(rosterGrid, conductor._id ?? conductor.id ?? "", d);
             if (isUnavailable(code)) continue;
+          }
+          // Vehículo marcado Taller/Avería/ITV ese día en Rostering →
+          // Vehículos: no se publica esa jornada a Rutas, igual que ya
+          // pasa arriba con el conductor de baja/libre.
+          if (vehicleRosterGrid) {
+            const vCode = vehicleCodeOnDay(vehicleRosterGrid, row._id ?? row.id ?? "", d);
+            if (isVehicleUnavailable(vCode)) continue;
           }
           const stops = byDay[d];
           const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
