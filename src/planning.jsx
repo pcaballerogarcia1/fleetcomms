@@ -395,7 +395,7 @@ function routeStats(pts) {
   return { km, minAt30: Math.round(km / 30 * 60) };
 }
 
-function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId, windowedKeys }) {
+function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId, windowedKeys, nombreOverrides }) {
   const divRef    = useRef(null);
   const mapRef    = useRef(null);
   const tileRef          = useRef(null);
@@ -533,8 +533,11 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
             html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;transition:transform .15s;"></div>`,
             iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2],
           });
+          // Nombre renombrado a mano en Timetable, si lo hay — mismo puntoKey.
+          const overrideName = nombreOverrides?.get(puntoKey);
+          const mPopup = overrideName ? { ...m, nombre: overrideName } : m;
           const marker = L.marker([lat, lng], { icon })
-            .bindPopup(makePopupHtml(m, color), { maxWidth: 320, className: "" });
+            .bindPopup(makePopupHtml(mPopup, color), { maxWidth: 320, className: "" });
 
           marker.on("click", e => {
             if (!selModeRef.current) return;
@@ -544,7 +547,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
             const idx  = prev.findIndex(s => s.lat === lat && s.lng === lng);
             setSelected(idx >= 0
               ? prev.filter((_, i) => i !== idx)
-              : [...prev, { lat, lng, nombre: m.nombre || m.name || getBarrio(m) || `${lat.toFixed(4)},${lng.toFixed(4)}` }]
+              : [...prev, { lat, lng, nombre: overrideName || m.nombre || m.name || getBarrio(m) || `${lat.toFixed(4)},${lng.toFixed(4)}` }]
             );
           });
 
@@ -606,7 +609,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       }
       map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [40, 40], maxZoom: 16 });
     }
-  }, [layers, depots, barrioColors, windowedKeys]);
+  }, [layers, depots, barrioColors, windowedKeys, nombreOverrides]);
 
   // Draw / update selection polyline and numbered pins
   useEffect(() => {
@@ -1560,11 +1563,20 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
   const [localDur,   setLocalDur]   = useState(entry.duracion != null ? String(entry.duracion) : "");
   const [franjaIni,  setFranjaIni]  = useState(entry.franjaInicio || "");
   const [franjaFin,  setFranjaFin]  = useState(entry.franjaFin || "");
+  // Nombre mostrado si no hay uno explícito guardado — mismo fallback de
+  // siempre (código SAP/calle/coordenadas), solo para que el input no
+  // aparezca vacío la primera vez que se edita un punto sin nombre propio.
+  const fallbackNombre =
+    Object.entries(entry.campos || {}).find(([k]) => ["pa","idsap","id_sap","codigopoint","codigo"].includes(k.toLowerCase()))?.[1]
+    || Object.entries(entry.campos || {}).find(([k]) => k.toLowerCase() === "calle")?.[1]
+    || `${entry.lat?.toFixed(4)}, ${entry.lng?.toFixed(4)}`;
+  const [localNombre, setLocalNombre] = useState(entry.nombre || "");
 
   useEffect(() => { setLocalStart(entry.horaInicio || ""); },                          [entry.horaInicio]);
   useEffect(() => { setLocalDur(entry.duracion != null ? String(entry.duracion) : ""); }, [entry.duracion]);
   useEffect(() => { setFranjaIni(entry.franjaInicio || ""); },                          [entry.franjaInicio]);
   useEffect(() => { setFranjaFin(entry.franjaFin || ""); },                             [entry.franjaFin]);
+  useEffect(() => { setLocalNombre(entry.nombre || ""); },                              [entry.nombre]);
 
   const camposRows = Object.entries(entry.campos || {})
     .filter(([k, v]) => k.toLowerCase() !== "barrio" && v !== "" && v != null);
@@ -1573,12 +1585,27 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
     <tr style={{ borderBottom: `1px solid ${C.border}`, animation: "planning-fadein .15s ease both" }}>
       {/* Punto */}
       <td style={{ padding: "10px 14px", verticalAlign: "top" }}>
-        <div style={{ fontWeight: 500, fontSize: 12, color: C.text, marginBottom: 2 }}>
-          {entry.nombre
-            || Object.entries(entry.campos || {}).find(([k]) => ["pa","idsap","id_sap","codigopoint","codigo"].includes(k.toLowerCase()))?.[1]
-            || Object.entries(entry.campos || {}).find(([k]) => k.toLowerCase() === "calle")?.[1]
-            || `${entry.lat?.toFixed(4)}, ${entry.lng?.toFixed(4)}`}
-        </div>
+        <input
+          value={localNombre}
+          placeholder={fallbackNombre}
+          onChange={e => setLocalNombre(e.target.value)}
+          onBlur={e => {
+            const v = e.target.value.trim();
+            // Guarda siempre algo mostrable: si lo dejan vacío, cae de nuevo
+            // al nombre calculado (código SAP/calle/coordenadas) en vez de
+            // guardar una cadena vacía que se vería en blanco en todas partes.
+            onUpdate({ nombre: v || fallbackNombre });
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.borderColor = "transparent";
+          }}
+          title="Nombre del punto — se sincroniza con el mapa y con Scheduling"
+          style={{
+            width: "100%", fontWeight: 500, fontSize: 12, color: C.text, marginBottom: 2,
+            background: "transparent", border: "1px solid transparent", borderRadius: 4,
+            padding: "2px 4px", marginLeft: -4, outline: "none", fontFamily: font,
+          }}
+          onFocus={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = C.border2; }}
+        />
         <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>
           {(() => {
             const calle = Object.entries(entry.campos || {}).find(([k]) => k.toLowerCase() === "calle")?.[1];
@@ -1814,11 +1841,21 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
     // Write in batches of 499 sequentially to avoid overwhelming Firestore
     (async () => {
+      // Puntos que ya tienen una fila en el timetable — no les tocamos el
+      // nombre aquí. Si no se excluyera, cada vez que `layers` cambia de
+      // referencia (recarga de página, nueva importación...) este efecto
+      // volvería a escribir el nombre recalculado desde el layer original,
+      // borrando en silencio cualquier renombrado hecho a mano en el
+      // Timetable (ver TimetableRow). El resto de campos sí se resincroniza.
+      const existingKeys = new Set((await getDocs(timetableCol)).docs.map(d => d.id));
       const BATCH_SIZE = 499;
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
         entries.slice(i, i + BATCH_SIZE).forEach(e => {
-          batch.set(doc(timetableCol, e.puntoKey), { ...e, updatedAt: serverTimestamp() }, { merge: true });
+          const payload = existingKeys.has(e.puntoKey)
+            ? { lat: e.lat, lng: e.lng, campos: e.campos, barrio: e.barrio, layerColor: e.layerColor, updatedAt: serverTimestamp() }
+            : { ...e, updatedAt: serverTimestamp() };
+          batch.set(doc(timetableCol, e.puntoKey), payload, { merge: true });
         });
         await batch.commit();
       }
@@ -2431,22 +2468,27 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
     return () => unsub();
   }, [projectId]);
 
-  // ── Franjas horarias: puntoKeys con horaInicio/franjaInicio en el timetable ──
-  // Vive en una colección aparte (scheduling_projects/{id}/timetable) de los
-  // marcadores del mapa (planning_layers) — sin este listener el mapa no
-  // tiene forma de saber qué puntos tienen franja para diferenciarlos.
+  // ── Franjas horarias y nombres editados: viven en una colección aparte
+  // (scheduling_projects/{id}/timetable) de los marcadores del mapa
+  // (planning_layers) — sin este listener el mapa no tiene forma de saber
+  // qué puntos tienen franja, ni el nombre renombrado a mano en Timetable.
   const [windowedKeys, setWindowedKeys] = useState(new Set());
+  const [nombreOverrides, setNombreOverrides] = useState(new Map());
   useEffect(() => {
     const timetableCol = projectId
       ? collection(db, "scheduling_projects", projectId, "timetable")
       : collection(db, "planning_timetable");
     const unsub = onSnapshot(timetableCol, snap => {
       const keys = new Set();
+      const names = new Map();
       snap.docs.forEach(d => {
         const e = d.data();
-        if (e.horaInicio || e.franjaInicio) keys.add(e.puntoKey || d.id);
+        const key = e.puntoKey || d.id;
+        if (e.horaInicio || e.franjaInicio) keys.add(key);
+        if (e.nombre) names.set(key, e.nombre);
       });
       setWindowedKeys(keys);
+      setNombreOverrides(names);
     }, () => {});
     return () => unsub();
   }, [projectId]);
@@ -2814,7 +2856,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               contenedorFilter={contenedorFilter}
               setContenedorFilter={setContenedorFilter}
             />
-            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} />
+            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} />
           </>
         ) : (
           <TabTimetable layers={layers} projectId={projectId} />

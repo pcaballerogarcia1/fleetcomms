@@ -1824,6 +1824,10 @@ async function loadTasksFromLayers(projectId) {
         }
         if (windowStart != null) { t.windowStart = windowStart; t.windowEnd = windowEnd; }
         if (e.duracion != null && t.duracion == null) t.duracion = e.duracion;
+        // Nombre renombrado a mano en el Timetable (Planning) — manda sobre
+        // el nombre calculado del layer original, igual que ya pasa con la
+        // ventana horaria y la duración: el Timetable es quien lo edita.
+        if (e.nombre) t.nombre = e.nombre;
       }
     }
   } catch { /* sin timetable — las tareas siguen sin ventana, comportamiento de siempre */ }
