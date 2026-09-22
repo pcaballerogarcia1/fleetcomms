@@ -1950,7 +1950,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [osrmRunning,  setOsrmRunning] = useState(false);
   const [genError,     setGenError]    = useState(null);
   const [scaleInfo,    setScaleInfo]   = useState(null);
-  const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"|"saving"
+  const [genPhase,     setGenPhase]    = useState(null); // "vrp"|"osrm"|"workers"
+  // Guardado del resumen (proyecto + historial + roster) tras generar —
+  // deliberadamente fuera de genPhase/generating: el escenario ya está
+  // calculado y usable en cuanto sale de "workers", así que no tiene
+  // sentido tener al usuario mirando una pantalla de "Guardando resultado"
+  // colgada si la conexión a Firestore se atasca en este último paso (pasa
+  // con red floja o pestaña que estuvo en segundo plano) — el resumen es
+  // secundario y se ve reflejado en la tarjeta de Proyectos, no en el
+  // Gantt que el usuario ya tiene delante.
+  const [savingSummary,    setSavingSummary]    = useState(false);
+  const [saveSummaryError, setSaveSummaryError] = useState(null);
   // Progreso real del auto-escalado (ronda, vehículos probados, sin
   // asignar, tiempo de esa ronda) — sin esto, un cálculo largo en un
   // proyecto grande es indistinguible de uno colgado.
@@ -1963,7 +1973,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     vrp:     { label: "Calculando rutas VRP…",            pct: 20 },
     osrm:    { label: "Calculando km reales por carretera…", pct: 55 },
     workers: { label: "Asignando trabajadores…",          pct: 78 },
-    saving:  { label: "Guardando resultado…",             pct: 92 },
   };
 
   // Elapsed-time counter — starts when generating=true, resets when done
@@ -2483,112 +2492,136 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         console.log(`[PERF] pintado tras setSchedules: ${(performance.now() - t_setSchedules).toFixed(0)}ms`);
       }));
 
-      // Persist full schedule to IndexedDB (too large for Firestore)
+      // Persist full schedule to IndexedDB (too large for Firestore) — local,
+      // sin red de por medio, se queda antes de soltar la UI.
       if (activeProject?._id) {
         idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows });
       }
 
-      // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
-      setGenPhase("saving");
-      console.time("[PERF] firestore-save");
-      if (activeProject && onProjectUpdate) {
-        const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
-        const totalStops = vehicleSchedule.reduce((s, v) =>
-          s + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0);
-        // Vehículos y turnos usados — solo nombre/matrícula/turno (nada de
-        // assignments, eso ya vive aparte en IndexedDB) para que la tarjeta
-        // de Proyectos pueda listarlos sin cargar el schedule completo.
-        const vehiclesUsed = vehicleSchedule.map(v => ({
-          nombre: v.nombre || v.matricula || "Vehículo",
-          turno:  v.turno || "",
-        }));
-        const turnosUsed = Array.from(new Set(vehiclesUsed.map(v => v.turno).filter(Boolean)));
-        await onProjectUpdate({
-          scheduling: {
-            vehicleCount: vehicleSchedule.length,
-            workerCount:  usedWorkerRows.length,
-            constraints:  { ...constraints, days: newDays },
-            daysUsed: newDays, totalKm, totalStops,
-            vehicles: vehiclesUsed, turnos: turnosUsed,
-            generatedAt: new Date().toISOString(),
-          },
-          status: "schedulado",
-        });
-        // Historial de versiones — solo métricas (no las assignments, muy
-        // grandes para Firestore), para poder comparar "esta semana vs la
-        // anterior" sin tener que rehacer el escenario.
-        if (activeProject._id) {
-          addDoc(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), {
-            vehicleCount: vehicleSchedule.length, workerCount: usedWorkerRows.length,
-            unassigned: vr.unassigned.length, daysUsed: newDays,
-            totalKm: +totalKm.toFixed(1), totalStops,
-            generatedAt: serverTimestamp(),
-          }).catch(() => {});
-        }
-      }
+      // El escenario ya está calculado y es utilizable desde aquí (Gantt,
+      // mover tareas, publicar...) — lo que queda es guardar el resumen en
+      // Firestore (para la tarjeta de Proyectos, el historial y Rostering),
+      // y eso ya no debe tener bloqueada la pantalla de generación. Antes,
+      // si la conexión a Firestore se atascaba en este último paso (pasa
+      // con red floja o una pestaña que estuvo un rato en segundo plano),
+      // la pantalla se quedaba en "Guardando resultado…" indefinidamente
+      // aunque el guardado normalmente SÍ llegaba a completarse en el
+      // servidor — al recargar, ahí estaba. Ver savingSummary más arriba.
+      setGenerating(false);
+      setGenPhase(null);
 
-      // Save worker–day roster so Rostering can display scheduled shifts
-      if (activeProject?._id && orgId) {
+      // ── Guardado del resumen — en segundo plano, no bloquea la UI ──────
+      (async () => {
+        setSavingSummary(true);
+        setSaveSummaryError(null);
         try {
-          const turnoByWorker = {};
-          const daysWorked    = {};
-          // Resumen por trabajador+día (paradas, km, horario, vehículo) para
-          // el popup de "resumen del turno" en Rostering (clic derecho en una
-          // celda). Solo números pequeños, no las paradas completas — eso sí
-          // superaría el límite de 1MB de Firestore con escenarios grandes.
-          const dailyDetail = {};
-          for (const wRow of workerRows) {
-            const wId = wRow._id || wRow.id;
-            // Antes se sacaba el código M/T/N con una regex sobre el texto
-            // del turno ("Mañana (06-14)"...) — funciona para trabajadores
-            // reales, pero los conductores virtuales (autoScaleFleet) tienen
-            // turno:"Jornada completa" siempre, así que nunca hacían match y
-            // se quedaban sin código: "Optimizar" en Rostering los saltaba
-            // en silencio (parecía no hacer nada con escenarios grandes,
-            // donde la mayoría de conductores son virtuales). Usar la
-            // ventana horaria real (_tw.start, ya calculada para cada
-            // trabajador, real o virtual) es agnóstico al texto del turno.
-            const code = wRow._tw ? shiftCodeFromStart(wRow._tw.start) : null;
-            if (code) turnoByWorker[wId] = code;
-
-            const byDay = {}; // dayNum -> { stops, km, start, end }
-            for (const a of (wRow.assignments ?? [])) {
-              const dayNum = Math.floor((a._start - constraints.startMin) / 1440) + 1;
-              const dd = byDay[dayNum] ?? (byDay[dayNum] = { stops: 0, km: 0, start: a._start, end: a._end });
-              dd.start = Math.min(dd.start, a._start);
-              dd.end   = Math.max(dd.end, a._end);
-              if (a._travel) dd.km += a.km || 0;
-              else if (!a._break && !a._wait) dd.stops += 1;
-            }
-            const dayNums = Object.keys(byDay).map(Number).sort((a, b) => a - b);
-            if (dayNums.length) {
-              daysWorked[wId] = dayNums;
-              const vehicleRow = wRow.vehiculoId
-                ? vehicleSchedule.find(v => (v._id || v.id) === wRow.vehiculoId)
-                : null;
-              const vehiculo = vehicleRow ? (vehicleRow.nombre || vehicleRow.matricula || "") : "";
-              dailyDetail[wId] = {};
-              for (const dn of dayNums) {
-                const dd = byDay[dn];
-                dailyDetail[wId][dn] = {
-                  stops: dd.stops, km: +dd.km.toFixed(1),
-                  start: dd.start, end: dd.end, vehiculo,
-                };
-              }
+          console.time("[PERF] firestore-save");
+          // Auto-save summary to project (assignments excluded — too large for Firestore 1MB limit)
+          if (activeProject && onProjectUpdate) {
+            const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
+            const totalStops = vehicleSchedule.reduce((s, v) =>
+              s + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0);
+            // Vehículos y turnos usados — solo nombre/matrícula/turno (nada de
+            // assignments, eso ya vive aparte en IndexedDB) para que la tarjeta
+            // de Proyectos pueda listarlos sin cargar el schedule completo.
+            const vehiclesUsed = vehicleSchedule.map(v => ({
+              nombre: v.nombre || v.matricula || "Vehículo",
+              turno:  v.turno || "",
+            }));
+            const turnosUsed = Array.from(new Set(vehiclesUsed.map(v => v.turno).filter(Boolean)));
+            await onProjectUpdate({
+              scheduling: {
+                vehicleCount: vehicleSchedule.length,
+                workerCount:  usedWorkerRows.length,
+                constraints:  { ...constraints, days: newDays },
+                daysUsed: newDays, totalKm, totalStops,
+                vehicles: vehiclesUsed, turnos: turnosUsed,
+                generatedAt: new Date().toISOString(),
+              },
+              status: "schedulado",
+            });
+            // Historial de versiones — solo métricas (no las assignments, muy
+            // grandes para Firestore), para poder comparar "esta semana vs la
+            // anterior" sin tener que rehacer el escenario.
+            if (activeProject._id) {
+              addDoc(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), {
+                vehicleCount: vehicleSchedule.length, workerCount: usedWorkerRows.length,
+                unassigned: vr.unassigned.length, daysUsed: newDays,
+                totalKm: +totalKm.toFixed(1), totalStops,
+                generatedAt: serverTimestamp(),
+              }).catch(() => {});
             }
           }
-          await setDoc(doc(db, "scheduling_roster", activeProject._id), {
-            projectId: activeProject._id,
-            orgId,
-            mes: activeProject.mes ?? "",   // "YYYY-MM" — schedule starts on day 1 of this month
-            turnoByWorker,
-            daysWorked,
-            dailyDetail,
-            generatedAt: new Date().toISOString(),
-          });
-        } catch { /* non-critical */ }
-      }
-      console.timeEnd("[PERF] firestore-save");
+
+          // Save worker–day roster so Rostering can display scheduled shifts
+          if (activeProject?._id && orgId) {
+            try {
+              const turnoByWorker = {};
+              const daysWorked    = {};
+              // Resumen por trabajador+día (paradas, km, horario, vehículo) para
+              // el popup de "resumen del turno" en Rostering (clic derecho en una
+              // celda). Solo números pequeños, no las paradas completas — eso sí
+              // superaría el límite de 1MB de Firestore con escenarios grandes.
+              const dailyDetail = {};
+              for (const wRow of workerRows) {
+                const wId = wRow._id || wRow.id;
+                // Antes se sacaba el código M/T/N con una regex sobre el texto
+                // del turno ("Mañana (06-14)"...) — funciona para trabajadores
+                // reales, pero los conductores virtuales (autoScaleFleet) tienen
+                // turno:"Jornada completa" siempre, así que nunca hacían match y
+                // se quedaban sin código: "Optimizar" en Rostering los saltaba
+                // en silencio (parecía no hacer nada con escenarios grandes,
+                // donde la mayoría de conductores son virtuales). Usar la
+                // ventana horaria real (_tw.start, ya calculada para cada
+                // trabajador, real o virtual) es agnóstico al texto del turno.
+                const code = wRow._tw ? shiftCodeFromStart(wRow._tw.start) : null;
+                if (code) turnoByWorker[wId] = code;
+
+                const byDay = {}; // dayNum -> { stops, km, start, end }
+                for (const a of (wRow.assignments ?? [])) {
+                  const dayNum = Math.floor((a._start - constraints.startMin) / 1440) + 1;
+                  const dd = byDay[dayNum] ?? (byDay[dayNum] = { stops: 0, km: 0, start: a._start, end: a._end });
+                  dd.start = Math.min(dd.start, a._start);
+                  dd.end   = Math.max(dd.end, a._end);
+                  if (a._travel) dd.km += a.km || 0;
+                  else if (!a._break && !a._wait) dd.stops += 1;
+                }
+                const dayNums = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+                if (dayNums.length) {
+                  daysWorked[wId] = dayNums;
+                  const vehicleRow = wRow.vehiculoId
+                    ? vehicleSchedule.find(v => (v._id || v.id) === wRow.vehiculoId)
+                    : null;
+                  const vehiculo = vehicleRow ? (vehicleRow.nombre || vehicleRow.matricula || "") : "";
+                  dailyDetail[wId] = {};
+                  for (const dn of dayNums) {
+                    const dd = byDay[dn];
+                    dailyDetail[wId][dn] = {
+                      stops: dd.stops, km: +dd.km.toFixed(1),
+                      start: dd.start, end: dd.end, vehiculo,
+                    };
+                  }
+                }
+              }
+              await setDoc(doc(db, "scheduling_roster", activeProject._id), {
+                projectId: activeProject._id,
+                orgId,
+                mes: activeProject.mes ?? "",   // "YYYY-MM" — schedule starts on day 1 of this month
+                turnoByWorker,
+                daysWorked,
+                dailyDetail,
+                generatedAt: new Date().toISOString(),
+              });
+            } catch { /* non-critical */ }
+          }
+          console.timeEnd("[PERF] firestore-save");
+        } catch (e) {
+          console.error("post-generate save error:", e);
+          setSaveSummaryError(e.message || "No se pudo guardar el resumen del proyecto");
+        } finally {
+          setSavingSummary(false);
+        }
+      })();
 
     } catch (e) {
       console.error("generateScenario error:", e);
@@ -3346,6 +3379,25 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         <div style={{ padding: "7px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>Error al generar: {genError}</span>
           <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+        </div>
+      )}
+
+      {/* Guardado del resumen en segundo plano — no bloquea, solo informa.
+          Si tarda mucho o falla (conexión atascada), el escenario ya está
+          generado y usable igualmente; esto solo afecta a la tarjeta de
+          Proyectos, el historial de versiones y Rostering. */}
+      {savingSummary && !focusMode && (
+        <div style={{ padding: "5px 16px", background: "rgba(92,155,255,0.06)", borderBottom: `1px solid rgba(92,155,255,0.18)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ width: 10, height: 10, border: `2px solid ${C.blue}55`, borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite" }} />
+          <span style={{ fontSize: 11, color: C.blueText }}>Guardando resumen del proyecto…</span>
+        </div>
+      )}
+      {saveSummaryError && !focusMode && (
+        <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.red }}>
+            No se pudo guardar el resumen del proyecto ({saveSummaryError}) — el escenario generado sigue intacto, pero la tarjeta de Proyectos y Rostering pueden no reflejarlo. Prueba a recargar.
+          </span>
+          <button onClick={() => setSaveSummaryError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
 
