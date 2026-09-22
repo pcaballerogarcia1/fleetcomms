@@ -178,11 +178,14 @@ function parseCSV(text) {
 
   const headers = rawHeader.split(delim).map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
 
-  // Find lat/lng column indices
+  // Find lat/lng column indices — misma detección (exacta, luego por
+  // palabra completa) que usa el importador de Excel, ver _findCol.
   const LAT_NAMES = ["lat","latitude","latitud","y","coord_y","geo_lat"];
   const LNG_NAMES = ["lon","lng","long","longitude","longitud","x","coord_x","geo_lon","geo_long"];
-  const latIdx = headers.findIndex(h => LAT_NAMES.includes(h));
-  const lngIdx = headers.findIndex(h => LNG_NAMES.includes(h));
+  const latHeader = _findCol(headers, LAT_NAMES);
+  const lngHeader = _findCol(headers, LNG_NAMES);
+  const latIdx = latHeader != null ? headers.indexOf(latHeader) : -1;
+  const lngIdx = lngHeader != null ? headers.indexOf(lngHeader) : -1;
 
   if (latIdx === -1 || lngIdx === -1) {
     return {
@@ -194,8 +197,13 @@ function parseCSV(text) {
   const markers = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(delim).map(c => c.trim().replace(/^["']|["']$/g, ""));
-    const lat = parseFloat(cols[latIdx]);
-    const lng = parseFloat(cols[lngIdx]);
+    // A prueba de coma decimal (frecuente en CSV exportados con locale
+    // español) — sin esto, parseFloat("39,5712345") se quedaba en 39,
+    // perdiendo todo el decimal en silencio: no daba error, simplemente
+    // amontonaba puntos de sitios distintos en la misma coordenada
+    // truncada a grados enteros.
+    const lat = parseFloat((cols[latIdx] ?? "").replace(",", "."));
+    const lng = parseFloat((cols[lngIdx] ?? "").replace(",", "."));
     if (isNaN(lat) || isNaN(lng)) continue;
     const fields = {};
     headers.forEach((h, idx) => {
@@ -210,22 +218,74 @@ function parseCSV(text) {
   return { markers, error: null };
 }
 
+// Interpreta una celda combinada "lat,lng" en sus dos números — a prueba
+// del formato español (coma decimal), que hace ambiguo el separador de
+// campo cuando también es coma. Casos reales que esto cubre:
+//   "39.5712345,2.6543210"   → separador coma, decimales con punto (caso normal)
+//   "39,5712345,2,6543210"   → 4 trozos sin puntos: cada par de trozos es
+//                              un número con coma decimal, pegado sin más
+//                              separador que la propia coma decimal
+//   "39,5712345;2,6543210"   → punto y coma como separador de campo,
+//                              coma como decimal dentro de cada número
+// Antes, un simple raw.split(",") con el primer/segundo trozo se comía
+// filas enteras con coma decimal: partía "39,5712345,2,6543210" en 4
+// trozos y se quedaba solo con los dos primeros (lat=39, lng=5712345),
+// que ni siquiera pasa el rango geográfico — la fila entera se perdía en
+// silencio, sin error visible para el usuario.
+function parseCoordPair(raw) {
+  const parts = raw.split(",").map(s => s.trim());
+
+  if (parts.length === 2) {
+    const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+    if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+  }
+  if (parts.length === 4 && parts.every(p => !p.includes("."))) {
+    const lat = parseFloat(`${parts[0]}.${parts[1]}`);
+    const lng = parseFloat(`${parts[2]}.${parts[3]}`);
+    if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+  }
+  if (raw.includes(";")) {
+    const semi = raw.split(";").map(s => s.trim().replace(",", "."));
+    if (semi.length === 2) {
+      const lat = parseFloat(semi[0]), lng = parseFloat(semi[1]);
+      if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+    }
+  }
+  return [NaN, NaN];
+}
+
+// Quita acentos y pasa a minúsculas — "Latitud (grados)" y "Latitud" deben
+// reconocerse igual aunque el usuario le ponga texto extra a la cabecera.
+function _normHeader(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
 // ── XLSX PARSER ───────────────────────────────────────────────────
+// Dos niveles: primero coincidencia exacta (más segura); si ninguna
+// columna encaja así, se prueba una coincidencia "por palabra completa"
+// dentro de la cabecera (con límites de palabra, para que "latitud" no
+// case por accidente con algo tipo "plataforma"). Esto cubre cabeceras
+// reales tipo "Latitud (WGS84)", "LAT." o "Coordenada Y" que antes no
+// encontraban columna y el import fallaba entero con "no se encontraron
+// columnas de coordenadas".
 function _findCol(keys, candidates) {
   for (const c of candidates) {
-    const k = keys.find(k => k.toLowerCase().trim() === c);
+    const k = keys.find(k => _normHeader(k) === c);
+    if (k) return k;
+  }
+  // Candidatos de una sola letra ("x", "y") se quedan fuera del nivel 2:
+  // "y" es la conjunción española, así que "Nombre y Dirección" haría
+  // falso positivo como columna de latitud si se permitiera aquí.
+  for (const c of candidates.filter(c => c.length > 2)) {
+    const re = new RegExp(`\\b${c}\\b`);
+    const k = keys.find(k => re.test(_normHeader(k)));
     if (k) return k;
   }
   return null;
 }
 
-async function parseXLSX(file) {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(new Uint8Array(buffer), { type: "array" });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-  if (rows.length === 0) return { markers: [], error: "El archivo Excel está vacío." };
+function parseXLSXRows(rows) {
+  if (rows.length === 0) return { markers: [], error: "La hoja está vacía." };
 
   const keys = Object.keys(rows[0]);
 
@@ -251,13 +311,10 @@ async function parseXLSX(file) {
       lat = parseFloat(String(row[latKey] ?? "").replace(",", "."));
       lng = parseFloat(String(row[lngKey] ?? "").replace(",", "."));
     } else {
-      // Combined "coordenadas" text column — split by comma
+      // Combined "coordenadas" text column — a prueba de coma decimal (ver parseCoordPair)
       const raw = String(row[coordKey] ?? "").trim();
       if (!raw) continue;
-      const parts = raw.split(",");
-      if (parts.length < 2) continue;
-      lat = parseFloat(parts[0].trim());
-      lng = parseFloat(parts[1].trim());
+      [lat, lng] = parseCoordPair(raw);
     }
     if (isNaN(lat) || isNaN(lng)) continue;
     // Skip UTM / out-of-range geographic coordinates
@@ -278,6 +335,29 @@ async function parseXLSX(file) {
     return { markers: [], error: hint };
   }
   return { markers, error: null };
+}
+
+async function parseXLSX(file) {
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(buffer), { type: "array" });
+
+  if (wb.SheetNames.length === 0) return { markers: [], error: "El archivo Excel está vacío." };
+
+  // Antes solo se miraba wb.SheetNames[0] — si los datos estaban en una
+  // pestaña que no era la primera (portada, resumen, otra hoja delante...)
+  // el import fallaba con "no se encontraron columnas de coordenadas" sin
+  // más pista, aunque el archivo tuviera los datos correctos más allá.
+  // Probamos cada hoja en orden y nos quedamos con la primera que dé
+  // resultado; si ninguna cuaja, devolvemos el error de la última — suele
+  // ser la más informativa (la hoja con más pinta de ser la de datos).
+  let lastResult = { markers: [], error: "El archivo Excel está vacío." };
+  for (const sheetName of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+    const result = parseXLSXRows(rows);
+    if (result.markers.length > 0) return result;
+    lastResult = result;
+  }
+  return lastResult;
 }
 
 // ── KML PARSER (generic) ─────────────────────────────────────────
