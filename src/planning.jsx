@@ -359,12 +359,22 @@ function makePopupHtml(marker, color) {
 // ── MAP STYLES ────────────────────────────────────────────────────
 const MAP_STYLES = [
   {
+    // CARTO (basemaps.cartocdn.com) empezó a exigir API key en sus tiles
+    // dark_all/light_all — sin ella, cada tile llega con la marca de agua
+    // "API KEY REQUIRED" en vez del mapa. Esri sirve estos "Canvas" (mismo
+    // estilo: base minimalista en gris/oscuro pensada para pintar datos
+    // encima) sin necesidad de key, con el mismo esquema {z}/{y}/{x} que ya
+    // usa "Satélite" un poco más abajo.
     key: "dark", label: "Oscuro", preview: "#1a2035",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    // El "Base" de Esri es solo el fondo, sin nombres de calles/barrios —
+    // esos vienen en una capa "Reference" aparte pensada para apilar encima.
+    labelsUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
   },
   {
     key: "light", label: "Claro", preview: "#f5f5f0",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    labelsUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
   },
   {
     key: "satellite", label: "Satélite", preview: "#2d4a2d",
@@ -399,6 +409,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
   const divRef    = useRef(null);
   const mapRef    = useRef(null);
   const tileRef          = useRef(null);
+  const tileLabelsRef    = useRef(null);
   const leafletLayersRef  = useRef([]);
   const depotLayersRef    = useRef([]);
   const canvasOverlayRef  = useRef(null); // raw canvas overlay for large datasets
@@ -660,6 +671,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       .setView([40.416, -3.703], 6);
     const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
     tileRef.current = L.tileLayer(style.url).addTo(map);
+    if (style.labelsUrl) tileLabelsRef.current = L.tileLayer(style.labelsUrl).addTo(map);
     mapRef.current = map;
     drawLayers();
   }, [drawLayers, mapStyle]);
@@ -670,7 +682,12 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
     if (!L || !mapRef.current) return;
     const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
     if (tileRef.current) mapRef.current.removeLayer(tileRef.current);
+    if (tileLabelsRef.current) { mapRef.current.removeLayer(tileLabelsRef.current); tileLabelsRef.current = null; }
     tileRef.current = L.tileLayer(style.url).addTo(mapRef.current);
+    // Etiquetas (nombres de calles/barrios) por encima del fondo, si el
+    // estilo las trae en una capa aparte (ver comentario en MAP_STYLES).
+    if (style.labelsUrl) tileLabelsRef.current = L.tileLayer(style.labelsUrl).addTo(mapRef.current);
+    if (tileLabelsRef.current) tileLabelsRef.current.bringToBack();
     tileRef.current.bringToBack();
   }, [mapStyle]);
 
