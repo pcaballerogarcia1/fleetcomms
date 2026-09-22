@@ -1314,21 +1314,19 @@ function ConstraintsPanel({ c, onChange, orgId }) {
   );
 }
 
-// ── VEHICLES TAB ──────────────────────────────────────────────────
-export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
-  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa", depotLat: "", depotLng: "" };
-  const [form,   setForm]   = useState(empty);
-  const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({});
+// ── DEPOT SECTION ─────────────────────────────────────────────────
+// Selector de cochera/depot compartido por vehículos y trabajadores: dos
+// campos lat/lng editables a mano, más un botón para elegir uno de los
+// depots ya creados en Planning (planning_depots) si el proyecto tiene
+// alguno. Cada instancia lleva su propio estado de "picker abierto" — no
+// hace falta compartirlo entre formularios porque cada uno es independiente.
+function DepotSection({ projectId, formObj, setFormObj }) {
   const [planningDepots, setPlanningDepots] = useState([]);
-  const [showDepotPicker, setShowDepotPicker] = useState(null); // vehicleId | "new"
+  const [showPicker,     setShowPicker]     = useState(false);
 
   // Load depots from Firestore planning_depots (migrated from localStorage)
   useEffect(() => {
-    if (!activeProject?._id) return;
-    const projectId = activeProject._id;
+    if (!projectId) return;
     return onSnapshot(doc(db, "planning_depots", projectId), snap => {
       if (snap.exists()) {
         setPlanningDepots(snap.data().depots ?? []);
@@ -1341,11 +1339,75 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
       }
     }, () => {
       try {
-        const raw = localStorage.getItem(`fc_depots_${activeProject._id}`);
+        const raw = localStorage.getItem(`fc_depots_${projectId}`);
         if (raw) setPlanningDepots(JSON.parse(raw) ?? []);
       } catch { /* ignore */ }
     });
-  }, [activeProject?._id]);
+  }, [projectId]);
+
+  const inpStyle = { flex: 1, minWidth: 0, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
+
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: .5 }}>COCHERA / DEPOT (inicio/fin de turno)</span>
+        {planningDepots.length > 0 && (
+          <button onClick={() => setShowPicker(v => !v)} style={{
+            fontSize: 10, padding: "3px 8px", background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
+            color: C.blueText, cursor: "pointer", fontFamily: font,
+          }}>Elegir de Planning</button>
+        )}
+      </div>
+      {showPicker && (
+        <div style={{ marginBottom: 8 }}>
+          {planningDepots.length === 0 ? (
+            <div style={{ padding: "8px 12px", fontSize: 11, color: C.muted }}>No hay depots en Planning para este proyecto.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {planningDepots.map(d => (
+                <button key={d.id} onClick={() => { setFormObj({ ...formObj, depotLat: String(d.lat), depotLng: String(d.lng) }); setShowPicker(false); }} style={{
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
+                  color: C.text, fontSize: 12, padding: "6px 10px", cursor: "pointer",
+                  fontFamily: font, textAlign: "left", transition: "border-color .12s",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+                >
+                  <span style={{ marginRight: 6 }}>🏠</span>
+                  <b>{d.nombre}</b>
+                  <span style={{ color: C.dim, marginLeft: 8, fontSize: 10, fontFamily: mono }}>{(+d.lat).toFixed(5)}, {(+d.lng).toFixed(5)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input type="number" placeholder="Lat (ej: 41.3851)" value={formObj.depotLat ?? ""}
+          onChange={e => setFormObj({ ...formObj, depotLat: e.target.value })}
+          step="0.00001" style={inpStyle} />
+        <input type="number" placeholder="Lng (ej: 2.1734)" value={formObj.depotLng ?? ""}
+          onChange={e => setFormObj({ ...formObj, depotLng: e.target.value })}
+          step="0.00001" style={inpStyle} />
+        {(formObj.depotLat || formObj.depotLng) && (
+          <button onClick={() => setFormObj({ ...formObj, depotLat: "", depotLng: "" })} title="Quitar depot"
+            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}>
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── VEHICLES TAB ──────────────────────────────────────────────────
+export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
+  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa", depotLat: "", depotLng: "" };
+  const [form,   setForm]   = useState(empty);
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
   const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
   const inpStyle = { ...selStyle };
@@ -1408,63 +1470,6 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
       style={inpStyle} />
   );
 
-  function DepotPicker({ onPick }) {
-    if (planningDepots.length === 0) return (
-      <div style={{ padding: "8px 12px", fontSize: 11, color: C.muted }}>No hay depots en Planning para este proyecto.</div>
-    );
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {planningDepots.map(d => (
-          <button key={d.id} onClick={() => onPick(d)} style={{
-            background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.text, fontSize: 12, padding: "6px 10px", cursor: "pointer",
-            fontFamily: font, textAlign: "left", transition: "border-color .12s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
-            onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-          >
-            <span style={{ marginRight: 6 }}>🏠</span>
-            <b>{d.nombre}</b>
-            <span style={{ color: C.dim, marginLeft: 8, fontSize: 10, fontFamily: mono }}>{(+d.lat).toFixed(5)}, {(+d.lng).toFixed(5)}</span>
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  const depotSection = (formObj, setFormObj, pickerKey) => (
-    <div style={{ marginTop: 10, padding: "10px 12px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: .5 }}>DEPOT (inicio/fin de turno)</span>
-        {planningDepots.length > 0 && (
-          <button onClick={() => setShowDepotPicker(showDepotPicker === pickerKey ? null : pickerKey)} style={{
-            fontSize: 10, padding: "3px 8px", background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
-            color: C.blueText, cursor: "pointer", fontFamily: font,
-          }}>Importar desde Planning</button>
-        )}
-      </div>
-      {showDepotPicker === pickerKey && (
-        <div style={{ marginBottom: 8 }}>
-          <DepotPicker onPick={d => { setFormObj({ ...formObj, depotLat: String(d.lat), depotLng: String(d.lng) }); setShowDepotPicker(null); }} />
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input type="number" placeholder="Lat (ej: 41.3851)" value={formObj.depotLat ?? ""}
-          onChange={e => setFormObj({ ...formObj, depotLat: e.target.value })}
-          step="0.00001" style={{ ...inpStyle, flex: 1, minWidth: 0 }} />
-        <input type="number" placeholder="Lng (ej: 2.1734)" value={formObj.depotLng ?? ""}
-          onChange={e => setFormObj({ ...formObj, depotLng: e.target.value })}
-          step="0.00001" style={{ ...inpStyle, flex: 1, minWidth: 0 }} />
-        {(formObj.depotLat || formObj.depotLng) && (
-          <button onClick={() => setFormObj({ ...formObj, depotLat: "", depotLng: "" })} title="Quitar depot"
-            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}>
-            ×
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 720 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -1499,7 +1504,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
             }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
-          {depotSection(form, setForm, "new")}
+          <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
       )}
 
@@ -1530,7 +1535,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   Cancelar
                 </button>
               </div>
-              {depotSection(editForm, setEditForm, v._id)}
+              <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
             <div key={v._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
@@ -1570,8 +1575,8 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
 }
 
 // ── WORKERS TAB ───────────────────────────────────────────────────
-export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
-  const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "" };
+export function TabTrabajadores({ workers, vehicles, loading, activeProject, orgId }) {
+  const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "", depotLat: "", depotLng: "" };
   const [form,     setForm]     = useState(empty);
   const [adding,   setAdding]   = useState(false);
   const [saving,   setSaving]   = useState(false);
@@ -1589,6 +1594,8 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
         nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
         turno: form.turno, rol: form.rol,
         vehiculoId: form.vehiculoId || "",
+        depotLat: form.depotLat ? +form.depotLat : null,
+        depotLng: form.depotLng ? +form.depotLng : null,
         activo: true, org_id: orgId, createdAt: serverTimestamp(),
       });
       setForm(empty); setAdding(false);
@@ -1603,6 +1610,8 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
         nombre: editForm.nombre.trim(), apellidos: (editForm.apellidos || "").trim(),
         turno: editForm.turno, rol: editForm.rol,
         vehiculoId: editForm.vehiculoId || "",
+        depotLat: editForm.depotLat ? +editForm.depotLat : null,
+        depotLng: editForm.depotLng ? +editForm.depotLng : null,
       });
       setEditId(null);
     } catch (e) { console.error("save worker:", e); alert("Error al guardar."); }
@@ -1616,7 +1625,7 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
 
   function startEdit(w) {
     setEditId(w._id);
-    setEditForm({ nombre: w.nombre || "", apellidos: w.apellidos || "", turno: w.turno || "Mañana (06-14)", rol: w.rol || "conductor", vehiculoId: w.vehiculoId || "" });
+    setEditForm({ nombre: w.nombre || "", apellidos: w.apellidos || "", turno: w.turno || "Mañana (06-14)", rol: w.rol || "conductor", vehiculoId: w.vehiculoId || "", depotLat: w.depotLat ?? "", depotLng: w.depotLng ?? "" });
     setAdding(false);
   }
 
@@ -1685,6 +1694,7 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
             }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
+          <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
       )}
 
@@ -1724,6 +1734,7 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
                   Cancelar
                 </button>
               </div>
+              <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
             <div key={w._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
@@ -1741,6 +1752,11 @@ export function TabTrabajadores({ workers, vehicles, loading, orgId }) {
                       ? <span style={{ color: C.blue, background: C.blueDim, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}>🚛 {v.nombre || v.matricula}</span>
                       : <span style={{ color: C.red, fontSize: 10 }}>Sin vehículo</span>;
                   })()}
+                  {w.depotLat && w.depotLng && (
+                    <span style={{ color: "#fb923c", display: "flex", alignItems: "center", gap: 3 }}>
+                      🏠 {(+w.depotLat).toFixed(4)}, {(+w.depotLng).toFixed(4)}
+                    </span>
+                  )}
                 </div>
               </div>
               <button onClick={() => startEdit(w)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
@@ -4056,7 +4072,7 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
           />
         </div>
         {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}
-        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} orgId={orgId} />}
+        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} activeProject={activeProject} orgId={orgId} />}
       </div>
     </div>
   );
