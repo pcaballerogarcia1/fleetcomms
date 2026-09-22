@@ -2449,12 +2449,21 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const totalKm    = vehicleSchedule.reduce((s, v) => s + (v.totalKm || 0), 0);
         const totalStops = vehicleSchedule.reduce((s, v) =>
           s + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0);
+        // Vehículos y turnos usados — solo nombre/matrícula/turno (nada de
+        // assignments, eso ya vive aparte en IndexedDB) para que la tarjeta
+        // de Proyectos pueda listarlos sin cargar el schedule completo.
+        const vehiclesUsed = vehicleSchedule.map(v => ({
+          nombre: v.nombre || v.matricula || "Vehículo",
+          turno:  v.turno || "",
+        }));
+        const turnosUsed = Array.from(new Set(vehiclesUsed.map(v => v.turno).filter(Boolean)));
         await onProjectUpdate({
           scheduling: {
             vehicleCount: vehicleSchedule.length,
             workerCount:  usedWorkerRows.length,
             constraints:  { ...constraints, days: newDays },
             daysUsed: newDays, totalKm, totalStops,
+            vehicles: vehiclesUsed, turnos: turnosUsed,
             generatedAt: new Date().toISOString(),
           },
           status: "schedulado",
@@ -3623,6 +3632,11 @@ const PROJECT_STATUS = {
   publicado:    { label: "Publicado",   color: C.amber },
 };
 
+// Colores disponibles para etiquetar la tarjeta de cada proyecto (franja
+// izquierda) — puramente visual, para distinguir proyectos de un vistazo
+// cuando hay muchos en la misma organización.
+const PROJECT_COLORS = ["#5c9bff","#34d399","#fb923c","#f87171","#a78bfa","#fbbf24","#f472b6","#22d3ee"];
+
 export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin }) {
   const [projects,    setProjects]    = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -3707,6 +3721,12 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     await deleteDoc(doc(db, "scheduling_projects", id));
   }
 
+  const [colorPickerFor, setColorPickerFor] = useState(null);
+  function setProjectColor(id, color) {
+    setColorPickerFor(null);
+    updateDoc(doc(db, "scheduling_projects", id), { color }).catch(e => console.error("setProjectColor:", e));
+  }
+
   const inpStyle = { width: "100%", background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "9px 12px", fontSize: 13, fontFamily: font, outline: "none", marginBottom: 10 };
 
   return (
@@ -3763,10 +3783,12 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
               <div key={p._id} style={{
                 background: C.card,
                 border: `1px solid ${isActive ? C.blue : C.border}`,
+                borderLeft: `4px solid ${p.color || C.border}`,
                 borderRadius: 12, padding: 20,
                 boxShadow: isActive ? `0 0 0 1px ${C.blue}` : "none",
                 display: "flex", flexDirection: "column", gap: 14,
                 animation: "sched-fadein .15s ease both",
+                position: "relative",
               }}>
                 {/* Title row */}
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -3778,9 +3800,45 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                     <div style={{ fontSize: 10, color: C.dim }}>{p.mes} · {dateStr}</div>
                     {p.descripcion && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.descripcion}</div>}
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "22", borderRadius: 5, padding: "3px 8px", border: `1px solid ${st.color}44`, flexShrink: 0 }}>
-                    {st.label}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => setColorPickerFor(cur => cur === p._id ? null : p._id)}
+                      title="Color del proyecto"
+                      style={{
+                        width: 20, height: 20, borderRadius: "50%",
+                        background: p.color || C.surface2,
+                        border: `1px solid ${p.color ? "rgba(255,255,255,0.5)" : C.border2}`,
+                        cursor: "pointer", padding: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "22", borderRadius: 5, padding: "3px 8px", border: `1px solid ${st.color}44` }}>
+                      {st.label}
+                    </span>
+                  </div>
+                  {colorPickerFor === p._id && (
+                    <>
+                    <div onClick={() => setColorPickerFor(null)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                    <div
+                      style={{
+                        position: "absolute", top: 44, right: 20, zIndex: 20,
+                        background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 8,
+                        padding: 8, display: "flex", gap: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                      }}
+                    >
+                      {p.color && (
+                        <button onClick={() => setProjectColor(p._id, null)} title="Quitar color"
+                          style={{ width: 18, height: 18, borderRadius: "50%", background: "none", border: `1px solid ${C.dim}`, color: C.dim, fontSize: 10, lineHeight: 1, cursor: "pointer", padding: 0 }}>×</button>
+                      )}
+                      {PROJECT_COLORS.map(c => (
+                        <button key={c} onClick={() => setProjectColor(p._id, c)} title={c}
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%", background: c, cursor: "pointer", padding: 0,
+                            border: p.color === c ? "2px solid #fff" : "1px solid rgba(255,255,255,0.3)",
+                          }} />
+                      ))}
+                    </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Planning section */}
@@ -3806,18 +3864,43 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 12px" }}>
                   <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.3, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Scheduling</div>
                   {p.scheduling ? (
-                    <div style={{ display: "flex", gap: 20 }}>
-                      {[
-                        [p.scheduling.daysUsed || 1, "días"],
-                        [p.scheduling.totalStops || 0, "paradas"],
-                        [`${(p.scheduling.totalKm || 0).toFixed(0)} km`, ""],
-                        [p.scheduling.vehicleSchedule?.length || 0, "vehículos"],
-                      ].map(([v, l]) => (
-                        <div key={l}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{v}</div>
-                          <div style={{ fontSize: 9, color: C.dim }}>{l}</div>
+                    <div>
+                      <div style={{ display: "flex", gap: 20 }}>
+                        {[
+                          [p.scheduling.daysUsed || 1, "días"],
+                          [p.scheduling.totalStops || 0, "paradas"],
+                          [`${(p.scheduling.totalKm || 0).toFixed(0)} km`, ""],
+                          [p.scheduling.vehicleCount ?? p.scheduling.vehicles?.length ?? 0, "vehículos"],
+                        ].map(([v, l]) => (
+                          <div key={l}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{v}</div>
+                            <div style={{ fontSize: 9, color: C.dim }}>{l}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {!!p.scheduling.turnos?.length && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Turnos</div>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {p.scheduling.turnos.map(tu => (
+                              <span key={tu} style={{ fontSize: 9, background: C.blueDim, border: `1px solid ${C.border2}`, color: C.blueText, borderRadius: 4, padding: "1px 6px" }}>{tu}</span>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                      )}
+                      {!!p.scheduling.vehicles?.length && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Vehículos</div>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {p.scheduling.vehicles.slice(0, 8).map((v, i) => (
+                              <span key={v.nombre + i} title={v.turno || ""} style={{ fontSize: 9, background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 6px" }}>{v.nombre}</span>
+                            ))}
+                            {p.scheduling.vehicles.length > 8 && (
+                              <span style={{ fontSize: 9, color: C.dim, padding: "1px 6px" }}>+{p.scheduling.vehicles.length - 8} más</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin schedule — genera el VRP</div>
