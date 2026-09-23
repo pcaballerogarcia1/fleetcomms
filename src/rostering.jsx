@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase.js";
 import {
   optimizeRoster, checkWorkerMonth, describeReasons,
-  DEFAULT_ROSTER_RULES, CODE_WINDOWS,
+  DEFAULT_ROSTER_RULES, CODE_WINDOWS, ESTATUTO_RULES, ESTATUTO_ARTS,
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import {
-  doc, onSnapshot, setDoc, serverTimestamp,
+  doc, onSnapshot, setDoc, getDoc, serverTimestamp,
   collection, query, where,
 } from "firebase/firestore";
 
@@ -692,6 +692,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // org_id) para no necesitar reglas de Firestore nuevas.
   const [rules, setRules] = useState(DEFAULT_ROSTER_RULES);
   const [horasPorTrabajador, setHorasPorTrabajador] = useState({});
+  // Convenio colectivo del que salen las reglas: { nombre, codigo, vigencia,
+  // url, arts: { regla: "art. 23" }, pdf: { name, size, chunks } }
+  const [convenio, setConvenio] = useState({});
   const [showRules, setShowRules] = useState(false);
   const [optResult, setOptResult] = useState(null);
   const rulesDocId = orgId ? `${orgId}_reglas` : null;
@@ -702,14 +705,16 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       const d = snap.exists() ? snap.data() : {};
       setRules({ ...DEFAULT_ROSTER_RULES, ...(d.rules || {}) });
       setHorasPorTrabajador(d.horasPorTrabajador || {});
+      setConvenio(d.convenio || {});
     }, () => { /* aún sin reglas guardadas: valen las de por defecto */ });
   }, [rulesDocId]);
 
-  function saveRules(newRules, newHoras) {
+  function saveRules(newRules, newHoras, newConvenio = convenio) {
+    setConvenio(newConvenio);
     setRules(newRules);
     setHorasPorTrabajador(newHoras);
     if (rulesDocId) setDoc(doc(db, "rostering", rulesDocId), {
-      org_id: orgId, rules: newRules, horasPorTrabajador: newHoras, updatedAt: serverTimestamp(),
+      org_id: orgId, rules: newRules, horasPorTrabajador: newHoras, convenio: newConvenio, updatedAt: serverTimestamp(),
     });
   }
 
@@ -1224,12 +1229,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             <tbody>
               {workers.map((w, wi) => {
                 const stats = workerStats(w._id);
-                const check = checkWorkerMonth(d => workedInterval(w._id, d), daysInMonth, rules, +horasPorTrabajador[w._id] || 0);
-                const ruleIssues = [
-                  check.overHours && `${check.hours}h supera el tope de ${check.cap}h`,
-                  check.overRun && `${check.maxRun} días seguidos (máx. ${rules.maxDiasSeguidos})`,
-                  check.restBreaks > 0 && `${check.restBreaks} descanso(s) de menos de ${rules.descansoMinH}h`,
-                ].filter(Boolean);
+                const check = checkWorkerMonth(d => workedInterval(w._id, d), daysInMonth, rules, +horasPorTrabajador[w._id] || 0, { year, month });
+                const ruleIssues = check.issues;
                 const rowBg = wi % 2 === 0 ? C.bg : "#12161f";
                 const shiftMeta = w.turno ? SHIFT_META[w.turno] : null;
 
@@ -1558,9 +1559,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
       {showRules && (
         <RulesModal
-          rules={rules} horas={horasPorTrabajador} workers={workers}
+          rules={rules} horas={horasPorTrabajador} convenio={convenio} workers={workers} orgId={orgId}
           onClose={() => setShowRules(false)}
-          onSave={(r, h) => { saveRules(r, h); setShowRules(false); }}
+          onSave={(r, h, c) => { saveRules(r, h, c); setShowRules(false); }}
         />
       )}
       {optResult && (
@@ -1570,57 +1571,226 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   );
 }
 
-// ── MODAL: reglas del cuadrante ────────────────────────────────────
-function RulesModal({ rules, horas, workers, onClose, onSave }) {
-  const [r, setR] = useState(rules);
+// ── MODAL: reglas del cuadrante + convenio colectivo ───────────────
+// Formulario guiado: el convenio (PDF) se abre al lado para ir leyéndolo, y
+// cada regla lleva el artículo del que sale y qué buscar en el texto. El
+// PDF se guarda troceado en Firestore (colección `rostering`, docs
+// `${orgId}_convenio_pdf_${uploadId}_${i}`) para que lo vea todo el equipo sin
+// depender de Firebase Storage. Cada subida usa su propio uploadId: si se
+// cancela el modal, el PDF anterior sigue intacto.
+const RULE_FIELDS = [
+  { key: "maxHorasMes",         label: "Máx. horas al mes",              suffix: "h/mes", busca: "cómputo mensual, jornada" },
+  { key: "jornadaAnualH",       label: "Jornada anual",                  suffix: "h/año", busca: "jornada anual, horas de trabajo efectivo" },
+  { key: "maxHorasDia",         label: "Jornada máxima diaria",          suffix: "h",     busca: "jornada diaria, horas ordinarias" },
+  { key: "descansoMinH",        label: "Descanso entre jornadas",        suffix: "h",     busca: "descanso entre jornadas" },
+  { key: "descansoSemanalH",    label: "Descanso semanal seguido",       suffix: "h",     busca: "descanso semanal, día y medio" },
+  { key: "maxDiasSeguidos",     label: "Máx. días seguidos",             suffix: "días",  busca: "días consecutivos, días de trabajo seguidos" },
+  { key: "minFindesLibres",     label: "Fines de semana libres al mes",  suffix: "mín.",  busca: "fines de semana, sábados y domingos" },
+  { key: "maxNochesSeguidas",   label: "Máx. noches seguidas",           suffix: "",      busca: "trabajo nocturno, nocturnidad" },
+  { key: "maxNochesMes",        label: "Máx. noches al mes",             suffix: "",      busca: "nocturnidad, turno de noche" },
+  { key: "maxDomingosFestivos", label: "Máx. domingos/festivos al mes",  suffix: "",      busca: "domingos, festivos" },
+];
+const PDF_CHUNK = 700_000;          // caracteres base64 por documento (< 1MB)
+const PDF_MAX_BYTES = 10 * 1024 * 1024;
+
+// "12/10/2026, 2026-12-25" → ["2026-10-12", "2026-12-25"]
+function parseFestivos(text) {
+  const out = [];
+  for (const raw of text.split(/[\s,;]+/).filter(Boolean)) {
+    let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) { out.push(`${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`); continue; }
+    m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) out.push(`${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`);
+  }
+  return [...new Set(out)].sort();
+}
+
+function RulesModal({ rules, horas, convenio, workers, orgId, onClose, onSave }) {
+  const [r, setR] = useState({ ...DEFAULT_ROSTER_RULES, ...rules });
   const [h, setH] = useState(horas);
-  const num = (key, suffix, help) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-      <label style={{ fontSize: 12, color: C.muted, width: 190, flexShrink: 0 }}>{help}</label>
-      <input type="number" min={0} value={r[key] ?? ""}
-        onChange={e => setR({ ...r, [key]: Math.max(0, parseInt(e.target.value) || 0) })}
-        style={inputStyle} />
-      <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>
-    </div>
+  const [cv, setCv] = useState({ arts: {}, ...convenio });
+  const [festText, setFestText] = useState((rules.festivos || []).join(", "));
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [pdfBusy, setPdfBusy] = useState(null); // texto de progreso
+  const fileRef = useRef(null);
+
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
+  async function uploadPdf(file) {
+    if (!file) return;
+    if (file.type !== "application/pdf") { alert("Sube el convenio en PDF."); return; }
+    if (file.size > PDF_MAX_BYTES) { alert("El PDF pasa de 10 MB — sube una versión más ligera."); return; }
+    setPdfBusy("Subiendo convenio…");
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result).split(",")[1]);
+        fr.onerror = rej;
+        fr.readAsDataURL(file);
+      });
+      const n = Math.ceil(b64.length / PDF_CHUNK);
+      const uploadId = Date.now().toString(36);
+      for (let i = 0; i < n; i++) {
+        setPdfBusy(`Subiendo convenio… ${i + 1}/${n}`);
+        await setDoc(doc(db, "rostering", `${orgId}_convenio_pdf_${uploadId}_${i}`), {
+          org_id: orgId, i, data: b64.slice(i * PDF_CHUNK, (i + 1) * PDF_CHUNK),
+        });
+      }
+      setCv(c => ({ ...c, pdf: { name: file.name, size: file.size, chunks: n, uploadId, uploadedAt: new Date().toISOString() } }));
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(URL.createObjectURL(file)); // se abre ya, sin volver a descargarlo
+    } catch (e) {
+      alert("No se pudo subir el convenio: " + (e.message || e));
+    } finally {
+      setPdfBusy(null);
+    }
+  }
+
+  async function openPdf() {
+    if (pdfUrl || !cv.pdf?.chunks) return;
+    setPdfBusy("Abriendo convenio…");
+    try {
+      let b64 = "";
+      for (let i = 0; i < cv.pdf.chunks; i++) {
+        const snap = await getDoc(doc(db, "rostering", `${orgId}_convenio_pdf_${cv.pdf.uploadId}_${i}`));
+        b64 += snap.data()?.data || "";
+      }
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      setPdfUrl(URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })));
+    } catch (e) {
+      alert("No se pudo abrir el convenio: " + (e.message || e));
+    } finally {
+      setPdfBusy(null);
+    }
+  }
+
+  function fillEstatuto() {
+    const next = { ...r };
+    const arts = { ...(cv.arts || {}) };
+    for (const [k, v] of Object.entries(ESTATUTO_RULES)) {
+      next[k] = v;
+      if (!arts[k]) arts[k] = ESTATUTO_ARTS[k];
+    }
+    setR(next);
+    setCv({ ...cv, arts });
+  }
+
+  function save() {
+    onSave({ ...r, festivos: parseFestivos(festText) }, h, cv);
+  }
+
+  const setArt = (key, val) => setCv({ ...cv, arts: { ...(cv.arts || {}), [key]: val } });
+  const meta = (key, placeholder, width = "100%") => (
+    <input value={cv[key] || ""} placeholder={placeholder}
+      onChange={e => setCv({ ...cv, [key]: e.target.value })}
+      style={{ ...inputStyle, width }} />
   );
+  const sectionTitle = t => (
+    <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, margin: "14px 0 6px" }}>{t}</div>
+  );
+
   return (
-    <ModalShell title="Reglas del cuadrante" onClose={onClose} width={460}>
-      <div style={{ fontSize: 11, color: C.dim, marginBottom: 14 }}>
-        Se aplican al pulsar <b style={{ color: C.muted }}>Optimizar</b> (escenarios en modo libre) y se comprueban
-        siempre en la columna de resumen. 0 = sin límite.
-      </div>
-      {num("maxDiasSeguidos", "días", "Máx. días seguidos trabajando")}
-      {num("maxHorasMes", "h/mes", "Máx. horas al mes")}
-      {num("descansoMinH", "h", "Descanso mínimo entre turnos")}
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.muted, marginBottom: 16, cursor: "pointer" }}>
-        <input type="checkbox" checked={!!r.equilibrar} onChange={e => setR({ ...r, equilibrar: e.target.checked })}
-          style={{ accentColor: C.blue }} />
-        Repartir horas y fines de semana de forma equitativa
-      </label>
-
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
-        Horas/mes por trabajador (vacío = {r.maxHorasMes || "sin límite"})
-      </div>
-      <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px" }}>
-        {workers.length === 0 && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>Sin trabajadores.</div>}
-        {workers.map(w => (
-          <div key={w._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 0" }}>
-            <span style={{ fontSize: 12, color: C.text }}>{[w.nombre, w.apellidos].filter(Boolean).join(" ")}</span>
-            <input type="number" min={0} placeholder={String(r.maxHorasMes || "")} value={h[w._id] ?? ""}
-              onChange={e => {
-                const v = parseInt(e.target.value);
-                const next = { ...h };
-                if (v > 0) next[w._id] = v; else delete next[w._id];
-                setH(next);
-              }}
-              style={{ ...inputStyle, width: 64 }} />
+    <ModalShell title="Reglas del cuadrante" onClose={onClose} width={pdfUrl ? 1280 : 640}>
+      <div style={{ display: "flex", gap: 16, alignItems: "stretch", flexWrap: "wrap" }}>
+        {pdfUrl && (
+          <div style={{ flex: "1 1 520px", minHeight: 520, display: "flex", flexDirection: "column" }}>
+            <iframe title="Convenio" src={pdfUrl}
+              style={{ flex: 1, width: "100%", minHeight: 520, border: `1px solid ${C.border}`, borderRadius: 6, background: "#fff" }} />
+            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>
+              Ctrl+F dentro del documento para buscar lo que indica cada regla.
+            </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-        <button onClick={onClose} style={secondaryBtn}>Cancelar</button>
-        <button onClick={() => onSave(r, h)} style={primaryBtn}>Guardar</button>
+        <div style={{ flex: "1 1 520px", minWidth: 0 }}>
+          {/* ── Convenio ── */}
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>
+            Sube el convenio colectivo y rellena cada regla con lo que dice, anotando el artículo.
+            Se aplican al pulsar <b style={{ color: C.muted }}>Optimizar</b> y se comprueban siempre en la columna de resumen.
+            0 = no se aplica.
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+            <input ref={fileRef} type="file" accept="application/pdf" style={{ display: "none" }}
+              onChange={e => { uploadPdf(e.target.files?.[0]); e.target.value = ""; }} />
+            <button onClick={() => fileRef.current?.click()} disabled={!!pdfBusy} style={secondaryBtn}>
+              {cv.pdf ? "Cambiar PDF del convenio" : "Subir PDF del convenio"}
+            </button>
+            {cv.pdf && !pdfUrl && (
+              <button onClick={openPdf} disabled={!!pdfBusy} style={secondaryBtn}>Abrir al lado</button>
+            )}
+            {pdfUrl && <button onClick={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }} style={secondaryBtn}>Cerrar PDF</button>}
+            <button onClick={fillEstatuto} style={secondaryBtn}
+              title="Jornada diaria 9h, descanso entre jornadas 12h, descanso semanal 36h, jornada anual 1.826h">
+              Rellenar mínimos del Estatuto
+            </button>
+            {pdfBusy && <span style={{ fontSize: 11, color: C.blue }}>{pdfBusy}</span>}
+            {cv.pdf && !pdfBusy && (
+              <span style={{ fontSize: 11, color: C.dim }}>{cv.pdf.name} · {(cv.pdf.size / 1024 / 1024).toFixed(1)} MB</span>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {meta("nombre", "Nombre del convenio")}
+            {meta("codigo", "Código de convenio (REGCON)")}
+            {meta("vigencia", "Vigencia (p. ej. 2025–2027)")}
+            {meta("url", "Enlace BOE / BOP")}
+          </div>
+
+          {/* ── Reglas ── */}
+          {sectionTitle("Reglas")}
+          {RULE_FIELDS.map(f => (
+            <div key={f.key} style={{ display: "grid", gridTemplateColumns: "190px 110px 1fr", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.muted }}>{f.label}</div>
+                <div style={{ fontSize: 10, color: C.dim }}>Busca: {f.busca}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input type="number" min={0} value={r[f.key] ?? 0}
+                  onChange={e => setR({ ...r, [f.key]: Math.max(0, parseFloat(e.target.value) || 0) })}
+                  style={{ ...inputStyle, width: 64 }} />
+                <span style={{ fontSize: 10.5, color: C.dim }}>{f.suffix}</span>
+              </div>
+              <input value={cv.arts?.[f.key] || ""} placeholder="Artículo (p. ej. art. 23.2)"
+                onChange={e => setArt(f.key, e.target.value)}
+                style={{ ...inputStyle, width: "100%" }} />
+            </div>
+          ))}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.muted, margin: "8px 0", cursor: "pointer" }}>
+            <input type="checkbox" checked={!!r.equilibrar} onChange={e => setR({ ...r, equilibrar: e.target.checked })}
+              style={{ accentColor: C.blue }} />
+            Repartir horas y fines de semana de forma equitativa (preferencia, no obligatoria)
+          </label>
+
+          {sectionTitle("Festivos (para el máximo de domingos/festivos)")}
+          <textarea value={festText} onChange={e => setFestText(e.target.value)} rows={2}
+            placeholder="12/10/2026, 01/11/2026, 2026-12-08…"
+            style={{ ...inputStyle, width: "100%", resize: "vertical", fontFamily: font }} />
+          <div style={{ fontSize: 10.5, color: C.dim }}>
+            {parseFestivos(festText).length} fecha(s) reconocida(s) — nacionales, autonómicos y locales del año.
+          </div>
+
+          {sectionTitle(`Horas/mes por trabajador (vacío = las de arriba${r.jornadaAnualH ? " y la jornada anual" : ""})`)}
+          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px" }}>
+            {workers.length === 0 && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>Sin trabajadores.</div>}
+            {workers.map(w => (
+              <div key={w._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 0" }}>
+                <span style={{ fontSize: 12, color: C.text }}>{[w.nombre, w.apellidos].filter(Boolean).join(" ")}</span>
+                <input type="number" min={0} placeholder={String(r.maxHorasMes || "")} value={h[w._id] ?? ""}
+                  onChange={e => {
+                    const v = parseInt(e.target.value);
+                    const next = { ...h };
+                    if (v > 0) next[w._id] = v; else delete next[w._id];
+                    setH(next);
+                  }}
+                  style={{ ...inputStyle, width: 64 }} />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <button onClick={onClose} style={secondaryBtn}>Cancelar</button>
+            <button onClick={save} disabled={!!pdfBusy} style={primaryBtn}>Guardar</button>
+          </div>
+        </div>
       </div>
     </ModalShell>
   );

@@ -9,9 +9,21 @@
 //                      del siguiente (p.ej. 12h prohíbe Noche → Mañana)
 //   - equilibrar:      repartir horas y fines de semana de forma equitativa
 //
-// Las tres primeras son OBLIGATORIAS: un turno que no se puede cubrir sin
-// romper alguna queda sin cubrir, con el motivo. "equilibrar" es una
-// preferencia (solo influye en a quién se elige entre los que cumplen).
+// Reglas típicas de convenio colectivo (0 = no se aplica), rellenadas a
+// mano desde Rostering → Reglas → Convenio:
+//   - maxHorasDia:        jornada máxima diaria (ET art. 34.3: 9h)
+//   - jornadaAnualH:      jornada anual; se prorratea al mes y se combina con
+//                         maxHorasMes (manda el menor)
+//   - descansoSemanalH:   descanso ininterrumpido mínimo en cada semana
+//                         natural L–D (ET art. 37.1: día y medio = 36h)
+//   - minFindesLibres:    fines de semana completos (sáb+dom) libres al mes
+//   - maxNochesSeguidas / maxNochesMes: turnos de noche
+//   - maxDomingosFestivos: domingos + festivos (lista `festivos`, fechas
+//                         "YYYY-MM-DD") trabajados al mes
+//
+// Todas menos "equilibrar" son OBLIGATORIAS: un turno que no se puede
+// cubrir sin romper alguna queda sin cubrir, con el motivo. "equilibrar"
+// es una preferencia (solo influye en a quién se elige entre los que cumplen).
 //
 // Lo que ya hay escrito a mano en el cuadrante manda: L/B = no disponible
 // ese día; M/T/N = ese día trabaja ese turno (solo se le puede asignar un
@@ -37,7 +49,39 @@ export const DEFAULT_ROSTER_RULES = {
   maxHorasMes: 220,
   descansoMinH: 12,
   equilibrar: true,
+  maxHorasDia: 0,
+  jornadaAnualH: 0,
+  descansoSemanalH: 0,
+  minFindesLibres: 0,
+  maxNochesSeguidas: 0,
+  maxNochesMes: 0,
+  maxDomingosFestivos: 0,
+  festivos: [],
 };
+
+// Mínimos legales del Estatuto de los Trabajadores — punto de partida al
+// rellenar un convenio (el convenio puede mejorarlos, nunca empeorarlos).
+export const ESTATUTO_RULES = {
+  maxHorasDia: 9,          // art. 34.3
+  descansoMinH: 12,        // art. 34.3
+  descansoSemanalH: 36,    // art. 37.1 (día y medio ininterrumpido)
+  jornadaAnualH: 1826,     // art. 34.1 (40h/semana de promedio anual)
+};
+export const ESTATUTO_ARTS = {
+  maxHorasDia: "ET art. 34.3",
+  descansoMinH: "ET art. 34.3",
+  descansoSemanalH: "ET art. 37.1",
+  jornadaAnualH: "ET art. 34.1",
+};
+
+// Tope de horas del mes: el menor entre maxHorasMes y la jornada anual
+// prorrateada por días del mes. 0 = sin tope.
+export function monthlyCap(rules, daysInMonth) {
+  const caps = [];
+  if (rules.maxHorasMes > 0) caps.push(rules.maxHorasMes);
+  if (rules.jornadaAnualH > 0) caps.push(+(rules.jornadaAnualH * daysInMonth / 365).toFixed(1));
+  return caps.length ? Math.min(...caps) : 0;
+}
 
 // Franjas nominales de los códigos del cuadrante (minutos desde la
 // medianoche del día; la noche termina a las 06:00 del día siguiente).
@@ -56,7 +100,65 @@ export const REASON_LABELS = {
   hours:   "superarían sus horas/mes",
   rest:    "no descansarían lo mínimo",
   run:     "superarían los días seguidos",
+  dia:     "el turno supera la jornada máxima diaria",
+  semanal: "se quedarían sin descanso semanal",
+  findes:  "se quedarían sin los fines de semana libres mínimos",
+  nochesS: "superarían las noches seguidas",
+  noches:  "superarían las noches al mes",
+  domingos: "superarían los domingos/festivos al mes",
 };
+
+// ── Comprobaciones de convenio sobre un mes ──────────────────────────
+// Todas reciben intervalOf(d) → { start, end } (minutos desde la medianoche
+// del día d) o null si ese día no trabaja; los días fuera del mes cuentan
+// como libres.
+const dowOf = (year, month, d) => new Date(year, month - 1, d).getDay();
+const isNightIv = iv => !!iv && shiftCodeFromStart(iv.start) === "N";
+
+export function festivoDays(festivos, year, month) {
+  const prefix = `${year}-${String(month).padStart(2, "0")}-`;
+  return new Set((festivos || []).filter(f => f.startsWith(prefix)).map(f => parseInt(f.slice(8), 10)));
+}
+
+// Mayor hueco sin trabajar (minutos) dentro de la semana natural L–D que
+// contiene el día d (incluye lo que se alarga desde el domingo anterior).
+function weeklyMaxGap(intervalOf, year, month, d) {
+  const monday = d - ((dowOf(year, month, d) + 6) % 7);
+  const wStart = (monday - 1) * 1440, wEnd = (monday + 6) * 1440;
+  const ivs = [];
+  for (let x = monday - 1; x <= monday + 6; x++) {
+    const iv = intervalOf(x);
+    if (!iv) continue;
+    const s = Math.max(wStart, (x - 1) * 1440 + iv.start), e = Math.min(wEnd, (x - 1) * 1440 + iv.end);
+    if (e > s) ivs.push([s, e]);
+  }
+  ivs.sort((a, b) => a[0] - b[0]);
+  let gap = 0, cur = wStart;
+  for (const [s, e] of ivs) { gap = Math.max(gap, s - cur); cur = Math.max(cur, e); }
+  return Math.max(gap, wEnd - cur);
+}
+
+function freeWeekends(intervalOf, year, month, daysInMonth) {
+  let free = 0;
+  for (let d = 1; d < daysInMonth; d++) {
+    if (dowOf(year, month, d) !== 6) continue; // sábado con su domingo dentro del mes
+    if (!intervalOf(d) && !intervalOf(d + 1)) free++;
+  }
+  return free;
+}
+
+function nightRunAround(intervalOf, d, daysInMonth) {
+  let run = 1;
+  for (let x = d - 1; x >= 1 && isNightIv(intervalOf(x)); x--) run++;
+  for (let x = d + 1; x <= daysInMonth && isNightIv(intervalOf(x)); x++) run++;
+  return run;
+}
+
+function countDays(intervalOf, daysInMonth, pred) {
+  let n = 0;
+  for (let d = 1; d <= daysInMonth; d++) { const iv = intervalOf(d); if (iv && pred(iv, d)) n++; }
+  return n;
+}
 
 function isWeekend(year, month, day) {
   const dow = new Date(year, month - 1, day).getDay();
@@ -76,6 +178,8 @@ function isWeekend(year, month, day) {
 export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, month, daysInMonth }) {
   const R = { ...DEFAULT_ROSTER_RULES, ...rules };
   const restMin = (R.descansoMinH || 0) * 60;
+  const festSet = festivoDays(R.festivos, year, month);
+  const isSunFest = d => dowOf(year, month, d) === 0 || festSet.has(d);
 
   // Estado por trabajador: qué hace cada día (código fijo y/o turno asignado)
   const st = new Map();
@@ -92,7 +196,7 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
     st.set(w.id, {
       w, days, weekends: 0,
       workedMin: nominalMin, // horas trabajadas en minutos, al día con assign/unassign
-      maxHoras: w.maxHoras > 0 ? w.maxHoras : R.maxHorasMes,
+      maxHoras: w.maxHoras > 0 ? w.maxHoras : monthlyCap(R, daysInMonth),
     });
   }
 
@@ -120,6 +224,7 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
     if (OFF_CODES.has(day.code)) return "off";
     if (day.shift) return "busy";
     if (WORK_CODES.has(day.code) && shiftCodeFromStart(sh.start) !== day.code) return "code";
+    if (R.maxHorasDia > 0 && sh.end - sh.start > R.maxHorasDia * 60) return "dia";
 
     const newHours = (s.workedMin + dayMinDelta(s, sh)) / 60;
     if (s.maxHoras > 0 && newHours > s.maxHoras + 1e-9) return "hours";
@@ -136,6 +241,24 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
       for (let x = d - 1; x >= 1 && worksOn(s, x); x--) run++;
       for (let x = d + 1; x <= daysInMonth && worksOn(s, x); x++) run++;
       if (run > R.maxDiasSeguidos) return "run";
+    }
+
+    // Reglas de convenio que dependen del resto del mes: se evalúan como si
+    // el turno ya estuviera asignado (day.shift es null aquí — "busy" arriba).
+    day.shift = sh;
+    try {
+      const iv = x => workedInterval(s, x);
+      if (R.descansoSemanalH > 0 && weeklyMaxGap(iv, year, month, d) < R.descansoSemanalH * 60) return "semanal";
+      if (R.minFindesLibres > 0 && (dowOf(year, month, d) === 6 || dowOf(year, month, d) === 0) &&
+          freeWeekends(iv, year, month, daysInMonth) < R.minFindesLibres) return "findes";
+      if (isNightIv(sh)) {
+        if (R.maxNochesSeguidas > 0 && nightRunAround(iv, d, daysInMonth) > R.maxNochesSeguidas) return "nochesS";
+        if (R.maxNochesMes > 0 && countDays(iv, daysInMonth, isNightIv) > R.maxNochesMes) return "noches";
+      }
+      if (R.maxDomingosFestivos > 0 && isSunFest(d) &&
+          countDays(iv, daysInMonth, (_, x) => isSunFest(x)) > R.maxDomingosFestivos) return "domingos";
+    } finally {
+      day.shift = null;
     }
     return null;
   }
@@ -290,12 +413,12 @@ export function describeReasons(reasons) {
 }
 
 // Comprobación de reglas sobre un cuadrante ya hecho (manual u optimizado)
-// para la columna de resumen: horas del mes, racha máxima de días
-// seguidos y nº de descansos por debajo del mínimo. `intervalOf(d)` da el
-// intervalo trabajado ese día ({start,end} en minutos) o null.
-export function checkWorkerMonth(intervalOf, daysInMonth, rules, maxHoras) {
+// para la columna de resumen. `intervalOf(d)` da el intervalo trabajado ese
+// día ({start,end} en minutos) o null. Devuelve las cifras y `issues`: un
+// texto por cada regla incumplida.
+export function checkWorkerMonth(intervalOf, daysInMonth, rules, maxHoras, { year, month } = {}) {
   const R = { ...DEFAULT_ROSTER_RULES, ...rules };
-  let min = 0, run = 0, maxRun = 0, restBreaks = 0;
+  let min = 0, run = 0, maxRun = 0, restBreaks = 0, longDays = 0, nightRun = 0, maxNightRun = 0;
   let prev = null;
   for (let d = 1; d <= daysInMonth; d++) {
     const iv = intervalOf(d);
@@ -303,14 +426,45 @@ export function checkWorkerMonth(intervalOf, daysInMonth, rules, maxHoras) {
       min += iv.end - iv.start;
       run++; maxRun = Math.max(maxRun, run);
       if (prev && R.descansoMinH > 0 && (iv.start + 1440) - prev.end < R.descansoMinH * 60) restBreaks++;
+      if (R.maxHorasDia > 0 && iv.end - iv.start > R.maxHorasDia * 60) longDays++;
       prev = iv;
     } else { run = 0; prev = null; }
+    nightRun = isNightIv(iv) ? nightRun + 1 : 0;
+    maxNightRun = Math.max(maxNightRun, nightRun);
   }
   const hours = min / 60;
-  const cap = maxHoras > 0 ? maxHoras : R.maxHorasMes;
-  return {
+  const cap = maxHoras > 0 ? maxHoras : monthlyCap(R, daysInMonth);
+  const out = {
     hours: +hours.toFixed(1), maxRun, restBreaks, cap,
     overHours: cap > 0 && hours > cap + 1e-9,
     overRun:   R.maxDiasSeguidos > 0 && maxRun > R.maxDiasSeguidos,
   };
+  const issues = [];
+  if (out.overHours) issues.push(`${out.hours}h supera el tope de ${cap}h`);
+  if (out.overRun) issues.push(`${maxRun} días seguidos (máx. ${R.maxDiasSeguidos})`);
+  if (restBreaks) issues.push(`${restBreaks} descanso(s) de menos de ${R.descansoMinH}h`);
+  if (longDays) issues.push(`${longDays} jornada(s) de más de ${R.maxHorasDia}h`);
+  if (R.maxNochesSeguidas > 0 && maxNightRun > R.maxNochesSeguidas) issues.push(`${maxNightRun} noches seguidas (máx. ${R.maxNochesSeguidas})`);
+  const nights = countDays(intervalOf, daysInMonth, isNightIv);
+  if (R.maxNochesMes > 0 && nights > R.maxNochesMes) issues.push(`${nights} noches (máx. ${R.maxNochesMes})`);
+  if (year && month) {
+    if (R.descansoSemanalH > 0) {
+      let bad = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        if (dowOf(year, month, d) !== 1 && d !== 1) continue; // un chequeo por semana
+        if (weeklyMaxGap(intervalOf, year, month, d) < R.descansoSemanalH * 60) bad++;
+      }
+      if (bad) issues.push(`${bad} semana(s) sin ${R.descansoSemanalH}h de descanso seguido`);
+    }
+    if (R.minFindesLibres > 0) {
+      const free = freeWeekends(intervalOf, year, month, daysInMonth);
+      if (free < R.minFindesLibres) issues.push(`${free} fin(es) de semana libre(s) (mín. ${R.minFindesLibres})`);
+    }
+    if (R.maxDomingosFestivos > 0) {
+      const fest = festivoDays(R.festivos, year, month);
+      const n = countDays(intervalOf, daysInMonth, (_, x) => dowOf(year, month, x) === 0 || fest.has(x));
+      if (n > R.maxDomingosFestivos) issues.push(`${n} domingos/festivos (máx. ${R.maxDomingosFestivos})`);
+    }
+  }
+  return { ...out, issues };
 }
