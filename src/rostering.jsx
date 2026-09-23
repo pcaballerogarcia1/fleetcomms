@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase.js";
 import {
+  optimizeRoster, checkWorkerMonth, describeReasons,
+  DEFAULT_ROSTER_RULES, CODE_WINDOWS,
+} from "./roster-optimizer.js";
+import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
+import {
   doc, onSnapshot, setDoc, serverTimestamp,
   collection, query, where,
 } from "firebase/firestore";
@@ -50,6 +55,10 @@ function fmtClock(min) {
 // conflicto ni la tenía en cuenta al generar o publicar.
 export function useRostering(orgId, year, month) {
   const [grid,    setGrid]    = useState({});
+  // Trabajador → día → { v, vn, s, e }: qué vehículo y horario le asignó
+  // Rostering → Optimizar (escenarios en modo libre). Publicar a Rutas lo
+  // usa para saber quién conduce cada tramo.
+  const [asignaciones, setAsignaciones] = useState({});
   const [loading, setLoading] = useState(true);
 
   const docId = (orgId && year && month)
@@ -57,16 +66,18 @@ export function useRostering(orgId, year, month) {
     : null;
 
   useEffect(() => {
-    if (!docId) { setGrid({}); setLoading(false); return; }
+    if (!docId) { setGrid({}); setAsignaciones({}); setLoading(false); return; }
     setGrid({});
+    setAsignaciones({});
     setLoading(true);
     return onSnapshot(doc(db, "rostering", docId), snap => {
       setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
+      setAsignaciones(snap.exists() ? (snap.data().asignaciones ?? {}) : {});
       setLoading(false);
     });
   }, [docId]);
 
-  return { grid, loading, docId };
+  return { grid, asignaciones, loading, docId };
 }
 
 // Helper exported for scheduling conflict check
@@ -615,6 +626,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // Local grid state (Firestore is the backing store, but we edit locally)
   const [grid,    setGrid]    = useState({});
   const [loading, setLoading] = useState(true);
+  // Asignaciones de Optimizar (modo libre): trabajador → día → { id, v, vn, s, e }
+  // (turno cubierto, vehículo y horario). Una celda con asignación la puso
+  // el optimizador; sin ella, la escribió alguien a mano.
+  const [asign, setAsign] = useState({});
+  const asignRef = useRef({});
 
   const loadedRef    = useRef(false);
   const debounceRef  = useRef({});
@@ -655,18 +671,71 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   // Load rostering for selected month
   useEffect(() => {
-    if (!docId) { setGrid({}); setLoading(false); return; }
+    if (!docId) { setGrid({}); setAsign({}); asignRef.current = {}; setLoading(false); return; }
     loadedRef.current = false;
     setGrid({});
+    setAsign({}); asignRef.current = {};
     setLoading(true);
     return onSnapshot(doc(db, "rostering", docId), snap => {
       if (!loadedRef.current) {
         setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
+        const a = snap.exists() ? (snap.data().asignaciones ?? {}) : {};
+        setAsign(a); asignRef.current = a;
         loadedRef.current = true;
       }
       setLoading(false);
-    });
+    }, () => setLoading(false));
   }, [docId]);
+
+  // ── Reglas del cuadrante (por organización) ───────────────────
+  // Se guardan en la misma colección `rostering` (doc `${orgId}_reglas`, con
+  // org_id) para no necesitar reglas de Firestore nuevas.
+  const [rules, setRules] = useState(DEFAULT_ROSTER_RULES);
+  const [horasPorTrabajador, setHorasPorTrabajador] = useState({});
+  const [showRules, setShowRules] = useState(false);
+  const [optResult, setOptResult] = useState(null);
+  const rulesDocId = orgId ? `${orgId}_reglas` : null;
+
+  useEffect(() => {
+    if (!rulesDocId) return;
+    return onSnapshot(doc(db, "rostering", rulesDocId), snap => {
+      const d = snap.exists() ? snap.data() : {};
+      setRules({ ...DEFAULT_ROSTER_RULES, ...(d.rules || {}) });
+      setHorasPorTrabajador(d.horasPorTrabajador || {});
+    }, () => { /* aún sin reglas guardadas: valen las de por defecto */ });
+  }, [rulesDocId]);
+
+  function saveRules(newRules, newHoras) {
+    setRules(newRules);
+    setHorasPorTrabajador(newHoras);
+    if (rulesDocId) setDoc(doc(db, "rostering", rulesDocId), {
+      org_id: orgId, rules: newRules, horasPorTrabajador: newHoras, updatedAt: serverTimestamp(),
+    });
+  }
+
+  // Escritura del documento del mes (cuadrante + asignaciones juntos, para
+  // que ninguna escritura pise a la otra).
+  function persistMonth(newGrid, newAsign = asignRef.current) {
+    if (!docId) return;
+    setDoc(doc(db, "rostering", docId), {
+      org_id: orgId, year, month, grid: newGrid, asignaciones: newAsign, updatedAt: serverTimestamp(),
+    });
+  }
+
+  // Una edición a mano de una celda anula la asignación del optimizador en
+  // esa celda (el turno vuelve a quedar sin cubrir hasta re-optimizar).
+  function dropAsign(cells) {
+    let changed = false;
+    const next = { ...asignRef.current };
+    for (const [wId, d] of cells) {
+      if (next[wId]?.[String(d)]) {
+        next[wId] = { ...next[wId] };
+        delete next[wId][String(d)];
+        changed = true;
+      }
+    }
+    if (changed) { asignRef.current = next; setAsign(next); }
+  }
 
   // ── Calendar helpers ──────────────────────────────────────────
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -726,6 +795,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     const r = getSelRange();
     if (!r) return;
     let newGrid = { ...grid };
+    const touched = [];
     for (let wi = r.r0; wi <= r.r1; wi++) {
       const w = workers[wi];
       if (!w) continue;
@@ -735,17 +805,17 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         if (d === undefined) continue;
         if (shift) wGrid[String(d)] = shift;
         else delete wGrid[String(d)];
+        touched.push([w._id, d]);
       }
       newGrid[w._id] = wGrid;
     }
+    dropAsign(touched);
     setGrid(newGrid);
     pendingRef.current = newGrid;
     clearTimeout(debounceRef.current._batch);
     debounceRef.current._batch = setTimeout(() => {
       if (!docId || !pendingRef.current) return;
-      setDoc(doc(db, "rostering", docId), {
-        org_id: orgId, year, month, grid: pendingRef.current, updatedAt: serverTimestamp(),
-      });
+      persistMonth(pendingRef.current);
     }, 400);
   }
 
@@ -805,11 +875,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     const wGrid = {};
     for (const d of days) wGrid[String(d)] = shift;
     const newGrid = { ...grid, [workerId]: wGrid };
+    dropAsign(days.map(d => [workerId, d]));
     setGrid(newGrid);
     pendingRef.current = newGrid;
-    if (docId) setDoc(doc(db, "rostering", docId), {
-      org_id: orgId, year, month, grid: newGrid, updatedAt: serverTimestamp(),
-    });
+    persistMonth(newGrid);
   }
 
   // ── Optimizar: auto-assign scheduled shifts respecting availability ──
@@ -829,6 +898,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       alert(`El escenario generado es de ${schedRoster.mes}, pero estás viendo ${year}-${String(month).padStart(2, "0")} — cambia el mes del calendario para verlo.`);
       return;
     }
+
+    if (schedRoster.modo === "libre") { optimizarLibre(); return; }
 
     const BLOCKED = new Set(["L", "B"]);     // can't override
     const MANUAL  = new Set(["M","T","N","G"]); // already manually set, skip
@@ -853,9 +924,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     }
     setGrid(newGrid);
     pendingRef.current = newGrid;
-    if (docId) setDoc(doc(db, "rostering", docId), {
-      org_id: orgId, year, month, grid: newGrid, updatedAt: serverTimestamp(),
-    });
+    persistMonth(newGrid);
 
     if (assignedCount === 0) {
       alert(skippedNoCode > 0
@@ -865,6 +934,97 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       alert(`Se han asignado ${assignedCount} turno(s).${skippedNoCode > 0 ? ` ${skippedNoCode} trabajador(es) con paradas asignadas no tenían un turno reconocible.` : ""}`);
     }
   }
+
+  // ── Optimizar (escenario en modo libre) ───────────────────────
+  // Asigna trabajador + vehículo a cada turno a cubrir del escenario según
+  // las reglas. Lo escrito a mano (L/B, M/T/N, G, D) se respeta; lo que puso
+  // una optimización anterior se recalcula entero.
+  function optimizarLibre() {
+    const shiftsRaw = schedRoster.shifts || [];
+    if (!shiftsRaw.length) {
+      alert("El escenario no tiene turnos guardados — regenéralo en Scheduling (modo libre).");
+      return;
+    }
+    if (Object.keys(asignRef.current).some(w => Object.keys(asignRef.current[w] || {}).length) &&
+        !confirm("Se recalcularán los turnos que asignó la optimización anterior (lo escrito a mano se mantiene). ¿Continuar?")) return;
+
+    // Celdas puestas por el optimizador → fuera; el resto son restricciones.
+    const baseGrid = {};
+    const fixed = {};
+    for (const w of workers) {
+      const wGrid = { ...(grid[w._id] ?? {}) };
+      // Se restaura lo que había a mano antes (p. ej. G o D) en vez de
+      // dejar la celda vacía.
+      for (const [d, a] of Object.entries(asignRef.current[w._id] || {})) {
+        if (a?.p) wGrid[d] = a.p; else delete wGrid[d];
+      }
+      baseGrid[w._id] = wGrid;
+      fixed[w._id] = wGrid;
+    }
+
+    const shifts = shiftsRaw.map(sh => ({
+      id: sh.id, day: sh.d, start: sh.s, end: sh.e,
+      vehicleId: sh.v, vehicleName: sh.vn, stops: sh.st,
+    }));
+    const optWorkers = workers.map(w => ({
+      id: w._id,
+      name: [w.nombre, w.apellidos].filter(Boolean).join(" "),
+      maxHoras: +horasPorTrabajador[w._id] || 0,
+      prefStart: w.turno ? turnoWindow(w.turno, null, null).start : null,
+    }));
+
+    const res = optimizeRoster({ shifts, workers: optWorkers, fixed, rules, year, month, daysInMonth });
+
+    const newGrid = { ...baseGrid };
+    const newAsign = {};
+    const byId = new Map(shifts.map(sh => [sh.id, sh]));
+    for (const [shiftId, wId] of Object.entries(res.assignments)) {
+      const sh = byId.get(shiftId);
+      const key = String(sh.day);
+      newGrid[wId] = { ...(newGrid[wId] ?? {}), [key]: shiftCodeFromStart(sh.start) };
+      const prevCode = baseGrid[wId]?.[key];
+      newAsign[wId] = { ...(newAsign[wId] ?? {}), [key]: {
+        id: sh.id, v: sh.vehicleId, vn: sh.vehicleName, s: sh.start, e: sh.end,
+        ...(prevCode ? { p: prevCode } : {}),
+      } };
+    }
+    setGrid(newGrid);
+    pendingRef.current = newGrid;
+    asignRef.current = newAsign;
+    setAsign(newAsign);
+    persistMonth(newGrid, newAsign);
+
+    setOptResult({
+      total: shifts.length - res.outOfMonth,
+      covered: Object.keys(res.assignments).length,
+      uncovered: res.uncovered,
+      outOfMonth: res.outOfMonth,
+      stats: res.stats,
+    });
+  }
+
+  // Horario trabajado por un trabajador un día (para horas y reglas):
+  // asignación del optimizador > detalle del escenario (modo cuadrante) >
+  // franja nominal del código M/T/N. null si ese día no trabaja.
+  function workedInterval(workerId, d) {
+    const a = asign[workerId]?.[String(d)];
+    if (a) return { start: a.s, end: a.e };
+    const code = grid[workerId]?.[String(d)] || scheduledCode(workerId, d);
+    if (!CODE_WINDOWS[code]) return null;
+    const dayNum = schedDayFor(d);
+    const det = dayNum ? schedRoster?.dailyDetail?.[workerId]?.[String(dayNum)] : null;
+    if (det) {
+      const off = (dayNum - 1) * 1440;
+      return { start: det.start - off, end: det.end - off };
+    }
+    return CODE_WINDOWS[code];
+  }
+
+  // Cobertura de los turnos del escenario libre en el mes que se ve
+  const libreShifts = schedRoster?.modo === "libre" &&
+    schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? (schedRoster.shifts || []) : null;
+  const coveredIds = new Set(Object.values(asign).flatMap(w => Object.values(w || {}).map(a => a?.id)));
+  const coveredCount = libreShifts ? libreShifts.filter(sh => coveredIds.has(sh.id)).length : 0;
 
   // ── Totals ────────────────────────────────────────────────────
   function dayTotals(day) {
@@ -888,7 +1048,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // ── Render ─────────────────────────────────────────────────────
   const CELL_W  = 34;
   const NAME_W  = 182;
-  const STATS_W = 130;
+  const STATS_W = 170;
 
   if (mode === "vehicles") {
     return (
@@ -942,6 +1102,27 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             </div>
           ))}
 
+          <button onClick={() => setShowRules(true)}
+            title="Reglas del cuadrante: días seguidos, horas/mes, descanso, reparto"
+            style={{
+              padding: "4px 12px", borderRadius: 6, background: "none",
+              border: `1px solid ${C.border2}`, color: C.muted, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: font,
+            }}>
+            Reglas
+          </button>
+
+          {libreShifts && (
+            <span title="Turnos del escenario (modo libre) con trabajador asignado"
+              style={{
+                fontSize: 11, fontWeight: 600, borderRadius: 6, padding: "3px 8px",
+                color: coveredCount === libreShifts.length ? "#34d399" : "#fbbf24",
+                background: coveredCount === libreShifts.length ? "#34d39918" : "#fbbf2418",
+              }}>
+              {coveredCount}/{libreShifts.length} turnos cubiertos
+            </span>
+          )}
+
           {/* Scheduling overlay legend + optimizar */}
           {schedRoster && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>
@@ -965,7 +1146,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.blue + "40"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = C.blue + "22"; }}
-                title="Asigna los turnos del escenario de scheduling a los trabajadores disponibles"
+                title={schedRoster.modo === "libre"
+                  ? "Asigna trabajador y vehículo a cada turno del escenario respetando las Reglas"
+                  : "Asigna los turnos del escenario de scheduling a los trabajadores disponibles"}
               >
                 Optimizar
               </button>
@@ -1041,6 +1224,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             <tbody>
               {workers.map((w, wi) => {
                 const stats = workerStats(w._id);
+                const check = checkWorkerMonth(d => workedInterval(w._id, d), daysInMonth, rules, +horasPorTrabajador[w._id] || 0);
+                const ruleIssues = [
+                  check.overHours && `${check.hours}h supera el tope de ${check.cap}h`,
+                  check.overRun && `${check.maxRun} días seguidos (máx. ${rules.maxDiasSeguidos})`,
+                  check.restBreaks > 0 && `${check.restBreaks} descanso(s) de menos de ${rules.descansoMinH}h`,
+                ].filter(Boolean);
                 const rowBg = wi % 2 === 0 ? C.bg : "#12161f";
                 const shiftMeta = w.turno ? SHIFT_META[w.turno] : null;
 
@@ -1112,7 +1301,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                             setSummaryCell({ workerId: w._id, day: d, x: e.clientX, y: e.clientY });
                           }}
                           title={shift
-                            ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[shift].label}`
+                            ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[shift].label}` +
+                              (asign[w._id]?.[String(d)]
+                                ? ` · ${asign[w._id][String(d)].vn} ${fmtClock(asign[w._id][String(d)].s)}–${fmtClock(asign[w._id][String(d)].e)} (optimizado)`
+                                : "")
                             : sched
                               ? `${[w.nombre, w.apellidos].filter(Boolean).join(" ")} · día ${d} · ${SHIFT_META[sched].label} (planificado)`
                               : `Día ${d} · sin asignar — selecciona y escribe M/T/N/L/G/B/D`}
@@ -1134,6 +1326,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                           }}
                         >
                           {display}
+                          {asign[w._id]?.[String(d)] && (
+                            <div title="Asignado por Optimizar" style={{
+                              position: "absolute", top: 3, right: 3, width: 4, height: 4,
+                              borderRadius: 2, background: C.blue, pointerEvents: "none",
+                            }} />
+                          )}
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
@@ -1152,7 +1350,17 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                       borderBottom: `1px solid ${C.border}`,
                       padding: "0 8px",
                     }}>
-                      <div style={{ display: "flex", gap: 5, justifyContent: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 5, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+                        {check.hours > 0 && (
+                          <span title={ruleIssues.length ? ruleIssues.join(" · ") : `${check.hours}h de ${check.cap}h · máx. ${check.maxRun} días seguidos`}
+                            style={{
+                              fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "0 4px",
+                              color: ruleIssues.length ? "#f87171" : C.muted,
+                              background: ruleIssues.length ? "#f8717122" : "transparent",
+                            }}>
+                            {ruleIssues.length ? "⚠ " : ""}{Math.round(check.hours)}h
+                          </span>
+                        )}
                         {SHIFTS.filter(s => stats[s]).map(s => (
                           <div key={s} style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 10 }}>
                             <span style={{ color: SHIFT_META[s].text, fontWeight: 700 }}>{s}</span>
@@ -1291,7 +1499,31 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                 <div style={{ fontSize: 11, color: C.dim, marginBottom: 10 }}>Sin turno asignado.</div>
               )}
 
-              {detail ? (
+              {asign[w._id]?.[String(day)] ? (() => {
+                const a = asign[w._id][String(day)];
+                const sh = (schedRoster?.shifts || []).find(x => x.id === a.id);
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: C.dim }}>Vehículo</span>
+                      <span style={{ color: C.text }}>{a.vn}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: C.dim }}>Horario</span>
+                      <span style={{ color: C.text, fontFamily: "'JetBrains Mono','Courier New',monospace" }}>
+                        {fmtClock(a.s)} – {fmtClock(a.e)}
+                      </span>
+                    </div>
+                    {sh && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: C.dim }}>Paradas · km</span>
+                        <span style={{ color: C.text }}>{sh.st} · {sh.km}</span>
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: C.dim }}>Asignado por Optimizar — editar la celda lo anula.</div>
+                  </div>
+                );
+              })() : detail ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: C.dim }}>Horario</span>
@@ -1323,9 +1555,187 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
           </>
         );
       })()}
+
+      {showRules && (
+        <RulesModal
+          rules={rules} horas={horasPorTrabajador} workers={workers}
+          onClose={() => setShowRules(false)}
+          onSave={(r, h) => { saveRules(r, h); setShowRules(false); }}
+        />
+      )}
+      {optResult && (
+        <OptResultModal result={optResult} workers={workers} rules={rules} onClose={() => setOptResult(null)} />
+      )}
     </div>
   );
 }
+
+// ── MODAL: reglas del cuadrante ────────────────────────────────────
+function RulesModal({ rules, horas, workers, onClose, onSave }) {
+  const [r, setR] = useState(rules);
+  const [h, setH] = useState(horas);
+  const num = (key, suffix, help) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <label style={{ fontSize: 12, color: C.muted, width: 190, flexShrink: 0 }}>{help}</label>
+      <input type="number" min={0} value={r[key] ?? ""}
+        onChange={e => setR({ ...r, [key]: Math.max(0, parseInt(e.target.value) || 0) })}
+        style={inputStyle} />
+      <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>
+    </div>
+  );
+  return (
+    <ModalShell title="Reglas del cuadrante" onClose={onClose} width={460}>
+      <div style={{ fontSize: 11, color: C.dim, marginBottom: 14 }}>
+        Se aplican al pulsar <b style={{ color: C.muted }}>Optimizar</b> (escenarios en modo libre) y se comprueban
+        siempre en la columna de resumen. 0 = sin límite.
+      </div>
+      {num("maxDiasSeguidos", "días", "Máx. días seguidos trabajando")}
+      {num("maxHorasMes", "h/mes", "Máx. horas al mes")}
+      {num("descansoMinH", "h", "Descanso mínimo entre turnos")}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.muted, marginBottom: 16, cursor: "pointer" }}>
+        <input type="checkbox" checked={!!r.equilibrar} onChange={e => setR({ ...r, equilibrar: e.target.checked })}
+          style={{ accentColor: C.blue }} />
+        Repartir horas y fines de semana de forma equitativa
+      </label>
+
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+        Horas/mes por trabajador (vacío = {r.maxHorasMes || "sin límite"})
+      </div>
+      <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px" }}>
+        {workers.length === 0 && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>Sin trabajadores.</div>}
+        {workers.map(w => (
+          <div key={w._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 0" }}>
+            <span style={{ fontSize: 12, color: C.text }}>{[w.nombre, w.apellidos].filter(Boolean).join(" ")}</span>
+            <input type="number" min={0} placeholder={String(r.maxHorasMes || "")} value={h[w._id] ?? ""}
+              onChange={e => {
+                const v = parseInt(e.target.value);
+                const next = { ...h };
+                if (v > 0) next[w._id] = v; else delete next[w._id];
+                setH(next);
+              }}
+              style={{ ...inputStyle, width: 64 }} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+        <button onClick={onClose} style={secondaryBtn}>Cancelar</button>
+        <button onClick={() => onSave(r, h)} style={primaryBtn}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ── MODAL: resultado de Optimizar ──────────────────────────────────
+function OptResultModal({ result, workers, rules, onClose }) {
+  const nameOf = id => {
+    const w = workers.find(x => x._id === id);
+    return w ? [w.nombre, w.apellidos].filter(Boolean).join(" ") : id;
+  };
+  const rows = Object.entries(result.stats)
+    .map(([id, s]) => ({ id, ...s }))
+    .filter(s => s.days > 0)
+    .sort((a, b) => b.hours - a.hours);
+  const allCovered = result.covered === result.total;
+  return (
+    <ModalShell title="Resultado de la optimización" onClose={onClose} width={560}>
+      <div style={{
+        fontSize: 13, fontWeight: 600, marginBottom: 12,
+        color: allCovered ? "#34d399" : "#fbbf24",
+      }}>
+        {result.covered} de {result.total} turnos cubiertos
+        {result.outOfMonth > 0 && <span style={{ color: C.dim, fontWeight: 400, fontSize: 11 }}> · {result.outOfMonth} fuera de este mes (no se optimizan)</span>}
+      </div>
+
+      {result.uncovered.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+            Sin cubrir
+          </div>
+          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 14 }}>
+            {result.uncovered.map(({ shift, reasons }) => (
+              <div key={shift.id} style={{ fontSize: 11, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ color: C.text, fontWeight: 600 }}>Día {shift.day}</span>
+                <span style={{ color: C.muted }}> · {shift.vehicleName} · {fmtClock(shift.start)}–{fmtClock(shift.end)}</span>
+                <div style={{ color: C.dim, fontSize: 10.5 }}>Nadie puede: {describeReasons(reasons)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 14 }}>
+            Para cubrirlos: más plantilla, relajar alguna regla, o revisar L/B/turnos fijados a mano esos días.
+          </div>
+        </>
+      )}
+
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+        Carga por trabajador
+      </div>
+      <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr style={{ color: C.dim, textAlign: "left" }}>
+              <th style={{ padding: "4px 8px", fontWeight: 500 }}>Trabajador</th>
+              <th style={{ padding: "4px 8px", fontWeight: 500, textAlign: "right" }}>Horas</th>
+              <th style={{ padding: "4px 8px", fontWeight: 500, textAlign: "right" }}>Días</th>
+              <th style={{ padding: "4px 8px", fontWeight: 500, textAlign: "right" }}>Racha máx.</th>
+              <th style={{ padding: "4px 8px", fontWeight: 500, textAlign: "right" }}>Findes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(s => (
+              <tr key={s.id} style={{ borderTop: `1px solid ${C.border}`, color: C.text }}>
+                <td style={{ padding: "3px 8px" }}>{nameOf(s.id)}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.hours} / {s.maxHoras || "—"}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.days}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right", color: rules.maxDiasSeguidos && s.maxRun > rules.maxDiasSeguidos ? "#f87171" : C.text }}>{s.maxRun}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.weekends}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10 }}>
+        Los días seguidos no tienen en cuenta el final del mes anterior.
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+        <button onClick={onClose} style={primaryBtn}>Cerrar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, onClose, width, children }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,.55)" }} />
+      <div style={{
+        position: "fixed", zIndex: 1001, top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        width: `min(${width}px, calc(100vw - 32px))`, maxHeight: "calc(100vh - 48px)", overflowY: "auto",
+        background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12,
+        boxShadow: "0 16px 48px rgba(0,0,0,.5)", padding: 18, fontFamily: font,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+const inputStyle = {
+  width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
+  borderRadius: 6, padding: "5px 8px", fontSize: 12, outline: "none", fontFamily: font,
+};
+const primaryBtn = {
+  padding: "6px 14px", borderRadius: 6, background: C.blue, border: "none",
+  color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
+};
+const secondaryBtn = {
+  padding: "6px 14px", borderRadius: 6, background: "none", border: `1px solid ${C.border2}`,
+  color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
+};
 
 // ── STYLE CONSTANTS ────────────────────────────────────────────────
 const navBtnStyle = {

@@ -1274,6 +1274,20 @@ function ConstraintsPanel({ c, onChange, orgId }) {
         {row("Días máximos de escenario (0 = automático)", numInput("maxDays", 0, 365, "días"))}
         {row("Circularidad (vuelve donde empieza)", checkbox("circular"))}
       </div>
+      <div style={{ marginTop: 4, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+        {row("Rostering", (
+          <select value={c.rosterMode || "cuadrante"} onChange={e => set("rosterMode", e.target.value)}
+            style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
+            <option value="cuadrante">Respetar el cuadrante</option>
+            <option value="libre">Libre — optimizar turnos después en Rostering</option>
+          </select>
+        ))}
+        <div style={{ fontSize: 11, color: C.dim, marginTop: -4 }}>
+          {(c.rosterMode || "cuadrante") === "cuadrante"
+            ? "Cada conductor trabaja el turno de su cuadrante ese día (M/T/N obligan, L/B no trabaja, D/G/vacío = turno de su ficha)."
+            : "Las rutas se calculan sin mirar quién trabaja. Después, en Rostering → Optimizar, se asigna trabajador y vehículo a cada turno según las reglas (días seguidos, horas/mes, descanso)."}
+        </div>
+      </div>
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <span style={{ fontSize: 11, color: C.muted }}>Priorizar optimización</span>
@@ -1905,6 +1919,48 @@ function deriveWorkerRows(vehicleRow, peersIn, startMin) {
   });
 }
 
+// Turnos a cubrir de un escenario: por vehículo y día, uno por tramo entre
+// relevos (breaks de su franja de ese día) que tenga alguna parada. Horario
+// = del primer al último bloque del tramo (salida y vuelta a cochera
+// incluidas), en minutos desde la medianoche de ese día. Claves cortas: con
+// escenarios grandes (≈90 vehículos × 2 tramos × 31 días) son miles de
+// objetos en un solo documento de Firestore (límite 1MB).
+function extractShifts(vehicleSchedule, startMin) {
+  const out = [];
+  for (const v of vehicleSchedule) {
+    const vid = v._id || v.id;
+    const byDay = new Map();
+    for (const a of v.assignments || []) {
+      const di = Math.floor((a._start - startMin) / 1440);
+      if (!byDay.has(di)) byDay.set(di, []);
+      byDay.get(di).push(a);
+    }
+    for (const [di, items] of byDay) {
+      const off = di * 1440;
+      const sh = shiftForDay(v, di) ?? { start: 0, end: 1440, breaks: [] };
+      const bounds = sh.breaks.filter(b => b > sh.start && b < sh.end).sort((a, b) => a - b);
+      const segs = bounds.map(() => []).concat([[]]);
+      for (const a of items) {
+        const t = a._start - off;
+        segs[bounds.filter(b => b <= t).length].push(a);
+      }
+      for (const seg of segs) {
+        const stops = seg.filter(a => !a._travel && !a._break && !a._wait);
+        if (!stops.length) continue;
+        const s = Math.min(...seg.map(a => a._start)) - off;
+        const e = Math.max(...seg.map(a => a._end)) - off;
+        out.push({
+          id: `${vid}_${di + 1}_${s}`, d: di + 1, v: vid,
+          vn: v.nombre || v.matricula || "Vehículo", ...(v._virtual ? { virt: true } : {}),
+          s, e, st: stops.length,
+          km: +seg.reduce((acc, a) => acc + (a._travel ? (a.km || 0) : 0), 0).toFixed(1),
+        });
+      }
+    }
+  }
+  return out;
+}
+
 // Código del cuadrante de Rostering → franja obligatoria ese día.
 const ROSTER_TURNO = { M: "Mañana (06-14)", T: "Tarde (14-22)", N: "Noche (22-06)" };
 
@@ -1989,7 +2045,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [constraints,  setConstraints] = useState({
     maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
     startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
-    optimizeWeight: 0, virtualShiftMin: 0,
+    optimizeWeight: 0, virtualShiftMin: 0, rosterMode: "cuadrante",
   });
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [moveHistory,  setMoveHistory] = useState([]); // { beforeVehicles, afterVehicles, beforeWorkers, afterWorkers, unassignedTask, label }
@@ -2037,10 +2093,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
   const [publishModal, setPublishModal] = useState(null);
   const [publishing,   setPublishing]  = useState(false);
+  // Modo de Rostering con el que se generó el escenario CARGADO (no el del
+  // selector de restricciones, que puede haberse cambiado después sin
+  // regenerar): decide de dónde sale el conductor de cada tramo al publicar.
+  const [scenarioRosterMode, setScenarioRosterMode] = useState("cuadrante");
 
   // ── Rostering integration ────────────────────────────────────
   const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
-  const { grid: rosterGrid } = useRostering(orgId, schedYear || null, schedMonth || null);
+  const { grid: rosterGrid, asignaciones: rosterAsign } = useRostering(orgId, schedYear || null, schedMonth || null);
   const { grid: vehicleRosterGrid } = useVehicleAvailability(orgId, schedYear || null, schedMonth || null, { live: true });
   const schedDaysInMonth = schedYear && schedMonth ? new Date(schedYear, schedMonth, 0).getDate() : 0;
 
@@ -2074,7 +2134,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       }
     }
 
-    for (const w of schedules.workers || []) {
+    // En modo libre los conductores del Gantt son solo el vínculo fijo de la
+    // ficha, no quién trabaja de verdad (eso lo decide Rostering →
+    // Optimizar), así que no tiene sentido cruzarlos con el cuadrante.
+    for (const w of (scenarioRosterMode === "libre" ? [] : schedules.workers || [])) {
       if (w._virtual) continue;
       const stopsByDay = {};
       for (const a of (w.assignments || []).filter(isStop)) {
@@ -2286,6 +2349,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     idbLoad(`vrp_${activeProject._id}`).then(cached => {
       if (cached?.vehicles?.length) {
         setSchedules({ vehicles: cached.vehicles, workers: cached.workers || [] });
+        setScenarioRosterMode(cached.rosterMode || sc?.constraints?.rosterMode || "cuadrante");
         if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days: sc.daysUsed || 1 }));
       } else if (sc) {
         setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
@@ -2375,10 +2439,14 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // franja de ficha (_tw) y, encima, la de cada día según el cuadrante
       // (_dayWindows: M/T/N obligan, L/B no trabaja, D/G/vacío = ficha). Sin
       // mes en el proyecto no hay cuadrante que mirar y todo queda como antes.
+      // Modo "libre": el cuadrante de trabajadores no se mira (se optimiza
+      // después en Rostering sobre los turnos que salgan de aquí); la
+      // disponibilidad de VEHÍCULOS (taller/avería/ITV) sí, en los dos modos.
+      const rosterLibre = constraints.rosterMode === "libre";
       const rosterWorkers = workers.map(w => ({
         ...w,
         _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
-        ...(schedDaysInMonth
+        ...(schedDaysInMonth && !rosterLibre
           ? { _dayWindows: workerDayWindows(w._id, rosterGrid, schedDaysInMonth, constraints.startMin, constraints.endMin) }
           : {}),
       }));
@@ -2386,11 +2454,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // Compute each vehicle's effective shift from its linked workers' union.
       // A vehicle with only a morning worker works 06–14; morning+afternoon → 06–22.
       // Vehicles with no linked workers keep their own turno. Encima, la
-      // franja de cada día según el cuadrante (vehicleDayWindows).
+      // franja de cada día según el cuadrante (vehicleDayWindows). En modo
+      // libre los vinculados solo dan la estructura de turnos del vehículo
+      // (mañana+tarde...), no quién lo lleva cada día.
       const vehiclesForVRP = vehiclesWithDepot.map(v => {
         const linked = rosterWorkers.filter(w => w.vehiculoId === (v._id || v.id));
         const daily = schedDaysInMonth
-          ? vehicleDayWindows(v._id || v.id, linked, vehicleRosterGrid, schedDaysInMonth)
+          ? vehicleDayWindows(v._id || v.id, rosterLibre ? [] : linked, vehicleRosterGrid, schedDaysInMonth)
           : null;
         const dayFields = daily ? { _dayWindows: daily.windows, _coverDays: daily.coverDays } : {};
         if (!linked.length) return { ...v, ...dayFields };
@@ -2540,6 +2610,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       console.log(`[PERF] setSchedules — vehicles=${vehicleSchedule.length} workers=${usedWorkerRows.length} totalBlocks=${totalBlocks}`);
       const t_setSchedules = performance.now();
       setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
+      setScenarioRosterMode(rosterLibre ? "libre" : "cuadrante");
       setMoveHistory([]); setHistoryIndex(-1); // un escenario nuevo invalida el historial de movimientos manuales
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
@@ -2564,7 +2635,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // Persist full schedule to IndexedDB (too large for Firestore) — local,
       // sin red de por medio, se queda antes de soltar la UI.
       if (activeProject?._id) {
-        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows });
+        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows, rosterMode: rosterLibre ? "libre" : "cuadrante" });
       }
 
       // El escenario ya está calculado y es utilizable desde aquí (Gantt,
@@ -2632,7 +2703,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               // celda). Solo números pequeños, no las paradas completas — eso sí
               // superaría el límite de 1MB de Firestore con escenarios grandes.
               const dailyDetail = {};
-              for (const wRow of workerRows) {
+              // En modo libre los conductores derivados por vínculo fijo no
+              // significan nada (quién lleva cada turno lo decide Rostering
+              // → Optimizar) — no se guardan para no pintar un plan falso.
+              for (const wRow of (rosterLibre ? [] : workerRows)) {
                 const wId = wRow._id || wRow.id;
                 // Antes se sacaba el código M/T/N con una regex sobre el texto
                 // del turno ("Mañana (06-14)"...) — funciona para trabajadores
@@ -2679,9 +2753,18 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 turnoByWorker,
                 daysWorked,
                 dailyDetail,
+                // Turnos a cubrir (día + vehículo + horario) — la entrada de
+                // Rostering → Optimizar en modo libre.
+                modo: rosterLibre ? "libre" : "cuadrante",
+                shifts: extractShifts(vehicleSchedule, constraints.startMin),
                 generatedAt: new Date().toISOString(),
               });
-            } catch { /* non-critical */ }
+            } catch (e) {
+              // Antes se tragaba en silencio: con modo libre, sin esto
+              // Rostering se queda sin turnos que optimizar sin saber por qué.
+              console.error("scheduling_roster save:", e);
+              setSaveSummaryError("No se pudieron guardar los turnos para Rostering: " + (e.message || e));
+            }
           }
           console.timeEnd("[PERF] firestore-save");
         } catch (e) {
@@ -2984,6 +3067,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // (vehículo en Taller/Avería/ITV, o su conductor de ese tramo en L/B)
       // — antes se descartaban en silencio; ahora se avisa antes de escribir.
       const skipped = []; // { label, day, stops }
+      const unstaffed = []; // modo libre: tramos publicados sin conductor asignado en Rostering
       for (const row of vehicleSchedule) {
         const allStops = row.assignments.filter(a => !a._break && !a._travel && !a._wait);
         if (allStops.length === 0) continue;
@@ -3002,9 +3086,27 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         // jornada la hiciera otro.
         const vid = row._id || row.id;
         const ownerOf = new Map();
-        for (const w of (schedules.workers || [])) {
-          if (w.vehiculoId !== vid) continue;
-          for (const a of (w.assignments || [])) ownerOf.set(a, w);
+        if (scenarioRosterMode === "libre") {
+          // Modo libre: el conductor de cada tramo es a quien Rostering →
+          // Optimizar (o una edición manual posterior) asignó este vehículo
+          // ese día en un horario que cubre la parada.
+          const assigned = []; // { w, day, s, e }
+          for (const w of workers) {
+            for (const [day, a] of Object.entries(rosterAsign?.[w._id] || {})) {
+              if (a?.v === vid) assigned.push({ w, day: Number(day), s: a.s, e: a.e });
+            }
+          }
+          for (const a of allStops) {
+            const day = Math.floor((a._start - startMin) / 1440) + 1;
+            const t = a._start - (day - 1) * 1440;
+            const hit = assigned.find(x => x.day === day && t >= x.s && t < x.e);
+            if (hit) ownerOf.set(a, hit.w);
+          }
+        } else {
+          for (const w of (schedules.workers || [])) {
+            if (w.vehiculoId !== vid) continue;
+            for (const a of (w.assignments || [])) ownerOf.set(a, w);
+          }
         }
         const nameOf = w => [w.nombre, w.apellidos].filter(Boolean).join(" ");
         const vehicleLabel = row.nombre || row.matricula || "Vehículo";
@@ -3037,6 +3139,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             });
           }
           if (!stops.length) continue;
+          // Modo libre: paradas cuyo tramo no tiene conductor asignado en
+          // Rostering — se publican igual (el plan es del vehículo) pero se
+          // avisa, que si no nadie las haría.
+          if (scenarioRosterMode === "libre" && !row._virtual) {
+            const noDriver = stops.filter(a => !ownerOf.get(a)).length;
+            if (noDriver) unstaffed.push({ label: vehicleLabel, day: calDay, stops: noDriver });
+          }
           const drivers = [...new Set(stops.map(a => ownerOf.get(a)).filter(Boolean))];
           const conductorLabel = drivers.length ? drivers.map(nameOf).join(" / ") : vehicleLabel;
           const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
@@ -3061,14 +3170,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         }
       }
 
-      if (skipped.length) {
-        const totalSkipped = skipped.reduce((s, x) => s + x.stops, 0);
-        const lines = skipped.slice(0, 12).map(x => `• Día ${x.day}: ${x.label} — ${x.stops} parada(s)`);
-        if (skipped.length > 12) lines.push(`• …y ${skipped.length - 12} más`);
-        const ok = confirm(
-          `${totalSkipped} parada(s) NO se publicarán por el cuadrante actual de Rostering:\n\n${lines.join("\n")}\n\n` +
-          `Regenera el escenario para repartirlas, o acepta para publicar el resto igualmente.`
-        );
+      if (skipped.length || unstaffed.length) {
+        const fmt = list => {
+          const lines = list.slice(0, 10).map(x => `• Día ${x.day}: ${x.label} — ${x.stops} parada(s)`);
+          if (list.length > 10) lines.push(`• …y ${list.length - 10} más`);
+          return lines.join("\n");
+        };
+        const total = list => list.reduce((s, x) => s + x.stops, 0);
+        const parts = [];
+        if (skipped.length) parts.push(`${total(skipped)} parada(s) NO se publicarán por el cuadrante actual de Rostering:\n${fmt(skipped)}`);
+        if (unstaffed.length) parts.push(`${total(unstaffed)} parada(s) se publicarán SIN conductor asignado en Rostering (usa Optimizar en Rostering):\n${fmt(unstaffed)}`);
+        const ok = confirm(`${parts.join("\n\n")}\n\nRegenera u optimiza para corregirlo, o acepta para publicar igualmente.`);
         if (!ok) { setPublishing(false); return; }
       }
 
