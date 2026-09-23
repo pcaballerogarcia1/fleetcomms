@@ -1611,6 +1611,8 @@ const RULE_FIELDS = [
   { key: "descansoSemanalH",    label: "Descanso semanal seguido",       suffix: "h",     busca: "descanso semanal, día y medio" },
   { key: "maxDiasSeguidos",     label: "Máx. días seguidos",             suffix: "días",  busca: "días consecutivos, días de trabajo seguidos" },
   { key: "minFindesLibres",     label: "Fines de semana libres al mes",  suffix: "mín.",  busca: "fines de semana, sábados y domingos" },
+  { key: "minLibresSeguidos",   label: "Libres consecutivos mínimos",    suffix: "días",  busca: "descanso consecutivo, días libres seguidos" },
+  { key: "vecesLibresSeguidos", label: "…esos libres, veces al mes",     suffix: "veces", busca: "p. ej. 2 días × 4 = dos libres seguidos cada semana" },
   { key: "maxNochesSeguidas",   label: "Máx. noches seguidas",           suffix: "",      busca: "trabajo nocturno, nocturnidad" },
   { key: "maxNochesMes",        label: "Máx. noches al mes",             suffix: "",      busca: "nocturnidad, turno de noche" },
   { key: "maxDomingosFestivos", label: "Máx. domingos/festivos al mes",  suffix: "",      busca: "domingos, festivos" },

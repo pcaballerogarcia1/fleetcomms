@@ -17,6 +17,10 @@
 //   - descansoSemanalH:   descanso ininterrumpido mínimo en cada semana
 //                         natural L–D (ET art. 37.1: día y medio = 36h)
 //   - minFindesLibres:    fines de semana completos (sáb+dom) libres al mes
+//   - minLibresSeguidos / vecesLibresSeguidos: al menos `veces` bloques de
+//                         `minLibresSeguidos` días libres seguidos al mes
+//                         (p. ej. 4 días × 1, o 2 días × 4 = "dos libres
+//                         seguidos cada semana")
 //   - maxNochesSeguidas / maxNochesMes: turnos de noche
 //   - maxDomingosFestivos: domingos + festivos (lista `festivos`, fechas
 //                         "YYYY-MM-DD") trabajados al mes
@@ -53,6 +57,8 @@ export const DEFAULT_ROSTER_RULES = {
   jornadaAnualH: 0,
   descansoSemanalH: 0,
   minFindesLibres: 0,
+  minLibresSeguidos: 0,
+  vecesLibresSeguidos: 1,
   maxNochesSeguidas: 0,
   maxNochesMes: 0,
   maxDomingosFestivos: 0,
@@ -106,6 +112,7 @@ export const REASON_LABELS = {
   dia:     "el turno supera la jornada máxima diaria",
   semanal: "se quedarían sin descanso semanal",
   findes:  "se quedarían sin los fines de semana libres mínimos",
+  libres:  "se quedarían sin sus días libres seguidos",
   nochesS: "superarían las noches seguidas",
   noches:  "superarían las noches al mes",
   domingos: "superarían los domingos/festivos al mes",
@@ -148,6 +155,18 @@ function freeWeekends(intervalOf, year, month, daysInMonth) {
     if (!intervalOf(d) && !intervalOf(d + 1)) free++;
   }
   return free;
+}
+
+// Cuántos bloques de `n` días libres seguidos (sin solaparse) caben aún en
+// el mes: los días sin trabajar (o de L/B) cuentan como libres.
+function freeBlocks(intervalOf, daysInMonth, n) {
+  let blocks = 0, run = 0;
+  for (let d = 1; d <= daysInMonth + 1; d++) {
+    if (d <= daysInMonth && !intervalOf(d)) { run++; continue; }
+    blocks += Math.floor(run / n);
+    run = 0;
+  }
+  return blocks;
 }
 
 function nightRunAround(intervalOf, d, daysInMonth) {
@@ -260,6 +279,8 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
       if (R.descansoSemanalH > 0 && weeklyMaxGap(iv, year, month, d) < R.descansoSemanalH * 60) return "semanal";
       if (R.minFindesLibres > 0 && (dowOf(year, month, d) === 6 || dowOf(year, month, d) === 0) &&
           freeWeekends(iv, year, month, daysInMonth) < R.minFindesLibres) return "findes";
+      if (R.minLibresSeguidos > 0 &&
+          freeBlocks(iv, daysInMonth, R.minLibresSeguidos) < Math.max(1, R.vecesLibresSeguidos || 1)) return "libres";
       if (isNightIv(sh)) {
         if (R.maxNochesSeguidas > 0 && nightRunAround(iv, d, daysInMonth) > R.maxNochesSeguidas) return "nochesS";
         if (R.maxNochesMes > 0 && countDays(iv, daysInMonth, isNightIv) > R.maxNochesMes) return "noches";
@@ -508,6 +529,11 @@ export function checkWorkerMonth(intervalOf, daysInMonth, rules, maxHoras, { yea
         if (weeklyMaxGap(intervalOf, year, month, d) < R.descansoSemanalH * 60) bad++;
       }
       if (bad) issues.push(`${bad} semana(s) sin ${R.descansoSemanalH}h de descanso seguido`);
+    }
+    if (R.minLibresSeguidos > 0) {
+      const need = Math.max(1, R.vecesLibresSeguidos || 1);
+      const got = freeBlocks(intervalOf, daysInMonth, R.minLibresSeguidos);
+      if (got < need) issues.push(`${got} de ${need} bloque(s) de ${R.minLibresSeguidos} días libres seguidos`);
     }
     if (R.minFindesLibres > 0) {
       const free = freeWeekends(intervalOf, year, month, daysInMonth);

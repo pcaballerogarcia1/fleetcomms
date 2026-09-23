@@ -197,3 +197,32 @@ describe("mover turnos de día (manda el cuadrante)", () => {
     expect(r.moves).toEqual([{ id: six[5].id, fromDay: 6, toDay: 7 }]);
   });
 });
+
+describe("libres consecutivos mínimos al mes", () => {
+  const month = n => Array.from({ length: n }, (_, i) => mkShift(i + 1, 360, 840));
+  const base = { maxDiasSeguidos: 0, maxHorasMes: 0, moverTurnos: false };
+
+  it("deja al menos un bloque de N días libres seguidos", () => {
+    const r = optimizeRoster({ ...BASE, shifts: month(30), workers: mkWorkers(1), rules: { ...base, minLibresSeguidos: 4 } });
+    expect(r.uncovered).toHaveLength(4);
+    expect(r.uncovered[0].reasons.libres).toBe(1);
+    const days = r.uncovered.map(u => u.shift.day).sort((a, b) => a - b);
+    expect(days[3] - days[0]).toBe(3); // los 4 sin cubrir son seguidos
+  });
+
+  it("N días × veces al mes", () => {
+    const r = optimizeRoster({ ...BASE, shifts: month(30), workers: mkWorkers(1), rules: { ...base, minLibresSeguidos: 2, vecesLibresSeguidos: 4 } });
+    expect(r.uncovered).toHaveLength(8);
+  });
+
+  it("L/B cuentan como libres", () => {
+    const fixed = { w1: { 10: "L", 11: "B", 12: "L" } };
+    const r = optimizeRoster({ ...BASE, shifts: month(30), workers: mkWorkers(1), fixed, rules: { ...base, minLibresSeguidos: 3 } });
+    expect(r.uncovered.every(u => [10, 11, 12].includes(u.shift.day))).toBe(true);
+  });
+
+  it("checkWorkerMonth lo avisa", () => {
+    const r = checkWorkerMonth(() => ({ start: 360, end: 840 }), 30, { minLibresSeguidos: 2 }, 0, { year: 2026, month: 9 });
+    expect(r.issues.join(" | ")).toContain("0 de 1 bloque(s) de 2 días libres seguidos");
+  });
+});
