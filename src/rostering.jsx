@@ -5,8 +5,9 @@ import {
   DEFAULT_ROSTER_RULES, CODE_WINDOWS, ESTATUTO_RULES, ESTATUTO_ARTS,
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
+import { loadScenario, publishWorker } from "./publicar-rutas.js";
 import {
-  doc, onSnapshot, setDoc, getDoc, serverTimestamp,
+  doc, onSnapshot, setDoc, getDoc, updateDoc, serverTimestamp,
   collection, query, where,
 } from "firebase/firestore";
 
@@ -590,6 +591,70 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const [mode,  setMode]  = useState("workers"); // "workers" | "vehicles"
 
   const [workers, setWorkers] = useState([]);
+  // ── Publicar a Rutas por trabajador ─────────────────────────────
+  // Usuarios de la app (para vincular cada trabajador con quien inicia
+  // sesión en Rutas) y cuadrantes ya publicados este mes (estado de la
+  // columna "Rutas").
+  const [usuarios, setUsuarios] = useState([]);
+  const [publicados, setPublicados] = useState({}); // uid → publicadoEn
+  const [publishModal, setPublishModal] = useState(null); // { targets: [worker] }
+  const [publishing, setPublishing] = useState(null); // texto de progreso
+  const viewMes = `${year}-${String(month).padStart(2, "0")}`;
+
+  useEffect(() => {
+    if (!orgId) return;
+    return onSnapshot(query(collection(db, "usuarios"), where("org_id", "==", orgId)),
+      snap => setUsuarios(snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(u => u.rol !== "superadmin")),
+      () => {});
+  }, [orgId]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    return onSnapshot(query(collection(db, "cuadrantes"), where("org_id", "==", orgId), where("mes", "==", viewMes)),
+      snap => setPublicados(Object.fromEntries(snap.docs.map(d => [d.data().uid, d.data().publicadoEn]))),
+      () => setPublicados({}));
+  }, [orgId, viewMes]);
+
+  const normName = s => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  function suggestUser(w) {
+    const full = normName([w.nombre, w.apellidos].filter(Boolean).join(" "));
+    const linked = new Set(workers.map(x => x.uid).filter(Boolean));
+    return usuarios.find(u => !linked.has(u._id) && normName([u.nombre, u.apellidos].filter(Boolean).join(" ")) === full) || null;
+  }
+  async function linkWorker(workerId, uid) {
+    try { await updateDoc(doc(db, "scheduling_workers", workerId), { uid: uid || null }); }
+    catch (e) { alert("No se pudo vincular: " + (e.message || e)); }
+  }
+
+  async function doPublish(targets, tipo) {
+    setPublishModal(null);
+    const projectId = activeProject?._id || null;
+    const sameMonth = schedRoster?.mes === viewMes;
+    const scenario = projectId && sameMonth ? await loadScenario(projectId) : null;
+    const startMin = activeProject?.scheduling?.constraints?.startMin ?? 360;
+    const lines = [];
+    let i = 0;
+    for (const w of targets) {
+      setPublishing(`Publicando ${++i}/${targets.length}…`);
+      try {
+        const r = await publishWorker({
+          orgId, projectId, worker: w, year, month, tipo, scenario, startMin,
+          gridWorker: grid[w._id] || {}, asignWorker: asign[w._id] || {},
+          dailyDetailWorker: schedRoster?.dailyDetail?.[w._id],
+        });
+        const name = [w.nombre, w.apellidos].filter(Boolean).join(" ");
+        lines.push(`• ${name}: ${r.created} ruta(s)${r.kept.length ? ` · días ${r.kept.join(", ")} ya empezados, no se tocan` : ""}`);
+      } catch (e) {
+        lines.push(`• ${w.nombre}: error — ${e.message || e}`);
+      }
+    }
+    setPublishing(null);
+    alert(
+      `Publicado en Rutas (${viewMes}):\n\n${lines.join("\n")}` +
+      (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${!projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Scheduling es de otro mes" : "el escenario no está guardado en este navegador — ábrelo en Scheduling primero"}.`)
+    );
+  }
+
   // Disponibilidad de vehículos del mes (para no mover turnos a días de taller)
   const { grid: vehicleGrid } = useVehicleAvailability(orgId, year, month, { live: true });
 
@@ -1079,6 +1144,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const CELL_W  = 34;
   const NAME_W  = 182;
   const STATS_W = 170;
+  const PUB_W   = 150;
 
   if (mode === "vehicles") {
     return (
@@ -1202,7 +1268,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             <div>Sin trabajadores. Añade trabajadores en el módulo de Scheduling.</div>
           </div>
         ) : (
-          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: NAME_W + daysInMonth * CELL_W + STATS_W }}>
+          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: NAME_W + daysInMonth * CELL_W + STATS_W + PUB_W }}>
             <thead>
               <tr>
                 {/* Name header */}
@@ -1242,11 +1308,27 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                 {/* Stats header */}
                 <th style={{
                   ...thStyle, width: STATS_W, minWidth: STATS_W,
-                  position: "sticky", right: 0, top: 0, zIndex: 5,
+                  position: "sticky", right: PUB_W, top: 0, zIndex: 5,
                   background: C.card, textAlign: "center",
                   borderLeft: `1px solid ${C.border2}`,
                 }}>
                   Resumen mes
+                </th>
+
+                {/* Publicar a Rutas */}
+                <th style={{
+                  ...thStyle, width: PUB_W, minWidth: PUB_W,
+                  position: "sticky", right: 0, top: 0, zIndex: 5,
+                  background: C.card, textAlign: "center",
+                  borderLeft: `1px solid ${C.border}`,
+                }}>
+                  <div>Rutas</div>
+                  <button disabled={!!publishing || !workers.some(w => w.uid)}
+                    onClick={() => setPublishModal({ targets: workers.filter(w => w.uid) })}
+                    title="Publica en Rutas las rutas y el cuadrante de todos los trabajadores vinculados a un usuario"
+                    style={{ ...pubBtn, marginTop: 3, opacity: workers.some(w => w.uid) ? 1 : 0.4 }}>
+                    {publishing || "Publicar todos"}
+                  </button>
                 </th>
               </tr>
             </thead>
@@ -1371,7 +1453,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
                     {/* Worker stats */}
                     <td style={{
-                      position: "sticky", right: 0, zIndex: 2,
+                      position: "sticky", right: PUB_W, zIndex: 2,
                       background: rowBg, borderLeft: `1px solid ${C.border2}`,
                       borderBottom: `1px solid ${C.border}`,
                       padding: "0 8px",
@@ -1397,6 +1479,46 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                           <span style={{ color: C.dim, fontSize: 10 }}>—</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* Publicar a Rutas: vincular con su usuario de la app + publicar */}
+                    <td style={{
+                      position: "sticky", right: 0, zIndex: 2,
+                      background: rowBg, borderLeft: `1px solid ${C.border}`,
+                      borderBottom: `1px solid ${C.border}`,
+                      padding: "0 6px", textAlign: "center",
+                    }}>
+                      {w.uid ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
+                          <button disabled={!!publishing} onClick={() => setPublishModal({ targets: [w] })}
+                            title={`Publicar en Rutas a ${usuarios.find(u => u._id === w.uid)?.email || "su usuario"}`}
+                            style={pubBtn}>
+                            Publicar
+                          </button>
+                          {publicados[w.uid] && (
+                            <span title={`Publicado ${new Date(publicados[w.uid]).toLocaleString()}`}
+                              style={{ fontSize: 10, color: "#34d399" }}>✓</span>
+                          )}
+                          <button onClick={() => { if (confirm("¿Desvincular este trabajador de su usuario de la app?")) linkWorker(w._id, null); }}
+                            title="Desvincular usuario" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 11, padding: 0 }}>×</button>
+                        </div>
+                      ) : (
+                        <select value="" onChange={e => e.target.value && linkWorker(w._id, e.target.value)}
+                          title="Vincula el trabajador con su usuario de la app para poder publicarle sus rutas"
+                          style={{ width: "100%", background: C.surface2, border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 5, fontSize: 10.5, padding: "3px 4px", fontFamily: font, cursor: "pointer" }}>
+                          <option value="">Vincular usuario…</option>
+                          {(() => {
+                            const sug = suggestUser(w);
+                            const linked = new Set(workers.map(x => x.uid).filter(Boolean));
+                            return [
+                              ...(sug ? [<option key={"s" + sug._id} value={sug._id}>★ {[sug.nombre, sug.apellidos].filter(Boolean).join(" ")}</option>] : []),
+                              ...usuarios.filter(u => !linked.has(u._id) && u._id !== sug?._id).map(u => (
+                                <option key={u._id} value={u._id}>{[u.nombre, u.apellidos].filter(Boolean).join(" ") || u.email}</option>
+                              )),
+                            ];
+                          })()}
+                        </select>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1436,8 +1558,13 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                   );
                 })}
                 <td style={{
-                  position: "sticky", right: 0, zIndex: 2,
+                  position: "sticky", right: PUB_W, zIndex: 2,
                   background: C.surface2, borderLeft: `1px solid ${C.border2}`,
+                  borderTop: `2px solid ${C.border2}`,
+                }}/>
+                <td style={{
+                  position: "sticky", right: 0, zIndex: 2,
+                  background: C.surface2, borderLeft: `1px solid ${C.border}`,
                   borderTop: `2px solid ${C.border2}`,
                 }}/>
               </tr>
@@ -1588,6 +1715,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
           onClose={() => setShowRules(false)}
           onSave={(r, h, c) => { saveRules(r, h, c); setShowRules(false); }}
         />
+      )}
+      {publishModal && (
+        <PublishModal targets={publishModal.targets} mes={viewMes}
+          onClose={() => setPublishModal(null)}
+          onConfirm={tipo => doPublish(publishModal.targets, tipo)} />
       )}
       {optResult && (
         <OptResultModal result={optResult} workers={workers} rules={rules} onClose={() => setOptResult(null)} />
@@ -1828,6 +1960,39 @@ function RulesModal({ rules, horas, convenio, workers, orgId, onClose, onSave })
   );
 }
 
+// ── MODAL: publicar a Rutas ────────────────────────────────────────
+const TIPOS_RUTA = [
+  { key: "prev", label: "Mantenimiento Preventivo" },
+  { key: "ext",  label: "Limpieza Exterior" },
+  { key: "int",  label: "Limpieza Interior" },
+];
+function PublishModal({ targets, mes, onClose, onConfirm }) {
+  const [tipo, setTipo] = useState(() => {
+    try { return localStorage.getItem("rostering_pub_tipo") || "prev"; } catch { return "prev"; }
+  });
+  const names = targets.map(w => [w.nombre, w.apellidos].filter(Boolean).join(" "));
+  return (
+    <ModalShell title="Publicar en Rutas" onClose={onClose} width={440}>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+        {targets.length === 1 ? names[0] : `${targets.length} trabajadores`} · {mes}
+      </div>
+      <div style={{ fontSize: 11, color: C.dim, marginBottom: 12 }}>
+        Cada uno verá en Rutas solo sus rutas (una por día trabajado, con su vehículo) y su cuadrante del mes.
+        Se sustituye lo publicado antes de este proyecto y mes, salvo los días en que ya haya marcado paradas.
+      </div>
+      <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 4 }}>Tipo de trabajo</label>
+      <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ ...inputStyle, width: "100%", marginBottom: 16 }}>
+        {TIPOS_RUTA.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <button onClick={onClose} style={secondaryBtn}>Cancelar</button>
+        <button onClick={() => { try { localStorage.setItem("rostering_pub_tipo", tipo); } catch { /* sin almacenamiento */ } onConfirm(tipo); }}
+          style={primaryBtn}>Publicar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 // ── MODAL: resultado de Optimizar ──────────────────────────────────
 function OptResultModal({ result, workers, rules, onClose }) {
   const nameOf = id => {
@@ -1952,6 +2117,10 @@ const inputStyle = {
 const primaryBtn = {
   padding: "6px 14px", borderRadius: 6, background: C.blue, border: "none",
   color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
+};
+const pubBtn = {
+  padding: "3px 10px", borderRadius: 5, background: "#5c9bff22", border: "1px solid #5c9bff55",
+  color: "#5c9bff", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font,
 };
 const secondaryBtn = {
   padding: "6px 14px", borderRadius: 6, background: "none", border: `1px solid ${C.border2}`,

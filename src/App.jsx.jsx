@@ -1056,6 +1056,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [debugInfo,setDebugInfo]     = useState([]);
   const [mesFilter,setMesFilter]     = useState(null);
   const [formTarea,setFormTarea]     = useState({titulo:"",descripcion:"",vehiculo:"",estado:"pendiente"});
+  const [verCuadrante,setVerCuadrante] = useState(false);
   const fileRef = useRef();
   // Intermedio tiene la misma gestión de Rutas que Administrador (subir
   // KML, borrar planes, gestionar tareas) — solo Incidencias/Inventario/
@@ -1124,6 +1125,8 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // plan del mismo mes en cualquier dispositivo) que antes sobrescribía la
   // vista con la versión del servidor, obligando a esperar el round-trip
   // completo de Firestore antes de ver el check ✓ — muy notorio en 4G.
+  if(verCuadrante) return <MiCuadrante sesion={sesion} onBack={()=>setVerCuadrante(false)}/>;
+
   if(planActivo){
     return <DetallePlan plan={planActivo} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated)=>{
       setPlanActivo(updated);
@@ -1138,6 +1141,16 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
     <div style={{paddingBottom:80}}>
       <FichajeWidget sesion={sesion} />
       <div style={{padding:"12px 14px 0"}}>
+        <div onClick={()=>setVerCuadrante(true)} style={{...S.card,cursor:"pointer",borderLeft:"4px solid #5c9bff",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:46,height:46,borderRadius:12,background:"#5c9bff18",border:"1px solid #5c9bff33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>📅</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:3}}>Mi cuadrante</div>
+              <div style={{fontSize:11,color:C.muted}}>Tus turnos, libres y vehículo de cada día</div>
+            </div>
+            <div style={{fontSize:20,color:C.border}}>›</div>
+          </div>
+        </div>
         <div style={{fontSize:10,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>Selecciona tipo de trabajo</div>
         {TIPOS_TRABAJO.map(t=>{
           const planesTipo=planes.filter(p=>p.tipo===t.key);
@@ -1332,6 +1345,112 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 }
 
 // ── LISTA PLANES (alias para compatibilidad) ───────────────────────
+// ── MI CUADRANTE (Rutas) ───────────────────────────────────────────
+// El cuadrante del mes que Rostering le publica a cada trabajador
+// (colección cuadrantes, un doc por usuario y mes: solo lo leen él y los
+// gestores).
+const CUADRANTE_META={
+  M:{label:"Mañana",bg:"#0d2248",text:"#4f8ef7"},
+  T:{label:"Tarde",bg:"#3d1a00",text:"#fb923c"},
+  N:{label:"Noche",bg:"#1a0d3d",text:"#a78bfa"},
+  L:{label:"Libre",bg:"#1c2a3a",text:"#64748b"},
+  G:{label:"Guardia",bg:"#2d2200",text:"#fbbf24"},
+  B:{label:"Baja",bg:"#3d0d0d",text:"#f87171"},
+  D:{label:"Disponible",bg:"#072015",text:"#34d399"},
+};
+const MESES_ES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const hhmm=m=>{ if(m==null) return ""; const x=((m%1440)+1440)%1440; return `${String(Math.floor(x/60)).padStart(2,"0")}:${String(x%60).padStart(2,"0")}`; };
+
+function MiCuadrante({sesion,onBack}){
+  const [docs,setDocs]=useState(null);
+  const [sel,setSel]=useState(null);
+  const [diaSel,setDiaSel]=useState(null);
+  useEffect(()=>{
+    if(!sesion?.org_id||!sesion?.uid) return;
+    const q=query(collection(db,"cuadrantes"),where("org_id","==",sesion.org_id),where("uid","==",sesion.uid));
+    return onSnapshot(q,snap=>{
+      const list=snap.docs.map(d=>({...d.data(),_id:d.id})).sort((a,b)=>b.mes.localeCompare(a.mes));
+      setDocs(list);
+    },err=>{ console.error("cuadrantes",err); setDocs([]); });
+  },[sesion?.org_id,sesion?.uid]);
+
+  const hoyMes=new Date().toISOString().slice(0,7);
+  const actual=docs&&(docs.find(d=>d.mes===sel)||docs.find(d=>d.mes===hoyMes)||docs[0]);
+
+  const header=(
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer",padding:0}}>‹</button>
+      <div style={{fontSize:15,fontWeight:700}}>Mi cuadrante</div>
+      {docs?.length>1&&(
+        <select value={actual?.mes||""} onChange={e=>{setSel(e.target.value);setDiaSel(null);}}
+          style={{marginLeft:"auto",background:C.surface2,border:`1px solid ${C.border}`,color:C.text,borderRadius:6,padding:"4px 8px",fontSize:12,fontFamily:font}}>
+          {docs.map(d=><option key={d.mes} value={d.mes}>{MESES_ES[d.month-1]} {d.year}</option>)}
+        </select>
+      )}
+    </div>
+  );
+
+  if(docs===null) return <div style={{paddingBottom:80}}>{header}<div style={{padding:20,color:C.dim,fontSize:13}}>Cargando…</div></div>;
+  if(!actual) return <div style={{paddingBottom:80}}>{header}<div style={{padding:20,color:C.dim,fontSize:13}}>Todavía no te han publicado ningún cuadrante.</div></div>;
+
+  const {year,month,dias={}}=actual;
+  const nDias=new Date(year,month,0).getDate();
+  const offset=(new Date(year,month-1,1).getDay()+6)%7; // lunes primero
+  const celdas=[...Array(offset).fill(null),...Array.from({length:nDias},(_,i)=>i+1)];
+  const hoy=new Date();
+  const esHoy=d=>hoy.getFullYear()===year&&hoy.getMonth()+1===month&&hoy.getDate()===d;
+  let horas=0; const cuenta={};
+  for(const v of Object.values(dias)){
+    cuenta[v.c]=(cuenta[v.c]||0)+1;
+    if(v.s!=null&&v.e!=null) horas+=(v.e-v.s)/60; else if("MTN".includes(v.c)) horas+=8;
+  }
+  const det=diaSel?dias[String(diaSel)]:null;
+
+  return(
+    <div style={{paddingBottom:80}}>
+      {header}
+      <div style={{padding:"0 14px"}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>{MESES_ES[month-1]} {year}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+          {["L","M","X","J","V","S","D"].map(d=><div key={d} style={{fontSize:10,color:C.dim,textAlign:"center"}}>{d}</div>)}
+          {celdas.map((d,i)=>{
+            if(!d) return <div key={"e"+i}/>;
+            const v=dias[String(d)]; const m=v?CUADRANTE_META[v.c]:null;
+            return(
+              <div key={d} onClick={()=>setDiaSel(d)} style={{
+                borderRadius:8,padding:"5px 2px",textAlign:"center",cursor:"pointer",minHeight:46,
+                background:m?m.bg:C.surface2,
+                border:`${esHoy(d)?2:1}px solid ${diaSel===d?"#fff":esHoy(d)?"#5c9bff":C.border}`,
+              }}>
+                <div style={{fontSize:10,color:C.dim}}>{d}</div>
+                <div style={{fontSize:14,fontWeight:700,color:m?m.text:C.dim}}>{v?.c||"·"}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {det?(
+          <div style={{...S.card,marginTop:12}}>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>Día {diaSel} · {CUADRANTE_META[det.c]?.label||det.c}</div>
+            {det.v&&<div style={{fontSize:12,color:C.muted}}>Vehículo: <b style={{color:C.text}}>{det.v}</b></div>}
+            {det.s!=null&&<div style={{fontSize:12,color:C.muted}}>Horario: <b style={{color:C.text}}>{hhmm(det.s)} – {hhmm(det.e)}</b></div>}
+          </div>
+        ):diaSel?(
+          <div style={{...S.card,marginTop:12,fontSize:12,color:C.dim}}>Día {diaSel}: sin turno asignado.</div>
+        ):null}
+
+        <div style={{...S.card,marginTop:12,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{fontSize:13,fontWeight:700}}>{Math.round(horas)}h</div>
+          {Object.entries(cuenta).map(([c,n])=>(
+            <div key={c} style={{fontSize:11,color:CUADRANTE_META[c]?.text||C.muted}}>{CUADRANTE_META[c]?.label||c}: {n}</div>
+          ))}
+        </div>
+        <div style={{fontSize:10,color:C.dim,marginTop:8}}>Publicado {new Date(actual.publicadoEn).toLocaleString()}</div>
+      </div>
+    </div>
+  );
+}
+
 function ListaPlanes({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   return <ModuloRutas planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>;
 }
@@ -2150,7 +2269,26 @@ export default function App(){
   // limitN=300: sin esto, cada conductor descarga y decodifica TODO el
   // histórico de planes de su org en cada apertura de la app — mismo
   // problema (y mismo límite) que ya se arregló en Control.
-  const {data:planes}=useCollection("planes","fechaSubida",sesion?.org_id, isSA, 300);
+  const {data:planesOrg}=useCollection("planes","fechaSubida",sesion?.org_id, isSA, 300);
+
+  // Planes publicados a un trabajador concreto desde Rostering (conductorUid):
+  // el conductor ve los suyos + los que no tienen conductor (lo de siempre);
+  // gestores ven todos. Sus propios planes se piden aparte porque, con uno
+  // por trabajador y día, en una plantilla grande pueden quedar fuera de los
+  // 300 más recientes de la organización.
+  const [misPlanes,setMisPlanes]=useState([]);
+  useEffect(()=>{
+    if(!sesion?.org_id||!sesion?.uid) return;
+    const q=query(collection(db,"planes"),where("org_id","==",sesion.org_id),where("conductorUid","==",sesion.uid));
+    return onSnapshot(q,snap=>setMisPlanes(snap.docs.map(d=>({...d.data(),_id:d.id}))),err=>console.error("misPlanes",err));
+  },[sesion?.org_id,sesion?.uid]);
+  const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
+  const planes = (()=>{
+    const byId=new Map();
+    for(const p of [...(sesion?.uid?misPlanes:[]),...planesOrg]) byId.set(p._id,p);
+    const all=[...byId.values()].sort((a,b)=>(b.fechaSubida||0)-(a.fechaSubida||0));
+    return verTodosPlanes ? all : all.filter(p=>!p.conductorUid||p.conductorUid===sesion?.uid);
+  })();
 
   async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
   async function updatePlan(plan){ await fbUpdate("planes",plan._id,plan); }

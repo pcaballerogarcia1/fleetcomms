@@ -17,6 +17,7 @@ import {
   computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet, shiftForDay,
 } from "./vrp-engine.js";
 import { useLang, t } from "./i18n.js";
+import { taskToUbicacion } from "./publicar-rutas.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -2958,36 +2959,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     } finally {
       setSimRunning(false);
     }
-  }
-
-  function taskToUbicacion(task, idx) {
-    const campos = task.campos || {};
-    const field = (...keys) => {
-      for (const k of keys) {
-        const e = Object.entries(campos).find(([fk]) => fk.toLowerCase().trim() === k);
-        if (e?.[1] != null && String(e[1]).trim()) return String(e[1]).trim();
-      }
-      return "";
-    };
-    return {
-      id: "u" + idx,
-      pa: task.nombre || field("pa","idsap","id_sap","codigopoint","codigo","codi") || ("PA-" + (idx + 1)),
-      orden: idx + 1,
-      calle: field("calle","carrer","street","via"),
-      num: field("num","num.","número","numero"),
-      comentari: field("comentari","comentario","comment"),
-      barri: task.barrio || field("barri","barrio","neighbourhood","neighborhood","sector","zona"),
-      districte: field("districte","distrito","district"),
-      turno: field("turno","turn","shift"),
-      dia: field("día","dia","day"),
-      lat: +task.lat || 0,
-      lng: +task.lng || 0,
-      elementos: [],
-      realizado: false,
-      realizadoPor: null,
-      realizadoEn: null,
-      nota: "",
-    };
   }
 
   // ── Excel export ───────────────────────────────────────────────
