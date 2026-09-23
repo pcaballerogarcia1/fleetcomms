@@ -14,7 +14,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { LoginScheduling } from "./login-scheduling.jsx";
 import {
   timeToMin, minToTime, turnoWindow, shiftCodeFromStart, hasCoords,
-  computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet,
+  computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet, shiftForDay,
 } from "./vrp-engine.js";
 import { useLang, t } from "./i18n.js";
 
@@ -1874,27 +1874,76 @@ async function loadTasksFromLayers(projectId) {
 // de un movimiento manual a nivel de vehículo, y para traducir un
 // movimiento hecho a nivel de conductor al vehículo real que lo sostiene
 // (turnos.jsx no tiene rutas propias, siempre son las del vehículo).
+// La ventana de cada conductor es la de ESE día (shiftForDay: cuadrante de
+// Rostering si lo hay, si no la de su ficha) — un conductor de baja ese día
+// no es dueño de nada, y uno puesto de tarde en el cuadrante se queda con la
+// tarde aunque su ficha diga mañana.
 function deriveWorkerRows(vehicleRow, peersIn, startMin) {
   const peers = [...peersIn].sort((a, b) =>
     a._tw.start !== b._tw.start ? a._tw.start - b._tw.start : (a.nombre || "").localeCompare(b.nombre || "")
   );
+  const byWorker = new Map(peers.map(p => [p._id || p.id, []]));
+  const onDutyCache = new Map(); // dayIdx -> [{ p, w }]
+  for (const a of vehicleRow.assignments || []) {
+    const dayIdx = Math.floor((a._start - startMin) / 1440);
+    const tStart = a._start - dayIdx * 1440;
+    let onDuty = onDutyCache.get(dayIdx);
+    if (!onDuty) {
+      onDuty = peers.map(p => ({ p, w: shiftForDay(p, dayIdx) })).filter(x => x.w);
+      onDutyCache.set(dayIdx, onDuty);
+    }
+    let owner = onDuty.find(x => tStart >= x.w.start && tStart < x.w.end);
+    // Regreso a depósito que se sale unos minutos de todas las ventanas
+    // (redondeo): al último conductor del día como red de seguridad.
+    if (!owner && a._depot_return) owner = onDuty.reduce((best, x) => !best || x.w.end > best.w.end ? x : best, null);
+    if (owner) byWorker.get(owner.p._id || owner.p.id).push(a);
+  }
   return peers.map(w => {
-    const wId = w._id || w.id;
-    const myAssignments = (vehicleRow.assignments || []).filter(a => {
-      const dayOffset = Math.floor((a._start - startMin) / 1440) * 1440;
-      const tStart = a._start - dayOffset;
-      if (a._depot_return) {
-        const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
-        if (owner) return (owner._id || owner.id) === wId;
-        const last = peers.reduce((best, p) => !best || p._tw.end > best._tw.end ? p : best, null);
-        return last && (last._id || last.id) === wId;
-      }
-      const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
-      return owner && (owner._id || owner.id) === wId;
-    });
+    const myAssignments = byWorker.get(w._id || w.id);
     const myKm = myAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
     return { ...w, assignments: myAssignments, totalKm: myKm };
   });
+}
+
+// Código del cuadrante de Rostering → franja obligatoria ese día.
+const ROSTER_TURNO = { M: "Mañana (06-14)", T: "Tarde (14-22)", N: "Noche (22-06)" };
+
+// Franjas por día de un trabajador según el cuadrante del mes del proyecto
+// (clave = día del escenario, 0 = día 1 del mes): M/T/N obligan a esa
+// franja; L/B = no trabaja (null); D/G/vacío = sin entrada, la de su ficha.
+function workerDayWindows(workerId, rosterGrid, daysInMonth, startMin, endMin) {
+  const out = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const code = workerCodeOnDay(rosterGrid, workerId, d);
+    if (isUnavailable(code)) out[d - 1] = null;
+    else if (ROSTER_TURNO[code]) out[d - 1] = { ...turnoWindow(ROSTER_TURNO[code], startMin, endMin), breaks: [] };
+  }
+  return out;
+}
+
+// Franjas por día de un vehículo: la unión de las de sus conductores ese
+// día, con un relevo en cada fin de turno intermedio (igual que la franja
+// habitual en runGenerate). Taller/Avería/ITV en Rostering → Vehículos = no
+// sale (null). Si todos sus conductores están en L/B, sale igualmente con su
+// franja habitual y ese día lo cubre un conductor virtual (coverDays).
+function vehicleDayWindows(vehicleId, linked, vehicleGrid, daysInMonth) {
+  const windows = {}, coverDays = [];
+  for (let d = 0; d < daysInMonth; d++) {
+    if (vehicleGrid && isVehicleUnavailable(vehicleCodeOnDay(vehicleGrid, vehicleId, d + 1))) {
+      windows[d] = null;
+      continue;
+    }
+    if (!linked.length) continue;
+    const wins = linked.map(w => shiftForDay(w, d)).filter(Boolean).sort((a, b) => a.start - b.start);
+    if (!wins.length) { coverDays.push(d); continue; }
+    const start = Math.min(...wins.map(w => w.start));
+    const end   = Math.max(...wins.map(w => w.end));
+    const breaks = [...new Set(wins.slice(0, -1).map(w => w.end))]
+      .filter(b => b > start && b < end)
+      .sort((a, b) => a - b);
+    windows[d] = { start, end, breaks };
+  }
+  return { windows, coverDays };
 }
 
 // Sustituye, dentro de la lista completa de un vehículo, todo lo que cae en
@@ -1904,8 +1953,9 @@ function deriveWorkerRows(vehicleRow, peersIn, startMin) {
 // fuente real de la ruta) sin arriesgarse a coger como vecina una parada de
 // OTRO conductor del mismo vehículo.
 function spliceWorkerWindowIntoVehicle(vehicleRow, worker, dayOffset, newWorkerAssignments) {
-  const wStart = dayOffset + worker._tw.start;
-  const wEnd   = dayOffset + worker._tw.end;
+  const win = shiftForDay(worker, Math.floor(dayOffset / 1440)) ?? worker._tw;
+  const wStart = dayOffset + win.start;
+  const wEnd   = dayOffset + win.end;
   const rest = (vehicleRow.assignments || []).filter(a => !(a._start >= wStart && a._start < wEnd));
   return [...rest, ...newWorkerAssignments].sort((a, b) => a._start - b._start);
 }
@@ -1991,54 +2041,61 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // ── Rostering integration ────────────────────────────────────
   const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
   const { grid: rosterGrid } = useRostering(orgId, schedYear || null, schedMonth || null);
-  const { grid: vehicleRosterGrid } = useVehicleAvailability(orgId, schedYear || null, schedMonth || null);
+  const { grid: vehicleRosterGrid } = useVehicleAvailability(orgId, schedYear || null, schedMonth || null, { live: true });
+  const schedDaysInMonth = schedYear && schedMonth ? new Date(schedYear, schedMonth, 0).getDate() : 0;
 
-  // Compute worker-day conflicts after VRP (L/B days assigned to routes),
-  // más los vehículo-día marcados Taller/Avería/ITV en el cuadrante de
-  // Rostering → Vehículos con una ruta asignada ese día. Mismo tratamiento
-  // que los trabajadores: no bloquea la generación del VRP en sí (el
-  // escenario ya está calculado para todo el mes de una vez), pero avisa
-  // aquí y evita publicar ese día concreto a Rutas (ver publishToRoutes).
+  // Conflictos entre el escenario ya generado y el cuadrante ACTUAL de
+  // Rostering. Al generar ya se respeta el cuadrante (ver runGenerate), así
+  // que esto solo salta si el cuadrante cambió después de generar, o tras
+  // mover paradas a mano: un trabajador con paradas un día que está en L/B
+  // (o con un turno M/T/N distinto al que se le planificó), o un vehículo
+  // con ruta un día en Taller/Avería/ITV. Se mira por trabajador (sus
+  // propias paradas), no por todos los vinculados al vehículo — si no,
+  // salía el conductor de mañana en conflicto por las paradas del de tarde.
   const rosterConflicts = (() => {
-    if (!schedules.vehicles || (!rosterGrid && !vehicleRosterGrid)) return [];
+    if (!schedules.vehicles) return [];
     const conflicts = [];
-    for (const row of schedules.vehicles) {
-      const byDay = {};
-      for (const a of row.assignments) {
-        if (a._break || a._travel || a._wait) continue;
-        const d = Math.floor((a._start - constraints.startMin) / 1440) + 1;
-        byDay[d] = true;
-      }
-      const dayNums = Object.keys(byDay).map(Number);
+    const isStop = a => !a._break && !a._travel && !a._wait;
+    const dayOf  = a => Math.floor((a._start - constraints.startMin) / 1440) + 1;
 
-      if (vehicleRosterGrid) {
-        const vId = row._id || row.id;
-        for (const day of dayNums) {
-          const code = vehicleCodeOnDay(vehicleRosterGrid, vId, day);
-          if (isVehicleUnavailable(code)) {
-            conflicts.push({
-              name: row.nombre || row.matricula || "Vehículo",
-              day, code,
-              label: VEHICLE_STATUS_META[code]?.label ?? code,
-            });
-          }
+    for (const row of schedules.vehicles) {
+      if (row._virtual) continue;
+      const vId = row._id || row.id;
+      const dayNums = new Set(row.assignments.filter(isStop).map(dayOf));
+      for (const day of dayNums) {
+        const code = vehicleCodeOnDay(vehicleRosterGrid, vId, day);
+        if (isVehicleUnavailable(code)) {
+          conflicts.push({
+            name: row.nombre || row.matricula || "Vehículo",
+            day, code,
+            label: VEHICLE_STATUS_META[code]?.label ?? code,
+          });
         }
       }
+    }
 
-      if (rosterGrid) {
-        const linked = workers.filter(w => w.vehiculoId === (row._id || row.id));
-        for (const w of linked) {
-          for (const day of dayNums) {
-            const code = workerCodeOnDay(rosterGrid, w._id, day);
-            if (isUnavailable(code)) {
-              conflicts.push({
-                name: [w.nombre, w.apellidos].filter(Boolean).join(" "),
-                day,
-                code,
-                label: SHIFT_META[code]?.label ?? code,
-              });
-            }
+    for (const w of schedules.workers || []) {
+      if (w._virtual) continue;
+      const stopsByDay = {};
+      for (const a of (w.assignments || []).filter(isStop)) {
+        const d = dayOf(a);
+        (stopsByDay[d] || (stopsByDay[d] = [])).push(a);
+      }
+      for (const [dayStr, stops] of Object.entries(stopsByDay)) {
+        const day  = Number(dayStr);
+        const code = workerCodeOnDay(rosterGrid, w._id, day);
+        let label = null;
+        if (isUnavailable(code)) {
+          label = SHIFT_META[code]?.label ?? code;
+        } else if (ROSTER_TURNO[code]) {
+          const win = turnoWindow(ROSTER_TURNO[code], constraints.startMin, constraints.endMin);
+          const off = (day - 1) * 1440;
+          if (stops.some(a => a._start - off < win.start || a._start - off >= win.end)) {
+            label = `ahora de ${SHIFT_META[code].label.toLowerCase()}`;
           }
+        }
+        if (label) {
+          conflicts.push({ name: [w.nombre, w.apellidos].filter(Boolean).join(" "), day, code, label });
         }
       }
     }
@@ -2314,14 +2371,30 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         return { ...v, depotLat: planningDepot.lat, depotLng: planningDepot.lng };
       });
 
+      // Cuadrante de Rostering del mes del proyecto: cada trabajador lleva su
+      // franja de ficha (_tw) y, encima, la de cada día según el cuadrante
+      // (_dayWindows: M/T/N obligan, L/B no trabaja, D/G/vacío = ficha). Sin
+      // mes en el proyecto no hay cuadrante que mirar y todo queda como antes.
+      const rosterWorkers = workers.map(w => ({
+        ...w,
+        _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
+        ...(schedDaysInMonth
+          ? { _dayWindows: workerDayWindows(w._id, rosterGrid, schedDaysInMonth, constraints.startMin, constraints.endMin) }
+          : {}),
+      }));
+
       // Compute each vehicle's effective shift from its linked workers' union.
       // A vehicle with only a morning worker works 06–14; morning+afternoon → 06–22.
-      // Vehicles with no linked workers keep their own turno.
+      // Vehicles with no linked workers keep their own turno. Encima, la
+      // franja de cada día según el cuadrante (vehicleDayWindows).
       const vehiclesForVRP = vehiclesWithDepot.map(v => {
-        const linked = workers.filter(w => w.vehiculoId === (v._id || v.id));
-        if (!linked.length) return v;
-        const wins = linked.map(w => turnoWindow(w.turno, constraints.startMin, constraints.endMin))
-          .sort((a, b) => a.start - b.start);
+        const linked = rosterWorkers.filter(w => w.vehiculoId === (v._id || v.id));
+        const daily = schedDaysInMonth
+          ? vehicleDayWindows(v._id || v.id, linked, vehicleRosterGrid, schedDaysInMonth)
+          : null;
+        const dayFields = daily ? { _dayWindows: daily.windows, _coverDays: daily.coverDays } : {};
+        if (!linked.length) return { ...v, ...dayFields };
+        const wins = linked.map(w => w._tw).sort((a, b) => a.start - b.start);
         const effStart = Math.min(...wins.map(w => w.start));
         const effEnd   = Math.max(...wins.map(w => w.end));
         // Circularidad por conductor: cada relevo entre conductores vinculados
@@ -2333,7 +2406,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         const shiftBreaks = [...new Set(wins.slice(0, -1).map(w => w.end))]
           .filter(b => b > effStart && b < effEnd)
           .sort((a, b) => a - b);
-        return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd, _shiftBreaks: shiftBreaks };
+        return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd, _shiftBreaks: shiftBreaks, ...dayFields };
       });
 
       // ── Step 1: Vehicle VRP ──────────────────────────────────────
@@ -2405,63 +2478,50 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         });
       });
 
+      // Conductor virtual de cobertura: un vehículo real cuyos conductores
+      // están todos en L/B un día sale igualmente ese día (con su franja
+      // habitual) y lo lleva un "Conductor necesario" que SOLO trabaja esos
+      // días (_onlyDayWindows) — así se ve qué ausencias hay que cubrir.
+      const coverWorkers = vehiclesForVRP
+        .filter(v => v._coverDays?.length)
+        .map(v => {
+          const vid = v._id || v.id;
+          const tw = { start: v._effectiveStart, end: v._effectiveEnd };
+          return {
+            _id: `virtual_cover_${vid}`, id: `virtual_cover_${vid}`,
+            nombre: `Conductor necesario (${v.nombre || v.matricula || "vehículo"})`, apellidos: "",
+            turno: "Jornada completa", rol: "conductor",
+            vehiculoId: vid, _virtual: true, _onlyDayWindows: true,
+            _effectiveStart: tw.start, _effectiveEnd: tw.end,
+            _dayWindows: Object.fromEntries(v._coverDays.map(d => [d, { ...tw, breaks: [] }])),
+          };
+        });
+
       // Pre-compute turno window for every worker (real + virtual). Un
       // conductor virtual con jornada acotada usa esa ventana directamente
-      // en vez de resolverla por turno.
-      const workersWithTw = [...workers, ...virtualWorkers].map(w => ({
+      // en vez de resolverla por turno. Los reales ya la traen (rosterWorkers).
+      const workersWithTw = [...rosterWorkers, ...coverWorkers, ...virtualWorkers].map(w => w._tw ? w : ({
         ...w,
         _tw: w._effectiveStart != null
           ? { start: w._effectiveStart, end: w._effectiveEnd }
           : turnoWindow(w.turno, constraints.startMin, constraints.endMin),
       }));
 
-      // Group workers by vehiculoId so we can resolve ownership per vehicle
+      // Reparto de cada vehículo entre sus conductores — misma regla que tras
+      // un movimiento manual (deriveWorkerRows), con la franja de cada día.
       const vehicleWorkerMap = {};
       for (const w of workersWithTw) {
-        const vid = w.vehiculoId;
-        if (!vid) continue;
-        if (!vehicleWorkerMap[vid]) vehicleWorkerMap[vid] = [];
-        vehicleWorkerMap[vid].push(w);
+        if (!w.vehiculoId) continue;
+        (vehicleWorkerMap[w.vehiculoId] || (vehicleWorkerMap[w.vehiculoId] = [])).push(w);
       }
-      // Sort each vehicle's workers by turno start (earliest first → first-match wins)
-      for (const list of Object.values(vehicleWorkerMap)) {
-        list.sort((a, b) =>
-          a._tw.start !== b._tw.start
-            ? a._tw.start - b._tw.start
-            : (a.nombre || "").localeCompare(b.nombre || "")
-        );
+      const derivedById = new Map();
+      for (const [vid, peers] of Object.entries(vehicleWorkerMap)) {
+        const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === vid);
+        if (!vehicleRow) continue;
+        for (const row of deriveWorkerRows(vehicleRow, peers, constraints.startMin)) derivedById.set(row._id || row.id, row);
       }
-
-      const workerRows = workersWithTw.map(w => {
-        const vehicleRow = vehicleSchedule.find(v => (v._id || v.id) === w.vehiculoId);
-        if (!vehicleRow) return { ...w, assignments: [], totalKm: 0 };
-
-        const peers = vehicleWorkerMap[w.vehiculoId] || [];
-        const wId   = w._id || w.id;
-
-        const myAssignments = vehicleRow.assignments.filter(a => {
-          const dayOffset = Math.floor((a._start - constraints.startMin) / 1440) * 1440;
-          const tStart = a._start - dayOffset;
-          // Depot/anchor return: normally owned by whichever peer's window
-          // contains its start (with circularidad hay una vuelta por cada
-          // relevo, no solo una al final del día). Si el tramo cae fuera de
-          // todas las ventanas (p.ej. la vuelta de cierre de jornada se sale
-          // unos minutos del turno), se atribuye al último conductor del día
-          // como red de seguridad.
-          if (a._depot_return) {
-            const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
-            if (owner) return (owner._id || owner.id) === wId;
-            const last = peers.reduce((best, p) => !best || p._tw.end > best._tw.end ? p : best, null);
-            return last && (last._id || last.id) === wId;
-          }
-          // All other blocks: owner = first peer whose window contains the slot start
-          const owner = peers.find(p => tStart >= p._tw.start && tStart < p._tw.end);
-          return owner && (owner._id || owner.id) === wId;
-        });
-
-        const myKm = myAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
-        return { ...w, assignments: myAssignments, totalKm: myKm };
-      });
+      const workerRows = workersWithTw.map(w =>
+        derivedById.get(w._id || w.id) ?? { ...w, assignments: [], totalKm: 0 });
 
       // Un conductor virtual sin ninguna asignación (el turno de tarde de un
       // vehículo cuyo cluster ya se agotó en la mañana) no aporta nada —
@@ -2484,10 +2544,19 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
       setConstraints(prev => ({ ...prev, days: newDays }));
-      const usedVirtualWorkerCount = usedWorkerRows.filter(w => w._virtual).length;
-      setScaleInfo(addedVehicles.length > 0
-        ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
-        : null);
+      const usedVirtualWorkerCount = usedWorkerRows.filter(w => w._virtual && !w._onlyDayWindows).length;
+      const usedCoverWorkers = usedWorkerRows.filter(w => w._onlyDayWindows);
+      const coverDaysCount = usedCoverWorkers.reduce((s, w) =>
+        s + new Set(w.assignments.map(a => Math.floor((a._start - constraints.startMin) / 1440))).size, 0);
+      const scaleMsgs = [
+        addedVehicles.length > 0
+          ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
+          : null,
+        usedCoverWorkers.length > 0
+          ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Rostering — cubiertos por "Conductor necesario".`
+          : null,
+      ].filter(Boolean);
+      setScaleInfo(scaleMsgs.length ? scaleMsgs.join(" ") : null);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         console.log(`[PERF] pintado tras setSchedules: ${(performance.now() - t_setSchedules).toFixed(0)}ms`);
       }));
@@ -2911,6 +2980,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     try {
       // Build all plan documents first, then write concurrently in chunks
       const docs = [];
+      // Paradas que NO se publican por el cuadrante ACTUAL de Rostering
+      // (vehículo en Taller/Avería/ITV, o su conductor de ese tramo en L/B)
+      // — antes se descartaban en silencio; ahora se avisa antes de escribir.
+      const skipped = []; // { label, day, stops }
       for (const row of vehicleSchedule) {
         const allStops = row.assignments.filter(a => !a._break && !a._travel && !a._wait);
         if (allStops.length === 0) continue;
@@ -2922,34 +2995,50 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           byDay[d].push(a);
         }
 
-        const linkedWorkers = workers
-          .filter(w => w.vehiculoId === (row._id || row.id))
-          .sort((a, b) => {
-            const ta = turnoWindow(a.turno, constraints.startMin, constraints.endMin);
-            const tb = turnoWindow(b.turno, constraints.startMin, constraints.endMin);
-            return ta.start - tb.start;
-          });
-        const conductor = linkedWorkers[0];
-        const conductorLabel = conductor
-          ? [conductor.nombre, conductor.apellidos].filter(Boolean).join(" ")
-          : (row.nombre || row.matricula || "Vehículo");
+        // Dueño real de cada parada (el conductor de ese tramo ese día, ya
+        // resuelto en schedules.workers) — antes se miraba siempre solo el
+        // primer conductor vinculado al vehículo, así que la baja del de
+        // tarde no se detectaba y la etiqueta decía el de mañana aunque la
+        // jornada la hiciera otro.
+        const vid = row._id || row.id;
+        const ownerOf = new Map();
+        for (const w of (schedules.workers || [])) {
+          if (w.vehiculoId !== vid) continue;
+          for (const a of (w.assignments || [])) ownerOf.set(a, w);
+        }
+        const nameOf = w => [w.nombre, w.apellidos].filter(Boolean).join(" ");
+        const vehicleLabel = row.nombre || row.matricula || "Vehículo";
 
         const daysList = Object.keys(byDay).map(Number).sort((a, b) => a - b);
         const totalDays = daysList.length;
 
         for (const d of daysList) {
-          if (conductor) {
-            const code = workerCodeOnDay(rosterGrid, conductor._id ?? conductor.id ?? "", d);
-            if (isUnavailable(code)) continue;
+          // d empieza en 0 (día 1 del escenario), el cuadrante en 1 (día
+          // del mes) — antes se consultaba con d tal cual, es decir, el
+          // cuadrante del día ANTERIOR.
+          const calDay = d + 1;
+          const vCode = vehicleCodeOnDay(vehicleRosterGrid, vid ?? "", calDay);
+          if (isVehicleUnavailable(vCode)) {
+            skipped.push({ label: `${vehicleLabel} (${VEHICLE_STATUS_META[vCode]?.label ?? vCode})`, day: calDay, stops: byDay[d].length });
+            continue;
           }
-          // Vehículo marcado Taller/Avería/ITV ese día en Rostering →
-          // Vehículos: no se publica esa jornada a Rutas, igual que ya
-          // pasa arriba con el conductor de baja/libre.
-          if (vehicleRosterGrid) {
-            const vCode = vehicleCodeOnDay(vehicleRosterGrid, row._id ?? row.id ?? "", d);
-            if (isVehicleUnavailable(vCode)) continue;
+          const stops = [];
+          const offByWorker = new Map();
+          for (const a of byDay[d]) {
+            const owner = ownerOf.get(a);
+            const code = owner && !owner._virtual ? workerCodeOnDay(rosterGrid, owner._id, calDay) : "";
+            if (isUnavailable(code)) offByWorker.set(owner, code);
+            else stops.push(a);
           }
-          const stops = byDay[d];
+          for (const [w, code] of offByWorker) {
+            skipped.push({
+              label: `${nameOf(w)} (${SHIFT_META[code]?.label ?? code})`, day: calDay,
+              stops: byDay[d].filter(a => ownerOf.get(a) === w).length,
+            });
+          }
+          if (!stops.length) continue;
+          const drivers = [...new Set(stops.map(a => ownerOf.get(a)).filter(Boolean))];
+          const conductorLabel = drivers.length ? drivers.map(nameOf).join(" / ") : vehicleLabel;
           const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
           const recorrido = stops
             .filter(a => hasCoords(a.lat, a.lng))
@@ -2970,6 +3059,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             org_id: orgId,
           });
         }
+      }
+
+      if (skipped.length) {
+        const totalSkipped = skipped.reduce((s, x) => s + x.stops, 0);
+        const lines = skipped.slice(0, 12).map(x => `• Día ${x.day}: ${x.label} — ${x.stops} parada(s)`);
+        if (skipped.length > 12) lines.push(`• …y ${skipped.length - 12} más`);
+        const ok = confirm(
+          `${totalSkipped} parada(s) NO se publicarán por el cuadrante actual de Rostering:\n\n${lines.join("\n")}\n\n` +
+          `Regenera el escenario para repartirlas, o acepta para publicar el resto igualmente.`
+        );
+        if (!ok) { setPublishing(false); return; }
       }
 
       // Write 50 docs concurrently per round

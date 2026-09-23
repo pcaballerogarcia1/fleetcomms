@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   timeToMin, minToTime, turnoWindow, windowWait, haversineKm, hasCoords,
   computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet,
-  reorderByWindowHint, shiftCodeFromStart, distSq, nnTSP, stripSort,
+  reorderByWindowHint, shiftCodeFromStart, distSq, nnTSP, stripSort, shiftForDay,
 } from "./vrp-engine.js";
 
 // ── timeToMin / minToTime ──────────────────────────────────────────
@@ -854,5 +854,65 @@ describe("stripSort", () => {
     const copy = [...stops];
     stripSort(stops, 5);
     expect(stops).toEqual(copy);
+  });
+});
+
+// ── Franjas por día (cuadrante de Rostering) ─────────────────────
+describe("shiftForDay", () => {
+  const row = { shiftStart: 360, shiftEnd: 1320, _shiftBreaks: [840] };
+  it("sin _dayWindows, la franja habitual", () => {
+    expect(shiftForDay(row, 3)).toEqual({ start: 360, end: 1320, breaks: [840] });
+  });
+  it("null = ese día no trabaja; entrada = franja de ese día; sin entrada = habitual", () => {
+    const r = { ...row, _dayWindows: { 0: null, 1: { start: 840, end: 1320, breaks: [] } } };
+    expect(shiftForDay(r, 0)).toBeNull();
+    expect(shiftForDay(r, 1)).toEqual({ start: 840, end: 1320, breaks: [] });
+    expect(shiftForDay(r, 2).start).toBe(360);
+  });
+  it("_onlyDayWindows: fuera de sus días no trabaja (conductor de cobertura)", () => {
+    const r = { ...row, _onlyDayWindows: true, _dayWindows: { 4: { start: 360, end: 1320, breaks: [] } } };
+    expect(shiftForDay(r, 4)).not.toBeNull();
+    expect(shiftForDay(r, 5)).toBeNull();
+  });
+});
+
+describe("generateScenario con franjas por día", () => {
+  const mkTasks = n => Array.from({ length: n }, (_, i) => ({
+    id: `t${i}`, nombre: `t${i}`, lat: 40 + i * 0.001, lng: -3, duracion: 60,
+  }));
+  const dayOf = a => Math.floor(a._start / 1440);
+  const stopsOf = r => r.schedule[0].assignments.filter(a => !a._travel && !a._wait && !a._break);
+
+  it("un día en null (L/B, taller) no recibe paradas — pasan al día siguiente", async () => {
+    const v = { ...mkVehicle(1, null, null), _dayWindows: { 0: null } };
+    const r = await generateScenario(mkTasks(4), [v], { ...BASE_CONSTRAINTS, maxDays: 0 });
+    expect(r.unassigned).toHaveLength(0);
+    const stops = stopsOf(r);
+    expect(stops).toHaveLength(4);
+    expect(stops.every(a => dayOf(a) >= 1)).toBe(true);
+  });
+
+  it("no corta el escenario si ese día no trabaja nadie (p.ej. domingo)", async () => {
+    const v = { ...mkVehicle(1, null, null), _dayWindows: { 0: null, 1: null } };
+    const r = await generateScenario(mkTasks(3), [v], { ...BASE_CONSTRAINTS, maxDays: 0 });
+    expect(r.unassigned).toHaveLength(0);
+    expect(stopsOf(r).every(a => dayOf(a) === 2)).toBe(true);
+  });
+
+  it("una franja de tarde ese día obliga a trabajar solo de 14 a 22", async () => {
+    const v = { ...mkVehicle(1, null, null), _dayWindows: { 0: { start: 840, end: 1320, breaks: [] } } };
+    const r = await generateScenario(mkTasks(3), [v], BASE_CONSTRAINTS);
+    expect(r.unassigned).toHaveLength(0);
+    for (const a of stopsOf(r)) {
+      expect(a._start).toBeGreaterThanOrEqual(840);
+      expect(a._end).toBeLessThanOrEqual(1320);
+    }
+  });
+
+  it("computeCandidateSlots no ofrece huecos un día que no trabaja", () => {
+    const row = { shiftStart: 360, shiftEnd: 1320, assignments: [], _dayWindows: { 0: null } };
+    const task = { id: "x", lat: 40, lng: -3, duracion: 15 };
+    expect(computeCandidateSlots(task, row, 0)).toHaveLength(0);
+    expect(computeCandidateSlots(task, row, 1440).length).toBeGreaterThan(0);
   });
 });

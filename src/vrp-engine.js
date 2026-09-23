@@ -38,6 +38,27 @@ export function turnoWindow(turno, fallbackStart, fallbackEnd) {
   return { start, end };
 }
 
+// Franja de un recurso (vehículo o conductor) en un día concreto del
+// escenario (0 = primer día). Si trae _dayWindows (cuadrante de Rostering,
+// calculado en scheduling.jsx) manda ese día: null = ese día no trabaja
+// (L/B, taller...), { start, end, breaks } = franja de ese día. Sin entrada
+// para ese día (o sin _dayWindows, p.ej. vehículos virtuales), su franja
+// habitual de siempre — salvo con _onlyDayWindows (conductor virtual que
+// solo cubre ausencias concretas), que no trabaja ningún otro día.
+export function shiftForDay(row, dayIdx) {
+  const dw = row._dayWindows?.[dayIdx];
+  if (dw === null) return null;
+  if (dw) return dw;
+  return row._onlyDayWindows ? null : defaultShift(row);
+}
+function defaultShift(row) {
+  return {
+    start:  row._tw?.start ?? row.shiftStart ?? 0,
+    end:    row._tw?.end   ?? row.shiftEnd   ?? 1440,
+    breaks: row._shiftBreaks || [],
+  };
+}
+
 // Ventana horaria de una tarea (task.windowStart/windowEnd, minuto del día,
 // vienen del Timetable de Planning — "hora inicio" u "franja horaria")
 // contra una hora de llegada dada (ya con dayOffset sumado). Sin ventana,
@@ -111,15 +132,17 @@ export function hasCoords(lat, lng) {
 // repartir esas paradas por conductor ese tramo de viaje se atribuiría al
 // turno equivocado (o inflaría su jornada más allá de su propio horario).
 export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
-  const dayStart = dayOffset + (row._tw?.start ?? row.shiftStart ?? 0);
-  const dayEnd   = dayOffset + (row._tw?.end   ?? row.shiftEnd   ?? 1440);
+  const sh = shiftForDay(row, Math.floor(dayOffset / 1440));
+  if (!sh) return []; // ese día no trabaja (cuadrante de Rostering)
+  const dayStart = dayOffset + sh.start;
+  const dayEnd   = dayOffset + sh.end;
 
   const dayItems = (row.assignments || [])
     .filter(a => a._start >= dayOffset && a._start < dayOffset + 1440)
     .sort((a, b) => a._start - b._start);
   const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
   const hasBreakIn = (from, to) => dayItems.some(a => a._break && a._start >= from && a._start < to);
-  const shiftBoundaries = (row._shiftBreaks || []).map(b => b + dayOffset).filter(b => b > dayStart && b < dayEnd);
+  const shiftBoundaries = sh.breaks.map(b => b + dayOffset).filter(b => b > dayStart && b < dayEnd);
   const crossesShiftBoundary = (from, to) => shiftBoundaries.some(b => b > from && b < to);
 
   const depotLat = row.depotLat, depotLng = row.depotLng;
@@ -178,8 +201,9 @@ export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
   const afterIdx  = fromDayStops.findIndex(a => a._start > task._start);
   const origPrev  = afterIdx === -1 ? (fromDayStops.length ? fromDayStops[fromDayStops.length - 1] : null) : (afterIdx > 0 ? fromDayStops[afterIdx - 1] : null);
   const origNext  = afterIdx === -1 ? null : fromDayStops[afterIdx];
-  const origDayStart = dayOffset + (fromRow._tw?.start ?? fromRow.shiftStart ?? 0);
-  const origDayEnd   = dayOffset + (fromRow._tw?.end   ?? fromRow.shiftEnd   ?? 1440);
+  const fromSh = shiftForDay(fromRow, Math.floor(dayOffset / 1440)) ?? defaultShift(fromRow);
+  const origDayStart = dayOffset + fromSh.start;
+  const origDayEnd   = dayOffset + fromSh.end;
   const gapStart = origPrev ? origPrev._end   : origDayStart;
   const gapEnd   = origNext ? origNext._start : origDayEnd;
 
@@ -588,9 +612,15 @@ export async function generateScenario(tasks, resources, constraints) {
 
   let day = 0;
   let anyAssignedThisDay = true;
+  // Un día en que algún recurso con trabajo pendiente no trabaja (cuadrante
+  // de Rostering: L/B, taller...) no cuenta como "día sin progreso" — si no,
+  // un domingo en que libra toda la plantilla cortaba el escenario ahí y
+  // dejaba el resto del mes sin asignar.
+  let skippedOffDay = false;
 
-  while (anyAssignedThisDay && day < dayCap) {
+  while ((anyAssignedThisDay || skippedOffDay) && day < dayCap) {
     anyAssignedThisDay = false;
+    skippedOffDay = false;
     const dayOffset = day * 1440;
     dayStops.fill(0);
 
@@ -607,9 +637,12 @@ export async function generateScenario(tasks, resources, constraints) {
       const queue = sortedQueues[i];
       if (queueIdx[i] >= queue.length) continue; // all tasks for this resource done
 
+      const sh = shiftForDay(res, day);
+      if (!sh) { skippedOffDay = true; continue; } // no trabaja hoy — su cola espera al siguiente día
+
       const depot  = (res.depotLat && res.depotLng)
         ? { lat: +res.depotLat, lng: +res.depotLng } : null;
-      const dayEnd = res.shiftEnd + dayOffset;
+      const dayEnd = sh.end + dayOffset;
 
       // Circularidad: con depósito, cada conductor vinculado al vehículo
       // vuelve a él al final de SU turno, no solo al final del día (segEnds
@@ -617,11 +650,11 @@ export async function generateScenario(tasks, resources, constraints) {
       // punto de vuelta es la ubicación de la primera parada del propio día
       // (anchor se fija dinámicamente más abajo). Con circular=false,
       // segEnds=[dayEnd] reproduce exactamente el comportamiento anterior.
-      const segEnds = circular && res._shiftBreaks?.length
-        ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+      const segEnds = circular && sh.breaks.length
+        ? [...sh.breaks.map(b => b + dayOffset), dayEnd]
         : [dayEnd];
 
-      let cursor     = res.shiftStart + dayOffset;
+      let cursor     = sh.start + dayOffset;
       let sinceBreak = 0;
       let lastLat    = depot ? depot.lat : null;
       let lastLng    = depot ? depot.lng : null;
@@ -638,7 +671,7 @@ export async function generateScenario(tasks, resources, constraints) {
       // Se estima el trabajo pendiente por la duración de servicio de las
       // tareas en cola (sin simular la ruta entera por adelantado) y se
       // reparte esa estimación entre los tramos según su peso.
-      const dayStart0 = res.shiftStart + dayOffset;
+      const dayStart0 = sh.start + dayOffset;
       const segStarts = [dayStart0, ...segEnds.slice(0, -1)];
       let segTargets = null;
       if (segEnds.length > 1) {
@@ -685,7 +718,7 @@ export async function generateScenario(tasks, resources, constraints) {
         function tryLookaheadSwap() {
           if (queueIdx[i] >= queue.length) return false;
           const LOOK = Math.min(40, queue.length - queueIdx[i]);
-          const tWorkSoFar = cursor - (res.shiftStart + dayOffset);
+          const tWorkSoFar = cursor - dayStart0;
           let swapTo = -1, bestWait = Infinity;
           for (let li = 0; li < LOOK; li++) {
             const t = queue[queueIdx[i] + li];
@@ -773,7 +806,7 @@ export async function generateScenario(tasks, resources, constraints) {
             }
           }
 
-          const workSoFar = cursor - (res.shiftStart + dayOffset);
+          const workSoFar = cursor - dayStart0;
           const feasible = wait != null
             && !(maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin)
             && (cursor + travelMin + wait + dur + retBuffer <= effSegEnd);
@@ -852,14 +885,16 @@ export async function generateScenario(tasks, resources, constraints) {
 
     for (let bDay = 0; bDay < day; bDay++) {
       const dOff = bDay * 1440;
-      const dEnd = res.shiftEnd + dOff;
-      if (res.shiftStart + dOff >= dEnd) continue;
+      const bSh  = shiftForDay(res, bDay);
+      if (!bSh) continue; // ese día no trabaja
+      const dEnd = bSh.end + dOff;
+      if (bSh.start + dOff >= dEnd) continue;
 
-      const segEnds = circular && res._shiftBreaks?.length
-        ? [...res._shiftBreaks.map(b => b + dOff), dEnd]
+      const segEnds = circular && bSh.breaks.length
+        ? [...bSh.breaks.map(b => b + dOff), dEnd]
         : [dEnd];
 
-      let cur     = res.shiftStart + dOff;
+      let cur     = bSh.start + dOff;
       let lLat    = eDepot ? eDepot.lat : null;
       let lLng    = eDepot ? eDepot.lng : null;
       let fromDep = !!eDepot;
@@ -956,11 +991,13 @@ export async function generateScenario(tasks, resources, constraints) {
       const dayOffsets = [...new Set((res.assignments || []).map(a => Math.floor(a._start / 1440) * 1440))];
       const segs = [];
       for (const dayOffset of dayOffsets) {
-        const dayEnd = res.shiftEnd + dayOffset;
-        const segEnds = circular && res._shiftBreaks?.length
-          ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+        const dSh = shiftForDay(res, dayOffset / 1440);
+        if (!dSh) continue;
+        const dayEnd = dSh.end + dayOffset;
+        const segEnds = circular && dSh.breaks.length
+          ? [...dSh.breaks.map(b => b + dayOffset), dayEnd]
           : [dayEnd];
-        const segStarts = [res.shiftStart + dayOffset, ...segEnds.slice(0, -1)];
+        const segStarts = [dSh.start + dayOffset, ...segEnds.slice(0, -1)];
         segEnds.forEach((segEnd, idx) => segs.push({ dayOffset, segStart: segStarts[idx], segEnd }));
       }
       return segs;
@@ -1042,22 +1079,26 @@ export async function generateScenario(tasks, resources, constraints) {
     const pool   = leftover.slice(); // mutable; tasks removed when assigned
     let mopDay   = day;
     let anyMop   = true;
+    let mopSkippedOff = false; // mismo motivo que skippedOffDay del bucle principal
 
-    while (pool.length > 0 && anyMop && mopDay < dayCap) {
+    while (pool.length > 0 && (anyMop || mopSkippedOff) && mopDay < dayCap) {
       anyMop = false;
+      mopSkippedOff = false;
       const dayOffset = mopDay * 1440;
 
       for (let i = 0; i < k && pool.length > 0; i++) {
         if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
         const res   = state[i];
+        const mSh   = shiftForDay(res, mopDay);
+        if (!mSh) { mopSkippedOff = true; continue; }
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
-        const dayEnd = res.shiftEnd + dayOffset;
-        const segEnds = circular && res._shiftBreaks?.length
-          ? [...res._shiftBreaks.map(b => b + dayOffset), dayEnd]
+        const dayEnd = mSh.end + dayOffset;
+        const segEnds = circular && mSh.breaks.length
+          ? [...mSh.breaks.map(b => b + dayOffset), dayEnd]
           : [dayEnd];
 
-        let cursor     = res.shiftStart + dayOffset;
+        let cursor     = mSh.start + dayOffset;
         let sinceBreak = 0;
         let lastLat    = depot ? depot.lat : null;
         let lastLng    = depot ? depot.lng : null;
@@ -1087,7 +1128,7 @@ export async function generateScenario(tasks, resources, constraints) {
             }
 
             const wait = windowWait(task, cursor + travelMin, dayOffset);
-            const workSoFar = cursor - (res.shiftStart + dayOffset);
+            const workSoFar = cursor - (mSh.start + dayOffset);
             const fitsShift   = wait != null && (maxShiftMin <= 0 || workSoFar + travelMin + wait + dur <= maxShiftMin);
             const fitsSeg     = wait != null && cursor + travelMin + wait + dur <= segEnd;
 
@@ -1197,8 +1238,9 @@ export async function generateScenario(tasks, resources, constraints) {
       const afterIdx = dayStops.findIndex(a => a._start > task._start);
       const origPrev = afterIdx === -1 ? (dayStops.length ? dayStops[dayStops.length - 1] : null) : (afterIdx > 0 ? dayStops[afterIdx - 1] : null);
       const origNext = afterIdx === -1 ? null : dayStops[afterIdx];
-      const origDayStart = dayOffset + (res._tw?.start ?? res.shiftStart ?? 0);
-      const origDayEnd   = dayOffset + (res._tw?.end   ?? res.shiftEnd   ?? 1440);
+      const rSh = shiftForDay(res, Math.floor(dayOffset / 1440)) ?? defaultShift(res);
+      const origDayStart = dayOffset + rSh.start;
+      const origDayEnd   = dayOffset + rSh.end;
       const gapStart = origPrev ? origPrev._end : origDayStart;
       const gapEnd   = origNext ? origNext._start : origDayEnd;
       let closingBlock = null;
@@ -1307,9 +1349,11 @@ export async function generateScenario(tasks, resources, constraints) {
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
-          const dayStart = dOff + (res._tw?.start ?? res.shiftStart ?? 0);
-          const dayEnd   = dOff + (res._tw?.end   ?? res.shiftEnd   ?? 1440);
-          const shiftBoundaries = (res._shiftBreaks || []).map(b => b + dOff).filter(b => b > dayStart && b < dayEnd);
+          const pSh = shiftForDay(res, d);
+          if (!pSh) continue; // ese día no trabaja
+          const dayStart = dOff + pSh.start;
+          const dayEnd   = dOff + pSh.end;
+          const shiftBoundaries = pSh.breaks.map(b => b + dOff).filter(b => b > dayStart && b < dayEnd);
           const crosses = (from, to) => shiftBoundaries.some(b => b > from && b < to);
           const dayItems = [...(res.assignments || [])].filter(a => a._start >= dOff && a._start < dOff + 1440).sort((a, b) => a._start - b._start);
           if (dayItems.length > PUSHBACK_MAX_DAY_STOPS) continue;

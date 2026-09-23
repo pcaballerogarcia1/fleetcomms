@@ -42,6 +42,12 @@ function fmtClock(min) {
 
 // ── PUBLIC HOOK ────────────────────────────────────────────────────
 // Used by scheduling.jsx to load rostering data for a given month.
+// Solo lectura, así que sigue en vivo todos los cambios de Firestore — la
+// página de Rostering tiene su propio listener con edición local. Antes
+// solo se aplicaba la primera lectura (patrón copiado de la página de
+// Rostering), y como Scheduling y Rostering se quedan montados a la vez,
+// Scheduling no veía una baja marcada después de abrirlo: ni avisaba del
+// conflicto ni la tenía en cuenta al generar o publicar.
 export function useRostering(orgId, year, month) {
   const [grid,    setGrid]    = useState({});
   const [loading, setLoading] = useState(true);
@@ -50,19 +56,12 @@ export function useRostering(orgId, year, month) {
     ? `${orgId}_${year}_${String(month).padStart(2, "0")}`
     : null;
 
-  const loadedRef = useRef(false);
-
   useEffect(() => {
     if (!docId) { setGrid({}); setLoading(false); return; }
-    loadedRef.current = false;
     setGrid({});
     setLoading(true);
     return onSnapshot(doc(db, "rostering", docId), snap => {
-      // Only overwrite from Firestore on initial load; local edits take over after
-      if (!loadedRef.current) {
-        setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
-        loadedRef.current = true;
-      }
+      setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
       setLoading(false);
     });
   }, [docId]);
@@ -90,7 +89,10 @@ export const VEHICLE_STATUS_META = {
   I: { label: "ITV",        bg: "#2d2200", text: "#fbbf24" },
 };
 
-export function useVehicleAvailability(orgId, year, month) {
+// live=true (Scheduling, solo lectura): sigue todos los cambios de
+// Firestore. Por defecto (la propia vista de Rostering, que edita en
+// local) solo aplica la primera lectura para no pisar las ediciones.
+export function useVehicleAvailability(orgId, year, month, { live = false } = {}) {
   const [grid,    setGrid]    = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -106,13 +108,13 @@ export function useVehicleAvailability(orgId, year, month) {
     setGrid({});
     setLoading(true);
     return onSnapshot(doc(db, "rostering_vehicles", docId), snap => {
-      if (!loadedRef.current) {
+      if (live || !loadedRef.current) {
         setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
         loadedRef.current = true;
       }
       setLoading(false);
     });
-  }, [docId]);
+  }, [docId, live]);
 
   return { grid, loading, docId };
 }
