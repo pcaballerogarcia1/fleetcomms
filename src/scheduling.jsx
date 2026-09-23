@@ -2008,6 +2008,54 @@ function vehicleDayWindows(vehicleId, linked, vehicleGrid, daysInMonth) {
 // acotada a su propio turno) se traslada al vehículo (la lista completa,
 // fuente real de la ruta) sin arriesgarse a coger como vecina una parada de
 // OTRO conductor del mismo vehículo.
+// Aplica al escenario los turnos que Rostering → Optimizar ha movido de día
+// para cumplir las reglas del cuadrante (manda el cuadrante; Scheduling
+// apoya): cada movimiento traslada los bloques de ese vehículo que caen en
+// el horario [s, e) del día fromDay al día toDay, mismo horario. Los
+// conductores de los vehículos tocados se re-derivan. Devuelve el mismo
+// objeto si no había nada que mover.
+function applyShiftMoves(schedules, moves, startMin) {
+  let vehicles = schedules.vehicles || [];
+  const touched = new Set();
+  for (const m of moves) {
+    const delta = (m.toDay - m.fromDay) * 1440;
+    const off = (m.fromDay - 1) * 1440;
+    vehicles = vehicles.map(v => {
+      if ((v._id || v.id) !== m.v) return v;
+      let changed = false;
+      const assignments = (v.assignments || []).map(a => {
+        const di = Math.floor((a._start - startMin) / 1440);
+        const t = a._start - off;
+        if (di !== m.fromDay - 1 || t < m.s || t >= m.e) return a;
+        changed = true;
+        return { ...a, _start: a._start + delta, _end: a._end + delta };
+      });
+      if (!changed) return v;
+      touched.add(m.v);
+      return { ...v, assignments: assignments.sort((a, b) => a._start - b._start) };
+    });
+  }
+  if (!touched.size) return schedules;
+  let workers = schedules.workers || [];
+  for (const vid of touched) {
+    const peers = workers.filter(w => w.vehiculoId === vid);
+    if (!peers.length) continue;
+    const vRow = vehicles.find(v => (v._id || v.id) === vid);
+    const derived = new Map(deriveWorkerRows(vRow, peers, startMin).map(w => [w._id || w.id, w]));
+    workers = workers.map(w => derived.get(w._id || w.id) ?? w);
+  }
+  return { vehicles, workers };
+}
+
+// Último día (1-based) con algún bloque en el escenario
+function lastScenarioDay(vehicles, startMin) {
+  let max = 1;
+  for (const v of vehicles || []) for (const a of v.assignments || []) {
+    max = Math.max(max, Math.floor((a._start - startMin) / 1440) + 1);
+  }
+  return max;
+}
+
 function spliceWorkerWindowIntoVehicle(vehicleRow, worker, dayOffset, newWorkerAssignments) {
   const win = shiftForDay(worker, Math.floor(dayOffset / 1440)) ?? worker._tw;
   const wStart = dayOffset + win.start;
@@ -2097,12 +2145,53 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // selector de restricciones, que puede haberse cambiado después sin
   // regenerar): decide de dónde sale el conductor de cada tramo al publicar.
   const [scenarioRosterMode, setScenarioRosterMode] = useState("cuadrante");
+  // Movimientos de día que manda Rostering (scheduling_roster.moves), y
+  // cuántos de ellos ya están aplicados a este escenario (se guarda con el
+  // escenario en IndexedDB). scenarioStampRef = generatedAt del escenario
+  // cargado: solo se aplican movimientos de ESE escenario (si no, al
+  // regenerar podían colarse los del escenario anterior).
+  const [rosterMoves, setRosterMoves] = useState({ stamp: null, moves: [] });
+  const appliedMovesRef = useRef(0);
+  const scenarioStampRef = useRef(null);
+  const scenarioProjectRef = useRef(null); // proyecto al que pertenece el escenario cargado
 
   // ── Rostering integration ────────────────────────────────────
   const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
   const { grid: rosterGrid, asignaciones: rosterAsign } = useRostering(orgId, schedYear || null, schedMonth || null);
   const { grid: vehicleRosterGrid } = useVehicleAvailability(orgId, schedYear || null, schedMonth || null, { live: true });
   const schedDaysInMonth = schedYear && schedMonth ? new Date(schedYear, schedMonth, 0).getDate() : 0;
+
+  // Turnos movidos de día por Rostering → Optimizar (manda el cuadrante):
+  // se escuchan en vivo y se aplican a las rutas, cada uno una sola vez.
+  useEffect(() => {
+    if (!activeProject?._id) return;
+    return onSnapshot(doc(db, "scheduling_roster", activeProject._id), snap => {
+      const d = snap.exists() ? snap.data() : {};
+      setRosterMoves({ stamp: d.generatedAt || null, moves: d.moves || [] });
+    }, () => {});
+  }, [activeProject?._id]);
+
+  useEffect(() => {
+    if (!schedules.vehicles?.length || !activeProject?._id) return;
+    if (scenarioProjectRef.current !== activeProject._id) return; // aún con el escenario de otro proyecto
+    // Movimientos de otro escenario (p. ej. el anterior, mientras se guarda
+    // el recién generado): no se tocan. Un escenario guardado antes de que
+    // existiera la marca (stamp null) acepta los del documento actual.
+    if (scenarioStampRef.current && rosterMoves.stamp !== scenarioStampRef.current) return;
+    const pending = rosterMoves.moves.slice(appliedMovesRef.current);
+    if (!pending.length) return;
+    const next = applyShiftMoves(schedules, pending, constraints.startMin);
+    appliedMovesRef.current = rosterMoves.moves.length;
+    if (next !== schedules) {
+      setSchedules(next);
+      setMoveHistory([]); setHistoryIndex(-1);
+      setConstraints(prev => ({ ...prev, days: Math.max(prev.days || 1, lastScenarioDay(next.vehicles, prev.startMin)) }));
+    }
+    idbSave(`vrp_${activeProject._id}`, {
+      vehicles: next.vehicles, workers: next.workers, rosterMode: scenarioRosterMode,
+      stamp: scenarioStampRef.current, appliedMoves: appliedMovesRef.current,
+    });
+  }, [rosterMoves, schedules, activeProject?._id, constraints.startMin, scenarioRosterMode]);
 
   // Conflictos entre el escenario ya generado y el cuadrante ACTUAL de
   // Rostering. Al generar ya se respeta el cuadrante (ver runGenerate), así
@@ -2350,7 +2439,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       if (cached?.vehicles?.length) {
         setSchedules({ vehicles: cached.vehicles, workers: cached.workers || [] });
         setScenarioRosterMode(cached.rosterMode || sc?.constraints?.rosterMode || "cuadrante");
-        if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days: sc.daysUsed || 1 }));
+        appliedMovesRef.current = cached.appliedMoves || 0;
+        scenarioProjectRef.current = activeProject._id;
+        scenarioStampRef.current = cached.stamp || null;
+        // Con turnos movidos de día el escenario puede pasar de daysUsed
+        const days = Math.max(sc?.daysUsed || 1, lastScenarioDay(cached.vehicles, (sc?.constraints || constraints).startMin));
+        if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days }));
       } else if (sc) {
         setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
         setConstraints(prev => ({ ...prev, ...(sc.constraints || {}), days: sc.daysUsed || 1 }));
@@ -2611,6 +2705,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       const t_setSchedules = performance.now();
       setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
       setScenarioRosterMode(rosterLibre ? "libre" : "cuadrante");
+      const scenarioStamp = new Date().toISOString();
+      scenarioStampRef.current = scenarioStamp;
+      appliedMovesRef.current = 0;
+      scenarioProjectRef.current = activeProject?._id ?? null;
       setMoveHistory([]); setHistoryIndex(-1); // un escenario nuevo invalida el historial de movimientos manuales
       setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
       const newDays = vr.daysUsed;
@@ -2635,7 +2733,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       // Persist full schedule to IndexedDB (too large for Firestore) — local,
       // sin red de por medio, se queda antes de soltar la UI.
       if (activeProject?._id) {
-        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows, rosterMode: rosterLibre ? "libre" : "cuadrante" });
+        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows, rosterMode: rosterLibre ? "libre" : "cuadrante", stamp: scenarioStamp, appliedMoves: 0 });
       }
 
       // El escenario ya está calculado y es utilizable desde aquí (Gantt,
@@ -2757,7 +2855,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 // Rostering → Optimizar en modo libre.
                 modo: rosterLibre ? "libre" : "cuadrante",
                 shifts: extractShifts(vehicleSchedule, constraints.startMin),
-                generatedAt: new Date().toISOString(),
+                moves: [],
+                generatedAt: scenarioStamp,
               });
             } catch (e) {
               // Antes se tragaba en silencio: con modo libre, sin esto

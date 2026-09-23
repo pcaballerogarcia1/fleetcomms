@@ -41,7 +41,7 @@ describe("optimizeRoster", () => {
 
   it("descanso mínimo: no encadena Noche → Mañana al día siguiente", () => {
     const shifts = [mkShift(1, 1320, 1800), mkShift(2, 360, 840)];
-    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1) });
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1), rules: { moverTurnos: false } });
     expect(r.uncovered).toHaveLength(1);
     expect(r.uncovered[0].reasons.rest).toBe(1);
     const r2 = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(2) });
@@ -52,13 +52,13 @@ describe("optimizeRoster", () => {
   it("respeta lo escrito a mano: L/B no, M/T/N solo ese turno", () => {
     const shifts = [mkShift(3, 360, 840), mkShift(4, 840, 1320)];
     const fixed = { w1: { 3: "B", 4: "M" } };
-    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1), fixed });
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1), fixed, rules: { moverTurnos: false } });
     expect(r.uncovered.map(u => Object.keys(u.reasons)[0]).sort()).toEqual(["code", "off"]);
   });
 
   it("un M escrito a mano cuenta como día trabajado para los días seguidos", () => {
     const fixed = { w1: { 1: "M", 2: "M", 3: "M", 4: "M", 5: "M", 6: "M" } };
-    const r = optimizeRoster({ ...BASE, shifts: [mkShift(7, 360, 840)], workers: mkWorkers(1), fixed });
+    const r = optimizeRoster({ ...BASE, shifts: [mkShift(7, 360, 840)], workers: mkWorkers(1), fixed, rules: { moverTurnos: false } });
     expect(r.uncovered[0].reasons.run).toBe(1);
   });
 
@@ -112,7 +112,7 @@ describe("reglas de convenio", () => {
   it("descanso semanal: cada semana L–D deja 36h seguidas libres", () => {
     const r = optimizeRoster({ ...BASE, shifts: month(30), workers: mkWorkers(2), rules: { maxDiasSeguidos: 0, descansoSemanalH: 36 } });
     expect(r.uncovered).toHaveLength(0);
-    const one = optimizeRoster({ ...BASE, shifts: month(14).slice(6, 13), workers: mkWorkers(1), rules: { maxDiasSeguidos: 0, descansoSemanalH: 36 } });
+    const one = optimizeRoster({ ...BASE, shifts: month(14).slice(6, 13), workers: mkWorkers(1), rules: { maxDiasSeguidos: 0, descansoSemanalH: 36, moverTurnos: false } });
     // semana 7–13 completa con un solo trabajador: alguno de los 7 días se queda sin cubrir
     expect(one.uncovered.length).toBeGreaterThan(0);
     expect(one.uncovered[0].reasons.semanal).toBe(1);
@@ -136,7 +136,7 @@ describe("reglas de convenio", () => {
   it("domingos y festivos al mes", () => {
     expect([...festivoDays(["2026-09-11", "2026-10-12"], 2026, 9)]).toEqual([11]);
     const shifts = [mkShift(6, 360, 840), mkShift(11, 360, 840), mkShift(13, 360, 840)]; // dom, festivo, dom
-    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1), rules: { maxDomingosFestivos: 2, festivos: ["2026-09-11"] } });
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(1), rules: { maxDomingosFestivos: 2, festivos: ["2026-09-11"], moverTurnos: false } });
     expect(Object.keys(r.assignments)).toHaveLength(2);
     expect(r.uncovered[0].reasons.domingos).toBe(1);
   });
@@ -147,5 +147,53 @@ describe("reglas de convenio", () => {
     expect(r.issues.join(" | ")).toContain("jornada(s) de más de 9h");
     expect(r.issues.join(" | ")).toContain("semana(s) sin 36h");
     expect(r.issues.join(" | ")).toMatch(/días seguidos/);
+  });
+});
+
+describe("mover turnos de día (manda el cuadrante)", () => {
+  // Caso real: 3 vehículos × mañana+tarde durante 16 días = 6 turnos/día con
+  // 6 trabajadores y máx. 5 días seguidos — imposible sin mover turnos
+  // a los días 17–30, que están libres.
+  const shifts = [];
+  for (let d = 1; d <= 16; d++) for (const v of ["A", "B", "C"]) {
+    shifts.push(mkShift(d, 360, 830, v));
+    shifts.push(mkShift(d, 840, 1310, v));
+  }
+  const rules = { maxDiasSeguidos: 5, maxHorasMes: 150 };
+
+  it("sin mover: quedan turnos sin cubrir", () => {
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(6), rules: { ...rules, moverTurnos: false } });
+    expect(r.uncovered.length).toBeGreaterThan(0);
+  });
+
+  it("moviendo: lo cubre todo y cumple las reglas", () => {
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(6), rules });
+    expect(r.uncovered).toHaveLength(0);
+    expect(r.moves.length).toBeGreaterThan(0);
+    for (const s of Object.values(r.stats)) {
+      expect(s.maxRun).toBeLessThanOrEqual(5);
+      expect(s.hours).toBeLessThanOrEqual(150);
+    }
+  });
+
+  it("nunca pone dos turnos del mismo vehículo a la misma hora, ni en días de taller", () => {
+    const r = optimizeRoster({ ...BASE, shifts, workers: mkWorkers(6), rules, vehicleOff: { A: [17, 18, 19] } });
+    const moved = new Map(r.moves.map(m => [m.id, m.toDay]));
+    const slots = new Set();
+    for (const sh of shifts) {
+      const day = moved.get(sh.id) ?? sh.day;
+      const key = `${sh.vehicleId}_${day}_${sh.start}`;
+      expect(slots.has(key)).toBe(false);
+      slots.add(key);
+      if (sh.vehicleId === "A" && moved.has(sh.id)) expect([17, 18, 19]).not.toContain(day);
+    }
+  });
+
+  it("mueve al día libre más cercano", () => {
+    // un solo trabajador, turnos días 1–6 con máx. 5 seguidos → el del día 6 pasa al 7 (descansa el 6)
+    const six = Array.from({ length: 6 }, (_, i) => mkShift(i + 1, 360, 840));
+    const r = optimizeRoster({ ...BASE, shifts: six, workers: mkWorkers(1), rules: { maxDiasSeguidos: 5, equilibrar: false } });
+    expect(r.uncovered).toHaveLength(0);
+    expect(r.moves).toEqual([{ id: six[5].id, fromDay: 6, toDay: 7 }]);
   });
 });

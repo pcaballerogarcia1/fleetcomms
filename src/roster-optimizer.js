@@ -57,6 +57,9 @@ export const DEFAULT_ROSTER_RULES = {
   maxNochesMes: 0,
   maxDomingosFestivos: 0,
   festivos: [],
+  // Manda el cuadrante: un turno que no cabe en su día se mueve al día más
+  // cercano en que alguien pueda hacerlo (Scheduling adapta sus rutas).
+  moverTurnos: true,
 };
 
 // Mínimos legales del Estatuto de los Trabajadores — punto de partida al
@@ -174,8 +177,14 @@ function isWeekend(year, month, day) {
  * @param {object} p.fixed    { [workerId]: { [day]: code } } — celdas escritas a mano
  * @param {object} p.rules    ver DEFAULT_ROSTER_RULES
  * @param {number} p.year, p.month, p.daysInMonth
+ * @param {object} p.vehicleOff { [vehicleId]: [día, …] } días en taller/avería/ITV (no se
+ *                            mueve ningún turno a ellos)
+ *
+ * Devuelve también `moves`: [{ id, fromDay, toDay }] — turnos que, por no
+ * poder cubrirse en su día, se han movido a otro día del mes (mismo
+ * vehículo y horario). Quien llame debe trasladar esas rutas en Scheduling.
  */
-export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, month, daysInMonth }) {
+export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, month, daysInMonth, vehicleOff = {} }) {
   const R = { ...DEFAULT_ROSTER_RULES, ...rules };
   const restMin = (R.descansoMinH || 0) * 60;
   const festSet = festivoDays(R.festivos, year, month);
@@ -334,7 +343,46 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
   // Reparación por intercambio: para un turno U sin cubrir, busca un
   // trabajador A que solo no puede porque ya tiene otro turno X ese día, y
   // un trabajador B que sí puede hacer X — B se queda X y A pasa a U.
+  // Ocupación de cada vehículo por día (todos sus turnos, cubiertos o no):
+  // a un turno solo se le puede mover a un día en que su vehículo esté libre
+  // en ese horario.
+  const occ = new Map(); // vehicleId → Map(day → [shift])
+  const occOf = (v, d) => {
+    if (!occ.has(v)) occ.set(v, new Map());
+    const m = occ.get(v);
+    if (!m.has(d)) m.set(d, []);
+    return m.get(d);
+  };
+  for (const sh of ordered) occOf(sh.vehicleId, sh.day).push(sh);
+  const offDays = new Map(Object.entries(vehicleOff).map(([v, days]) => [v, new Set((days || []).map(Number))]));
+
+  function tryRelocate(U) {
+    const candidates = [];
+    for (let d = 1; d <= daysInMonth; d++) if (d !== U.day) candidates.push(d);
+    candidates.sort((a, b) => Math.abs(a - U.day) - Math.abs(b - U.day) || a - b);
+    for (const d of candidates) {
+      if (offDays.get(U.vehicleId)?.has(d)) continue;
+      if (occOf(U.vehicleId, d).some(o => o.start < U.end && U.start < o.end)) continue;
+      const moved = { ...U, day: d };
+      let best = null, bestSc = -Infinity;
+      for (const s of st.values()) {
+        if (blockReason(s, moved)) continue;
+        const sc = score(s, moved);
+        if (sc > bestSc) { bestSc = sc; best = s; }
+      }
+      if (!best) continue;
+      const from = occOf(U.vehicleId, U.day);
+      from.splice(from.indexOf(U), 1);
+      occOf(U.vehicleId, d).push(moved);
+      assign(best, moved);
+      assignments[U.id] = best.w.id;
+      return moved;
+    }
+    return null;
+  }
+
   const uncovered = [];
+  const moves = [];
   for (const U of pending) {
     let fixedIt = false;
     for (const A of st.values()) {
@@ -353,6 +401,11 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
       assign(A, X);
     }
     if (fixedIt) continue;
+
+    if (R.moverTurnos) {
+      const moved = tryRelocate(U);
+      if (moved) { moves.push({ id: U.id, fromDay: U.day, toDay: moved.day }); continue; }
+    }
 
     const counts = {};
     for (const s of st.values()) {
@@ -400,7 +453,7 @@ export function optimizeRoster({ shifts, workers, fixed = {}, rules = {}, year, 
     stats[s.w.id] = { hours: +hoursOf(s).toFixed(1), days, maxRun, weekends: s.weekends, maxHoras: s.maxHoras };
   }
 
-  return { assignments, uncovered, stats, outOfMonth };
+  return { assignments, uncovered, stats, outOfMonth, moves };
 }
 
 // Texto corto del motivo de un turno sin cubrir: "3 superarían sus

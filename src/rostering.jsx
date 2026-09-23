@@ -590,6 +590,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const [mode,  setMode]  = useState("workers"); // "workers" | "vehicles"
 
   const [workers, setWorkers] = useState([]);
+  // Disponibilidad de vehículos del mes (para no mover turnos a días de taller)
+  const { grid: vehicleGrid } = useVehicleAvailability(orgId, year, month, { live: true });
 
   // ── Scheduling roster (populated when a scenario is generated) ──
   const [schedRoster, setSchedRoster] = useState(null); // { mes, turnoByWorker, daysWorked }
@@ -978,14 +980,21 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       prefStart: w.turno ? turnoWindow(w.turno, null, null).start : null,
     }));
 
-    const res = optimizeRoster({ shifts, workers: optWorkers, fixed, rules, year, month, daysInMonth });
+    // Días en taller/avería/ITV de cada vehículo: no se mueve ningún turno a ellos
+    const vehicleOff = {};
+    for (const [vid, byDay] of Object.entries(vehicleGrid || {})) {
+      vehicleOff[vid] = Object.entries(byDay || {}).filter(([, c]) => isVehicleUnavailable(c)).map(([d]) => Number(d));
+    }
+
+    const res = optimizeRoster({ shifts, workers: optWorkers, fixed, rules, year, month, daysInMonth, vehicleOff });
 
     const newGrid = { ...baseGrid };
     const newAsign = {};
     const byId = new Map(shifts.map(sh => [sh.id, sh]));
+    const movedTo = new Map(res.moves.map(m => [m.id, m.toDay]));
     for (const [shiftId, wId] of Object.entries(res.assignments)) {
       const sh = byId.get(shiftId);
-      const key = String(sh.day);
+      const key = String(movedTo.get(shiftId) ?? sh.day);
       newGrid[wId] = { ...(newGrid[wId] ?? {}), [key]: shiftCodeFromStart(sh.start) };
       const prevCode = baseGrid[wId]?.[key];
       newAsign[wId] = { ...(newAsign[wId] ?? {}), [key]: {
@@ -999,7 +1008,23 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     setAsign(newAsign);
     persistMonth(newGrid, newAsign);
 
+    // Turnos movidos de día: se reflejan en el escenario (scheduling_roster)
+    // para que Scheduling traslade esas rutas — manda el cuadrante. Los
+    // movimientos se acumulan en orden; Scheduling aplica cada uno una sola vez.
+    if (res.moves.length && activeProject?._id) {
+      const newShifts = shiftsRaw.map(sh => movedTo.has(sh.id) ? { ...sh, d: movedTo.get(sh.id) } : sh);
+      const newMoves = res.moves.map(m => {
+        const sh = byId.get(m.id);
+        return { id: m.id, v: sh.vehicleId, s: sh.start, e: sh.end, fromDay: m.fromDay, toDay: m.toDay };
+      });
+      setDoc(doc(db, "scheduling_roster", activeProject._id), {
+        shifts: newShifts,
+        moves: [...(schedRoster.moves || []), ...newMoves],
+      }, { merge: true }).catch(e => alert("No se pudieron guardar los turnos movidos en el escenario: " + (e.message || e)));
+    }
+
     setOptResult({
+      moves: res.moves.map(m => ({ ...m, shift: byId.get(m.id) })),
       total: shifts.length - res.outOfMonth,
       covered: Object.keys(res.assignments).length,
       uncovered: res.uncovered,
@@ -1759,6 +1784,11 @@ function RulesModal({ rules, horas, convenio, workers, orgId, onClose, onSave })
               style={{ accentColor: C.blue }} />
             Repartir horas y fines de semana de forma equitativa (preferencia, no obligatoria)
           </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.muted, margin: "8px 0", cursor: "pointer" }}>
+            <input type="checkbox" checked={r.moverTurnos !== false} onChange={e => setR({ ...r, moverTurnos: e.target.checked })}
+              style={{ accentColor: C.blue }} />
+            Si un turno no se puede cubrir en su día, moverlo al día más cercano en que se pueda (Scheduling adapta la ruta)
+          </label>
 
           {sectionTitle("Festivos (para el máximo de domingos/festivos)")}
           <textarea value={festText} onChange={e => setFestText(e.target.value)} rows={2}
@@ -1816,6 +1846,25 @@ function OptResultModal({ result, workers, rules, onClose }) {
         {result.covered} de {result.total} turnos cubiertos
         {result.outOfMonth > 0 && <span style={{ color: C.dim, fontWeight: 400, fontSize: 11 }}> · {result.outOfMonth} fuera de este mes (no se optimizan)</span>}
       </div>
+
+      {result.moves?.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+            Movidos de día para cumplir las reglas ({result.moves.length})
+          </div>
+          <div style={{ maxHeight: 140, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
+            {result.moves.map(m => (
+              <div key={m.id} style={{ fontSize: 11, padding: "3px 0", color: C.muted }}>
+                <span style={{ color: C.text, fontWeight: 600 }}>Día {m.fromDay} → {m.toDay}</span>
+                {" · "}{m.shift?.vehicleName} · {fmtClock(m.shift?.start)}–{fmtClock(m.shift?.end)}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 14 }}>
+            Scheduling mueve esas rutas al nuevo día (mismo vehículo y horario). Revísalas en el Gantt antes de publicar.
+          </div>
+        </>
+      )}
 
       {result.uncovered.length > 0 && (
         <>
