@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
-import { collection, query, where, onSnapshot, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getCountFromServer, limit } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
 
 const C = {
@@ -815,18 +815,31 @@ export function ControlPage({ sesion, orgId: orgIdProp, embedded = false }) {
     });
   }, [orgId, isSuperAdmin, mesFilter]);
 
-  // One-time (not real-time) fetch of which months have plans, to populate the
-  // month picker without keeping a permanent listener on the whole org's history.
+  // Meses con planes, para el selector. Antes se descargaban 500 planes
+  // COMPLETOS (cada uno con todas sus paradas) solo para leer su campo
+  // "mes": con proyectos grandes eran varios MB que el SDK tenía que
+  // descodificar y guardar en caché en el hilo principal — medido: bloqueo
+  // de 4,5 s al entrar en Control en un PC normal ("la página no
+  // responde"). Ahora se cuenta cuántos planes hay en cada uno de los
+  // últimos 24 meses y los 12 siguientes con getCountFromServer: devuelve solo
+  // un número por mes, sin descargar ningún plan.
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
+    let cancelled = false;
     const col = collection(db, "planes");
-    const filters = orgId ? [where("org_id", "==", orgId)] : [];
-    const q = query(col, ...filters, limit(500));
-    getDocs(q).then(snap => {
-      const set = new Set();
-      snap.docs.forEach(d => { const m = d.data().mes; if (m) set.add(m); });
-      setMesesDisponibles([...set]);
-    }).catch(() => {});
+    const base = orgId ? [where("org_id", "==", orgId)] : [];
+    const now = new Date();
+    const meses = [];
+    for (let k = -24; k <= 12; k++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + k, 1);
+      meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    Promise.all(meses.map(m =>
+      getCountFromServer(query(col, ...base, where("mes", "==", m)))
+        .then(s => (s.data().count > 0 ? m : null))
+        .catch(() => null)
+    )).then(res => { if (!cancelled) setMesesDisponibles(res.filter(Boolean)); });
+    return () => { cancelled = true; };
   }, [orgId, isSuperAdmin]);
 
   // Real-time: usuarios (for name resolution)

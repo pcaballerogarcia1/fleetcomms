@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager, memoryLocalCache,
   collection, onSnapshot, addDoc, updateDoc,
   deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc, getDoc, getDocFromServer,
 } from "firebase/firestore";
@@ -16,10 +16,21 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// Offline persistence: data loads from local IndexedDB cache instantly,
-// syncs with Firestore in background — prevents disappearing data on slow mobile networks
+// Caché de Firestore según qué parte de la app se carga (main.jsx elige el
+// árbol por la URL inicial, y el paso a /rutas recarga la página):
+//  - App del conductor (/rutas, /incidencias, /inventario): caché persistente
+//    en IndexedDB — abre al instante y funciona sin cobertura.
+//  - Oficina (Planning, Scheduling, Rostering, Control, Analytics, Superadmin):
+//    caché en memoria. La persistente escribía en IndexedDB, en el hilo
+//    principal, todo lo descargado — con planes grandes era la mayor parte
+//    del bloqueo medido al entrar en Control (4,5 s en un PC normal, "la
+//    página no responde"), y en la oficina no hace falta trabajar offline.
+const _path = typeof window !== "undefined" ? window.location.pathname : "";
+const _isFleetApp = ["/rutas", "/incidencias", "/inventario"].some(p => _path.startsWith(p));
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
+  localCache: _isFleetApp
+    ? persistentLocalCache({ tabManager: persistentSingleTabManager() })
+    : memoryLocalCache(),
 });
 export const auth = getAuth(app);
 
