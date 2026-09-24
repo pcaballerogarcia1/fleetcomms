@@ -1,5 +1,4 @@
 {
-  "alias": ["app.operanzia.com"],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
