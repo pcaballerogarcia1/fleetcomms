@@ -152,6 +152,12 @@ service cloud.firestore {
       allow read: if sameOrg(projectOrg(resource.data.projectId)) && puedeWorkspace();
       allow create: if sameOrg(projectOrg(request.resource.data.projectId)) && puedeWorkspace();
       allow update, delete: if sameOrg(projectOrg(resource.data.projectId)) && puedeWorkspace();
+
+      // Puntos de las capas grandes, comprimidos y troceados (layer-store.js)
+      match /trozos/{pieceId} {
+        allow read, delete: if sameOrg(projectOrg(resource.data.projectId)) && puedeWorkspace();
+        allow create, update: if sameOrg(projectOrg(request.resource.data.projectId)) && puedeWorkspace();
+      }
     }
     // planning_depots / planning_settings / scheduling_roster: siempre un
     // único documento cuyo ID ES el projectId (nunca se listan), así que

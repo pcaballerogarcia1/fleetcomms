@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } from "./layer-store.js";
 
 // ── IndexedDB para markers grandes (evita límite 1MB de Firestore) ──
 const _IDB_NAME = 'operanzia_v1';
@@ -16,14 +17,6 @@ function _idbOpen() {
     req.onerror = () => { _idbConn = null; rej(req.error); };
   });
   return _idbConn;
-}
-async function idbPut(key, value) {
-  const db = await _idbOpen();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(_IDB_STORE, 'readwrite');
-    const r = tx.objectStore(_IDB_STORE).put(value, key);
-    r.onsuccess = res; r.onerror = () => rej(r.error);
-  });
 }
 export async function idbGet(key) {
   const db = await _idbOpen();
@@ -1069,7 +1062,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
       const layer = layers.find(l => l.id === id);
       const docId = `${projectId}_${id}`;
       deleteDoc(doc(db, "planning_layers", docId));
-      if (layer?.localOnly) idbDel(docId);
+      if (layer?.localOnly || layer?.cloud) idbDel(docId);
+      if (layer?.cloud) deleteLayerPieces(docId, layer.cloud);
       if (layer?.chunked && layer.chunkCount) {
         for (let ci = 0; ci < layer.chunkCount; ci++) {
           deleteDoc(doc(db, "planning_layers", `${docId}_c${ci}`));
@@ -1480,6 +1474,17 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                         {(layer.markers?.length ?? layer.totalMarkers ?? 0).toLocaleString()} pts
                       </span>
                     </div>
+                    {layer._missing && (
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#fbbf24", marginTop: 2 }}
+                        title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planning, se sube sola y aparece aquí.">
+                        ⚠ {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
+                      </div>
+                    )}
+                    {layer._loadError && (
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f87171", marginTop: 2 }}>
+                        No se pudieron cargar los puntos: {layer._loadError}
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button
@@ -2531,10 +2536,13 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
       // the markers that were set immediately on upload, causing a visible flash to 0.
       setLayers(prev => {
         const merged = assembled.map(layer => {
-          if (layer.localOnly && (!layer.markers || layer.markers.length === 0)) {
+          if ((layer.localOnly || layer.cloud) && (!layer.markers || layer.markers.length === 0)) {
             const existing = prev.find(l => l._docId === layer._docId);
-            if (existing?.markers?.length > 0) {
-              return { ...layer, markers: existing.markers };
+            // Capa en la nube: solo se conservan los puntos si son de la
+            // misma versión (si alguien la ha vuelto a subir, se recargan).
+            const sameVersion = !layer.cloud || !existing?._cloudV || existing._cloudV === layer.cloud.v;
+            if (existing?.markers?.length > 0 && sameVersion) {
+              return { ...layer, markers: existing.markers, _cloudV: existing._cloudV };
             }
           }
           return layer;
@@ -2590,34 +2598,54 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
     return () => unsub();
   }, [projectId]);
 
-  // ── IDB loader: fills markers for localOnly layers after onSnapshot sets them empty ──
+  // ── Cargador de capas grandes (layer-store.js) ──
+  // Capas en la nube: de la copia local si es de la misma versión, si no se
+  // descargan. Capas antiguas "solo locales": si este navegador es el que
+  // las subió, se usan y ADEMÁS se suben a la nube para que las vean los
+  // demás; si no, se marcan como no disponibles aquí (aviso en la lista).
+  const layerLoadTriedRef = useRef(new Set());
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
   useEffect(() => {
-    const toLoad = layers.filter(l => l.localOnly && l._docId && (!l.markers || l.markers.length === 0));
-    if (toLoad.length === 0) return;
-    let cancelled = false;
-    console.log('[IDB loader] loading', toLoad.map(l => l._docId));
-    Promise.all(toLoad.map(l =>
-      idbGet(l._docId)
-        .then(markers => {
-          console.log('[IDB loader]', l._docId, '→', markers?.length ?? 0, 'markers');
-          return { id: l.id, markers: markers || [] };
-        })
-        .catch(e => { console.error('[IDB loader] error', l._docId, e); return { id: l.id, markers: [] }; })
-    )).then(results => {
-      if (cancelled) return;
-      // Only call setLayers if we actually got markers to avoid infinite update loops
-      const anyLoaded = results.some(r => r.markers.length > 0);
-      if (!anyLoaded) {
-        console.warn('[IDB loader] no markers found in IDB for', toLoad.map(l => l._docId));
-        return;
+    const pending = layers.filter(l =>
+      l._docId && (l.cloud || l.localOnly) && (!l.markers || l.markers.length === 0) &&
+      !layerLoadTriedRef.current.has(`${l._docId}:${l.cloud?.v || "local"}`));
+    if (!pending.length) return;
+    for (const l of pending) layerLoadTriedRef.current.add(`${l._docId}:${l.cloud?.v || "local"}`);
+    Promise.all(pending.map(async l => {
+      try {
+        if (l.cloud) return { id: l.id, markers: await loadLayerMarkers(l._docId, l.cloud), v: l.cloud.v };
+        const local = await localGet(l._docId);
+        if (Array.isArray(local) && local.length) {
+          migrateLegacyLayer(l, local);
+          return { id: l.id, markers: local };
+        }
+        return { id: l.id, missing: true };
+      } catch (e) {
+        console.error("[capas] error cargando", l._docId, e);
+        return { id: l.id, error: e.message || String(e) };
       }
+    })).then(results => {
+      if (!aliveRef.current) return;
       setLayers(prev => prev.map(layer => {
         const r = results.find(x => x.id === layer.id);
-        return (r && r.markers.length > 0) ? { ...layer, markers: r.markers } : layer;
+        if (!r) return layer;
+        if (r.markers) return { ...layer, markers: r.markers, _cloudV: r.v, _missing: false, _loadError: null };
+        return { ...layer, _missing: !!r.missing, _loadError: r.error || null };
       }));
     });
-    return () => { cancelled = true; };
-  }, [layers]);
+  }, [layers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sube a la nube una capa antigua que solo estaba en este navegador
+  async function migrateLegacyLayer(layer, markers) {
+    try {
+      const cloud = await uploadLayerMarkers(layer._docId, projectId, markers);
+      await updateDoc(doc(db, "planning_layers", layer._docId), { cloud, localOnly: false, totalMarkers: markers.length });
+      console.log("[capas] capa subida a la nube:", layer._docId, cloud);
+    } catch (e) {
+      console.error("[capas] no se pudo subir la capa a la nube", layer._docId, e);
+    }
+  }
 
   // ── Depots: Firestore subscription + one-time localStorage migration ──
   useEffect(() => {
@@ -2775,18 +2803,24 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         const markers = newLayer.markers;
         const docId = `${projectId}_${newLayer.id}`;
         if (markers.length > 500) {
-          // Large layer: markers go to IndexedDB (no Firestore size limit)
-          // Show immediately from memory, persist in background
-          setLayers(prev => [...prev, { ...newLayer, _docId: docId, localOnly: true, totalMarkers: markers.length }]);
+          // Capa grande: los puntos van a la nube comprimidos y troceados
+          // (layer-store.js) para que la vea cualquier navegador — antes
+          // solo se guardaban en el IndexedDB de este. Se muestra ya desde
+          // memoria y se sube en segundo plano.
+          setLayers(prev => [...prev, { ...newLayer, _docId: docId, totalMarkers: markers.length }]);
           (async () => {
             try {
-              await idbPut(docId, markers);
+              const cloud = await uploadLayerMarkers(docId, projectId, markers);
+              setLayers(prev => prev.map(l => l._docId === docId ? { ...l, _cloudV: cloud.v } : l));
               await setDoc(doc(db, "planning_layers", docId), {
                 id: newLayer.id, name, type: ext, color, visible: true,
-                markers: [], localOnly: true, totalMarkers: markers.length,
+                markers: [], cloud, totalMarkers: markers.length,
                 projectId, orgId, createdAt: serverTimestamp(),
               });
-            } catch (e) { console.error("Layer persist:", e); }
+            } catch (e) {
+              console.error("Layer persist:", e);
+              setErrors(prev => [...prev, `${name}: no se pudo guardar en la nube (${e.message || e}) — vuelve a subir el archivo.`]);
+            }
           })();
         } else {
           // Small layer: store inline in Firestore, onSnapshot updates state

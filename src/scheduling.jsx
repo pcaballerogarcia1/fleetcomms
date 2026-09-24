@@ -6,6 +6,7 @@ import {
   useVehicleAvailability, vehicleCodeOnDay, isVehicleUnavailable, VEHICLE_STATUS_META,
 } from "./rostering.jsx";
 import { PlanningPage, idbGet } from "./planning.jsx";
+import { loadLayerMarkers } from "./layer-store.js";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
   doc, serverTimestamp, query, where, getDoc, setDoc, getDocs, limit,
@@ -1811,7 +1812,11 @@ async function loadTasksFromLayers(projectId) {
 
   const assembled = await Promise.all(mainDocs.map(async d => {
     const layer = { _docId: d.id, ...d.data() };
-    if (layer.localOnly) {
+    if (layer.cloud) {
+      // Capa grande en la nube (layer-store.js): la ve cualquier navegador
+      layer.markers = await loadLayerMarkers(d.id, layer.cloud).catch(() => []);
+    } else if (layer.localOnly) {
+      // Capa antigua, solo en el navegador que la subió
       layer.markers = await idbGet(d.id).catch(() => []);
     } else if (layer.chunked) {
       const chunks = chunkDocs
