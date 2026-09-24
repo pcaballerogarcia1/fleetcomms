@@ -7,6 +7,10 @@ import {
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import { loadScenario, publishWorker } from "./publicar-rutas.js";
 import {
+  listenScenarioRoster, saveShiftMoves, loadRosterMonth, listenRosterMonth,
+  saveRosterMonth, savedSnapshotOf,
+} from "./roster-store.js";
+import {
   doc, onSnapshot, setDoc, getDoc, updateDoc, serverTimestamp,
   collection, query, where,
 } from "firebase/firestore";
@@ -71,12 +75,14 @@ export function useRostering(orgId, year, month) {
     setGrid({});
     setAsignaciones({});
     setLoading(true);
-    return onSnapshot(doc(db, "rostering", docId), snap => {
-      setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
-      setAsignaciones(snap.exists() ? (snap.data().asignaciones ?? {}) : {});
+    // Una ficha por trabajador (roster-store.js) — antes todo el mes en un
+    // solo documento, que pasaba de 1 MB con plantillas grandes.
+    return listenRosterMonth(orgId, year, month, m => {
+      setGrid(m.grid);
+      setAsignaciones(m.asignaciones);
       setLoading(false);
     });
-  }, [docId]);
+  }, [docId, orgId, year, month]);
 
   return { grid, asignaciones, loading, docId };
 }
@@ -663,9 +669,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   useEffect(() => {
     if (!activeProject?._id) { setSchedRoster(null); return; }
-    return onSnapshot(doc(db, "scheduling_roster", activeProject._id), snap => {
-      setSchedRoster(snap.exists() ? snap.data() : null);
-    });
+    // Ficha principal + partes (roster-store.js): los turnos y el detalle
+    // diario van troceados para no pasar de 1 MB.
+    return listenScenarioRoster(activeProject._id, setSchedRoster);
   }, [activeProject?._id]);
 
   // Given a calendar day in the current view, return the scheduling day number
@@ -698,6 +704,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // el optimizador; sin ella, la escribió alguien a mano.
   const [asign, setAsign] = useState({});
   const asignRef = useRef({});
+  // Lo último guardado por trabajador (para escribir solo lo que cambia) y
+  // si el mes venía en el formato antiguo de un solo documento.
+  const savedRef = useRef({});
+  const legacyRef = useRef(false);
+  const persistChain = useRef(Promise.resolve());
 
   const loadedRef    = useRef(false);
   const debounceRef  = useRef({});
@@ -743,16 +754,20 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     setGrid({});
     setAsign({}); asignRef.current = {};
     setLoading(true);
-    return onSnapshot(doc(db, "rostering", docId), snap => {
-      if (!loadedRef.current) {
-        setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
-        const a = snap.exists() ? (snap.data().asignaciones ?? {}) : {};
-        setAsign(a); asignRef.current = a;
-        loadedRef.current = true;
-      }
+    // Lectura única: aquí se edita en local y se guarda por trabajador
+    // (antes también se usaba solo la primera lectura del listener).
+    let cancelled = false;
+    loadRosterMonth(orgId, year, month).then(m => {
+      if (cancelled) return;
+      setGrid(m.grid);
+      setAsign(m.asignaciones); asignRef.current = m.asignaciones;
+      savedRef.current = m.legacy ? {} : savedSnapshotOf(m.grid, m.asignaciones);
+      legacyRef.current = m.legacy;
+      loadedRef.current = true;
       setLoading(false);
-    }, () => setLoading(false));
-  }, [docId]);
+    });
+    return () => { cancelled = true; };
+  }, [docId, orgId, year, month]);
 
   // ── Reglas del cuadrante (por organización) ───────────────────
   // Se guardan en la misma colección `rostering` (doc `${orgId}_reglas`, con
@@ -789,9 +804,13 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // que ninguna escritura pise a la otra).
   function persistMonth(newGrid, newAsign = asignRef.current) {
     if (!docId) return;
-    setDoc(doc(db, "rostering", docId), {
-      org_id: orgId, year, month, grid: newGrid, asignaciones: newAsign, updatedAt: serverTimestamp(),
-    });
+    // En cola: dos guardados seguidos no se pisan y cada uno escribe solo
+    // los trabajadores que han cambiado desde el anterior.
+    const y = year, m = month;
+    persistChain.current = persistChain.current
+      .then(() => saveRosterMonth(orgId, y, m, newGrid, newAsign, savedRef, { legacy: legacyRef.current }))
+      .then(() => { legacyRef.current = false; })
+      .catch(e => alert("No se pudo guardar el cuadrante: " + (e.message || e)));
   }
 
   // Una edición a mano de una celda anula la asignación del optimizador en
@@ -1012,6 +1031,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // las reglas. Lo escrito a mano (L/B, M/T/N, G, D) se respeta; lo que puso
   // una optimización anterior se recalcula entero.
   function optimizarLibre() {
+    // Turnos troceados en partes: si aún no han llegado todas, optimizar
+    // ahora dejaría fuera turnos sin avisar.
+    if (schedRoster._partsComplete === false) {
+      alert("Todavía se están cargando los turnos del escenario — espera unos segundos y vuelve a pulsar Optimizar.");
+      return;
+    }
     const shiftsRaw = schedRoster.shifts || [];
     if (!shiftsRaw.length) {
       alert("El escenario no tiene turnos guardados — regenéralo en Scheduling (modo libre).");
@@ -1077,15 +1102,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     // para que Scheduling traslade esas rutas — manda el cuadrante. Los
     // movimientos se acumulan en orden; Scheduling aplica cada uno una sola vez.
     if (res.moves.length && activeProject?._id) {
-      const newShifts = shiftsRaw.map(sh => movedTo.has(sh.id) ? { ...sh, d: movedTo.get(sh.id) } : sh);
       const newMoves = res.moves.map(m => {
         const sh = byId.get(m.id);
         return { id: m.id, v: sh.vehicleId, s: sh.start, e: sh.end, fromDay: m.fromDay, toDay: m.toDay };
       });
-      setDoc(doc(db, "scheduling_roster", activeProject._id), {
-        shifts: newShifts,
-        moves: [...(schedRoster.moves || []), ...newMoves],
-      }, { merge: true }).catch(e => alert("No se pudieron guardar los turnos movidos en el escenario: " + (e.message || e)));
+      saveShiftMoves(activeProject._id, schedRoster, movedTo, newMoves)
+        .catch(e => alert("No se pudieron guardar los turnos movidos en el escenario: " + (e.message || e)));
     }
 
     setOptResult({

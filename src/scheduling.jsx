@@ -18,6 +18,7 @@ import {
 } from "./vrp-engine.js";
 import { useLang, t } from "./i18n.js";
 import { taskToUbicacion } from "./publicar-rutas.js";
+import { saveScenarioRoster } from "./roster-store.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -2796,7 +2797,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           if (activeProject?._id && orgId) {
             try {
               const turnoByWorker = {};
-              const daysWorked    = {};
               // Resumen por trabajador+día (paradas, km, horario, vehículo) para
               // el popup de "resumen del turno" en Rostering (clic derecho en una
               // celda). Solo números pequeños, no las paradas completas — eso sí
@@ -2830,7 +2830,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 }
                 const dayNums = Object.keys(byDay).map(Number).sort((a, b) => a - b);
                 if (dayNums.length) {
-                  daysWorked[wId] = dayNums;
                   const vehicleRow = wRow.vehiculoId
                     ? vehicleSchedule.find(v => (v._id || v.id) === wRow.vehiculoId)
                     : null;
@@ -2845,20 +2844,20 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                   }
                 }
               }
-              await setDoc(doc(db, "scheduling_roster", activeProject._id), {
+              // Turnos a cubrir (día + vehículo + horario, la entrada de
+              // Rostering → Optimizar) y detalle diario por trabajador van
+              // troceados en partes (roster-store.js): en un solo documento
+              // pasaban de 1 MB con ~100 vehículos. daysWorked ya no se
+              // guarda — se deduce del detalle al leer.
+              await saveScenarioRoster(activeProject._id, {
                 projectId: activeProject._id,
                 orgId,
                 mes: activeProject.mes ?? "",   // "YYYY-MM" — schedule starts on day 1 of this month
                 turnoByWorker,
-                daysWorked,
-                dailyDetail,
-                // Turnos a cubrir (día + vehículo + horario) — la entrada de
-                // Rostering → Optimizar en modo libre.
                 modo: rosterLibre ? "libre" : "cuadrante",
-                shifts: extractShifts(vehicleSchedule, constraints.startMin),
                 moves: [],
                 generatedAt: scenarioStamp,
-              });
+              }, extractShifts(vehicleSchedule, constraints.startMin), dailyDetail);
             } catch (e) {
               // Antes se tragaba en silencio: con modo libre, sin esto
               // Rostering se queda sin turnos que optimizar sin saber por qué.

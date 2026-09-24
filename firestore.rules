@@ -166,12 +166,24 @@ service cloud.firestore {
     }
     match /scheduling_roster/{projectId} {
       allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+
+      // Turnos a cubrir y detalle diario troceados (límite de 1 MB por doc)
+      match /partes/{partId} {
+        allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      }
     }
 
-    // ── ROSTERING (documento único por org+mes, campo org_id) ───────
+    // ── ROSTERING (ficha por org+mes, campo org_id) ─────────────────
     match /rostering/{docId} {
       allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+
+      // Cuadrante + asignaciones de cada trabajador ese mes (una ficha por
+      // trabajador: en una sola pasaba de 1 MB con plantillas grandes)
+      match /trabajadores/{workerId} {
+        allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+        allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      }
     }
 
     // ── CUADRANTE PUBLICADO A CADA TRABAJADOR (Rostering → Publicar) ──
