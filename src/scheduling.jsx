@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import {
@@ -219,7 +219,7 @@ function ClockBadge({ size = 11 }) {
 
 function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0 }) {
   const [tooltip,      setTooltip]      = useState(null);
-  const [pxPerMin,     setPxPerMin]     = useState(2);
+  const [pxPerMin,     setPxPerMin]     = useState(1); // x1 por defecto: se ve la jornada entera
   const [unassignedOpen, setUnassignedOpen] = useState(true);
   const [selectedDay,  setSelectedDay]  = useState(0);
   const [compactDayNav, setCompactDayNav] = useState(() => days > 10);
@@ -421,8 +421,59 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     !hasNightShift && endMin < 1440 ? { x: endMin * pxPerMin, w: (1440 - endMin) * pxPerMin } : null,
   ].filter(Boolean);
 
-  const zoomIn  = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i < ZOOM_STEPS.length - 1) setPxPerMin(ZOOM_STEPS[i + 1]); else setPxPerMin(Math.min(12, pxPerMin * 2)); };
-  const zoomOut = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i > 0) setPxPerMin(ZOOM_STEPS[i - 1]); else setPxPerMin(Math.max(0.1, pxPerMin / 2)); };
+  // ── Encuadre horizontal ──
+  // El Gantt pinta el día desde las 00:00; con turnos que empiezan a las
+  // 6:00 se abría con seis horas vacías a la izquierda. Al abrir un
+  // escenario, cambiar de día o de vista (vehículos/trabajadores) se
+  // desplaza a 30 min antes de la primera tarea de ese día. No se recentra
+  // al mover paradas a mano (las filas son las mismas), para no saltar.
+  const firstActiveMin = useMemo(() => {
+    const dayOffset = selectedDay * 1440;
+    let first = Infinity;
+    for (const r of rows) {
+      for (const a of r.assignments || []) {
+        if (a._start >= dayOffset && a._start < dayOffset + 1440 && a._start - dayOffset < first) first = a._start - dayOffset;
+      }
+    }
+    return isFinite(first) ? first : minShiftStart;
+  }, [rows, selectedDay, minShiftStart]);
+  const rowsKey = rows.map(r => r._id || r.id).join("|");
+  const centeredForRef = useRef(null);
+  // Si el Gantt está oculto (otra pestaña de Scheduling) no se puede
+  // desplazar: se espera a que tenga ancho (ResizeObserver) para encuadrar.
+  const [scrollerW, setScrollerW] = useState(0);
+  useEffect(() => {
+    const el = ganttScrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setScrollerW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const el = ganttScrollRef.current;
+    if (!el || !rows.length || !el.clientWidth) return;
+    const key = `${selectedDay}#${rowsKey}`;
+    if (centeredForRef.current === key) return;
+    centeredForRef.current = key;
+    el.scrollLeft = Math.max(0, (firstActiveMin - 30) * pxPerMin);
+  }, [selectedDay, rowsKey, firstActiveMin, pxPerMin, rows.length, scrollerW]);
+
+  // Zoom manteniendo la hora que se ve en el borde izquierdo (antes se
+  // conservaban los píxeles y la vista saltaba a otra hora).
+  const zoomAnchorRef = useRef(null);
+  const setZoom = z => {
+    const el = ganttScrollRef.current;
+    if (el) zoomAnchorRef.current = el.scrollLeft / pxPerMin;
+    setPxPerMin(z);
+  };
+  useLayoutEffect(() => {
+    const el = ganttScrollRef.current;
+    if (el && zoomAnchorRef.current != null) el.scrollLeft = zoomAnchorRef.current * pxPerMin;
+    zoomAnchorRef.current = null;
+  }, [pxPerMin]);
+
+  const zoomIn  = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i < ZOOM_STEPS.length - 1) setZoom(ZOOM_STEPS[i + 1]); else setZoom(Math.min(12, pxPerMin * 2)); };
+  const zoomOut = () => { const i = ZOOM_STEPS.indexOf(pxPerMin); if (i > 0) setZoom(ZOOM_STEPS[i - 1]); else setZoom(Math.max(0.1, pxPerMin / 2)); };
 
   const zoomLabel = pxPerMin >= 1 ? `${pxPerMin}×` : `${pxPerMin}×`;
 
@@ -441,7 +492,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
         <button onClick={zoomIn}  style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: C.muted, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
         <div style={{ width: 1, height: 16, background: C.border, margin: "0 4px" }} />
         {ZOOM_STEPS.map(z => (
-          <button key={z} onClick={() => setPxPerMin(z)} style={{
+          <button key={z} onClick={() => setZoom(z)} style={{
             padding: "2px 8px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
             border: `1px solid ${pxPerMin === z ? C.blue : C.border}`,
             background: pxPerMin === z ? C.blueDim : "none",
