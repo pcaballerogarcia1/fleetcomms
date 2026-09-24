@@ -5,7 +5,7 @@ import {
   useRostering, workerCodeOnDay, isUnavailable, SHIFT_META,
   useVehicleAvailability, vehicleCodeOnDay, isVehicleUnavailable, VEHICLE_STATUS_META,
 } from "./rostering.jsx";
-import { PlanningPage, idbGet } from "./planning.jsx";
+import { PlanningPage, idbGet, isJunkCoord } from "./planning.jsx";
 import { loadLayerMarkers } from "./layer-store.js";
 import {
   collection, onSnapshot, addDoc, deleteDoc, updateDoc,
@@ -1832,7 +1832,9 @@ async function loadTasksFromLayers(projectId) {
     if (!layer.visible) return;
     (layer.markers || []).forEach(m => {
       const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
-      if (!isFinite(lat) || !isFinite(lng)) return;
+      // Sin coordenadas o en 0,0 (filas del Excel vacías): no es una parada
+      // real — antes entraba en la ruta como si estuviera en el golfo de Guinea.
+      if (isJunkCoord(lat, lng)) return;
       // IDB markers are flat { lat, lng, Barrio: "X", ... }; Firestore markers nest under .campos/.fields
       const nested = m.campos || m.fields || null;
       const fields = (nested && Object.keys(nested).length > 0) ? nested : m;

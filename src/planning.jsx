@@ -160,6 +160,45 @@ if (typeof document !== "undefined" && !document.getElementById("planning-styles
   document.head.appendChild(s);
 }
 
+// ── Calidad de coordenadas de una capa ───────────────────────────
+// Filas del Excel sin coordenadas acaban como 0/0 (o casi): se pintaban en el
+// golfo de Guinea y el mapa se encuadraba para incluirlas, así que al abrir
+// un proyecto se veía medio continente en vez de la ciudad. Aquí:
+//  - "basura": no numérico, fuera de rango o a < ~50 km del punto 0,0
+//    (ahí nunca hay un contenedor) → ni se pinta ni se importa;
+//  - "lejos": a más de max(50 km, 4 × p95) del centro (mediana) de la capa
+//    → se pinta, pero no cuenta para encuadrar el mapa.
+// Se calcula una vez por array de puntos (WeakMap), no en cada render.
+const _coordCache = new WeakMap();
+export function isJunkCoord(lat, lng) {
+  return !isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+    (Math.abs(lat) < 0.5 && Math.abs(lng) < 0.5);
+}
+export function coordQuality(markers) {
+  if (!markers?.length) return { invalid: 0, far: 0, isFar: () => false };
+  if (_coordCache.has(markers)) return _coordCache.get(markers);
+  const lats = [], lngs = [];
+  let invalid = 0;
+  for (const m of markers) {
+    const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
+    if (isJunkCoord(lat, lng)) { invalid++; continue; }
+    lats.push(lat); lngs.push(lng);
+  }
+  let res = { invalid, far: 0, isFar: () => false };
+  if (lats.length) {
+    const med = a => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+    const cLat = med(lats), cLng = med(lngs);
+    const kx = 111.32 * Math.cos(cLat * Math.PI / 180);
+    const dist = (lat, lng) => Math.hypot((lat - cLat) * 110.57, (lng - cLng) * kx);
+    const ds = lats.map((lat, i) => dist(lat, lngs[i])).sort((x, y) => x - y);
+    const limitKm = Math.max(50, 4 * ds[Math.floor((ds.length - 1) * 0.95)]);
+    const isFar = (lat, lng) => dist(lat, lng) > limitKm;
+    res = { invalid, far: ds.filter(d => d > limitKm).length, isFar, limitKm };
+  }
+  _coordCache.set(markers, res);
+  return res;
+}
+
 // ── CSV PARSER ────────────────────────────────────────────────────
 function parseCSV(text) {
   const lines = text.replace(/\r/g, "").trim().split("\n").filter(Boolean);
@@ -535,8 +574,9 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
 
     // Clean up previous canvas/renderer overlay
     if (canvasOverlayRef.current) {
-      const { canvas, drawFn, renderer } = canvasOverlayRef.current;
+      const { canvas, drawFn, renderer, clickFn } = canvasOverlayRef.current;
       if (drawFn) { try { map.off('moveend zoomend viewreset resize', drawFn); } catch {} }
+      if (clickFn) { try { map.off('click', clickFn); } catch { /* ya no estaba */ } }
       if (canvas)   { try { canvas.remove(); } catch {} }
       if (renderer) { try { renderer.remove(); } catch {} }
       canvasOverlayRef.current = null;
@@ -554,15 +594,17 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       // ── LARGE DATASET: direct canvas overlay in Leaflet's overlayPane ──
       // Build a flat array of [lat, lng, color] tuples first (no Leaflet objects).
       const allPts = [];
+      const ptMarkers = []; // punto original de cada entrada de allPts (para seleccionarlo al medir)
       visibleLayers.forEach(layer => {
+        const q = coordQuality(layer.markers);
         layer.markers.forEach(m => {
           const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
-          if (!isFinite(lat) || !isFinite(lng)) return;
-          if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+          if (isJunkCoord(lat, lng)) return;
           const barrio = getBarrio(m);
           const color = barrio ? barrioColor(barrio, barrioColors) : (layer.color || '#4f8ef7');
           allPts.push(lat, lng, color); // packed flat for cache efficiency
-          allPoints.push([lat, lng]);
+          ptMarkers.push(m);
+          if (!q.isFar(lat, lng)) allPoints.push([lat, lng]); // los muy lejanos no mueven el encuadre
         });
       });
 
@@ -596,15 +638,42 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
 
       drawPts();
       map.on('moveend zoomend viewreset resize', drawPts);
-      canvasOverlayRef.current = { canvas, drawFn: drawPts, renderer: null };
+
+      // "Medir distancia" con muchos puntos: el canvas no recibe clics (los
+      // puntos no son marcadores), así que en Madrid no había forma de
+      // seleccionar ninguno. Al hacer clic en el mapa en modo medición se
+      // coge el punto pintado más cercano al cursor (a menos de 14 px).
+      const PICK_PX = 14;
+      function pickNearest(e) {
+        if (!selModeRef.current) return;
+        const cp = e.containerPoint;
+        let best = -1, bestD = PICK_PX * PICK_PX;
+        for (let i = 0; i < allPts.length; i += 3) {
+          const p = map.latLngToContainerPoint([allPts[i], allPts[i + 1]]);
+          const dx = p.x - cp.x, dy = p.y - cp.y, d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best < 0) return;
+        const lat = allPts[best], lng = allPts[best + 1];
+        const m = ptMarkers[best / 3];
+        const overrideName = nombreOverrides?.get(`${lat.toFixed(5)}_${lng.toFixed(5)}`);
+        const prev = selectedRef.current;
+        const idx = prev.findIndex(s => s.lat === lat && s.lng === lng);
+        setSelected(idx >= 0
+          ? prev.filter((_, i) => i !== idx)
+          : [...prev, { lat, lng, nombre: overrideName || m?.nombre || m?.name || (m && getBarrio(m)) || `${lat.toFixed(4)},${lng.toFixed(4)}` }]
+        );
+      }
+      map.on('click', pickNearest);
+      canvasOverlayRef.current = { canvas, drawFn: drawPts, renderer: null, clickFn: pickNearest };
 
     } else {
       // ── SMALL DATASET: individual Leaflet markers with popups ──
       visibleLayers.forEach(layer => {
+        const q = coordQuality(layer.markers);
         layer.markers.forEach(m => {
           const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
-          if (!isFinite(lat) || !isFinite(lng)) return;
-          if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+          if (isJunkCoord(lat, lng)) return;
 
           const barrio = getBarrio(m);
           const color  = barrio ? barrioColor(barrio, barrioColors) : layer.color;
@@ -637,7 +706,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
 
           marker.addTo(map);
           leafletLayersRef.current.push(marker);
-          allPoints.push([lat, lng]);
+          if (!q.isFar(lat, lng)) allPoints.push([lat, lng]); // los muy lejanos no mueven el encuadre
         });
       });
     }
@@ -1474,6 +1543,19 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                         {(layer.markers?.length ?? layer.totalMarkers ?? 0).toLocaleString()} pts
                       </span>
                     </div>
+                    {(() => {
+                      const q = coordQuality(layer.markers);
+                      if (!q.invalid && !q.far) return null;
+                      return (
+                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#fbbf24", marginTop: 2 }}
+                          title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Scheduling. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
+                          ⚠ {[
+                            q.invalid && `${q.invalid.toLocaleString()} sin coordenadas válidas`,
+                            q.far && `${q.far.toLocaleString()} muy lejos del resto`,
+                          ].filter(Boolean).join(" · ")}
+                        </div>
+                      );
+                    })()}
                     {layer._missing && (
                       <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#fbbf24", marginTop: 2 }}
                         title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planning, se sube sola y aparece aquí.">
