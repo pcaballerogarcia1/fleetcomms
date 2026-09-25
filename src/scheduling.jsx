@@ -17,9 +17,11 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { LoginScheduling } from "./login-scheduling.jsx";
 import {
   timeToMin, minToTime, turnoWindow, shiftCodeFromStart, hasCoords,
-  computeCandidateSlots, applyTaskMove, generateScenario, autoScaleFleet, shiftForDay,
+  computeCandidateSlots, applyTaskMove, shiftForDay,
 } from "./vrp-engine.js";
 import { useLang, t } from "./i18n.js";
+// El cálculo de escenarios corre en un hilo aparte: la pantalla no se congela
+import { generateScenarioBg, autoScaleFleetBg } from "./vrp-client.js";
 import { taskToUbicacion } from "./publicar-rutas.js";
 import { saveScenarioRoster } from "./roster-store.js";
 
@@ -2650,12 +2652,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       let vehiclesForSchedule = vehiclesForVRP;
       let addedVehicles = [];
       if (vehiclesForVRP.length > 0) {
-        vr = await generateScenario(tasks, vehiclesForVRP, constraints);
+        vr = await generateScenarioBg(tasks, vehiclesForVRP, constraints);
 
         // Días máximos de escenario: si sobran paradas dentro de ese límite,
         // añade vehículos virtuales "Vehículo necesario N" hasta que quepan todas.
         if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-          const scaled = await autoScaleFleet(tasks, vehiclesForVRP, constraints, setScaleProgress);
+          const scaled = await autoScaleFleetBg(tasks, vehiclesForVRP, constraints, setScaleProgress);
           vr = scaled.result;
           vehiclesForSchedule = scaled.resources;
           addedVehicles = scaled.resources.slice(vehiclesForVRP.length);
@@ -3008,10 +3010,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         return;
       }
 
-      let vr = await generateScenario(tasks, simVehicles, constraints);
+      let vr = await generateScenarioBg(tasks, simVehicles, constraints);
       let finalVehicleCount = simVehicles.length;
       if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-        const scaled = await autoScaleFleet(tasks, simVehicles, constraints);
+        const scaled = await autoScaleFleetBg(tasks, simVehicles, constraints);
         vr = scaled.result;
         finalVehicleCount = scaled.resources.length;
       }
