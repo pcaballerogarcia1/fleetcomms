@@ -2110,9 +2110,6 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     await deleteDoc(doc(timetableCol, id));
   }
 
-  // Unique sorted barrios
-  const barrios = [...new Set(effectiveEntries.map(e => e.barrio || "Sin barrio"))].sort();
-
   // Sort within a group: scheduled by time first, then unscheduled
   const sortFn = (a, b) => {
     if (!a.horaInicio && !b.horaInicio) return 0;
@@ -2121,10 +2118,24 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     return a.horaInicio.localeCompare(b.horaInicio);
   };
 
-  // Group all entries by barrio
-  const grouped = Object.fromEntries(
-    barrios.map(b => [b, effectiveEntries.filter(e => (e.barrio || "Sin barrio") === b).sort(sortFn)])
-  );
+  // Barrios y paradas agrupadas por barrio, en UNA pasada y solo cuando
+  // cambian las paradas. Antes, en cada repintado, se recorrían todas las
+  // paradas una vez por barrio (MADRID: 131 × 44.249 ≈ 5,8 millones de
+  // comparaciones) — era lo que más tardaba al abrir el Timetable (medido:
+  // bloqueos de 0,5–0,8 s seguidos en un PC normal).
+  const { barrios, grouped } = useMemo(() => {
+    const g = new Map();
+    for (const e of effectiveEntries) {
+      const b = e.barrio || "Sin barrio";
+      let arr = g.get(b);
+      if (!arr) g.set(b, (arr = []));
+      arr.push(e);
+    }
+    const barrios = [...g.keys()].sort();
+    const grouped = {};
+    for (const b of barrios) grouped[b] = g.get(b).sort(sortFn);
+    return { barrios, grouped };
+  }, [effectiveEntries]);
 
   // Which barrios to render (after filter)
   const renderBarrios = barrioFiltro ? [barrioFiltro] : barrios;
