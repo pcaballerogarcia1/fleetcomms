@@ -385,7 +385,7 @@ function WorkspaceRouter() {
             pointerEvents: path === "/analytics" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <AnalyticsPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />
+              <AnalyticsPageLazy sesion={sesion} orgId={effectiveOrgId} activeProject={activeProject} embedded />
             </Suspense>
           </div>
         )}

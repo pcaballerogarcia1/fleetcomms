@@ -3307,6 +3307,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             ubicaciones, recorrido,
             fechaSubida: Date.now(),
             origenVRP: true,
+            // Para que Analytics (facturación) sepa de qué proyecto es el plan
+            projectId: activeProject?._id || null,
             org_id: orgId,
           });
         }

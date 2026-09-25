@@ -6,6 +6,7 @@ import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } from "./layer-store.js";
+import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur } from "./price-store.js";
 
 // ── IndexedDB para markers grandes (evita límite 1MB de Firestore) ──
 const _IDB_NAME = 'operanzia_v1';
@@ -1799,7 +1800,15 @@ function timeToMin(t) {
 }
 
 // ── TIMETABLE ROW ─────────────────────────────────────────────────
-function TimetableRow({ entry, onUpdate, onDelete }) {
+function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = null, defaultPrice = null, onPrice }) {
+  const [localPrice, setLocalPrice] = useState(price != null ? String(price) : "");
+  // Si el precio cambia desde fuera (otro admin, o "aplicar al barrio"), se
+  // refleja en el campo (ajuste durante el render, sin efecto).
+  const [syncedPrice, setSyncedPrice] = useState(price);
+  if (price !== syncedPrice) {
+    setSyncedPrice(price);
+    setLocalPrice(price != null ? String(price) : "");
+  }
   const [localStart, setLocalStart] = useState(entry.horaInicio || "");
   const [localDur,   setLocalDur]   = useState(entry.duracion != null ? String(entry.duracion) : "");
   const [franjaIni,  setFranjaIni]  = useState(entry.franjaInicio || "");
@@ -1942,6 +1951,34 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
         </div>
       </td>
 
+      {/* Precio — solo administradores (ver price-store.js) */}
+      {canPrice && (
+        <td style={{ padding: "10px 8px", verticalAlign: "middle", width: 100 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <input
+              type="number" min="0" step="0.01"
+              value={localPrice}
+              onChange={e => setLocalPrice(e.target.value)}
+              onBlur={e => {
+                const n = parseFloat(String(e.target.value).replace(",", "."));
+                const next = isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+                if (next !== price) onPrice?.(next);
+              }}
+              placeholder={defaultPrice != null ? String(defaultPrice) : "—"}
+              title={defaultPrice != null ? `Vacío = precio por defecto (${fmtEur(defaultPrice)})` : "Precio de este punto"}
+              style={{
+                width: 64, background: "rgba(255,255,255,0.04)",
+                border: `1px solid ${localPrice ? C.green + "55" : C.border}`,
+                color: localPrice ? C.green : C.muted,
+                padding: "6px 8px", borderRadius: 6, fontSize: 12,
+                fontFamily: mono, outline: "none", textAlign: "right",
+              }}
+            />
+            <span style={{ fontSize: 10, color: C.dim, flexShrink: 0 }}>€</span>
+          </div>
+        </td>
+      )}
+
       {/* Acciones */}
       <td style={{ padding: "10px 12px 10px 4px", verticalAlign: "middle", width: 36 }}>
         <button onClick={onDelete} title="Eliminar" style={{
@@ -1960,7 +1997,26 @@ function TimetableRow({ entry, onUpdate, onDelete }) {
 }
 
 // ── TIMETABLE TAB ─────────────────────────────────────────────────
-function TabTimetable({ layers, projectId: ttProjectId }) {
+function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId = null }) {
+  // ── Precios por punto (solo administradores) ──
+  const [prices, setPrices] = useState({ defaultPrecio: null, byKey: new Map(), ready: false });
+  const [showPricePanel, setShowPricePanel] = useState(false);
+  const [priceInput, setPriceInput] = useState("");
+  const [barrioPriceInput, setBarrioPriceInput] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
+  useEffect(() => {
+    if (!canPrice || !ttProjectId) return;
+    return listenPrices(ttProjectId, p => {
+      setPrices(p);
+      if (p.ready) setPriceInput(prev => prev || (p.defaultPrecio != null ? String(p.defaultPrecio) : ""));
+    });
+  }, [canPrice, ttProjectId]);
+  const parsePrice = v => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
+  async function withSaving(fn) {
+    setSavingPrice(true);
+    try { await fn(); } catch (e) { alert("No se pudo guardar el precio: " + (e.message || e)); }
+    setSavingPrice(false);
+  }
   const [firestoreEntries, setFirestoreEntries] = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [barrioFiltro,     setBarrioFiltro]     = useState(null);
@@ -2137,6 +2193,17 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     return { barrios, grouped };
   }, [effectiveEntries]);
 
+  // Importe de todos los puntos (precio propio o por defecto) — solo admins
+  const importeTotal = useMemo(() => {
+    if (!canPrice) return { total: 0, count: 0, sinPrecio: 0 };
+    let total = 0, count = 0, sinPrecio = 0;
+    for (const e of effectiveEntries) {
+      const p = effectivePrice(prices, e.puntoKey || e._id);
+      if (p == null) sinPrecio++; else { total += p; count++; }
+    }
+    return { total, count, sinPrecio };
+  }, [canPrice, effectiveEntries, prices]);
+
   // Which barrios to render (after filter)
   const renderBarrios = barrioFiltro ? [barrioFiltro] : barrios;
 
@@ -2294,6 +2361,13 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
             <span style={{ fontSize: 11, color: C.muted }}>barrios</span>
           </div>
         )}
+        {canPrice && importeTotal.count > 0 && (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}
+            title={`${importeTotal.count.toLocaleString()} puntos con precio${importeTotal.sinPrecio ? ` · ${importeTotal.sinPrecio.toLocaleString()} sin precio` : ""}`}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.green }}>{fmtEur(importeTotal.total)}</span>
+            <span style={{ fontSize: 11, color: C.muted }}>importe total</span>
+          </div>
+        )}
         {effectiveEntries.length === 0 && (
           <span style={{ fontSize: 11, color: C.dim }}>
             Ve a Mapa y sube un Excel para añadir puntos
@@ -2302,6 +2376,22 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
         {effectiveEntries.length > 0 && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Price button — solo administradores */}
+            {canPrice && (
+              <button
+                onClick={() => setShowPricePanel(v => !v)}
+                title="Precio por punto: por defecto y por barrio (solo administradores)"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                  background: showPricePanel ? "rgba(52,211,153,0.15)" : "rgba(52,211,153,0.07)",
+                  border: `1px solid ${showPricePanel ? "rgba(52,211,153,0.5)" : "rgba(52,211,153,0.22)"}`,
+                  color: C.green, fontSize: 12, fontWeight: 500, fontFamily: font, transition: "all .15s",
+                }}
+              >
+                €&nbsp;{prices.defaultPrecio != null ? `${fmtEur(prices.defaultPrecio)}/punto` : "Precio"}
+              </button>
+            )}
             {/* Duration button */}
             <button
               onClick={() => setShowDurPanel(v => !v)}
@@ -2390,6 +2480,51 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
       </div>
 
       {/* Duration panel */}
+      {canPrice && showPricePanel && (
+        <div style={{
+          padding: "14px 20px", borderBottom: `1px solid ${C.border}`,
+          background: "rgba(52,211,153,0.05)", flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>€ Precio por punto</span>
+          <span style={{ fontSize: 12, color: C.muted }}>Solo lo ven los administradores. Los puntos sin precio propio usan el de por defecto.</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: C.muted }}>Por defecto</span>
+            <input type="number" min="0" step="0.01" value={priceInput}
+              onChange={e => setPriceInput(e.target.value)} placeholder="€"
+              style={{ width: 80, background: C.surface2, border: "1px solid rgba(52,211,153,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+            <button disabled={savingPrice}
+              onClick={() => withSaving(() => saveDefaultPrice(ttProjectId, orgId, parsePrice(priceInput)))}
+              style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+              {savingPrice ? "Guardando…" : "Guardar"}
+            </button>
+            {barrioFiltro && (
+              <>
+                <span style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />
+                <span style={{ fontSize: 12, color: C.muted }}>Todos los de {barrioFiltro}</span>
+                <input type="number" min="0" step="0.01" value={barrioPriceInput}
+                  onChange={e => setBarrioPriceInput(e.target.value)} placeholder="€ (vacío = quitar)"
+                  style={{ width: 120, background: C.surface2, border: "1px solid rgba(52,211,153,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+                <button disabled={savingPrice}
+                  onClick={() => {
+                    const p = parsePrice(barrioPriceInput);
+                    const list = grouped[barrioFiltro] || [];
+                    if (!confirm(p == null
+                      ? `¿Quitar el precio propio de los ${list.length} puntos de ${barrioFiltro}? Pasarán a usar el precio por defecto.`
+                      : `¿Poner ${fmtEur(p)} a los ${list.length} puntos de ${barrioFiltro}?`)) return;
+                    withSaving(() => savePointPrices(ttProjectId, orgId,
+                      Object.fromEntries(list.map(e => [e.puntoKey || e._id, p]))));
+                  }}
+                  style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+                  Aplicar a {(grouped[barrioFiltro] || []).length} puntos
+                </button>
+              </>
+            )}
+            {!barrioFiltro && <span style={{ fontSize: 11, color: C.dim }}>Elige un barrio a la izquierda para poner precio a todos sus puntos.</span>}
+          </div>
+        </div>
+      )}
+
       {showDurPanel && (
         <div style={{
           padding: "14px 20px", borderBottom: `1px solid ${C.border}`,
@@ -2542,13 +2677,14 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
                   <th style={{ ...thS, width: 116 }}>Hora inicio</th>
                   <th style={{ ...thS, width: 148 }}>Franja horaria</th>
                   <th style={{ ...thS, width: 106 }}>Duración</th>
+                  {canPrice && <th style={{ ...thS, width: 100 }}>Precio</th>}
                   <th style={{ ...thS, width: 36 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {isLarge && !barrioFiltro ? (
                   <tr>
-                    <td colSpan={4} style={{ padding: "40px 20px", textAlign: "center" }}>
+                    <td colSpan={canPrice ? 6 : 5} style={{ padding: "40px 20px", textAlign: "center" }}>
                       <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>
                         {effectiveEntries.length.toLocaleString()} puntos cargados
                       </div>
@@ -2561,7 +2697,7 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
                   <Fragment key={barrio}>
                     {barrioFiltro === null && (
                       <tr>
-                        <td colSpan={4} style={{
+                        <td colSpan={canPrice ? 6 : 5} style={{
                           padding: "8px 14px 7px",
                           background: C.surface2,
                           borderTop: `1px solid ${C.border2}`,
@@ -2584,6 +2720,11 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
                         entry={entry}
                         onUpdate={changes => updateEntry(entry._id, changes)}
                         onDelete={() => deleteEntry(entry._id)}
+                        canPrice={canPrice}
+                        price={canPrice ? (prices.byKey.get(entry.puntoKey || entry._id) ?? null) : null}
+                        defaultPrice={prices.defaultPrecio}
+                        onPrice={p => savePointPrices(ttProjectId, orgId, { [entry.puntoKey || entry._id]: p })
+                          .catch(e => alert("No se pudo guardar el precio: " + (e.message || e)))}
                       />
                     ))}
                   </Fragment>
@@ -3142,7 +3283,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} />
           </>
         ) : (
-          <TabTimetable layers={layers} projectId={projectId} />
+          <TabTimetable layers={layers} projectId={projectId} orgId={orgId}
+            canPrice={sesion?.rol === "admin" || sesion?.rol === "superadmin"} />
         )}
       </div>
     </div>

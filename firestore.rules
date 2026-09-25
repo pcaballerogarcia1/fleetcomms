@@ -192,6 +192,16 @@ service cloud.firestore {
       }
     }
 
+    // ── PRECIOS POR PUNTO (Planning → Timetable, Analytics) ──────────
+    // Solo administradores de la org del proyecto (ni intermedio ni
+    // conductores); superadmin entra por la regla comodín.
+    match /precios/{projectId} {
+      allow read, write: if sameOrg(projectOrg(projectId)) && myProfile().rol == 'admin';
+      match /trozos/{partId} {
+        allow read, write: if sameOrg(projectOrg(projectId)) && myProfile().rol == 'admin';
+      }
+    }
+
     // ── CUADRANTE PUBLICADO A CADA TRABAJADOR (Rostering → Publicar) ──
     // Un doc por usuario y mes. Lo lee el propio trabajador en Rutas ("Mi
     // cuadrante") o un gestor; solo lo escriben los gestores.

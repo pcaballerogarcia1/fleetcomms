@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
+import { listenPrices, effectivePrice, puntoKeyOf, fmtEur } from "./price-store.js";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -69,10 +70,18 @@ const axisStyle = { fontSize: 10, fill: C.muted, fontFamily: font };
 const tooltipStyle = { background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 8, fontSize: 12, fontFamily: font, color: C.text };
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────
-export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
+export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }) {
   const lang = useLang();
   const orgId = orgIdProp ?? sesion?.org_id ?? null;
   const isSuperAdmin = sesion?.rol === "superadmin";
+  // Facturación: solo administradores (los precios solo los pueden leer ellos)
+  const canPrice = sesion?.rol === "admin" || isSuperAdmin;
+  const projectId = activeProject?._id || null;
+  const [prices, setPrices] = useState({ defaultPrecio: null, byKey: new Map(), ready: false });
+  useEffect(() => {
+    if (!canPrice || !projectId) return;
+    return listenPrices(projectId, setPrices);
+  }, [canPrice, projectId]);
 
   const [vista, setVista] = useState("produccion"); // produccion | personal | varios
   const now = new Date();
@@ -147,6 +156,47 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
 
     return { totalParadas, hechas, pct, vehiculosActivos, evolucionDiaria, topPlanes };
   }, [planesReales]);
+
+  // ── FACTURACIÓN (solo administradores) ──
+  // En tiempo real: los planes llegan por onSnapshot, así que en cuanto un
+  // conductor marca una parada como hecha, su precio pasa de "pendiente" a
+  // "facturado". Precio = el propio del punto o el de por defecto del
+  // proyecto (Planning → Timetable). Solo cuentan los planes de este
+  // proyecto (o los antiguos sin proyecto, que aún no lo guardaban).
+  const fact = useMemo(() => {
+    if (!canPrice) return null;
+    let facturado = 0, pendiente = 0, hechas = 0, sinPrecio = 0;
+    const porDia = {}, porVehiculo = {};
+    for (const p of planesReales) {
+      if (p.projectId && projectId && p.projectId !== projectId) continue;
+      const veh = p.vehiculoNombre || p.conductorNombre || p.nombre || "Plan";
+      for (const u of p.ubicaciones || []) {
+        if (u.lat == null || u.lng == null) continue;
+        const precio = effectivePrice(prices, puntoKeyOf(u.lat, u.lng));
+        if (precio == null) { sinPrecio++; continue; }
+        if (u.realizado) {
+          facturado += precio; hechas++;
+          porVehiculo[veh] = (porVehiculo[veh] || 0) + precio;
+          if (u.realizadoEn) {
+            const d = new Date(toMillis(u.realizadoEn));
+            const k = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+            porDia[k] = (porDia[k] || 0) + precio;
+          }
+        } else pendiente += precio;
+      }
+    }
+    const total = facturado + pendiente;
+    return {
+      facturado, pendiente, total, hechas, sinPrecio,
+      pct: total > 0 ? Math.round(facturado / total * 100) : 0,
+      porDia: Object.entries(porDia)
+        .map(([dia, euros]) => ({ dia, euros: +euros.toFixed(2), _s: dia.split("/").reverse().join("") }))
+        .sort((a, b) => a._s.localeCompare(b._s)),
+      porVehiculo: Object.entries(porVehiculo)
+        .map(([nombre, euros]) => ({ nombre: nombre.slice(0, 22), euros: +euros.toFixed(2) }))
+        .sort((a, b) => b.euros - a.euros).slice(0, 10),
+    };
+  }, [canPrice, planesReales, prices, projectId]);
 
   // ── PERSONAL ──
   const personal = useMemo(() => {
@@ -231,7 +281,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["produccion", t("produccion", lang)], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
+              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? C.blue : "none",
@@ -286,6 +336,50 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp }) {
                     <YAxis type="category" dataKey="nombre" tick={axisStyle} width={120} />
                     <Tooltip contentStyle={tooltipStyle} formatter={v => `${v}%`} />
                     <Bar dataKey="pct" fill={C.green} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Panel>
+            </div>
+          </div>
+        )}
+
+        {vista === "facturacion" && fact && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <KpiCard label="Facturado (paradas hechas)" value={fmtEur(fact.facturado)} sub={`${fact.hechas.toLocaleString()} paradas`} color={C.green} />
+              <KpiCard label="Pendiente" value={fmtEur(fact.pendiente)} color={C.orange} />
+              <KpiCard label="Previsto del mes" value={fmtEur(fact.total)} color={C.blue} />
+              <KpiCard label="% facturado" value={`${fact.pct}%`} color={fact.pct === 100 ? C.green : C.purple} />
+            </div>
+            {(!prices.ready || (prices.defaultPrecio == null && prices.byKey.size === 0)) ? (
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {prices.ready ? "Este proyecto todavía no tiene precios: ponlos en Planning → Timetable → € Precio." : "Cargando precios…"}
+              </div>
+            ) : fact.sinPrecio > 0 ? (
+              <div style={{ fontSize: 11, color: C.dim }}>
+                {fact.sinPrecio.toLocaleString()} paradas de los planes de este mes no tienen precio (ni propio ni por defecto) y no cuentan.
+              </div>
+            ) : null}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <Panel title="Facturado por día" empty={fact.porDia.length === 0}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={fact.porDia}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="dia" tick={axisStyle} />
+                    <YAxis tick={axisStyle} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={v => fmtEur(v)} />
+                    <Bar dataKey="euros" fill={C.green} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Panel>
+              <Panel title="Facturado por vehículo (top 10)" empty={fact.porVehiculo.length === 0}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={fact.porVehiculo} layout="vertical" margin={{ left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                    <XAxis type="number" tick={axisStyle} />
+                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={120} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={v => fmtEur(v)} />
+                    <Bar dataKey="euros" fill={C.green} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </Panel>
