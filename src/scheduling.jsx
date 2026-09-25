@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
-import * as XLSX from "xlsx";
+// La librería de Excel (~430 KB) se descarga solo cuando se usa (importar o
+// exportar un Excel), no al abrir cualquier proyecto.
+const loadXLSX = () => import("xlsx");
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import {
   useRostering, workerCodeOnDay, isUnavailable, SHIFT_META,
@@ -1849,11 +1851,19 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
 const BARRIO_KEYS_VRP = ["barri","barrio","barri_nom","sector","zona","zone","district",
                          "districte","municipio","area","neighbourhood","neighborhood"];
 function extractFieldVRP(fields, keys) {
-  for (const [k, v] of Object.entries(fields || {})) {
-    if (keys.includes(k.toLowerCase().trim()) && v) return String(v);
+  // Se llama por cada parada al importar (44.249 en MADRID): se decide una
+  // sola vez por nombre de columna si es de las buscadas, en vez de pasar
+  // cada nombre a minúsculas por cada parada.
+  let c = _vrpKeyCache.get(keys);
+  if (!c) { c = { set: new Set(keys), is: new Map() }; _vrpKeyCache.set(keys, c); }
+  for (const k in fields || {}) {
+    let is = c.is.get(k);
+    if (is === undefined) { is = c.set.has(k.toLowerCase().trim()); c.is.set(k, is); }
+    if (is && fields[k]) return String(fields[k]);
   }
   return "";
 }
+const _vrpKeyCache = new WeakMap();
 async function loadTasksFromLayers(projectId) {
   const snap = await getDocs(
     query(collection(db, "planning_layers"), where("projectId", "==", projectId))
@@ -3019,7 +3029,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   }
 
   // ── Excel export ───────────────────────────────────────────────
-  function downloadVehicleXLSX() {
+  async function downloadVehicleXLSX() {
+    const XLSX = await loadXLSX();
     const vs = schedules.vehicles;
     if (!vs) return;
     const rows = [["Vehículo","Matrícula","Día","Hora inicio","Hora fin","Tipo","Nombre parada","Dirección","Barrio","Lat","Lng","Duración (min)","Km"]];
@@ -3049,7 +3060,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     XLSX.writeFile(wb, `vehicle_scheduling_${activeProject?.nombre || "export"}.xlsx`);
   }
 
-  function downloadCrewXLSX() {
+  async function downloadCrewXLSX() {
+    const XLSX = await loadXLSX();
     const ws2 = schedules.workers;
     if (!ws2) return;
     const rows = [["Trabajador","Turno","Vehículo","Día","Hora inicio","Hora fin","Tipo","Nombre parada","Dirección","Duración (min)","Km"]];
@@ -3086,7 +3098,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
+      const XLSX = await loadXLSX();
       try {
         const parseT = t => {
           const s = String(t ?? "00:00");

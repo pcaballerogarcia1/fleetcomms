@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
-import * as XLSX from "xlsx";
+// La librería de Excel (~430 KB) se descarga solo cuando se usa (importar o
+// exportar un Excel), no al abrir cualquier proyecto.
+const loadXLSX = () => import("xlsx");
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -86,9 +88,20 @@ function barrioColor(b, overrides = {}) {
 // Detecta el campo de barrio comparando en lowercase (independiente de capitalización)
 const BARRIO_KEYS = ["barri","barrio","barri_nom","sector","zona","zone","district",
                      "districte","municipio","area","neighbourhood","neighborhood"];
+// Rendimiento: estas búsquedas se hacen por cada punto (44.249 en MADRID) y
+// varias veces por pintado. Antes, por cada punto se recorrían todas sus
+// columnas normalizando cada nombre — cientos de miles de operaciones de
+// texto (medido: ~1 s bloqueando la pantalla al abrir Planning en un PC
+// normal). Solo hay unas pocas columnas distintas, así que se decide UNA
+// vez por nombre de columna si es la buscada (caché) y se recorre con
+// for...in, sin crear arrays.
+const _barrioKeySet = new Set(BARRIO_KEYS);
+const _isBarrioKey = new Map();
 function getBarrio(m) {
-  for (const [k, v] of Object.entries(m)) {
-    if (BARRIO_KEYS.includes(k.toLowerCase().trim()) && v) return String(v);
+  for (const k in m) {
+    let is = _isBarrioKey.get(k);
+    if (is === undefined) { is = _barrioKeySet.has(k.toLowerCase().trim()); _isBarrioKey.set(k, is); }
+    if (is && m[k]) return String(m[k]);
   }
   return "";
 }
@@ -99,10 +112,13 @@ function _normKey(s) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 function _fieldGetter(keys) {
-  const normKeys = keys.map(_normKey);
+  const normKeys = new Set(keys.map(_normKey));
+  const isKey = new Map(); // nombre de columna tal cual → ¿es una de las buscadas?
   return function (m) {
-    for (const [k, v] of Object.entries(m)) {
-      if (normKeys.includes(_normKey(k)) && v) return String(v);
+    for (const k in m) {
+      let is = isKey.get(k);
+      if (is === undefined) { is = normKeys.has(_normKey(k)); isKey.set(k, is); }
+      if (is && m[k]) return String(m[k]);
     }
     return "";
   };
@@ -370,6 +386,7 @@ function parseXLSXRows(rows) {
 }
 
 async function parseXLSX(file) {
+  const XLSX = await loadXLSX();
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(new Uint8Array(buffer), { type: "array" });
 
@@ -615,8 +632,38 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       canvas.style.cssText = 'position:absolute;pointer-events:none;';
       map.getPanes().overlayPane.appendChild(canvas);
 
+      // Rendimiento del dibujo (44.249 puntos en MADRID; medido ~1,4 s
+      // bloqueando la pantalla al abrir, en un PC normal):
+      //  - cada punto se proyecta UNA vez por nivel de zoom; al desplazar el
+      //    mapa solo cambia un desplazamiento común (sin reproyectar);
+      //  - un solo trazado y un solo relleno por color (antes, uno por punto);
+      //  - los puntos fuera de la vista no se dibujan;
+      //  - varios eventos seguidos (mover + zoom + tamaño) = un solo redibujo.
+      const nPts = allPts.length / 3;
+      const byColor = new Map(); // color → índices de punto
+      for (let k = 0; k < nPts; k++) {
+        const col = allPts[k * 3 + 2];
+        if (!byColor.has(col)) byColor.set(col, []);
+        byColor.get(col).push(k);
+      }
+      let projZoom = null, proj = null;
+      function projected() {
+        const z = map.getZoom();
+        if (projZoom !== z || !proj) {
+          proj = new Float64Array(nPts * 2);
+          for (let k = 0; k < nPts; k++) {
+            const p = map.project([allPts[k * 3], allPts[k * 3 + 1]], z);
+            proj[k * 2] = p.x; proj[k * 2 + 1] = p.y;
+          }
+          projZoom = z;
+        }
+        // desplazamiento proyectado → punto de contenedor (igual para todos)
+        const ref = map.latLngToContainerPoint([allPts[0], allPts[1]]);
+        return { proj, ox: ref.x - proj[0], oy: ref.y - proj[1] };
+      }
+
       function drawPts() {
-        if (!canvas.parentNode || !mapRef.current) return;
+        if (!canvas.parentNode || !mapRef.current || !nPts) return;
         const sz = map.getSize();
         // Position canvas to cover viewport + PAD padding (same math as L.Canvas renderer)
         const topLeft = map.containerPointToLayerPoint([-PAD, -PAD]);
@@ -625,19 +672,29 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
         canvas.height = sz.y + 2 * PAD;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (let i = 0; i < allPts.length; i += 3) {
-          const lat = allPts[i], lng = allPts[i + 1], color = allPts[i + 2];
-          const p = map.latLngToContainerPoint([lat, lng]);
-          ctx.fillStyle = color;
+        const { proj: pr, ox, oy } = projected();
+        const W = canvas.width, H = canvas.height, TWO_PI = Math.PI * 2;
+        for (const [col, idxs] of byColor) {
+          ctx.fillStyle = col;
           ctx.beginPath();
-          // offset by PAD because canvas top-left = container(-PAD,-PAD)
-          ctx.arc(p.x + PAD, p.y + PAD, 3, 0, Math.PI * 2);
+          for (const k of idxs) {
+            // offset by PAD because canvas top-left = container(-PAD,-PAD)
+            const x = pr[k * 2] + ox + PAD, y = pr[k * 2 + 1] + oy + PAD;
+            if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
+            ctx.moveTo(x + 3, y);
+            ctx.arc(x, y, 3, 0, TWO_PI);
+          }
           ctx.fill();
         }
       }
 
+      let rafId = 0;
+      const scheduleDraw = () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => { rafId = 0; drawPts(); });
+      };
       drawPts();
-      map.on('moveend zoomend viewreset resize', drawPts);
+      map.on('moveend zoomend viewreset resize', scheduleDraw);
 
       // "Medir distancia" con muchos puntos: el canvas no recibe clics (los
       // puntos no son marcadores), así que en Madrid no había forma de
@@ -648,10 +705,10 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
         if (!selModeRef.current) return;
         const cp = e.containerPoint;
         let best = -1, bestD = PICK_PX * PICK_PX;
-        for (let i = 0; i < allPts.length; i += 3) {
-          const p = map.latLngToContainerPoint([allPts[i], allPts[i + 1]]);
-          const dx = p.x - cp.x, dy = p.y - cp.y, d = dx * dx + dy * dy;
-          if (d < bestD) { bestD = d; best = i; }
+        const { proj: pr, ox, oy } = projected();
+        for (let k = 0; k < nPts; k++) {
+          const dx = pr[k * 2] + ox - cp.x, dy = pr[k * 2 + 1] + oy - cp.y, d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = k * 3; }
         }
         if (best < 0) return;
         const lat = allPts[best], lng = allPts[best + 1];
@@ -665,7 +722,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
         );
       }
       map.on('click', pickNearest);
-      canvasOverlayRef.current = { canvas, drawFn: drawPts, renderer: null, clickFn: pickNearest };
+      canvasOverlayRef.current = { canvas, drawFn: scheduleDraw, renderer: null, clickFn: pickNearest };
 
     } else {
       // ── SMALL DATASET: individual Leaflet markers with popups ──
@@ -2074,7 +2131,8 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
 
   const withTime = effectiveEntries.filter(e => e.horaInicio);
 
-  function exportToExcel() {
+  async function exportToExcel() {
+    const XLSX = await loadXLSX();
     const source = barrioFiltro
       ? effectiveEntries.filter(e => (e.barrio || "Sin barrio") === barrioFiltro)
       : [...effectiveEntries];
@@ -2125,6 +2183,7 @@ function TabTimetable({ layers, projectId: ttProjectId }) {
     setImporting(true);
     try {
       const buf = await file.arrayBuffer();
+      const XLSX = await loadXLSX();
       const wb = XLSX.read(buf, { type: "array" });
       // raw:false — sin esto, una celda de Excel con formato de hora (p.ej.
       // "10:00") se lee como el número de serie interno de Excel (fracción

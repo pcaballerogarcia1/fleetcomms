@@ -12,7 +12,7 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: async ref => { store.delete(ref); },
   Bytes: { fromUint8Array: u => ({ toUint8Array: () => u, length: u.length }) },
 }));
-const { gzip, gunzip, splitBytes, joinBytes, uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, PIECE_BYTES } =
+const { gzip, gunzip, splitBytes, joinBytes, uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, forgetLayerCache, PIECE_BYTES } =
   await import("./layer-store.js");
 
 // Puntos tipo Excel de contenedores (campos reales de Planning)
@@ -49,13 +49,17 @@ describe("capa de 44.000 puntos en la nube", () => {
       expect(piece.projectId).toBe("proj");
       expect(piece.data.length).toBeLessThanOrEqual(PIECE_BYTES);
     }
+    forgetLayerCache("proj_capa1"); // "otro navegador": sin copia en memoria
     const loaded = await loadLayerMarkers("proj_capa1", cloud);
     expect(loaded).toEqual(markers);
+    // y una segunda pantalla del mismo navegador reutiliza la copia en memoria
+    expect(await loadLayerMarkers("proj_capa1", cloud)).toBe(loaded);
   });
 
   it("si falta un trozo, avisa en vez de devolver un mapa incompleto", async () => {
     const cloud = await uploadLayerMarkers("proj_capa2", "proj", mkMarkers(3000));
     store.delete(`planning_layers/proj_capa2/trozos/${cloud.v}_0`);
+    forgetLayerCache("proj_capa2");
     await expect(loadLayerMarkers("proj_capa2", cloud)).rejects.toThrow(/faltan trozos/);
   });
 

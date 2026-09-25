@@ -61,6 +61,14 @@ export function joinBytes(parts) {
 
 const pieceRef = (docId, v, i) => doc(db, "planning_layers", docId, "trozos", `${v}_${i}`);
 
+// Caché en memoria compartida por Planning y Scheduling (mismo módulo): si
+// una ya tiene los puntos de una capa, la otra los reutiliza tal cual — sin
+// volver a leer IndexedDB (~200 ms con 44.000 puntos) ni duplicarlos.
+const memCache = new Map(); // docId → { v, markers }
+const inflight = new Map(); // "docId:v" → promesa de carga en curso (dos pantallas a la vez = una carga)
+// Olvida la copia en memoria (tests / al sustituir la capa)
+export function forgetLayerCache(docId) { memCache.delete(docId); }
+
 /**
  * Sube los puntos de una capa. Devuelve el `cloud` a guardar en la ficha de
  * la capa. Deja además la copia local con esa versión.
@@ -74,6 +82,7 @@ export async function uploadLayerMarkers(docId, projectId, markers) {
   }
   await localPut(docId, markers);
   await localPut(`${docId}__v`, v);
+  memCache.set(docId, { v, markers });
   return { v, n: pieces.length, bytes: bytes.length, count: markers.length };
 }
 
@@ -82,20 +91,33 @@ export async function uploadLayerMarkers(docId, projectId, markers) {
  * versión; si no, se descargan, se descomprimen y se guarda la copia.
  */
 export async function loadLayerMarkers(docId, cloud) {
+  const mem = memCache.get(docId);
+  if (mem && mem.v === cloud.v) return mem.markers;
+  const key = `${docId}:${cloud.v}`;
+  if (!inflight.has(key)) inflight.set(key, fetchLayerMarkers(docId, cloud).finally(() => inflight.delete(key)));
+  return inflight.get(key);
+}
+
+async function fetchLayerMarkers(docId, cloud) {
   if ((await localGet(`${docId}__v`)) === cloud.v) {
     const cached = await localGet(docId);
-    if (Array.isArray(cached) && cached.length === cloud.count) return cached;
+    if (Array.isArray(cached) && cached.length === cloud.count) {
+      memCache.set(docId, { v: cloud.v, markers: cached });
+      return cached;
+    }
   }
   const snaps = await Promise.all(Array.from({ length: cloud.n }, (_, i) => getDoc(pieceRef(docId, cloud.v, i))));
   if (snaps.some(s => !s.exists())) throw new Error("faltan trozos de la capa en la nube");
   const markers = JSON.parse(await gunzip(joinBytes(snaps.map(s => s.data().data.toUint8Array()))));
   await localPut(docId, markers);
   await localPut(`${docId}__v`, cloud.v);
+  memCache.set(docId, { v: cloud.v, markers });
   return markers;
 }
 
 // Borra los trozos de una versión (al sustituirla o al borrar la capa).
 export async function deleteLayerPieces(docId, cloud) {
+  memCache.delete(docId);
   if (!cloud) return;
   await Promise.all(Array.from({ length: cloud.n }, (_, i) => deleteDoc(pieceRef(docId, cloud.v, i)).catch(() => {})));
 }
