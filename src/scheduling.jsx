@@ -24,6 +24,7 @@ import { useLang, t } from "./i18n.js";
 import { generateScenarioBg, autoScaleFleetBg } from "./vrp-client.js";
 import { taskToUbicacion } from "./publicar-rutas.js";
 import { saveScenarioRoster } from "./roster-store.js";
+import { saveScenarioCloud, loadScenarioCloud, watchScenarioMeta, newScenarioVersion } from "./scenario-store.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -72,7 +73,7 @@ function barrioColor(b) {
 }
 
 // Minutos -> "8h" / "8h30" — mismo formato que ya se usa en cada fila del Gantt
-function fmtDurHM(min) {
+export function fmtDurHM(min) {
   const h = Math.floor(min / 60), m = Math.round(min % 60);
   return `${h}h${m > 0 ? String(m).padStart(2, "0") : ""}`;
 }
@@ -1852,7 +1853,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
 // ── helpers for loading tasks from planning_layers ────────────────
 const BARRIO_KEYS_VRP = ["barri","barrio","barri_nom","sector","zona","zone","district",
                          "districte","municipio","area","neighbourhood","neighborhood"];
-function extractFieldVRP(fields, keys) {
+export function extractFieldVRP(fields, keys) {
   // Se llama por cada parada al importar (44.249 en MADRID): se decide una
   // sola vez por nombre de columna si es de las buscadas, en vez de pasar
   // cada nombre a minúsculas por cada parada.
@@ -2227,6 +2228,67 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const scenarioStampRef = useRef(null);
   const scenarioProjectRef = useRef(null); // proyecto al que pertenece el escenario cargado
 
+  // ── Escenario en la nube (scenario-store.js) ──────────────────────
+  // Todo cambio del escenario (generar, mover paradas en el Gantt,
+  // deshacer, turnos movidos por Rostering) se guarda al momento en el
+  // IndexedDB de este navegador y, 1,5 s después, en Firestore — así el
+  // escenario se ve desde cualquier PC. Si otro PC guarda una versión
+  // nueva mientras este tiene el proyecto abierto, se descarga sola.
+  const cloudVRef       = useRef(null);  // versión de la nube que tiene este navegador
+  const cloudTimerRef   = useRef(null);
+  const cloudPendingRef = useRef(null);  // { projectId, payload } pendiente de subir
+  const persistedRef    = useRef(null);  // { s, u } ya guardado/cargado — no se resube
+  const [cloudSync, setCloudSync] = useState(null); // null | "loading" | "saving" | "saved" | "error"
+
+  async function runCloudSave() {
+    clearTimeout(cloudTimerRef.current); cloudTimerRef.current = null;
+    const job = cloudPendingRef.current;
+    cloudPendingRef.current = null;
+    if (!job) return;
+    const v = newScenarioVersion();
+    // Nuestra propia escritura: el aviso de cambio que llegue con esta
+    // versión no debe volver a descargarla.
+    if (job.projectId === scenarioProjectRef.current) cloudVRef.current = v;
+    setCloudSync("saving");
+    try {
+      await saveScenarioCloud(job.projectId, orgId, job.payload, v);
+      idbSave(`vrp_${job.projectId}`, { ...job.payload, cloudV: v, dirty: false });
+      setCloudSync(s => (s === "saving" ? "saved" : s));
+    } catch (e) {
+      console.error("scenario cloud save:", e);
+      setCloudSync("error");
+    }
+  }
+
+  function persistScenario(projectId, payload) {
+    // Local al momento (sobrevive a recargar aunque la nube falle)…
+    idbSave(`vrp_${projectId}`, { ...payload, cloudV: cloudVRef.current, dirty: true });
+    // …y a la nube con un pequeño retardo, para no subir el escenario
+    // entero por cada parada que se arrastra.
+    clearTimeout(cloudTimerRef.current);
+    cloudPendingRef.current = { projectId, payload };
+    cloudTimerRef.current = setTimeout(runCloudSave, 1500);
+  }
+
+  // Pinta un escenario cargado (del IndexedDB o de la nube)
+  function applyScenario(projectId, data) {
+    const sc = activeProject?.scheduling;
+    const next = { vehicles: data.vehicles, workers: data.workers || [] };
+    const un = data.unassigned || { vehicles: [], workers: [] };
+    persistedRef.current = { s: next, u: un };
+    setSchedules(next);
+    setUnassigneds(un);
+    setMoveHistory([]); setHistoryIndex(-1);
+    setScenarioRosterMode(data.rosterMode || sc?.constraints?.rosterMode || "cuadrante");
+    appliedMovesRef.current = data.appliedMoves || 0;
+    scenarioProjectRef.current = projectId;
+    scenarioStampRef.current = data.stamp || null;
+    // Con turnos movidos de día el escenario puede pasar de daysUsed
+    const days = Math.max(sc?.daysUsed || 1, lastScenarioDay(data.vehicles, (sc?.constraints || constraints).startMin));
+    if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days }));
+    else setConstraints(prev => ({ ...prev, days }));
+  }
+
   // ── Rostering integration ────────────────────────────────────
   const [schedYear, schedMonth] = (activeProject?.mes ?? "").split("-").map(Number);
   const { grid: rosterGrid, asignaciones: rosterAsign } = useRostering(orgId, schedYear || null, schedMonth || null);
@@ -2259,11 +2321,29 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setMoveHistory([]); setHistoryIndex(-1);
       setConstraints(prev => ({ ...prev, days: Math.max(prev.days || 1, lastScenarioDay(next.vehicles, prev.startMin)) }));
     }
-    idbSave(`vrp_${activeProject._id}`, {
-      vehicles: next.vehicles, workers: next.workers, rosterMode: scenarioRosterMode,
+    persistedRef.current = { s: next, u: unassigneds };
+    persistScenario(activeProject._id, {
+      vehicles: next.vehicles, workers: next.workers, unassigned: unassigneds, rosterMode: scenarioRosterMode,
       stamp: scenarioStampRef.current, appliedMoves: appliedMovesRef.current,
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rosterMoves, schedules, activeProject?._id, constraints.startMin, scenarioRosterMode]);
+
+  // Cualquier otro cambio del escenario (generar, mover paradas a mano,
+  // deshacer/rehacer, importar Excel) se guarda — antes los movimientos
+  // manuales del Gantt se perdían al recargar.
+  useEffect(() => {
+    const pid = activeProject?._id;
+    if (!pid || !schedules.vehicles?.length) return;
+    if (scenarioProjectRef.current !== pid) return; // escenario de otro proyecto o heredado sin cargar
+    if (persistedRef.current?.s === schedules && persistedRef.current?.u === unassigneds) return;
+    persistedRef.current = { s: schedules, u: unassigneds };
+    persistScenario(pid, {
+      vehicles: schedules.vehicles, workers: schedules.workers, unassigned: unassigneds,
+      rosterMode: scenarioRosterMode, stamp: scenarioStampRef.current, appliedMoves: appliedMovesRef.current,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules, unassigneds]);
 
   // Conflictos entre el escenario ya generado y el cuadrante ACTUAL de
   // Rostering. Al generar ya se respeta el cuadrante (ver runGenerate), así
@@ -2506,24 +2586,53 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       setSchedules({ vehicles: null, workers: null });
       return;
     }
+    const pid = activeProject._id;
     const sc = activeProject.scheduling;
-    idbLoad(`vrp_${activeProject._id}`).then(cached => {
-      if (cached?.vehicles?.length) {
-        setSchedules({ vehicles: cached.vehicles, workers: cached.workers || [] });
-        setScenarioRosterMode(cached.rosterMode || sc?.constraints?.rosterMode || "cuadrante");
-        appliedMovesRef.current = cached.appliedMoves || 0;
-        scenarioProjectRef.current = activeProject._id;
-        scenarioStampRef.current = cached.stamp || null;
-        // Con turnos movidos de día el escenario puede pasar de daysUsed
-        const days = Math.max(sc?.daysUsed || 1, lastScenarioDay(cached.vehicles, (sc?.constraints || constraints).startMin));
-        if (sc?.constraints) setConstraints(prev => ({ ...prev, ...sc.constraints, days }));
+    let cancelled = false, unsub = null;
+    cloudVRef.current = null;
+    setCloudSync(null);
+    idbLoad(`vrp_${pid}`).then(cached => {
+      if (cancelled) return;
+      const hasLocal = !!cached?.vehicles?.length;
+      if (hasLocal) {
+        applyScenario(pid, cached);
       } else if (sc) {
         setSchedules({ vehicles: sc.vehicleSchedule || [], workers: sc.workerSchedule || [] });
         setConstraints(prev => ({ ...prev, ...(sc.constraints || {}), days: sc.daysUsed || 1 }));
       } else {
         setSchedules({ vehicles: null, workers: null });
       }
+      cloudVRef.current = cached?.cloudV || null;
+      // Escenario local que nunca llegó a la nube (generado antes de este
+      // cambio, o el guardado no terminó): se sube al ver la nube.
+      const localPending = hasLocal && (cached.dirty || !cached.cloudV);
+      let first = true;
+      unsub = watchScenarioMeta(pid, meta => {
+        const isFirst = first; first = false;
+        if (!meta?.v || meta.v === cloudVRef.current) {
+          if (isFirst && localPending) persistScenario(pid, cached);
+          return;
+        }
+        // Hay cambios de este navegador sin subir: gana el último que guarde
+        if (cloudPendingRef.current?.projectId === pid) return;
+        setCloudSync("loading");
+        loadScenarioCloud(pid, meta).then(({ meta: m, data }) => {
+          if (cancelled) return;
+          cloudVRef.current = m.v;
+          applyScenario(pid, data);
+          idbSave(`vrp_${pid}`, { ...data, cloudV: m.v, dirty: false });
+          setCloudSync("saved");
+        }).catch(e => {
+          console.error("scenario cloud load:", e);
+          if (!cancelled) setCloudSync("error");
+        });
+      });
     });
+    return () => {
+      cancelled = true;
+      unsub?.();
+      if (cloudPendingRef.current) runCloudSave(); // no dejar cambios sin subir al cambiar de proyecto
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?._id]);
 
@@ -2802,11 +2911,9 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         console.log(`[PERF] pintado tras setSchedules: ${(performance.now() - t_setSchedules).toFixed(0)}ms`);
       }));
 
-      // Persist full schedule to IndexedDB (too large for Firestore) — local,
-      // sin red de por medio, se queda antes de soltar la UI.
-      if (activeProject?._id) {
-        idbSave(`vrp_${activeProject._id}`, { vehicles: vehicleSchedule, workers: usedWorkerRows, rosterMode: rosterLibre ? "libre" : "cuadrante", stamp: scenarioStamp, appliedMoves: 0 });
-      }
+      // El escenario completo se guarda (IndexedDB + nube, scenario-store.js)
+      // desde el efecto que vigila `schedules`: scenarioProjectRef ya apunta
+      // a este proyecto.
 
       // El escenario ya está calculado y es utilizable desde aquí (Gantt,
       // mover tareas, publicar...) — lo que queda es guardar el resumen en
@@ -3746,6 +3853,22 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         <div style={{ padding: "5px 16px", background: "rgba(92,155,255,0.06)", borderBottom: `1px solid rgba(92,155,255,0.18)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ width: 10, height: 10, border: `2px solid ${C.blue}55`, borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite" }} />
           <span style={{ fontSize: 11, color: C.blueText }}>Guardando resumen del proyecto…</span>
+        </div>
+      )}
+      {(cloudSync === "saving" || cloudSync === "loading") && !focusMode && (
+        <div style={{ padding: "4px 16px", background: "rgba(92,155,255,0.05)", borderBottom: `1px solid rgba(92,155,255,0.15)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ width: 9, height: 9, border: `2px solid ${C.blue}55`, borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite" }} />
+          <span style={{ fontSize: 11, color: C.blueText }}>
+            {cloudSync === "saving" ? "Guardando el escenario en la nube…" : "Cargando la última versión del escenario…"}
+          </span>
+        </div>
+      )}
+      {cloudSync === "error" && !focusMode && (
+        <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.red }}>
+            No se pudo sincronizar el escenario con la nube. Está guardado en este navegador y se volverá a subir con el próximo cambio o al recargar.
+          </span>
+          <button onClick={() => setCloudSync(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
       {saveSummaryError && !focusMode && (

@@ -170,6 +170,13 @@ service cloud.firestore {
     match /planning_settings/{projectId} {
       allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
     }
+    // Escenario completo de Scheduling, comprimido y troceado (scenario-store.js)
+    match /scheduling_scenarios/{projectId} {
+      allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      match /trozos/{pieceId} {
+        allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      }
+    }
     match /scheduling_roster/{projectId} {
       allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
 
