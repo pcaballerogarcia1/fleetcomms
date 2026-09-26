@@ -46,6 +46,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/scheduling_projects/$(projectId)).data.org_id;
     }
 
+    // Ficha por org+mes que todavía no existe: su ID empieza por el org_id
+    // de quien la pide (p. ej. {org}_2026_09). Solo sirve para que la
+    // escucha en vivo no falle antes de que se cree.
+    function fichaPropiaSinCrear(docId) {
+      return resource == null && docId.matches('^' + myOrgId() + '_.*');
+    }
+
     // ── SUPERADMIN: acceso total a todo ─────────────────────────────
     match /{document=**} {
       allow read, write: if isSuperAdmin();
@@ -145,6 +152,18 @@ service cloud.firestore {
       match /timetable/{entry} {
         allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
       }
+
+      // Historial de versiones del escenario (solo métricas)
+      match /scenario_history/{entry} {
+        allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      }
+    }
+
+    // Plantillas de restricciones de Scheduling (por organización)
+    match /scheduling_constraint_templates/{docId} {
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
 
     // ── PLANNING (campo orgId, camelCase, y siempre por projectId) ──
@@ -188,7 +207,7 @@ service cloud.firestore {
 
     // ── ROSTERING (ficha por org+mes, campo org_id) ─────────────────
     match /rostering/{docId} {
-      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow read: if puedeWorkspace() && (sameOrg(resource.data.org_id) || fichaPropiaSinCrear(docId));
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
 
       // Cuadrante + asignaciones de cada trabajador ese mes (una ficha por
@@ -221,7 +240,7 @@ service cloud.firestore {
 
     // ── ROSTERING DE VEHÍCULOS (mismo patrón, disponibilidad por día) ──
     match /rostering_vehicles/{docId} {
-      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow read: if puedeWorkspace() && (sameOrg(resource.data.org_id) || fichaPropiaSinCrear(docId));
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
     }
 
