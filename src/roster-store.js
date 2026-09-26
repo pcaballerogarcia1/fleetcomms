@@ -21,9 +21,46 @@
 
 import { db } from "./firebase.js";
 import {
-  collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, updateDoc,
-  deleteDoc, where, writeBatch, serverTimestamp,
+  collection, doc, getDoc, getDocs, onSnapshot, query, setDoc,
+  deleteDoc, where, writeBatch, serverTimestamp, runTransaction, deleteField, FieldPath,
 } from "firebase/firestore";
+
+// ── Varias personas editando a la vez ────────────────────────────────
+// Los cuadrantes se guardan casilla a casilla (solo lo que cambia) y cada
+// pantalla recibe en vivo lo que cambian los demás. Así dos personas que
+// tocan casillas distintas del mismo mes nunca se pisan; si tocan la misma
+// casilla, queda la última.
+
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+// Claves (días) cuyo valor difiere entre dos mapas día → valor
+export function changedKeys(prev = {}, next = {}) {
+  return [...new Set([...Object.keys(prev || {}), ...Object.keys(next || {})])]
+    .filter(k => !same(prev?.[k], next?.[k]));
+}
+
+// Mezcla una cuadrícula fila → día → valor recibida de Firestore (remote)
+// con la local: las casillas que se han tocado aquí y aún no se han
+// guardado (local ≠ base, lo último guardado/leído) se conservan; todo lo
+// demás pasa a ser lo de Firestore.
+export function mergeCells(local = {}, base = {}, remote = {}) {
+  const out = {};
+  const rows = new Set([...Object.keys(local || {}), ...Object.keys(base || {}), ...Object.keys(remote || {})]);
+  for (const r of rows) {
+    const L = local?.[r] || {}, B = base?.[r] || {}, R = remote?.[r] || {};
+    const row = {};
+    for (const c of new Set([...Object.keys(L), ...Object.keys(B), ...Object.keys(R)])) {
+      const v = same(L[c], B[c]) ? R[c] : L[c];
+      if (v !== undefined && v !== null && v !== "") row[c] = v;
+    }
+    if (Object.keys(row).length || r in (remote || {})) out[r] = row;
+  }
+  return out;
+}
+
+// Pares [ruta, valor] para updateDoc: un valor vacío borra el campo
+const cellWrites = (prefix, prev, next) =>
+  changedKeys(prev, next).flatMap(k => [new FieldPath(...prefix, k), next?.[k] ?? deleteField()]);
 
 export const PART_MAX_BYTES = 600_000;
 
@@ -104,24 +141,32 @@ export function listenScenarioRoster(projectId, cb) {
 
 // Turnos movidos de día por Optimizar: reescribe solo las partes afectadas
 // (o la principal, en formato antiguo) y añade los movimientos a la lista.
+// En una transacción: se leen las partes y la lista de movimientos tal como
+// están AHORA en Firestore (no la copia de esta pantalla), así dos personas
+// que optimizan a la vez no se borran los movimientos la una a la otra.
 export async function saveShiftMoves(projectId, scenario, movedTo, newMoves) {
   const strip = ({ _p, ...sh }) => sh; // eslint-disable-line no-unused-vars
   const moved = sh => movedTo.has(sh.id) ? { ...sh, d: movedTo.get(sh.id) } : sh;
   const mainRef = doc(db, "scheduling_roster", projectId);
-  if (!scenario.parts) {
-    await setDoc(mainRef, { shifts: scenario.shifts.map(sh => strip(moved(sh))), moves: [...(scenario.moves || []), ...newMoves] }, { merge: true });
-    return;
-  }
-  const byPart = new Map();
-  for (const sh of scenario.shifts) {
-    if (!byPart.has(sh._p)) byPart.set(sh._p, []);
-    byPart.get(sh._p).push(sh);
-  }
-  for (const [partId, list] of byPart) {
-    if (!list.some(sh => movedTo.has(sh.id))) continue;
-    await updateDoc(doc(db, "scheduling_roster", projectId, "partes", partId), { shifts: list.map(sh => strip(moved(sh))) });
-  }
-  await updateDoc(mainRef, { moves: [...(scenario.moves || []), ...newMoves] });
+  const partRef = id => doc(db, "scheduling_roster", projectId, "partes", id);
+  const partIds = [...new Set((scenario.shifts || []).filter(sh => movedTo.has(sh.id) && sh._p).map(sh => sh._p))];
+  await runTransaction(db, async tx => {
+    const mainSnap = await tx.get(mainRef);
+    const main = mainSnap.exists() ? mainSnap.data() : {};
+    if (scenario.generatedAt && main.generatedAt && main.generatedAt !== scenario.generatedAt) {
+      throw new Error("el escenario de Scheduling se ha vuelto a generar mientras tanto; vuelve a optimizar");
+    }
+    const moves = [...(main.moves || []), ...newMoves];
+    if (!main.parts) {
+      tx.set(mainRef, { shifts: (main.shifts || scenario.shifts || []).map(sh => strip(moved(sh))), moves }, { merge: true });
+      return;
+    }
+    const snaps = await Promise.all(partIds.map(id => tx.get(partRef(id))));
+    snaps.forEach((s, i) => {
+      if (s.exists()) tx.update(partRef(partIds[i]), { shifts: (s.data().shifts || []).map(sh => strip(moved(sh))) });
+    });
+    tx.update(mainRef, { moves });
+  });
 }
 
 // ── Cuadrante del mes ──────────────────────────────────────────────
@@ -157,15 +202,19 @@ export async function loadRosterMonth(orgId, year, month) {
   return assembleMonth(mainData, workerDocs);
 }
 
-// Escucha en vivo (Scheduling, solo lectura).
+// Escucha en vivo (Scheduling y la propia pantalla de Rostering). No avisa
+// hasta tener las dos lecturas (ficha del mes + fichas por trabajador): si
+// no, el primer aviso podía llegar con el mes vacío.
 export function listenRosterMonth(orgId, year, month, cb) {
   const id = monthId(orgId, year, month);
-  let mainData = null, workerDocs = [];
-  const emit = () => cb(assembleMonth(mainData, workerDocs));
-  const u1 = onSnapshot(doc(db, "rostering", id), s => { mainData = s.exists() ? s.data() : null; emit(); }, () => { mainData = null; emit(); });
+  let mainData = null, workerDocs = [], gotMain = false, gotWorkers = false;
+  const emit = () => { if (gotMain && gotWorkers) cb(assembleMonth(mainData, workerDocs)); };
+  const u1 = onSnapshot(doc(db, "rostering", id),
+    s => { mainData = s.exists() ? s.data() : null; gotMain = true; emit(); },
+    () => { mainData = null; gotMain = true; emit(); });
   const u2 = onSnapshot(query(collection(db, "rostering", id, "trabajadores"), where("org_id", "==", orgId)),
-    s => { workerDocs = s.docs.map(d => ({ id: d.id, data: d.data() })); emit(); },
-    () => { workerDocs = []; emit(); });
+    s => { workerDocs = s.docs.map(d => ({ id: d.id, data: d.data() })); gotWorkers = true; emit(); },
+    () => { workerDocs = []; gotWorkers = true; emit(); });
   return () => { u1(); u2(); };
 }
 
@@ -183,15 +232,44 @@ export async function saveRosterMonth(orgId, year, month, grid, asignaciones, sa
     if (!legacy && savedRef.current?.[wid] === json) continue;
     changed.push([wid, payload, json]);
   }
-  for (let i = 0; i < changed.length; i += 400) {
+  // Formato antiguo: se escribe la ficha entera (migración). Si no, solo las
+  // casillas que han cambiado respecto a lo último guardado/leído.
+  for (let i = 0; i < changed.length; i += 200) {
     const batch = writeBatch(db);
-    for (const [wid, payload] of changed.slice(i, i + 400)) {
-      batch.set(doc(db, "rostering", id, "trabajadores", wid), { org_id: orgId, year, month, ...payload });
+    for (const [wid, payload] of changed.slice(i, i + 200)) {
+      const ref = doc(db, "rostering", id, "trabajadores", wid);
+      if (legacy) {
+        batch.set(ref, { org_id: orgId, year, month, ...payload });
+        continue;
+      }
+      // También la primera vez (trabajador sin ficha ese mes): se crea por
+      // fusión y se escriben solo sus casillas — si dos personas empiezan a
+      // la vez el mismo trabajador, ninguna borra lo de la otra.
+      const prev = savedRef.current?.[wid] ? JSON.parse(savedRef.current[wid]) : { grid: {}, asign: {} };
+      const writes = [...cellWrites(["grid"], prev.grid, payload.grid), ...cellWrites(["asign"], prev.asign, payload.asign)];
+      batch.set(ref, { org_id: orgId, year, month }, { merge: true });
+      if (writes.length) batch.update(ref, ...writes);
     }
     await batch.commit();
   }
   for (const [wid, , json] of changed) savedRef.current[wid] = json;
   await setDoc(doc(db, "rostering", id), { org_id: orgId, year, month, formato: 2, updatedAt: serverTimestamp() });
+}
+
+// Disponibilidad de vehículos (rostering_vehicles/{org}_{YYYY}_{MM}):
+// escribe solo las casillas vehículo+día que han cambiado.
+export async function saveVehicleCells(docId, orgId, year, month, prevGrid, nextGrid) {
+  const writes = [];
+  for (const vid of new Set([...Object.keys(prevGrid || {}), ...Object.keys(nextGrid || {})])) {
+    writes.push(...cellWrites(["grid", vid], prevGrid?.[vid], nextGrid?.[vid]));
+  }
+  if (!writes.length) return false;
+  const ref = doc(db, "rostering_vehicles", docId);
+  const batch = writeBatch(db);
+  batch.set(ref, { org_id: orgId, year, month, updatedAt: serverTimestamp() }, { merge: true });
+  batch.update(ref, ...writes);
+  await batch.commit();
+  return true;
 }
 
 // Estado "ya guardado" tras leer un mes en formato nuevo (para no reescribir

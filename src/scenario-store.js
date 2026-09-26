@@ -14,7 +14,7 @@
 // así quien esté leyendo nunca se encuentra una versión a medias.
 
 import { db } from "./firebase.js";
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp, Bytes } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp, runTransaction, Bytes } from "firebase/firestore";
 import { gzip, gunzip, splitBytes, joinBytes } from "./layer-store.js";
 
 const metaRef  = projectId => doc(db, "scheduling_scenarios", projectId);
@@ -35,17 +35,36 @@ export function scenarioBody(data) {
 export const newScenarioVersion = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-/** Sube el escenario y devuelve la versión guardada. */
-export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion()) {
+// Otra persona guardó una versión distinta de la que se estaba editando
+export class ScenarioConflictError extends Error {
+  constructor(meta) { super("otra persona ha guardado este escenario"); this.conflict = true; this.meta = meta; }
+}
+
+/** Sube el escenario y devuelve la versión guardada.
+ *  baseV: versión de la que partía esta edición. Si en la nube ya hay otra
+ *  (alguien guardó entre medias), no se pisa: lanza ScenarioConflictError.
+ *  Sin baseV (undefined) se guarda encima sin comprobar. */
+export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion(), { baseV, savedBy } = {}) {
   const bytes  = await gzip(JSON.stringify(scenarioBody(data)));
   const pieces = splitBytes(bytes);
   await Promise.all(pieces.map((p, i) =>
     setDoc(pieceRef(projectId, v, i), { projectId, v, i, data: Bytes.fromUint8Array(p) })));
-  const prev = await getDoc(metaRef(projectId)).then(s => (s.exists() ? s.data() : null)).catch(() => null);
-  await setDoc(metaRef(projectId), {
-    org_id: orgId ?? null, projectId, v, n: pieces.length, bytes: bytes.length,
-    stamp: data?.stamp || null, updatedAt: serverTimestamp(),
-  });
+  let prev;
+  try {
+    prev = await runTransaction(db, async tx => {
+      const s = await tx.get(metaRef(projectId));
+      const cur = s.exists() ? s.data() : null;
+      if (baseV !== undefined && (cur?.v ?? null) !== (baseV ?? null)) throw new ScenarioConflictError(cur);
+      tx.set(metaRef(projectId), {
+        org_id: orgId ?? null, projectId, v, n: pieces.length, bytes: bytes.length,
+        stamp: data?.stamp || null, savedBy: savedBy || null, updatedAt: serverTimestamp(),
+      });
+      return cur;
+    });
+  } catch (e) {
+    deleteScenarioPieces(projectId, { v, n: pieces.length }).catch(() => {});
+    throw e;
+  }
   if (prev?.v && prev.v !== v) deleteScenarioPieces(projectId, prev).catch(() => {});
   return v;
 }

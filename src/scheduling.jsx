@@ -2138,7 +2138,7 @@ function spliceWorkerWindowIntoVehicle(vehicleRow, worker, dayOffset, newWorkerA
 }
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
-export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId }) {
+export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
   const lang = useLang();
   const [tasks,        setTasks]       = useState([]);
   const [loadingTasks, setLoadingTasks]= useState(false);
@@ -2239,6 +2239,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const cloudPendingRef = useRef(null);  // { projectId, payload } pendiente de subir
   const persistedRef    = useRef(null);  // { s, u } ya guardado/cargado — no se resube
   const [cloudSync, setCloudSync] = useState(null); // null | "loading" | "saving" | "saved" | "error"
+  // Otra persona guardó este escenario mientras se editaba aquí:
+  // { projectId, payload, meta } — se pregunta qué hacer en vez de pisarla.
+  const [cloudConflict, setCloudConflict] = useState(null);
+  const cloudConflictRef = useRef(null);
+  useEffect(() => { cloudConflictRef.current = cloudConflict; }, [cloudConflict]);
 
   async function runCloudSave() {
     clearTimeout(cloudTimerRef.current); cloudTimerRef.current = null;
@@ -2246,18 +2251,58 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     cloudPendingRef.current = null;
     if (!job) return;
     const v = newScenarioVersion();
+    const isCurrent = job.projectId === scenarioProjectRef.current;
+    // Versión de la que parte esta edición (si alguien guardó otra entre
+    // medias, no se pisa: se pregunta). Solo se conoce para el proyecto abierto.
+    const baseV = job.force || !isCurrent ? undefined : cloudVRef.current;
     // Nuestra propia escritura: el aviso de cambio que llegue con esta
     // versión no debe volver a descargarla.
-    if (job.projectId === scenarioProjectRef.current) cloudVRef.current = v;
+    if (isCurrent) cloudVRef.current = v;
     setCloudSync("saving");
     try {
-      await saveScenarioCloud(job.projectId, orgId, job.payload, v);
+      const savedBy = sesion ? { uid: sesion.uid, nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" ") } : null;
+      await saveScenarioCloud(job.projectId, orgId, job.payload, v, { baseV, savedBy });
       idbSave(`vrp_${job.projectId}`, { ...job.payload, cloudV: v, dirty: false });
       setCloudSync(s => (s === "saving" ? "saved" : s));
+      setCloudConflict(null);
     } catch (e) {
+      if (e.conflict) {
+        if (isCurrent) cloudVRef.current = baseV ?? null;
+        setCloudSync(null);
+        setCloudConflict({ projectId: job.projectId, payload: job.payload, meta: e.meta });
+        return;
+      }
       console.error("scenario cloud save:", e);
       setCloudSync("error");
     }
+  }
+
+  // Conflicto: quedarse con la versión de la otra persona…
+  async function takeTheirScenario() {
+    const c = cloudConflict;
+    if (!c?.meta) return;
+    setCloudConflict(null);
+    clearTimeout(cloudTimerRef.current); cloudPendingRef.current = null;
+    setCloudSync("loading");
+    try {
+      const { meta, data } = await loadScenarioCloud(c.projectId, c.meta);
+      if (c.projectId !== scenarioProjectRef.current) return;
+      cloudVRef.current = meta.v;
+      applyScenario(c.projectId, data);
+      idbSave(`vrp_${c.projectId}`, { ...data, cloudV: meta.v, dirty: false });
+      setCloudSync("saved");
+    } catch (e) {
+      console.error("scenario cloud load:", e);
+      setCloudSync("error");
+    }
+  }
+  // …o guardar la mía encima de la suya
+  function keepMyScenario() {
+    const c = cloudConflict;
+    if (!c) return;
+    setCloudConflict(null);
+    cloudPendingRef.current = { projectId: c.projectId, payload: c.payload, force: true };
+    runCloudSave();
   }
 
   function persistScenario(projectId, payload) {
@@ -2613,8 +2658,15 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           if (isFirst && localPending) persistScenario(pid, cached);
           return;
         }
-        // Hay cambios de este navegador sin subir: gana el último que guarde
+        // Hay cambios de este navegador sin subir: al guardarlos se detecta
+        // el conflicto y se pregunta (no se descarga encima)
         if (cloudPendingRef.current?.projectId === pid) return;
+        // Conflicto sin resolver: no se descarga encima de lo de esta
+        // persona; solo se apunta la versión nueva para "Ver su versión"
+        if (cloudConflictRef.current?.projectId === pid) {
+          setCloudConflict(c => (c && c.projectId === pid ? { ...c, meta } : c));
+          return;
+        }
         setCloudSync("loading");
         loadScenarioCloud(pid, meta).then(({ meta: m, data }) => {
           if (cancelled) return;
@@ -3863,6 +3915,21 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           </span>
         </div>
       )}
+      {cloudConflict && cloudConflict.projectId === activeProject?._id && !focusMode && (
+        <div style={{ padding: "8px 16px", background: "rgba(251,191,36,0.10)", borderBottom: `1px solid rgba(251,191,36,0.35)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#fbbf24" }}>
+            {cloudConflict.meta?.savedBy?.nombre || "Otra persona"} ha guardado otra versión de este escenario mientras lo editabas. Tus cambios están a salvo en este navegador — elige con cuál te quedas.
+          </span>
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            <button onClick={takeTheirScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: C.surface2, border: `1px solid ${C.border}`, color: C.text }}>
+              Ver su versión (descarta la mía)
+            </button>
+            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.45)", color: "#fbbf24", fontWeight: 600 }}>
+              Guardar la mía encima
+            </button>
+          </div>
+        </div>
+      )}
       {cloudSync === "error" && !focusMode && (
         <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>
@@ -4568,7 +4635,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
 }
 
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
-export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate, orgId }) {
+export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate, orgId, sesion = null }) {
   const [subTab, setSubTab] = useState("vrp");
   const SUB_TABS = [
     { key: "vrp",          label: "VRP / Gantt" },
@@ -4599,7 +4666,7 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
             vehicles={vehicles} workers={workers}
             activeProject={activeProject}
             onProjectUpdate={onProjectUpdate}
-            orgId={orgId}
+            orgId={orgId} sesion={sesion}
           />
         </div>
         {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}

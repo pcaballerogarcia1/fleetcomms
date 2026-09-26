@@ -10,9 +10,13 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: async ref => { store.delete(ref); },
   onSnapshot: () => () => {},
   serverTimestamp: () => "ts",
+  runTransaction: async (_db, fn) => fn({
+    get: async ref => ({ exists: () => store.has(ref), data: () => store.get(ref) }),
+    set: (ref, data) => store.set(ref, data),
+  }),
   Bytes: { fromUint8Array: u => ({ toUint8Array: () => u, length: u.length }) },
 }));
-const { saveScenarioCloud, loadScenarioCloud, getScenarioMeta } = await import("./scenario-store.js");
+const { saveScenarioCloud, loadScenarioCloud, getScenarioMeta, ScenarioConflictError } = await import("./scenario-store.js");
 const { PIECE_BYTES } = await import("./layer-store.js");
 
 // Escenario tipo Madrid: 120 vehículos × 30 días, ~44.000 paradas repartidas
@@ -54,6 +58,24 @@ describe("escenario de Scheduling en la nube", () => {
     expect(n1).toBeGreaterThan(0);
     const { data } = await loadScenarioCloud("projB", await getScenarioMeta("projB"));
     expect(data.vehicles).toHaveLength(4);
+  });
+
+  it("no pisa lo que guardó otra persona: si la nube ya no está en la versión de partida, avisa", async () => {
+    const vA = await saveScenarioCloud("projD", "org1", mkScenario(2, 5), undefined, { savedBy: { nombre: "Ana" } });
+    // B partía de vA y guarda bien
+    const vB = await saveScenarioCloud("projD", "org1", mkScenario(3, 5), undefined, { baseV: vA, savedBy: { nombre: "Bea" } });
+    // A sigue editando sobre vA (no ha visto lo de B) → conflicto, sin tocar la nube
+    const err = await saveScenarioCloud("projD", "org1", mkScenario(9, 5), undefined, { baseV: vA }).catch(e => e);
+    expect(err).toBeInstanceOf(ScenarioConflictError);
+    expect(err.meta.v).toBe(vB);
+    expect(err.meta.savedBy.nombre).toBe("Bea");
+    await new Promise(r => setTimeout(r, 0));
+    const meta = await getScenarioMeta("projD");
+    expect(meta.v).toBe(vB);
+    expect([...store.keys()].filter(k => k.startsWith("scheduling_scenarios/projD/trozos/")).every(k => k.includes(vB))).toBe(true);
+    // "Guardar la mía encima" (sin baseV) sí sobrescribe
+    const vA2 = await saveScenarioCloud("projD", "org1", mkScenario(9, 5));
+    expect((await getScenarioMeta("projD")).v).toBe(vA2);
   });
 
   it("si la versión que se leía la sustituye otro PC a medias, carga la nueva", async () => {

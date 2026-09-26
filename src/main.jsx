@@ -353,7 +353,7 @@ function WorkspaceRouter() {
                 vehicles={vehicles} workers={workers}
                 loadingV={loadingV} loadingW={loadingW}
                 activeProject={activeProject} onProjectUpdate={updateProject}
-                orgId={effectiveOrgId}
+                orgId={effectiveOrgId} sesion={sesion}
               />
             </Suspense>
           </div>

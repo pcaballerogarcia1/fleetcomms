@@ -7,8 +7,8 @@ import {
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import { loadScenario, publishWorker } from "./publicar-rutas.js";
 import {
-  listenScenarioRoster, saveShiftMoves, loadRosterMonth, listenRosterMonth,
-  saveRosterMonth, savedSnapshotOf,
+  listenScenarioRoster, saveShiftMoves, listenRosterMonth,
+  saveRosterMonth, savedSnapshotOf, saveVehicleCells, mergeCells,
 } from "./roster-store.js";
 import {
   doc, onSnapshot, setDoc, getDoc, updateDoc, serverTimestamp,
@@ -171,10 +171,23 @@ function ModeTabs({ mode, setMode }) {
 // "Optimizar" — eso es específico del reparto de conductores.
 function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, setMode, embedded }) {
   const [vehicles, setVehicles] = useState([]);
-  const { grid: loadedGrid, loading: gridLoading, docId } = useVehicleAvailability(orgId, year, month);
+  // En vivo: lo que cambian otros aparece aquí sin recargar, y lo que se
+  // edita aquí se guarda casilla a casilla (saveVehicleCells) sin pisar lo
+  // de los demás.
+  const { grid: remoteGrid, loading: gridLoading, docId } = useVehicleAvailability(orgId, year, month, { live: true });
 
   const [grid,    setGrid]    = useState({});
-  useEffect(() => { setGrid(loadedGrid); }, [loadedGrid]);
+  const gridRef  = useRef({});   // cuadrícula local al día (incluye lo no guardado)
+  const savedRef = useRef({});   // lo último guardado/recibido de Firestore
+  const docIdRef = useRef(docId);
+  useEffect(() => {
+    // Cambio de mes: se empieza de cero con lo de Firestore
+    if (docIdRef.current !== docId) { docIdRef.current = docId; gridRef.current = {}; savedRef.current = {}; }
+    const next = mergeCells(gridRef.current, savedRef.current, remoteGrid);
+    savedRef.current = remoteGrid;
+    gridRef.current = next;
+    setGrid(next);
+  }, [remoteGrid, docId]);
 
   const debounceRef = useRef({});
   const pendingRef   = useRef(null);
@@ -234,21 +247,25 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
   }
 
   function persist(newGrid) {
+    gridRef.current = newGrid;
     setGrid(newGrid);
-    pendingRef.current = newGrid;
+    pendingRef.current = true;
     clearTimeout(debounceRef.current._batch);
+    const target = docId;
     debounceRef.current._batch = setTimeout(() => {
-      if (!docId || !pendingRef.current) return;
-      setDoc(doc(db, "rostering_vehicles", docId), {
-        org_id: orgId, year, month, grid: pendingRef.current, updatedAt: serverTimestamp(),
-      });
+      if (!target || !pendingRef.current || docIdRef.current !== target) return;
+      pendingRef.current = null;
+      const next = gridRef.current, prev = savedRef.current;
+      // Lo guardado vuelve enseguida por la escucha en vivo (y pasa a savedRef)
+      saveVehicleCells(target, orgId, year, month, prev, next)
+        .catch(e => alert("No se pudo guardar la disponibilidad: " + (e.message || e)));
     }, 400);
   }
 
   function applyToSelection(code) {
     const r = getSelRange();
     if (!r) return;
-    let newGrid = { ...grid };
+    let newGrid = { ...gridRef.current };
     for (let vi = r.r0; vi <= r.r1; vi++) {
       const v = vehicles[vi];
       if (!v) continue;
@@ -267,7 +284,7 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
   function fillRow(vehicleId, code) {
     const vGrid = {};
     for (const d of days) vGrid[String(d)] = code;
-    persist({ ...grid, [vehicleId]: vGrid });
+    persist({ ...gridRef.current, [vehicleId]: vGrid });
   }
 
   function handleKeyDown(e) {
@@ -467,6 +484,7 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
 
                       return (
                         <td key={d}
+                          data-cell={`${v._id}:${d}`}
                           onMouseDown={e => handleCellMouseDown(e, vi, dIdx)}
                           onMouseEnter={e => { handleCellMouseEnter(vi, dIdx); e.currentTarget.style.filter = "brightness(1.35)"; }}
                           onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; }}
@@ -709,6 +727,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const savedRef = useRef({});
   const legacyRef = useRef(false);
   const persistChain = useRef(Promise.resolve());
+  // Cuadrícula local al día (incluye lo tocado aquí y aún no guardado): la
+  // escucha en vivo mezcla sobre ella lo que cambian los demás.
+  const gridRef = useRef({});
+  const docIdRef = useRef(null);
+  const updateGrid = next => { gridRef.current = next; setGrid(next); };
 
   const loadedRef    = useRef(false);
   const debounceRef  = useRef({});
@@ -751,22 +774,35 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   useEffect(() => {
     if (!docId) { setGrid({}); setAsign({}); asignRef.current = {}; setLoading(false); return; }
     loadedRef.current = false;
-    setGrid({});
+    docIdRef.current = docId;
+    updateGrid({});
     setAsign({}); asignRef.current = {};
+    savedRef.current = {};
     setLoading(true);
-    // Lectura única: aquí se edita en local y se guarda por trabajador
-    // (antes también se usaba solo la primera lectura del listener).
-    let cancelled = false;
-    loadRosterMonth(orgId, year, month).then(m => {
-      if (cancelled) return;
-      setGrid(m.grid);
-      setAsign(m.asignaciones); asignRef.current = m.asignaciones;
-      savedRef.current = m.legacy ? {} : savedSnapshotOf(m.grid, m.asignaciones);
-      legacyRef.current = m.legacy;
-      loadedRef.current = true;
-      setLoading(false);
+    // En vivo: lo que cambian otras personas aparece aquí sin recargar. Las
+    // casillas tocadas aquí y aún sin guardar se respetan (mergeCells), y se
+    // guarda casilla a casilla (saveRosterMonth), así nadie pisa a nadie.
+    return listenRosterMonth(orgId, year, month, m => {
+      if (!loadedRef.current) {
+        updateGrid(m.grid);
+        setAsign(m.asignaciones); asignRef.current = m.asignaciones;
+        savedRef.current = m.legacy ? {} : savedSnapshotOf(m.grid, m.asignaciones);
+        legacyRef.current = m.legacy;
+        loadedRef.current = true;
+        setLoading(false);
+        return;
+      }
+      if (legacyRef.current) return; // formato antiguo: se migra entero al primer guardado
+      const base = { grid: {}, asign: {} };
+      for (const [wid, json] of Object.entries(savedRef.current)) {
+        const p = JSON.parse(json); base.grid[wid] = p.grid; base.asign[wid] = p.asign;
+      }
+      const g = mergeCells(gridRef.current, base.grid, m.grid);
+      const a = mergeCells(asignRef.current, base.asign, m.asignaciones);
+      savedRef.current = savedSnapshotOf(m.grid, m.asignaciones);
+      updateGrid(g);
+      asignRef.current = a; setAsign(a);
     });
-    return () => { cancelled = true; };
   }, [docId, orgId, year, month]);
 
   // ── Reglas del cuadrante (por organización) ───────────────────
@@ -805,10 +841,16 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   function persistMonth(newGrid, newAsign = asignRef.current) {
     if (!docId) return;
     // En cola: dos guardados seguidos no se pisan y cada uno escribe solo
-    // los trabajadores que han cambiado desde el anterior.
-    const y = year, m = month;
+    // las casillas que han cambiado desde el anterior. Al tocarle el turno
+    // se guarda lo más reciente (incluye lo que haya llegado de otros entre
+    // tanto), salvo que ya se haya cambiado de mes.
+    const y = year, m = month, target = docId;
     persistChain.current = persistChain.current
-      .then(() => saveRosterMonth(orgId, y, m, newGrid, newAsign, savedRef, { legacy: legacyRef.current }))
+      .then(() => {
+        const current = docIdRef.current === target;
+        return saveRosterMonth(orgId, y, m, current ? gridRef.current : newGrid, current ? asignRef.current : newAsign,
+          savedRef, { legacy: legacyRef.current });
+      })
       .then(() => { legacyRef.current = false; })
       .catch(e => alert("No se pudo guardar el cuadrante: " + (e.message || e)));
   }
@@ -885,7 +927,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   function applyToSelection(shift) {
     const r = getSelRange();
     if (!r) return;
-    let newGrid = { ...grid };
+    let newGrid = { ...gridRef.current };
     const touched = [];
     for (let wi = r.r0; wi <= r.r1; wi++) {
       const w = workers[wi];
@@ -901,12 +943,12 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       newGrid[w._id] = wGrid;
     }
     dropAsign(touched);
-    setGrid(newGrid);
+    updateGrid(newGrid);
     pendingRef.current = newGrid;
     clearTimeout(debounceRef.current._batch);
     debounceRef.current._batch = setTimeout(() => {
       if (!docId || !pendingRef.current) return;
-      persistMonth(pendingRef.current);
+      persistMonth(gridRef.current);
     }, 400);
   }
 
@@ -965,9 +1007,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   function fillRow(workerId, shift) {
     const wGrid = {};
     for (const d of days) wGrid[String(d)] = shift;
-    const newGrid = { ...grid, [workerId]: wGrid };
+    const newGrid = { ...gridRef.current, [workerId]: wGrid };
     dropAsign(days.map(d => [workerId, d]));
-    setGrid(newGrid);
+    updateGrid(newGrid);
     pendingRef.current = newGrid;
     persistMonth(newGrid);
   }
@@ -995,7 +1037,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     const BLOCKED = new Set(["L", "B"]);     // can't override
     const MANUAL  = new Set(["M","T","N","G"]); // already manually set, skip
 
-    const newGrid = { ...grid };
+    const newGrid = { ...gridRef.current };
     let assignedCount = 0, skippedNoCode = 0;
     for (const w of workers) {
       const wId  = w._id;
@@ -1013,7 +1055,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       }
       newGrid[wId] = wGrid;
     }
-    setGrid(newGrid);
+    updateGrid(newGrid);
     pendingRef.current = newGrid;
     persistMonth(newGrid);
 
@@ -1049,7 +1091,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     const baseGrid = {};
     const fixed = {};
     for (const w of workers) {
-      const wGrid = { ...(grid[w._id] ?? {}) };
+      const wGrid = { ...(gridRef.current[w._id] ?? {}) };
       // Se restaura lo que había a mano antes (p. ej. G o D) en vez de
       // dejar la celda vacía.
       for (const [d, a] of Object.entries(asignRef.current[w._id] || {})) {
@@ -1092,7 +1134,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         ...(prevCode ? { p: prevCode } : {}),
       } };
     }
-    setGrid(newGrid);
+    updateGrid(newGrid);
     pendingRef.current = newGrid;
     asignRef.current = newAsign;
     setAsign(newAsign);
@@ -1423,6 +1465,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
                       return (
                         <td key={d}
+                          data-cell={`${w._id}:${d}`}
                           onMouseDown={e => handleCellMouseDown(e, wi, dIdx)}
                           onMouseEnter={e => { handleCellMouseEnter(wi, dIdx); e.currentTarget.style.filter = "brightness(1.35)"; }}
                           onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; }}
