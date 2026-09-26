@@ -215,14 +215,18 @@ function WorkspaceRouter() {
     });
   }, []);
 
-  // Presencia: esta sesión aparece como conectada a los de su organización
+  // Presencia: esta sesión aparece como conectada a los de su organización.
+  // Solo usuarios de oficina (la ubicación de los conductores ya se ve en
+  // Control, y así cada empresa cabe en la cuota gratuita de Firestore).
+  const enPresencia = !!sesion?.uid && puedeUsarWorkspace(sesion.rol);
   useEffect(() => {
-    if (!sesion?.uid) return;
+    if (!enPresencia) return;
     return startPresence(sesion, "oficina");
-  }, [sesion]);
+  }, [sesion, enPresencia]);
   useEffect(() => {
-    if (sesion?.uid) updatePresencePage(sesion.uid, path);
-  }, [sesion?.uid, path]);
+    if (enPresencia) updatePresencePage(sesion.uid, path);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enPresencia, path]);
 
   // Auth guard (solo cuando ya terminó de cargar)
   useEffect(() => {
