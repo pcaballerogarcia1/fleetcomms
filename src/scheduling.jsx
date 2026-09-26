@@ -25,6 +25,7 @@ import { generateScenarioBg, autoScaleFleetBg } from "./vrp-client.js";
 import { taskToUbicacion } from "./publicar-rutas.js";
 import { saveScenarioRoster } from "./roster-store.js";
 import { saveScenarioCloud, loadScenarioCloud, watchScenarioMeta, newScenarioVersion } from "./scenario-store.js";
+import { logAudit, logAuditGrouped } from "./audit.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -1490,6 +1491,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
     if (!orgId) { alert("No se puede crear un vehículo sin org_id. Abre un proyecto primero."); return; }
     setSaving(true);
     try {
+      logAudit({ modulo: "Flota", accion: "Dio de alta un vehículo", detalle: [form.nombre.trim(), form.matricula.trim()].filter(Boolean).join(" · "), projectId: null });
       await addDoc(collection(db, "scheduling_vehicles"), {
         nombre: form.nombre.trim(), matricula: form.matricula.trim(),
         tipo: form.tipo, turno: form.turno,
@@ -1506,6 +1508,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
   async function save(id) {
     setSaving(true);
     try {
+      logAudit({ modulo: "Flota", accion: "Modificó un vehículo", detalle: [editForm.nombre.trim(), editForm.matricula.trim()].filter(Boolean).join(" · "), projectId: null });
       await updateDoc(doc(db, "scheduling_vehicles", id), {
         nombre: editForm.nombre.trim(), matricula: editForm.matricula.trim(),
         tipo: editForm.tipo, turno: editForm.turno,
@@ -1520,7 +1523,9 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
 
   async function remove(id) {
     if (!window.confirm("¿Eliminar este vehículo?")) return;
+    const v = vehicles.find(x => x._id === id);
     await deleteDoc(doc(db, "scheduling_vehicles", id));
+    logAudit({ modulo: "Flota", accion: "Eliminó un vehículo", detalle: [v?.nombre, v?.matricula].filter(Boolean).join(" · "), projectId: null });
   }
 
   function startEdit(v) {
@@ -1663,6 +1668,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
     if (!orgId) { alert("No se puede crear un trabajador sin org_id. Abre un proyecto primero."); return; }
     setSaving(true);
     try {
+      logAudit({ modulo: "Plantilla", accion: "Dio de alta un trabajador", detalle: [form.nombre.trim(), form.apellidos.trim()].filter(Boolean).join(" "), projectId: null });
       await addDoc(collection(db, "scheduling_workers"), {
         nombre: form.nombre.trim(), apellidos: form.apellidos.trim(),
         turno: form.turno, rol: form.rol,
@@ -1679,6 +1685,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
   async function save(id) {
     setSaving(true);
     try {
+      logAudit({ modulo: "Plantilla", accion: "Modificó un trabajador", detalle: [editForm.nombre.trim(), (editForm.apellidos || "").trim()].filter(Boolean).join(" "), projectId: null });
       await updateDoc(doc(db, "scheduling_workers", id), {
         nombre: editForm.nombre.trim(), apellidos: (editForm.apellidos || "").trim(),
         turno: editForm.turno, rol: editForm.rol,
@@ -1693,7 +1700,9 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
 
   async function remove(id) {
     if (!window.confirm("¿Eliminar este trabajador?")) return;
+    const w = workers.find(x => x._id === id);
     await deleteDoc(doc(db, "scheduling_workers", id));
+    logAudit({ modulo: "Plantilla", accion: "Eliminó un trabajador", detalle: [w?.nombre, w?.apellidos].filter(Boolean).join(" "), projectId: null });
   }
 
   function startEdit(w) {
@@ -2243,6 +2252,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // { projectId, payload, meta } — se pregunta qué hacer en vez de pisarla.
   const [cloudConflict, setCloudConflict] = useState(null);
   const cloudConflictRef = useRef(null);
+  const [cloudMeta, setCloudMeta] = useState(null); // ficha de la nube: versión actual + puntos de restauración
   useEffect(() => { cloudConflictRef.current = cloudConflict; }, [cloudConflict]);
 
   async function runCloudSave() {
@@ -2261,7 +2271,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     setCloudSync("saving");
     try {
       const savedBy = sesion ? { uid: sesion.uid, nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" ") } : null;
-      await saveScenarioCloud(job.projectId, orgId, job.payload, v, { baseV, savedBy });
+      await saveScenarioCloud(job.projectId, orgId, job.payload, v, { baseV, savedBy, motivo: job.force ? "sobrescribir" : job.motivo });
       idbSave(`vrp_${job.projectId}`, { ...job.payload, cloudV: v, dirty: false });
       setCloudSync(s => (s === "saving" ? "saved" : s));
       setCloudConflict(null);
@@ -2303,15 +2313,43 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     setCloudConflict(null);
     cloudPendingRef.current = { projectId: c.projectId, payload: c.payload, force: true };
     runCloudSave();
+    logAudit({ modulo: "Scheduling", accion: "Guardó su escenario encima del de otra persona",
+      detalle: `Se sustituyó la versión de ${c.meta?.savedBy?.nombre || "otra persona"} (queda como punto de restauración)` });
   }
 
-  function persistScenario(projectId, payload) {
+  // Restaurar un punto de restauración: pasa a ser la versión actual (y la
+  // que había queda a su vez como punto, por si acaso)
+  async function restorePoint(p) {
+    const pid = activeProject?._id;
+    if (!pid || !p?.v) return;
+    const cuando = p.savedAtMs ? new Date(p.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    const otraGeneracion = p.stamp && scenarioStampRef.current && p.stamp !== scenarioStampRef.current;
+    if (!confirm(`¿Restaurar la versión${cuando ? " del " + cuando : ""}${p.savedBy?.nombre ? " (" + p.savedBy.nombre + ")" : ""}?\n\nLa versión actual no se pierde: queda como punto de restauración.` +
+      (otraGeneracion ? "\n\nOjo: es de un escenario generado antes. Rostering sigue con los turnos del último generado — si trabajáis con Optimizar, vuelve a generar." : ""))) return;
+    setShowHistorial(false);
+    setCloudSync("loading");
+    try {
+      const { data } = await loadScenarioCloud(pid, p);
+      if (scenarioProjectRef.current !== pid && activeProject?._id !== pid) return;
+      applyScenario(pid, data);
+      persistScenario(pid, data, "restaurar");
+      setCloudSync(null);
+      logAudit({ modulo: "Scheduling", accion: "Restauró una versión anterior del escenario",
+        detalle: [p.motivo, cuando, p.savedBy?.nombre].filter(Boolean).join(" · ") });
+    } catch (e) {
+      console.error("restore point:", e);
+      setCloudSync("error");
+    }
+  }
+
+  function persistScenario(projectId, payload, motivo) {
     // Local al momento (sobrevive a recargar aunque la nube falle)…
     idbSave(`vrp_${projectId}`, { ...payload, cloudV: cloudVRef.current, dirty: true });
     // …y a la nube con un pequeño retardo, para no subir el escenario
     // entero por cada parada que se arrastra.
     clearTimeout(cloudTimerRef.current);
-    cloudPendingRef.current = { projectId, payload };
+    const prevMotivo = cloudPendingRef.current?.projectId === projectId ? cloudPendingRef.current.motivo : undefined;
+    cloudPendingRef.current = { projectId, payload, motivo: motivo || prevMotivo };
     cloudTimerRef.current = setTimeout(runCloudSave, 1500);
   }
 
@@ -2517,6 +2555,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     }
 
     const entry = { beforeVehicles, afterVehicles, beforeWorkers, afterWorkers, unassignedTask: unassignedTask || null, label };
+    if (activeProject?._id) {
+      logAuditGrouped(`sched-edit:${activeProject._id}`, { modulo: "Scheduling", accion: "Editó el escenario a mano" },
+        acc => { acc.n = (acc.n || 0) + 1; if (label) acc.last = label; },
+        acc => `${acc.n} cambio${acc.n === 1 ? "" : "s"} en el Gantt${acc.last ? " (último: " + acc.last + ")" : ""}`);
+    }
     setMoveHistory(h => [...h.slice(0, historyIndex + 1), entry]);
     setHistoryIndex(i => i + 1);
     applyVehicleWorkerState(afterVehicles, afterWorkers);
@@ -2636,6 +2679,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     let cancelled = false, unsub = null;
     cloudVRef.current = null;
     setCloudSync(null);
+    setCloudMeta(null);
     idbLoad(`vrp_${pid}`).then(cached => {
       if (cancelled) return;
       const hasLocal = !!cached?.vehicles?.length;
@@ -2654,6 +2698,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       let first = true;
       unsub = watchScenarioMeta(pid, meta => {
         const isFirst = first; first = false;
+        if (!cancelled) setCloudMeta(meta);
         if (!meta?.v || meta.v === cloudVRef.current) {
           if (isFirst && localPending) persistScenario(pid, cached);
           return;
@@ -2717,6 +2762,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       const uniqueBarrios = [...new Set(allTasks.map(t => t.barrio).filter(Boolean))];
       setTasks(allTasks);
+      logAudit({ modulo: "Scheduling", accion: "Importó las paradas de Planning", detalle: `${allTasks.length} paradas` });
       onProjectUpdate({
         planning: {
           tasksCount: allTasks.length,
@@ -2937,6 +2983,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       console.log(`[PERF] setSchedules — vehicles=${vehicleSchedule.length} workers=${usedWorkerRows.length} totalBlocks=${totalBlocks}`);
       const t_setSchedules = performance.now();
       setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
+      logAudit({ modulo: "Scheduling", accion: "Generó un escenario",
+        detalle: `${vehicleSchedule.length} vehículos · ${vehicleSchedule.reduce((n, v) => n + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0)} paradas · ${vr.daysUsed} día(s) · ${vr.unassigned.length} sin asignar${rosterLibre ? " · modo libre" : ""}` });
       setScenarioRosterMode(rosterLibre ? "libre" : "cuadrante");
       const scenarioStamp = new Date().toISOString();
       scenarioStampRef.current = scenarioStamp;
@@ -3494,6 +3542,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       }
 
       setPublishModal(null);
+      logAudit({ modulo: "Scheduling", accion: "Publicó los planes en Rutas", detalle: `${docs.length} plan(es)` });
     } catch (e) {
       console.error("publishToRoutes error:", e);
       alert("Error al publicar: " + (e.message || e));
@@ -4145,6 +4194,35 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Historial de versiones</div>
               <button onClick={() => setShowHistorial(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
             </div>
+            {/* Puntos de restauración (versiones completas guardadas en la nube) */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, margin: "10px 0 4px" }}>Puntos de restauración</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+              Versiones completas del escenario a las que puedes volver. Se guarda una antes de volver a generar, antes de restaurar, antes de guardar encima de otra persona y una copia automática cada 30 min de edición (máx. 15).
+              {cloudMeta?.savedAtMs ? <> Versión actual: {new Date(cloudMeta.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}{cloudMeta.savedBy?.nombre ? ` · ${cloudMeta.savedBy.nombre}` : ""}.</> : null}
+            </div>
+            {!(cloudMeta?.puntos?.length) ? (
+              <div style={{ padding: "12px 0 16px", color: C.dim, fontSize: 12 }}>
+                Todavía no hay puntos de restauración — aparecerán al volver a generar o tras 30 min editando.
+              </div>
+            ) : (
+              <div style={{ marginBottom: 18, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                {cloudMeta.puntos.map(p => (
+                  <div key={p.v} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, width: 95, flexShrink: 0 }}>
+                      {p.savedAtMs ? new Date(p.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: C.text }}>{p.motivo}</div>
+                      <div style={{ fontSize: 10.5, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
+                    </div>
+                    <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(92,155,255,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
+                      Restaurar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, margin: "6px 0 4px" }}>Resumen de cada generación</div>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
               Cada vez que generas un escenario se guarda un resumen aquí — compara esta semana con la anterior sin tener que volver a generar nada.
             </div>
@@ -4350,6 +4428,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     // valor. El botón ya se desactiva en este caso, pero esto es la última
     // barrera por si algo lo evita (Enter en el formulario, etc.).
     if (!projectOrgId) { alert("No se puede crear el proyecto sin organización. Selecciona una."); return; }
+    logAudit({ modulo: "Proyectos", accion: "Creó un proyecto", detalle: `${nombre} (${mes})`, projectId: docId, proyecto: nombre, orgId: projectOrgId });
 
     // Close modal and navigate immediately (optimistic)
     setNewModal(null);
@@ -4369,7 +4448,9 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
 
   async function removeProject(id) {
     if (!window.confirm("¿Eliminar este proyecto y todos sus datos?")) return;
+    const p = projects.find(x => x._id === id);
     await deleteDoc(doc(db, "scheduling_projects", id));
+    logAudit({ modulo: "Proyectos", accion: "Eliminó un proyecto", detalle: p?.nombre || id, projectId: id, proyecto: p?.nombre || null, orgId: p?.org_id });
   }
 
   const [colorPickerFor, setColorPickerFor] = useState(null);

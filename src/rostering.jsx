@@ -6,6 +6,7 @@ import {
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import { loadScenario, publishWorker } from "./publicar-rutas.js";
+import { logAudit, logAuditGrouped, addCells } from "./audit.js";
 import {
   listenScenarioRoster, saveShiftMoves, listenRosterMonth,
   saveRosterMonth, savedSnapshotOf, saveVehicleCells, mergeCells,
@@ -246,7 +247,11 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
     return (r.r1 - r.r0 + 1) * (r.c1 - r.c0 + 1);
   }
 
-  function persist(newGrid) {
+  function persist(newGrid, cells = []) {
+    if (cells.length && docId) {
+      logAuditGrouped(`veh-edit:${docId}`, { modulo: "Rostering", accion: "Editó la disponibilidad de vehículos", projectId: null },
+        addCells(cells), acc => `${acc.cells.size} casilla(s) de ${acc.rows.size} vehículo(s) · ${MONTH_NAMES[month - 1]} ${year}`);
+    }
     gridRef.current = newGrid;
     setGrid(newGrid);
     pendingRef.current = true;
@@ -266,6 +271,7 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
     const r = getSelRange();
     if (!r) return;
     let newGrid = { ...gridRef.current };
+    const touched = [];
     for (let vi = r.r0; vi <= r.r1; vi++) {
       const v = vehicles[vi];
       if (!v) continue;
@@ -275,16 +281,17 @@ function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, 
         if (d === undefined) continue;
         if (code) vGrid[String(d)] = code;
         else delete vGrid[String(d)];
+        touched.push([v._id, d]);
       }
       newGrid[v._id] = vGrid;
     }
-    persist(newGrid);
+    persist(newGrid, touched);
   }
 
   function fillRow(vehicleId, code) {
     const vGrid = {};
     for (const d of days) vGrid[String(d)] = code;
-    persist({ ...gridRef.current, [vehicleId]: vGrid });
+    persist({ ...gridRef.current, [vehicleId]: vGrid }, days.map(d => [vehicleId, d]));
   }
 
   function handleKeyDown(e) {
@@ -673,6 +680,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       }
     }
     setPublishing(null);
+    logAudit({ modulo: "Rostering", accion: "Publicó el cuadrante en Rutas", detalle: `${targets.length} trabajador(es) · ${viewMes}` });
     alert(
       `Publicado en Rutas (${viewMes}):\n\n${lines.join("\n")}` +
       (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${!projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Scheduling es de otro mes" : "el escenario no está guardado en este navegador — ábrelo en Scheduling primero"}.`)
@@ -828,6 +836,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   }, [rulesDocId]);
 
   function saveRules(newRules, newHoras, newConvenio = convenio) {
+    logAudit({ modulo: "Rostering", accion: "Cambió las reglas del cuadrante", projectId: null,
+      detalle: newConvenio?.nombre ? `Convenio: ${newConvenio.nombre}` : "" });
     setConvenio(newConvenio);
     setRules(newRules);
     setHorasPorTrabajador(newHoras);
@@ -858,6 +868,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // Una edición a mano de una celda anula la asignación del optimizador en
   // esa celda (el turno vuelve a quedar sin cubrir hasta re-optimizar).
   function dropAsign(cells) {
+    if (cells.length && docId) {
+      logAuditGrouped(`roster-edit:${docId}`, { modulo: "Rostering", accion: "Editó el cuadrante", projectId: null },
+        addCells(cells), acc => `${acc.cells.size} casilla(s) de ${acc.rows.size} trabajador(es) · ${MONTH_NAMES[month - 1]} ${year}`);
+    }
     let changed = false;
     const next = { ...asignRef.current };
     for (const [wId, d] of cells) {
@@ -1059,6 +1073,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     pendingRef.current = newGrid;
     persistMonth(newGrid);
 
+    if (assignedCount > 0) logAudit({ modulo: "Rostering", accion: "Optimizó el cuadrante", detalle: `${assignedCount} turno(s) asignados · ${MONTH_NAMES[month - 1]} ${year}` });
     if (assignedCount === 0) {
       alert(skippedNoCode > 0
         ? "No se ha asignado ningún turno nuevo — las celdas ya estaban marcadas manualmente (M/T/N/G), libres o de baja."
@@ -1152,6 +1167,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         .catch(e => alert("No se pudieron guardar los turnos movidos en el escenario: " + (e.message || e)));
     }
 
+    logAudit({ modulo: "Rostering", accion: "Optimizó el cuadrante (modo libre)",
+      detalle: `${Object.keys(res.assignments).length} de ${shifts.length - res.outOfMonth} turnos cubiertos · ${res.moves.length} movido(s) de día · ${MONTH_NAMES[month - 1]} ${year}` });
     setOptResult({
       moves: res.moves.map(m => ({ ...m, shift: byId.get(m.id) })),
       total: shifts.length - res.outOfMonth,

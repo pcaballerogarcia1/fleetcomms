@@ -7,6 +7,7 @@ import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serve
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } from "./layer-store.js";
 import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur } from "./price-store.js";
+import { logAudit, logAuditGrouped } from "./audit.js";
 
 // ── IndexedDB para markers grandes (evita límite 1MB de Firestore) ──
 const _IDB_NAME = 'operanzia_v1';
@@ -1187,6 +1188,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
   async function removeLayer(id) {
     if (projectId) {
       const layer = layers.find(l => l.id === id);
+      logAudit({ modulo: "Planning", accion: "Eliminó una capa", detalle: `${layer?.name || id}${layer?.totalMarkers ? " · " + layer.totalMarkers + " puntos" : ""}` });
       const docId = `${projectId}_${id}`;
       deleteDoc(doc(db, "planning_layers", docId));
       if (layer?.localOnly || layer?.cloud) idbDel(docId);
@@ -2494,7 +2496,10 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
               onChange={e => setPriceInput(e.target.value)} placeholder="€"
               style={{ width: 80, background: C.surface2, border: "1px solid rgba(52,211,153,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
             <button disabled={savingPrice}
-              onClick={() => withSaving(() => saveDefaultPrice(ttProjectId, orgId, parsePrice(priceInput)))}
+              onClick={() => withSaving(async () => {
+                await saveDefaultPrice(ttProjectId, orgId, parsePrice(priceInput));
+                logAudit({ modulo: "Planning", accion: "Cambió el precio por defecto", detalle: parsePrice(priceInput) == null ? "sin precio" : fmtEur(parsePrice(priceInput)) });
+              })}
               style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
               {savingPrice ? "Guardando…" : "Guardar"}
             </button>
@@ -2512,8 +2517,10 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
                     if (!confirm(p == null
                       ? `¿Quitar el precio propio de los ${list.length} puntos de ${barrioFiltro}? Pasarán a usar el precio por defecto.`
                       : `¿Poner ${fmtEur(p)} a los ${list.length} puntos de ${barrioFiltro}?`)) return;
-                    withSaving(() => savePointPrices(ttProjectId, orgId,
-                      Object.fromEntries(list.map(e => [e.puntoKey || e._id, p]))));
+                    withSaving(async () => {
+                      await savePointPrices(ttProjectId, orgId, Object.fromEntries(list.map(e => [e.puntoKey || e._id, p])));
+                      logAudit({ modulo: "Planning", accion: "Cambió el precio de un barrio", detalle: `${barrioFiltro} · ${list.length} puntos · ${p == null ? "precio por defecto" : fmtEur(p)}` });
+                    });
                   }}
                   style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
                   Aplicar a {(grouped[barrioFiltro] || []).length} puntos
@@ -2724,6 +2731,9 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
                         price={canPrice ? (prices.byKey.get(entry.puntoKey || entry._id) ?? null) : null}
                         defaultPrice={prices.defaultPrecio}
                         onPrice={p => savePointPrices(ttProjectId, orgId, { [entry.puntoKey || entry._id]: p })
+                          .then(() => logAuditGrouped(`precio:${ttProjectId}`, { modulo: "Planning", accion: "Cambió precios de puntos" },
+                            acc => { acc.n = (acc.n || 0) + 1; acc.last = `${entry.nombre || entry.direccion || "punto"}: ${p == null ? "por defecto" : fmtEur(p)}`; },
+                            acc => `${acc.n} punto(s) (último: ${acc.last})`))
                           .catch(e => alert("No se pudo guardar el precio: " + (e.message || e)))}
                       />
                     ))}
@@ -3101,6 +3111,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
           // solo se guardaban en el IndexedDB de este. Se muestra ya desde
           // memoria y se sube en segundo plano.
           setLayers(prev => [...prev, { ...newLayer, _docId: docId, totalMarkers: markers.length }]);
+          logAudit({ modulo: "Planning", accion: "Subió una capa", detalle: `${name} · ${markers.length} puntos` });
           (async () => {
             try {
               const cloud = await uploadLayerMarkers(docId, projectId, markers);

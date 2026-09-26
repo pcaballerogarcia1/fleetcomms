@@ -4,8 +4,28 @@
       "collectionGroup": "planes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "org_id", "order": "ASCENDING" },
-        { "fieldPath": "fechaSubida", "order": "DESCENDING" }
+        {
+          "fieldPath": "org_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaSubida",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auditoria",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "org_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "atMs",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

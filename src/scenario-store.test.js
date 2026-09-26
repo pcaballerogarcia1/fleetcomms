@@ -16,7 +16,7 @@ vi.mock("firebase/firestore", () => ({
   }),
   Bytes: { fromUint8Array: u => ({ toUint8Array: () => u, length: u.length }) },
 }));
-const { saveScenarioCloud, loadScenarioCloud, getScenarioMeta, ScenarioConflictError } = await import("./scenario-store.js");
+const { saveScenarioCloud, loadScenarioCloud, getScenarioMeta, ScenarioConflictError, motivoPunto, MAX_PUNTOS, AUTO_PUNTO_MS } = await import("./scenario-store.js");
 const { PIECE_BYTES } = await import("./layer-store.js");
 
 // Escenario tipo Madrid: 120 vehículos × 30 días, ~44.000 paradas repartidas
@@ -86,5 +86,45 @@ describe("escenario de Scheduling en la nube", () => {
     const { meta, data } = await loadScenarioCloud("projC", stale);
     expect(meta.v).not.toBe(stale.v);
     expect(data.vehicles).toHaveLength(5);
+  });
+
+  it("puntos de restauración: se conserva la versión anterior al regenerar y se puede volver a ella", async () => {
+    const gen1 = { ...mkScenario(2, 5), stamp: "gen-1" };
+    const v1 = await saveScenarioCloud("projE", "org1", gen1, undefined, { savedBy: { nombre: "Ana" } });
+    await saveScenarioCloud("projE", "org1", { ...mkScenario(4, 5), stamp: "gen-2" });
+    await new Promise(r => setTimeout(r, 0));
+    const meta = await getScenarioMeta("projE");
+    expect(meta.puntos).toHaveLength(1);
+    expect(meta.puntos[0]).toMatchObject({ v: v1, motivo: "Antes de volver a generar el escenario", savedBy: { nombre: "Ana" } });
+    // sus trozos siguen ahí y se puede cargar
+    const { data } = await loadScenarioCloud("projE", meta.puntos[0]);
+    expect(data.vehicles).toHaveLength(2);
+    // restaurarla: la actual pasa a ser un punto y la restaurada, la actual
+    await saveScenarioCloud("projE", "org1", data, undefined, { motivo: "restaurar" });
+    const m2 = await getScenarioMeta("projE");
+    expect(m2.puntos.map(p => p.motivo)).toEqual(["Antes de restaurar una versión anterior", "Antes de volver a generar el escenario"]);
+  });
+
+  it("como mucho MAX_PUNTOS: los más viejos se borran con sus trozos", async () => {
+    let first;
+    for (let i = 0; i <= MAX_PUNTOS + 1; i++) {
+      const v = await saveScenarioCloud("projF", "org1", { ...mkScenario(1, 2), stamp: "g" + i });
+      if (i === 0) first = v;
+    }
+    await new Promise(r => setTimeout(r, 0));
+    const meta = await getScenarioMeta("projF");
+    expect(meta.puntos).toHaveLength(MAX_PUNTOS);
+    expect(meta.puntos.some(p => p.v === first)).toBe(false);
+    expect(store.has(`scheduling_scenarios/projF/trozos/${first}_0`)).toBe(false);
+    for (const p of meta.puntos) expect(store.has(`scheduling_scenarios/projF/trozos/${p.v}_0`)).toBe(true);
+  });
+
+  it("copia automática cada 30 min de edición, no en cada guardado", () => {
+    const cur = { v: "a", stamp: "g", puntoRefMs: 1_000_000 };
+    expect(motivoPunto(cur, "g", undefined, 1_000_000 + 60_000)).toBe(null);
+    expect(motivoPunto(cur, "g", undefined, 1_000_000 + AUTO_PUNTO_MS)).toBe("Copia automática");
+    expect(motivoPunto({ v: "a", stamp: "g" }, "g", undefined, 5)).toBe(null); // escenario antiguo sin referencia
+    expect(motivoPunto(cur, "g", "sobrescribir")).toMatch(/antes de guardar otra encima/);
+    expect(motivoPunto(null, "g")).toBe(null);
   });
 });

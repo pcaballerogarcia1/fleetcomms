@@ -244,6 +244,17 @@ service cloud.firestore {
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
     }
 
+    // ── HISTORIAL DE CAMBIOS (audit.js) ─────────────────────────────
+    // Registro de quién hizo qué: cada uno solo puede añadir líneas propias
+    // de su organización, y nadie puede modificarlas ni borrarlas (salvo el
+    // superadmin, por la regla comodín). Lo leen los usuarios de oficina.
+    match /auditoria/{id} {
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace()
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // ── PRESENCIA: quién está conectado (presence.js) ───────────────
     // Cada uno escribe solo su propia ficha y con su propia org; la leen
     // los de su misma organización (el superadmin, todas, por la regla

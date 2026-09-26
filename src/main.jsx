@@ -25,7 +25,9 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useLang, setLang, t } from "./i18n.js";
 import { puedeUsarWorkspace, roleLabel } from "./roles.js";
 import { OnlineUsers } from "./presence-bar.jsx";
+import { AuditButton } from "./audit-panel.jsx";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
+import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -98,6 +100,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {/* Quién más está conectado (su organización; el superadmin, todas) */}
         <OnlineUsers sesion={sesion} />
+        {/* Historial de cambios de la organización */}
+        <AuditButton sesion={sesion} activeProject={activeProject} />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
@@ -215,6 +219,10 @@ function WorkspaceRouter() {
     });
   }, []);
 
+  // Historial de cambios: quién registra (esta sesión) y en qué proyecto
+  useEffect(() => { setAuditUser(sesion); }, [sesion]);
+  useEffect(() => { setAuditProject(activeProject); }, [activeProject]);
+
   // Presencia: esta sesión aparece como conectada a los de su organización.
   // Solo usuarios de oficina (la ubicación de los conductores ya se ve en
   // Control, y así cada empresa cabe en la cuota gratuita de Firestore).
@@ -278,6 +286,7 @@ function WorkspaceRouter() {
     setSesion(u); go("/projects");
   }
   async function logout() {
+    flushAllAudit();
     await markOffline(sesion?.uid);
     await signOut(auth);
     setSesion(null); setActiveProject(null);

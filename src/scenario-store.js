@@ -40,32 +40,67 @@ export class ScenarioConflictError extends Error {
   constructor(meta) { super("otra persona ha guardado este escenario"); this.conflict = true; this.meta = meta; }
 }
 
+// ── Puntos de restauración ───────────────────────────────────────────
+// Cada guardado sustituye a la versión anterior, pero algunas se conservan
+// (hasta MAX_PUNTOS, en meta.puntos) para poder volver a ellas:
+//   · la que había antes de volver a generar el escenario,
+//   · la que había antes de restaurar otra,
+//   · la de otra persona antes de guardar la mía encima,
+//   · y una copia automática cada 30 min de edición.
+export const MAX_PUNTOS = 15;
+export const AUTO_PUNTO_MS = 30 * 60_000;
+
+/** Decide si la versión actual (cur) se conserva al guardar la nueva. */
+export function motivoPunto(cur, nextStamp, motivo, now = Date.now()) {
+  if (!cur?.v) return null;
+  if (motivo === "restaurar") return "Antes de restaurar una versión anterior";
+  if (motivo === "sobrescribir") return `Versión de ${cur.savedBy?.nombre || "otra persona"} antes de guardar otra encima`;
+  if ((cur.stamp || null) !== (nextStamp || null)) return "Antes de volver a generar el escenario";
+  // Los 30 min cuentan desde el último punto (o desde que existe el escenario)
+  if (now - (cur.puntoRefMs ?? now) >= AUTO_PUNTO_MS) return "Copia automática";
+  return null;
+}
+
 /** Sube el escenario y devuelve la versión guardada.
  *  baseV: versión de la que partía esta edición. Si en la nube ya hay otra
  *  (alguien guardó entre medias), no se pisa: lanza ScenarioConflictError.
- *  Sin baseV (undefined) se guarda encima sin comprobar. */
-export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion(), { baseV, savedBy } = {}) {
+ *  Sin baseV (undefined) se guarda encima sin comprobar.
+ *  motivo: "restaurar" | "sobrescribir" | undefined (puntos de restauración). */
+export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion(), { baseV, savedBy, motivo } = {}) {
   const bytes  = await gzip(JSON.stringify(scenarioBody(data)));
   const pieces = splitBytes(bytes);
   await Promise.all(pieces.map((p, i) =>
     setDoc(pieceRef(projectId, v, i), { projectId, v, i, data: Bytes.fromUint8Array(p) })));
-  let prev;
+  let borrar;
   try {
-    prev = await runTransaction(db, async tx => {
+    borrar = await runTransaction(db, async tx => {
       const s = await tx.get(metaRef(projectId));
       const cur = s.exists() ? s.data() : null;
       if (baseV !== undefined && (cur?.v ?? null) !== (baseV ?? null)) throw new ScenarioConflictError(cur);
+      const now = Date.now();
+      let puntos = cur?.puntos || [];
+      const quitar = [];
+      const razon = motivoPunto(cur, data?.stamp, motivo, now);
+      if (razon) {
+        puntos = [{ v: cur.v, n: cur.n, bytes: cur.bytes || 0, stamp: cur.stamp || null,
+          savedBy: cur.savedBy || null, savedAtMs: cur.savedAtMs || null, at: now, motivo: razon }, ...puntos];
+        quitar.push(...puntos.slice(MAX_PUNTOS));
+        puntos = puntos.slice(0, MAX_PUNTOS);
+      } else if (cur?.v && cur.v !== v && !puntos.some(p => p.v === cur.v)) {
+        quitar.push(cur); // la anterior no se conserva
+      }
       tx.set(metaRef(projectId), {
         org_id: orgId ?? null, projectId, v, n: pieces.length, bytes: bytes.length,
-        stamp: data?.stamp || null, savedBy: savedBy || null, updatedAt: serverTimestamp(),
+        stamp: data?.stamp || null, savedBy: savedBy || null, savedAtMs: now,
+        puntos, puntoRefMs: razon ? now : (cur?.puntoRefMs ?? now), updatedAt: serverTimestamp(),
       });
-      return cur;
+      return quitar;
     });
   } catch (e) {
     deleteScenarioPieces(projectId, { v, n: pieces.length }).catch(() => {});
     throw e;
   }
-  if (prev?.v && prev.v !== v) deleteScenarioPieces(projectId, prev).catch(() => {});
+  for (const p of borrar) deleteScenarioPieces(projectId, p).catch(() => {});
   return v;
 }
 
