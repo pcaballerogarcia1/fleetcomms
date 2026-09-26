@@ -1,0 +1,38 @@
+# Comprobaciones automáticas en cada push y pull request:
+# tests, compilación y tests de las reglas de Firestore (con el emulador).
+# Si algo falla, GitHub marca el commit en rojo y avisa por email.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Tests de reglas de Firestore (emulador)
+        run: npm run test:rules

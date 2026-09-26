@@ -3,6 +3,7 @@
 // superadmin ve todas.
 import { useState, useEffect, useMemo } from "react";
 import { watchAudit } from "./audit.js";
+import { watchErrors, groupErrors } from "./error-report.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
@@ -50,6 +51,9 @@ export function AuditButton({ sesion, activeProject }) {
 }
 
 function AuditPanel({ sesion, activeProject, onClose }) {
+  // El superadmin ve además los errores registrados en los navegadores
+  const [tab, setTab] = useState("cambios");
+  const isSA = sesion?.rol === "superadmin";
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const [modulo, setModulo] = useState("");
@@ -85,9 +89,19 @@ function AuditPanel({ sesion, activeProject, onClose }) {
       }}>
         <div style={{ padding: "16px 18px 10px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Historial de cambios</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{tab === "errores" ? "Errores registrados" : "Historial de cambios"}</div>
+              {isSA && (
+                <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+                  {[["cambios", "Cambios"], ["errores", "Errores"]].map(([k, l]) => (
+                    <button key={k} onClick={() => setTab(k)} style={{ padding: "3px 10px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font, background: tab === k ? C.blue : "transparent", color: tab === k ? "#fff" : C.muted }}>{l}</button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
           </div>
+          {tab === "errores" ? <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 2px" }}>Errores que han ocurrido en los navegadores de los usuarios (oficina y Rutas), agrupados. Últimos 300.</div> : <>
           <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 10px" }}>
             Quién hizo qué y cuándo{sesion.rol === "superadmin" ? " (todas las organizaciones)" : " en tu organización"}. Últimos {LIMIT} cambios; las ediciones seguidas se agrupan por minuto.
           </div>
@@ -104,7 +118,9 @@ function AuditPanel({ sesion, activeProject, onClose }) {
               </label>
             )}
           </div>
+          </>}
         </div>
+        {tab === "errores" ? <ErrorList now={now} /> : (
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px 16px" }}>
           {error ? (
             <div style={{ padding: 20, fontSize: 12, color: "#f87171" }}>No se pudo cargar el historial ({error.code || String(error)}).</div>
@@ -129,7 +145,39 @@ function AuditPanel({ sesion, activeProject, onClose }) {
             </div>
           ))}
         </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ErrorList({ now }) {
+  const [list, setList] = useState(null);
+  const [error, setError] = useState(null);
+  const [abierto, setAbierto] = useState(null);
+  useEffect(() => watchErrors(LIMIT, (l, err) => { if (err) setError(err); else setList(l); }), []);
+  const grupos = useMemo(() => groupErrors(list), [list]);
+  if (error) return <div style={{ padding: 20, fontSize: 12, color: "#f87171" }}>No se pudieron cargar los errores ({error.code || String(error)}).</div>;
+  if (list === null) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Cargando…</div>;
+  if (!grupos.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>No hay errores registrados. 👍</div>;
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px 16px" }}>
+      {grupos.map(g => (
+        <div key={g.key} onClick={() => setAbierto(a => a === g.key ? null : g.key)} style={{ padding: "9px 8px", borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171", flexShrink: 0 }}>×{g.veces}</span>
+            <span style={{ fontSize: 12, color: C.text, wordBreak: "break-word" }}>{g.mensaje?.slice(0, 220)}</span>
+          </div>
+          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>
+            {[g.ejemplo.tipo, `${g.usuarios.size} usuario(s)`, [...g.paginas].slice(0, 3).join(", "), g.ejemplo.version && `v ${g.ejemplo.version}`, cuando(g.ultimo, now)].filter(Boolean).join(" · ")}
+          </div>
+          {abierto === g.key && (
+            <pre style={{ fontSize: 10, color: C.muted, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg, padding: 8, borderRadius: 6, marginTop: 6, maxHeight: 240, overflow: "auto" }}>
+              {[...g.usuarios].join(", ")}{"\n"}{g.ejemplo.navegador}{"\n\n"}{g.ejemplo.stack}
+            </pre>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import "./index.css";
@@ -28,6 +28,32 @@ import { OnlineUsers } from "./presence-bar.jsx";
 import { AuditButton } from "./audit-panel.jsx";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
+import { initErrorReporting, setErrorUser, reportError } from "./error-report.js";
+
+// Errores de cualquier pantalla (oficina y Rutas) → errores/{id} para el superadmin
+initErrorReporting();
+
+// Si una pantalla se rompe, en vez de quedarse en blanco se ve un aviso con
+// "Recargar", y el error queda registrado.
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    reportError({ tipo: "pantalla", mensaje: error?.message || String(error), stack: (error?.stack || "") + "\n--- componentes:" + (info?.componentStack || "") });
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
+        <div style={{ maxWidth: 420, textAlign: "center", padding: 24 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Algo ha fallado en esta pantalla</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>El error ya se ha registrado para revisarlo. Tus datos guardados no se han perdido.</div>
+          <button onClick={() => window.location.reload()} style={{ padding: "8px 18px", borderRadius: 8, background: C.blue, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Recargar</button>
+        </div>
+      </div>
+    );
+  }
+}
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -220,7 +246,7 @@ function WorkspaceRouter() {
   }, []);
 
   // Historial de cambios: quién registra (esta sesión) y en qué proyecto
-  useEffect(() => { setAuditUser(sesion); }, [sesion]);
+  useEffect(() => { setAuditUser(sesion); setErrorUser(sesion); }, [sesion]);
   useEffect(() => { setAuditProject(activeProject); }, [activeProject]);
 
   // Presencia: esta sesión aparece como conectada a los de su organización.
@@ -511,8 +537,10 @@ function UpdatePrompt() {
 createRoot(document.getElementById("root")).render(
   <>
     <UpdatePrompt />
-    <Suspense fallback={<RootFallback />}>
-      {isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />}
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<RootFallback />}>
+        {isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />}
+      </Suspense>
+    </ErrorBoundary>
   </>
 );

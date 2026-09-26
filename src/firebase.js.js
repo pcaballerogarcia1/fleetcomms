@@ -6,13 +6,17 @@ import {
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
+// Producción por defecto. Un entorno de pruebas (otro proyecto de
+// Firebase, p. ej. en los despliegues de vista previa de Vercel) se
+// configura con las variables VITE_FIREBASE_* — ver ENTORNO_PRUEBAS.md.
+const env = import.meta.env || {};
 const firebaseConfig = {
-  apiKey: "AIzaSyDqzT7OqBTlNApkB_ERriA6Eag7MQLMQcM",
-  authDomain: "fleetcomms-13d89.firebaseapp.com",
-  projectId: "fleetcomms-13d89",
-  storageBucket: "fleetcomms-13d89.firebasestorage.app",
-  messagingSenderId: "724829938531",
-  appId: "1:724829938531:web:9c426744e7be116589a956",
+  apiKey:            env.VITE_FIREBASE_API_KEY             || "AIzaSyDqzT7OqBTlNApkB_ERriA6Eag7MQLMQcM",
+  authDomain:        env.VITE_FIREBASE_AUTH_DOMAIN         || "fleetcomms-13d89.firebaseapp.com",
+  projectId:         env.VITE_FIREBASE_PROJECT_ID          || "fleetcomms-13d89",
+  storageBucket:     env.VITE_FIREBASE_STORAGE_BUCKET      || "fleetcomms-13d89.firebasestorage.app",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "724829938531",
+  appId:             env.VITE_FIREBASE_APP_ID              || "1:724829938531:web:9c426744e7be116589a956",
 };
 
 const app = initializeApp(firebaseConfig);

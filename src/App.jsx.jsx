@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
+import { setErrorUser } from "./error-report.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -2248,6 +2249,7 @@ export default function App(){
           const snap=await getUserProfileSafe(user.uid);
           if(snap.exists()&&snap.data().activo!==false){
             setSesion({uid:user.uid,id:user.uid,...snap.data()});
+            setErrorUser({uid:user.uid,...snap.data()});
           }else{
             await signOut(auth); setSesion(null);
           }

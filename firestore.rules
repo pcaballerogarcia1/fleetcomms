@@ -244,6 +244,15 @@ service cloud.firestore {
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
     }
 
+    // ── ERRORES DE LOS NAVEGADORES (error-report.js) ────────────────
+    // Cualquiera con sesión puede registrar un error suyo, de su propia
+    // organización. Solo el superadmin los lee (regla comodín).
+    match /errores/{id} {
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.org_id == myOrgId();
+      allow read, update, delete: if false;
+    }
+
     // ── HISTORIAL DE CAMBIOS (audit.js) ─────────────────────────────
     // Registro de quién hizo qué: cada uno solo puede añadir líneas propias
     // de su organización, y nadie puede modificarlas ni borrarlas (salvo el
