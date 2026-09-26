@@ -24,6 +24,8 @@ import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query }
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useLang, setLang, t } from "./i18n.js";
 import { puedeUsarWorkspace, roleLabel } from "./roles.js";
+import { OnlineUsers } from "./presence-bar.jsx";
+import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -94,6 +96,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
         </>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Quién más está conectado (su organización; el superadmin, todas) */}
+        <OnlineUsers sesion={sesion} />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
@@ -211,6 +215,15 @@ function WorkspaceRouter() {
     });
   }, []);
 
+  // Presencia: esta sesión aparece como conectada a los de su organización
+  useEffect(() => {
+    if (!sesion?.uid) return;
+    return startPresence(sesion, "oficina");
+  }, [sesion]);
+  useEffect(() => {
+    if (sesion?.uid) updatePresencePage(sesion.uid, path);
+  }, [sesion?.uid, path]);
+
   // Auth guard (solo cuando ya terminó de cargar)
   useEffect(() => {
     if (sesion === undefined) return; // aún cargando
@@ -261,6 +274,7 @@ function WorkspaceRouter() {
     setSesion(u); go("/projects");
   }
   async function logout() {
+    await markOffline(sesion?.uid);
     await signOut(auth);
     setSesion(null); setActiveProject(null);
     clearLS("fc_active_project"); go("/login");

@@ -244,6 +244,18 @@ service cloud.firestore {
       allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
     }
 
+    // ── PRESENCIA: quién está conectado (presence.js) ───────────────
+    // Cada uno escribe solo su propia ficha y con su propia org; la leen
+    // los de su misma organización (el superadmin, todas, por la regla
+    // comodín).
+    match /presencia/{uid} {
+      allow read: if sameOrg(resource.data.org_id);
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.org_id == myOrgId();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // ── UBICACIÓN EN VIVO DEL CONDUCTOR ─────────────────────────────
     match /ubicaciones_activas/{uid} {
       allow read: if sameOrg(resource.data.org_id);

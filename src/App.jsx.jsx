@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
+import { startPresence, markOffline } from "./presence.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -2256,6 +2257,12 @@ export default function App(){
     });
   },[]);
 
+  // Presencia: el conductor aparece como conectado en la oficina
+  useEffect(()=>{
+    if(!sesion?.uid) return;
+    return startPresence(sesion,"rutas");
+  },[sesion]);
+
   // Cargar usuarios de la misma org en tiempo real
   useEffect(()=>{
     if(!sesion?.org_id) return;
@@ -2332,7 +2339,7 @@ export default function App(){
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
             <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{roleLabel(sesion.rol)}</div>
           </div>
-          <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
+          <div onClick={async()=>{await markOffline(sesion?.uid);signOut(auth);}} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
             {avatarOf(sesion)}
