@@ -26,6 +26,7 @@ import { taskToUbicacion } from "./publicar-rutas.js";
 import { saveScenarioRoster } from "./roster-store.js";
 import { saveScenarioCloud, loadScenarioCloud, watchScenarioMeta, newScenarioVersion } from "./scenario-store.js";
 import { logAudit, logAuditGrouped } from "./audit.js";
+import { dayMetrics, dayIssues, scenarioKpis } from "./scenario-metrics.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 const C = {
@@ -197,6 +198,79 @@ const HEADER_H = 44;
 const LABEL_W_DEFAULT = 210;
 const LABEL_W_MIN = 150;
 const LABEL_W_MAX = 480;
+
+// Vista "Tabla" del Gantt: columnas de datos por fila (como un planificador
+// profesional): métricas del día que se está viendo, ordenables, con avisos
+// de reglas (ver scenario-metrics.js) y fila de totales abajo.
+const TABLE_COLS = [
+  { k: "avisos",     l: "",         w: 22, align: "center", t: "Avisos de reglas (pasa el ratón por el !)" },
+  { k: "nombre",     l: "Recurso",  w: 150, align: "left" },
+  { k: "turno",      l: "Turno",    w: 64, align: "left" },
+  { k: "inicio",     l: "Inicio",   w: 50, t: "Primera tarea del día" },
+  { k: "fin",        l: "Fin",      w: 50, t: "Última tarea del día" },
+  { k: "amplitud",   l: "Amplitud", w: 62, t: "De la primera a la última tarea (tiempo pagado)" },
+  { k: "conduccion", l: "Conduc.",  w: 58, t: "Tiempo conduciendo" },
+  { k: "trabajo",    l: "Trabajo",  w: 58, t: "Tiempo en paradas" },
+  { k: "pausas",     l: "Pausas",   w: 52 },
+  { k: "km",         l: "Km",       w: 52 },
+  { k: "kmVacio",    l: "Km vacío", w: 58, t: "Salida y vuelta a cochera" },
+  { k: "paradas",    l: "Paradas",  w: 54 },
+];
+const TABLE_W = TABLE_COLS.reduce((sum, c) => sum + c.w, 0) + 8;
+const COL_COLOR = { amplitud: "#34d399", km: "#fb923c", kmVacio: "#fb923c" };
+const rowName = r => [r?.nombre, r?.apellidos].filter(Boolean).join(" ") || r?.name || r?.matricula || "?";
+const turnoCorto = r => r?._virtual ? "—" : ((r?.turno || "").split(/[ (]/)[0] || "—");
+
+// Indicadores que se guardan con cada generación (para comparar versiones)
+function kpiHistorial(k) {
+  if (!k) return {};
+  const n = v => (v == null || !isFinite(v) ? null : +(+v).toFixed(4));
+  return { pvr: k.pvr, turnos: k.turnos, kmVacio: n(k.kmVacio), eficVehiculo: n(k.eficVehiculo), eficPersonal: n(k.eficPersonal), avisos: k.filasConAviso, coste: n(k.coste) };
+}
+
+// Barra de indicadores del escenario, con el cambio respecto a la generación anterior
+function KpiBar({ k, base, onConfigCostes }) {
+  const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
+  const num = v => v == null ? "—" : Math.round(v).toLocaleString("es-ES");
+  const eur = v => v == null ? "—" : v.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  // mejor: "up" = subir es bueno, "down" = bajar es bueno
+  const delta = (cur, prev, mejor, fmt) => {
+    if (cur == null || prev == null) return null;
+    const d = cur - prev;
+    if (Math.abs(d) < 1e-9) return null;
+    const bueno = mejor === "up" ? d > 0 : d < 0;
+    return <span style={{ fontSize: 11, fontWeight: 700, color: bueno ? C.green : C.red, marginLeft: 6 }}>{d > 0 ? "▲" : "▼"} {fmt(Math.abs(d))}</span>;
+  };
+  const pp = d => `${(d * 100).toFixed(1).replace(".", ",")} pp`;
+  const h = min => `${Math.round(min / 60).toLocaleString("es-ES")} h`;
+  const items = [
+    { l: "Vehículos", v: num(k.vehiculos), d: delta(k.vehiculos, base?.vehicleCount, "down", num), sub: `PVR ${k.pvr} (a la vez en punta)` },
+    { l: "Turnos", v: num(k.turnos), d: delta(k.turnos, base?.turnos, "down", num), sub: "conductor × día" },
+    { l: "Eficiencia vehículo", v: pct(k.eficVehiculo), d: delta(k.eficVehiculo, base?.eficVehiculo, "up", pp), sub: `km en ruta / km totales · ${num(k.km - k.kmVacio)} / ${num(k.km)}` },
+    { l: "Eficiencia personal", v: pct(k.eficPersonal), d: delta(k.eficPersonal, base?.eficPersonal, "up", pp), sub: `tiempo productivo / pagado · ${h(k.conduccion + k.trabajo)} / ${h(k.pagado)}` },
+    { l: "Km", v: num(k.km), d: delta(k.km, base?.totalKm, "down", num), sub: `${num(k.kmVacio)} en vacío (cochera)` },
+    { l: "Paradas", v: num(k.paradas), d: delta(k.paradas, base?.totalStops, "up", num), sub: k.sinAsignar ? `${num(k.sinAsignar)} sin asignar` : "todas asignadas", subColor: k.sinAsignar ? C.red : C.green },
+    k.coste != null
+      ? { l: "Coste estimado", v: eur(k.coste), d: delta(k.coste, base?.coste, "down", eur), sub: "personal + km (Restricciones)" }
+      : { l: "Coste estimado", v: <button onClick={onConfigCostes} style={{ background: "none", border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
+    { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
+  ];
+  return (
+    <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, display: "flex", overflowX: "auto" }}>
+      {items.map((it, i) => (
+        <div key={it.l} style={{ padding: "10px 18px", borderRight: i < items.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline" }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
+            {it.d}
+          </div>
+          <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 3 }}>{it.l}</div>
+          <div style={{ fontSize: 10, color: it.subColor || C.dim, marginTop: 1, whiteSpace: "nowrap" }}>{it.sub}</div>
+        </div>
+      ))}
+      {base && <div style={{ padding: "10px 14px", fontSize: 10, color: C.dim, alignSelf: "center", whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</div>}
+    </div>
+  );
+}
 const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4, 8];
 const UNASSIGNED_RENDER_CAP = 300;
 
@@ -223,7 +297,11 @@ function ClockBadge({ size = 11 }) {
   );
 }
 
-function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0 }) {
+function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null }) {
+  // Vista "Tabla" (columnas de datos) o "Compacta" (solo nombre y resumen)
+  const [vista, setVista] = useState(() => { try { return localStorage.getItem("fc_gantt_vista") || "tabla"; } catch { return "tabla"; } });
+  const cambiarVista = v => { setVista(v); try { localStorage.setItem("fc_gantt_vista", v); } catch { /* sin almacenamiento local */ } };
+  const [colSort, setColSort] = useState(null); // { key, dir: 1 | -1 }
   const [tooltip,      setTooltip]      = useState(null);
   const [pxPerMin,     setPxPerMin]     = useState(1); // x1 por defecto: se ve la jornada entera
   const [unassignedOpen, setUnassignedOpen] = useState(true);
@@ -353,7 +431,44 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
     window.alert("No se puede colocar esta parada ahí: se solaparía con otra parada existente o no llegaría a tiempo dentro de su franja horaria.");
   };
 
+  // Métricas y avisos de cada fila en el día que se está viendo
+  const metricsById = useMemo(() => {
+    const map = new Map();
+    for (const r of rows) {
+      const m = dayMetrics(r, selectedDay);
+      map.set(r._id || r.id, { m, issues: dayIssues(m, { maxShiftMin, reglas }) });
+    }
+    return map;
+  }, [rows, selectedDay, maxShiftMin, reglas]);
+  const totals = useMemo(() => {
+    const t = { n: 0, conAviso: 0, conduccion: 0, trabajo: 0, pausas: 0, km: 0, kmVacio: 0, paradas: 0, amplitud: 0, inicio: Infinity, fin: -Infinity };
+    for (const { m, issues } of metricsById.values()) {
+      if (issues.length) t.conAviso++;
+      if (!m.activo) continue;
+      t.n++;
+      for (const k of ["conduccion", "trabajo", "pausas", "km", "kmVacio", "paradas", "amplitud"]) t[k] += m[k];
+      t.inicio = Math.min(t.inicio, m.inicio); t.fin = Math.max(t.fin, m.fin);
+    }
+    return t;
+  }, [metricsById]);
+
   const sortedRows = useMemo(() => {
+    if (colSort) {
+      const val = r => {
+        const x = metricsById.get(r._id || r.id);
+        if (colSort.key === "nombre") return rowName(r).toLowerCase();
+        if (colSort.key === "turno") return turnoCorto(r);
+        if (colSort.key === "avisos") return x?.issues.length || 0;
+        return x?.m.activo ? x.m[colSort.key] : null;
+      };
+      return [...rows].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * colSort.dir;
+      });
+    }
     if (ganttSort === "default") return rows;
     const type = ganttSort.startsWith("salida") ? "salida" : "servicio";
     const asc  = ganttSort.endsWith("asc");
@@ -374,7 +489,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
       if (kb === Infinity) return -1;
       return asc ? ka - kb : kb - ka;
     });
-  }, [rows, ganttSort, selectedDay]);
+  }, [rows, ganttSort, selectedDay, colSort, metricsById]);
 
   // Jornada media del día seleccionado — duración real (primera parada a
   // última) de cada fila con trabajo ese día, promediada. Sirve para ver
@@ -483,6 +598,51 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
 
   const zoomLabel = pxPerMin >= 1 ? `${pxPerMin}×` : `${pxPerMin}×`;
 
+  const leftW = vista === "tabla" ? TABLE_W : labelW;
+  const fmtCell = (k, m) => {
+    if (!m.activo) return "—";
+    if (k === "inicio" || k === "fin") return minToTime(m[k] % 1440);
+    if (k === "km" || k === "kmVacio") return m[k] ? m[k].toFixed(1) : "0";
+    if (k === "paradas") return m.paradas;
+    return m[k] ? fmtDurHM(m[k]) : "0";
+  };
+  const renderTableCells = row => {
+    const x = metricsById.get(row._id || row.id) || { m: dayMetrics(row, selectedDay), issues: [] };
+    const hasErr = x.issues.some(i => i.nivel === "error");
+    return TABLE_COLS.map(col => {
+      let content;
+      if (col.k === "avisos") {
+        content = x.issues.length
+          ? <span title={x.issues.map(i => "• " + i.texto).join("\n")} style={{ color: hasErr ? C.red : C.amber, fontWeight: 800, fontSize: 13, cursor: "help" }}>!</span>
+          : null;
+      } else if (col.k === "nombre") {
+        content = <span title={rowName(row)} style={{ fontFamily: font, fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+          {rowName(row)}{row._virtual && <span style={{ color: C.dim, fontWeight: 400 }}> · necesario</span>}
+        </span>;
+      } else if (col.k === "turno") {
+        content = <span style={{ color: C.muted, fontFamily: font, fontSize: 11 }}>{turnoCorto(row)}</span>;
+      } else {
+        content = <span style={{ color: !x.m.activo ? C.dim : COL_COLOR[col.k] || C.text }}>{fmtCell(col.k, x.m)}</span>;
+      }
+      return <div key={col.k} style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: mono, fontSize: 11, overflow: "hidden" }}>{content}</div>;
+    });
+  };
+  const footerCell = k => {
+    const t = totals;
+    if (!t.n) return "";
+    switch (k) {
+      case "avisos": return t.conAviso ? String(t.conAviso) : "";
+      case "nombre": return `${t.n} activos`;
+      case "turno": return "Total";
+      case "inicio": return minToTime(t.inicio % 1440);
+      case "fin": return minToTime(t.fin % 1440);
+      case "amplitud": return "x̄ " + fmtDurHM(t.amplitud / t.n);
+      case "km": case "kmVacio": return t[k].toFixed(0);
+      case "paradas": return t.paradas.toLocaleString("es-ES");
+      default: return fmtDurHM(t[k]);
+    }
+  };
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
@@ -491,6 +651,12 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
         flexShrink: 0, background: C.surface2, borderBottom: `1px solid ${C.border}`,
         display: "flex", alignItems: "center", gap: 6, padding: "5px 16px", flexWrap: "wrap",
       }}>
+        {/* Vista */}
+        <div style={{ display: "flex", gap: 2, background: C.card, borderRadius: 6, padding: 2, marginRight: 8 }}>
+          {[["tabla", "Tabla"], ["compacta", "Compacta"]].map(([v, l]) => (
+            <button key={v} onClick={() => cambiarVista(v)} style={{ padding: "2px 9px", borderRadius: 4, border: "none", fontSize: 10, fontFamily: font, cursor: "pointer", fontWeight: 600, background: vista === v ? C.blue : "transparent", color: vista === v ? "#fff" : C.dim }}>{l}</button>
+          ))}
+        </div>
         {/* Zoom */}
         <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginRight: 4 }}>Zoom</span>
         <button onClick={zoomOut} style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: C.muted, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
@@ -524,6 +690,12 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
             transition: "all .1s",
           }}>{label}</button>
         ))}
+
+        {totals.conAviso > 0 && (
+          <span title="Filas del día con avisos de reglas — mira la columna ! de la tabla" style={{ marginLeft: 8, fontSize: 10, fontFamily: mono, color: C.red, fontWeight: 700 }}>
+            ! {totals.conAviso} con avisos
+          </span>
+        )}
 
         {/* Day navigation */}
         {days > 1 && <>
@@ -588,7 +760,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
 
       {/* ── Scrollable Gantt ── */}
       <div ref={ganttScrollRef} onScroll={handleGanttScroll} style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
-        <div style={{ display: "inline-block", minWidth: labelW + chartW, minHeight: "100%", position: "relative" }}>
+        <div style={{ display: "inline-block", minWidth: leftW + chartW, minHeight: "100%", position: "relative" }}>
 
           {/* Línea vertical de referencia — cruza header + todas las filas.
               zIndex por encima del header (10, sticky) — si no, la
@@ -596,7 +768,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
               scroll, invisible en la práctica. */}
           {vLineMin != null && (
             <div style={{
-              position: "absolute", left: labelW + vLineMin * pxPerMin, top: 0, bottom: 0, width: 2,
+              position: "absolute", left: leftW + vLineMin * pxPerMin, top: 0, bottom: 0, width: 2,
               background: C.blue, zIndex: 14, pointerEvents: "none", boxShadow: `0 0 6px ${C.blue}`,
             }}>
               <div style={{
@@ -616,13 +788,24 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
             background: C.card, borderBottom: `1px solid ${C.border2}`,
           }}>
             <div style={{
-              width: labelW, flexShrink: 0, position: "sticky", left: 0, zIndex: 12,
+              width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 12,
               background: C.card, borderRight: `1px solid ${C.border}`,
-              display: "flex", alignItems: "flex-end", padding: "0 16px 8px",
+              display: "flex", alignItems: "flex-end", padding: vista === "tabla" ? "0 4px 8px" : "0 16px 8px",
             }}>
-              <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>
+              {vista === "tabla" ? TABLE_COLS.map(col => (
+                <div key={col.k} title={col.t || (col.l ? `Ordenar por ${col.l.toLowerCase()}` : "")}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setColSort(prev => prev?.key === col.k
+                      ? (prev.dir === (col.k === "nombre" || col.k === "turno" ? 1 : -1) ? { key: col.k, dir: -prev.dir } : null)
+                      : { key: col.k, dir: col.k === "nombre" || col.k === "turno" ? 1 : -1 });
+                  }}
+                  style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", cursor: "pointer", fontSize: 9, letterSpacing: .6, textTransform: "uppercase", fontWeight: 700, color: colSort?.key === col.k ? C.blueText : C.dim, whiteSpace: "nowrap", userSelect: "none" }}>
+                  {col.k === "avisos" ? "!" : col.l}{colSort?.key === col.k ? (colSort.dir === 1 ? " ▲" : " ▼") : ""}
+                </div>
+              )) : <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>}
               {/* Asa de redimensión — arrastrar para ensanchar la columna */}
-              <div
+              {vista !== "tabla" && <div
                 onMouseDown={startResizeLabel}
                 title="Arrastrar para ensanchar"
                 style={{
@@ -632,7 +815,7 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
                 onClick={e => e.stopPropagation()}
               >
                 <div style={{ position: "absolute", top: 0, bottom: 0, left: 3, width: 1, background: C.border2 }} />
-              </div>
+              </div>}
             </div>
             <div
               onClick={e => {
@@ -674,12 +857,12 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
             <div key={row._id || row.id || ri} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}` }}>
               {/* Label */}
               <div style={{
-                width: labelW, flexShrink: 0, position: "sticky", left: 0, zIndex: 3,
+                width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 3,
                 background: ri % 2 === 0 ? C.card : C.surface2,
                 borderRight: `1px solid ${C.border}`,
-                display: "flex", alignItems: "center", padding: "0 14px", gap: 10,
+                display: "flex", alignItems: "center", padding: vista === "tabla" ? "0 4px" : "0 14px", gap: vista === "tabla" ? 0 : 10,
               }}>
-                {(() => {
+                {vista === "tabla" ? renderTableCells(row) : (() => {
                   const fullName = [row.nombre, row.apellidos].filter(Boolean).join(" ") || row.name || "?";
                   const letter = fullName[0].toUpperCase();
                   const dayAssignments = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
@@ -959,7 +1142,21 @@ function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], a
           })}
 
           {rows.length === 0 && (
-            <div style={{ padding: "48px 0", textAlign: "center", color: C.dim, fontSize: 13, width: labelW + chartW }}>Sin recursos asignados</div>
+            <div style={{ padding: "48px 0", textAlign: "center", color: C.dim, fontSize: 13, width: leftW + chartW }}>Sin recursos asignados</div>
+          )}
+
+          {/* Totales y medias del día (vista Tabla) */}
+          {vista === "tabla" && totals.n > 0 && (
+            <div style={{ display: "flex", height: 30, position: "sticky", bottom: 0, zIndex: 9, background: C.surface2, borderTop: `1px solid ${C.border2}` }}>
+              <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 11, background: C.surface2, borderRight: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 4px" }}>
+                {TABLE_COLS.map(col => (
+                  <div key={col.k} style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: col.k === "avisos" ? C.red : C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
+                    {footerCell(col.k)}
+                  </div>
+                ))}
+              </div>
+              <div style={{ width: chartW, flexShrink: 0 }} />
+            </div>
           )}
         </div>
 
@@ -1286,6 +1483,15 @@ function ConstraintsPanel({ c, onChange, orgId }) {
       style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }}
     />
   );
+  const decInput = (key, suffix) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <input type="number" min="0" step="0.01" value={c[key] ?? ""}
+        onChange={e => set(key, e.target.value === "" ? null : Math.max(0, parseFloat(String(e.target.value).replace(",", ".")) || 0))}
+        style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }}
+      />
+      {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
+    </div>
+  );
   const checkbox = (key) => (
     <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
       <input type="checkbox" checked={!!c[key]} onChange={e => set(key, e.target.checked)}
@@ -1333,6 +1539,9 @@ function ConstraintsPanel({ c, onChange, orgId }) {
         {row("Ventana: hora de fin", timeInput("endMin"))}
         {row("Días máximos de escenario (0 = automático)", numInput("maxDays", 0, 365, "días"))}
         {row("Circularidad (vuelve donde empieza)", checkbox("circular"))}
+        {row("Coste por hora de conductor (indicadores)", decInput("costeHora", "€/h"))}
+        {row("Coste por km (indicadores)", decInput("costeKm", "€/km"))}
+        {row("No aplicar tiempos de conducción UE 561/2006 (p. ej. recogida de residuos exenta)", checkbox("sin561"))}
       </div>
       <div style={{ marginTop: 4, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
         {row("Rostering", (
@@ -2495,6 +2704,15 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // an empty array [] is truthy in JS but means "no data yet".
   const activeDays = schedule?.length > 0 ? (constraints.days || 1) : 1;
 
+  // Reglas de avisos e indicadores del escenario (scenario-metrics.js)
+  const reglasGantt = useMemo(() => ({ aplicar561: !constraints.sin561 }), [constraints.sin561]);
+  const kpis = useMemo(() => schedules.vehicles?.length ? scenarioKpis({
+    vehicles: schedules.vehicles, workers: schedules.workers || [],
+    unassigned: (unassigneds.vehicles || []).length, days: activeDays,
+    maxShiftMin: constraints.maxShiftMin, reglas: reglasGantt,
+    costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
+  }) : null, [schedules, unassigneds, activeDays, constraints.maxShiftMin, reglasGantt, constraints.costeHora, constraints.costeKm]);
+
   // Reasignación manual de paradas en el Gantt (mover de vehículo/trabajador)
   // — historial tipo Excel: cada movimiento guarda el estado de TODOS los
   // vehículos y conductores afectados (no solo la fila que se ve en el modo
@@ -3063,6 +3281,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             if (activeProject._id) {
               addDoc(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), {
                 vehicleCount: vehicleSchedule.length, workerCount: usedWorkerRows.length,
+                ...kpiHistorial(scenarioKpis({
+                  vehicles: vehicleSchedule, workers: usedWorkerRows, unassigned: vr.unassigned.length, days: newDays,
+                  maxShiftMin: constraints.maxShiftMin, reglas: { aplicar561: !constraints.sin561 },
+                  costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
+                })),
                 unassigned: vr.unassigned.length, daysUsed: newDays,
                 totalKm: +totalKm.toFixed(1), totalStops,
                 generatedAt: serverTimestamp(),
@@ -3564,15 +3787,6 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const totalAssigned = schedule ? schedule.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0) : 0;
   const totalKm       = schedule ? schedule.reduce((s, r) => s + (r.totalKm || 0), 0) : 0;
 
-  // Scenario-wide summary (independent of the vehicles/workers mode toggle)
-  const vehicleRows     = schedules.vehicles || [];
-  const workerRows      = schedules.workers || [];
-  const summaryKm        = vehicleRows.length ? vehicleRows.reduce((s, r) => s + (r.totalKm || 0), 0) : totalKm;
-  const summaryAssigned  = vehicleRows.length
-    ? vehicleRows.reduce((s, r) => s + r.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0)
-    : totalAssigned;
-  const vehiclesUsed     = vehicleRows.filter(r => r.assignments.some(a => !a._break && !a._travel && !a._wait)).length;
-  const workersUsed      = workerRows.filter(r => r.assignments.some(a => !a._break && !a._travel && !a._wait)).length;
   const stopsPerDay   = schedule ? (() => {
     const counts = {};
     schedule.forEach(r => r.assignments.filter(a => !a._break && !a._travel && !a._wait).forEach(a => {
@@ -4048,25 +4262,9 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         </div>
       )}
 
-      {/* Scenario summary bar */}
-      {schedule?.length > 0 && !focusMode && (
-        <div style={{
-          flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`,
-          padding: "10px 16px", display: "flex", gap: 28,
-        }}>
-          {[
-            { l: "Kms totales",  v: `${summaryKm.toFixed(0)} km`,       c: C.amber },
-            { l: "Días",         v: activeDays,                          c: C.blue  },
-            { l: "Asignaciones", v: summaryAssigned.toLocaleString(),    c: C.green },
-            { l: "Conductores",  v: workersUsed,                         c: C.text  },
-            { l: "Vehículos",    v: vehiclesUsed,                        c: C.text  },
-          ].map(s => (
-            <div key={s.l} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ fontSize: 17, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</span>
-              <span style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: .8 }}>{s.l}</span>
-            </div>
-          ))}
-        </div>
+      {/* Indicadores del escenario (con cambio respecto a la generación anterior) */}
+      {schedule?.length > 0 && !focusMode && kpis && (
+        <KpiBar k={kpis} base={scenarioHistory[1] || null} onConfigCostes={() => setShowC(true)} />
       )}
 
       {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
@@ -4103,6 +4301,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               unassigned={unassigned}
               onPlaceUnassigned={placeUnassignedTask}
               maxShiftMin={constraints.maxShiftMin}
+              reglas={reglasGantt}
             />
           </div>
         </div>
