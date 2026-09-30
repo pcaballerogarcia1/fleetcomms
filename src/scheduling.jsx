@@ -228,6 +228,18 @@ function kpiHistorial(k) {
   return { pvr: k.pvr, turnos: k.turnos, kmVacio: n(k.kmVacio), eficVehiculo: n(k.eficVehiculo), eficPersonal: n(k.eficPersonal), avisos: k.filasConAviso, coste: n(k.coste) };
 }
 
+// Explicación de cada indicador (al pasar el ratón)
+const KPI_AYUDA = {
+  "Vehículos": "Vehículos con alguna ruta en el escenario. PVR: los que están en ruta a la vez en el momento de más actividad — los que necesitas de verdad.",
+  "Turnos": "Jornadas de trabajo: cada conductor (o vehículo, si no hay conductores) en cada día con ruta.",
+  "Eficiencia vehículo": "Km en ruta / km totales. Lo que falta hasta el 100 % son los km en vacío de salida y vuelta a cochera.",
+  "Eficiencia personal": "Tiempo productivo (conducción + trabajo en paradas) / tiempo pagado (de inicio a fin de jornada). Lo que falta son pausas y esperas.",
+  "Km": "Kilómetros totales del escenario; debajo, los recorridos en vacío (salida y vuelta a cochera).",
+  "Paradas": "Paradas asignadas a alguna ruta; debajo, las que el algoritmo no pudo encajar (panel \"Sin asignar\").",
+  "Coste estimado": "Horas pagadas × €/hora + km × €/km, con las tarifas de Restricciones. Es una estimación para comparar escenarios.",
+  "Avisos": "Filas que incumplen alguna regla: conducción UE 561/2006, descanso del Estatuto (art. 34.4), jornada máxima o franja horaria. Detalle en la columna \"!\" de la tabla.",
+};
+
 // Barra de indicadores del escenario, con el cambio respecto a la generación anterior
 function KpiBar({ k, base, onConfigCostes }) {
   const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
@@ -258,7 +270,7 @@ function KpiBar({ k, base, onConfigCostes }) {
   return (
     <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, display: "flex", overflowX: "auto" }}>
       {items.map((it, i) => (
-        <div key={it.l} style={{ padding: "10px 18px", borderRight: i < items.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0 }}>
+        <div key={it.l} title={KPI_AYUDA[it.l]} style={{ padding: "10px 18px", borderRight: i < items.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0, cursor: "help" }}>
           <div style={{ display: "flex", alignItems: "baseline" }}>
             <span style={{ fontSize: 20, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
             {it.d}

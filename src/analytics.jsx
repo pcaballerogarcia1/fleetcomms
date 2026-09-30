@@ -41,9 +41,29 @@ function fmtDur(ms) {
 }
 
 // ── UI building blocks ───────────────────────────────────────────
+// Explicación de cada indicador (al pasar el ratón)
+const KPI_AYUDA = {
+  "Paradas totales": "Paradas de todos los planes publicados del mes.",
+  "Completadas": "Paradas que los conductores han marcado como hechas en la app de campo.",
+  "% cumplimiento": "Paradas completadas / paradas totales de los planes del mes.",
+  "Vehículos con actividad": "Vehículos con al menos una parada hecha en el mes.",
+  "Facturado (paradas hechas)": "Suma del precio de las paradas ya hechas (precio propio del punto o el de por defecto).",
+  "Pendiente": "Importe de las paradas de los planes del mes que aún no están hechas.",
+  "Previsto del mes": "Importe de todas las paradas de los planes del mes: facturado + pendiente.",
+  "% facturado": "Facturado / previsto del mes.",
+  "Fichados ahora": "Conductores con la jornada abierta en este momento.",
+  "Horas del mes": "Horas fichadas en el mes (de entrada a salida).",
+  "Km del mes": "Km recorridos según los fichajes: cuentakilómetros al fichar la salida menos al fichar la entrada.",
+  "Media horas/conductor": "Horas del mes / conductores que han fichado.",
+  "Incidencias abiertas": "Incidencias del mes en estado Abierta.",
+  "En revisión": "Incidencias del mes en estado En revisión.",
+  "Cerradas": "Incidencias del mes ya cerradas.",
+  "% resueltas": "Incidencias cerradas / total de incidencias del mes.",
+};
+
 function KpiCard({ label, value, sub, color = C.blue }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 140 }}>
+    <div title={KPI_AYUDA[label]} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 140, cursor: KPI_AYUDA[label] ? "help" : undefined }}>
       <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: mono, lineHeight: 1 }}>{value}</div>
       <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{label}</div>
       {sub && <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{sub}</div>}

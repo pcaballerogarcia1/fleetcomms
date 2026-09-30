@@ -26,6 +26,7 @@ import { useLang, setLang, t } from "./i18n.js";
 import { puedeUsarWorkspace, roleLabel } from "./roles.js";
 import { OnlineUsers } from "./presence-bar.jsx";
 import { AuditButton } from "./audit-panel.jsx";
+import { HelpButton } from "./help-panel.jsx";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { initErrorReporting, setErrorUser, reportError } from "./error-report.js";
@@ -128,6 +129,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
         <OnlineUsers sesion={sesion} />
         {/* Historial de cambios de la organización */}
         <AuditButton sesion={sesion} activeProject={activeProject} />
+        {/* Ayuda del módulo abierto: preguntas frecuentes con buscador */}
+        <HelpButton sesion={sesion} path={path} />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
