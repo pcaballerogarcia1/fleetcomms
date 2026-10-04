@@ -27,6 +27,7 @@ import { puedeUsarWorkspace, roleLabel } from "./roles.js";
 import { OnlineUsers } from "./presence-bar.jsx";
 import { AuditButton } from "./audit-panel.jsx";
 import { HelpButton } from "./help-panel.jsx";
+import { ProjectMenu } from "./project-menu.jsx";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { initErrorReporting, setErrorUser, reportError } from "./error-report.js";
@@ -84,7 +85,7 @@ function go(path) {
 }
 
 // ── Shared header ─────────────────────────────────────────────────
-function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
+function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject }) {
   const lang = useLang();
   const initials = ((sesion?.nombre?.[0] ?? "") + (sesion?.apellidos?.[0] ?? "")).toUpperCase();
   const crumb = (label, href, active) => (
@@ -113,9 +114,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen }) {
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
         {activeProject && <>
           <span style={{ color: C.dim, fontSize: 12 }}>/</span>
-          <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 4px" }}>
-            {activeProject.nombre}
-          </span>
+          {/* Nombre del proyecto: al pincharlo, menú con "Duplicar proyecto" */}
+          <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} />
           <span style={{ color: C.dim, fontSize: 12 }}>/</span>
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
@@ -349,7 +349,7 @@ function WorkspaceRouter() {
   // uploaded layers state across navigation within the same project)
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
-      {!fullscreen && <TopBar sesion={sesion} activeProject={activeProject} path={path} onLogout={logout} onFullscreen={() => setFullscreen(true)} />}
+      {!fullscreen && <TopBar sesion={sesion} activeProject={activeProject} path={path} onLogout={logout} onFullscreen={() => setFullscreen(true)} onOpenProject={openProject} />}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
         {/* /projects — unmounts when leaving (no heavy state to preserve) */}
