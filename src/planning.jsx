@@ -2020,6 +2020,9 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
 }
 
 // ── TIMETABLE TAB ─────────────────────────────────────────────────
+const TT_PAGINA = 300;
+const normTxt = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
 function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId = null }) {
   // ── Precios por punto (solo administradores) ──
   const [prices, setPrices] = useState({ defaultPrecio: null, byKey: new Map(), ready: false });
@@ -2043,6 +2046,11 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
   const [firestoreEntries, setFirestoreEntries] = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [barrioFiltro,     setBarrioFiltro]     = useState(null);
+  // Buscador de puntos y filas pintadas: con miles de puntos sin barrio (un
+  // GTFS, 8.302 paradas en "Sin barrio") pintar todas las filas editables a
+  // la vez congelaba la página. Se pintan de TT_PAGINA en TT_PAGINA.
+  const [busqueda,         setBusqueda]         = useState("");
+  const [paginas,          setPaginas]          = useState({ clave: "", n: 1 });
   const [defaultDur,       setDefaultDur]       = useState(null);
   const [durInput,         setDurInput]         = useState("");
   const [showDurPanel,     setShowDurPanel]     = useState(false);
@@ -2061,7 +2069,8 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
       if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
       const campos = {};
       for (const [k, v] of Object.entries(m)) {
-        if (k !== 'lat' && k !== 'lng') campos[k] = String(v ?? '');
+        // _r: ids internos de las líneas de un GTFS (ya están en "lineas")
+        if (k !== 'lat' && k !== 'lng' && !k.startsWith('_')) campos[k] = String(v ?? '');
       }
       const barrio  = getBarrio(m);
       const nombre  = m.nombre || m.name || m["Dirección"] || m["Direccion"] || "";
@@ -2229,6 +2238,21 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
 
   // Which barrios to render (after filter)
   const renderBarrios = barrioFiltro ? [barrioFiltro] : barrios;
+
+  const qNorm = normTxt(busqueda.trim());
+  const claveLista = `${barrioFiltro ?? ""}|${qNorm}`;
+  const nPaginas = paginas.clave === claveLista ? paginas.n : 1;
+  const tope = nPaginas * TT_PAGINA;
+  const bloques = useMemo(() => {
+    const out = [];
+    for (const b of renderBarrios) {
+      const lista = grouped[b] ?? [];
+      const filtrada = qNorm ? lista.filter(e => normTxt(`${e.nombre} ${Object.values(e.campos || {}).join(" ")}`).includes(qNorm)) : lista;
+      if (filtrada.length) out.push({ barrio: b, lista: filtrada });
+    }
+    return out;
+  }, [renderBarrios, grouped, qNorm]);
+  const totalFiltradas = bloques.reduce((s, x) => s + x.lista.length, 0);
 
   const withTime = effectiveEntries.filter(e => e.horaInicio);
 
@@ -2698,6 +2722,13 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
 
           {/* Table */}
           <div style={{ flex: 1, overflowY: "auto", overflowX: "auto" }}>
+            <div style={{ position: "sticky", top: 0, left: 0, zIndex: 3, background: C.bg, padding: "8px 12px", borderBottom: `1px solid ${C.border}` }}>
+              <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar punto por nombre, código, línea…"
+                style={{ width: "100%", maxWidth: 420, boxSizing: "border-box", background: C.surface2, border: `1px solid ${C.border}`,
+                  color: C.text, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontFamily: font, outline: "none" }} />
+              {qNorm && <span style={{ marginLeft: 10, fontSize: 11, color: C.dim }}>{totalFiltradas.toLocaleString()} coincidencias</span>}
+            </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -2710,18 +2741,21 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
                 </tr>
               </thead>
               <tbody>
-                {isLarge && !barrioFiltro ? (
+                {isLarge && !barrioFiltro && !qNorm ? (
                   <tr>
                     <td colSpan={canPrice ? 6 : 5} style={{ padding: "40px 20px", textAlign: "center" }}>
                       <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>
                         {effectiveEntries.length.toLocaleString()} puntos cargados
                       </div>
                       <div style={{ fontSize: 11, color: C.dim }}>
-                        Selecciona un barrio en el panel izquierdo para ver sus puntos
+                        Selecciona un barrio en el panel izquierdo o busca un punto arriba para ver sus filas
                       </div>
                     </td>
                   </tr>
-                ) : renderBarrios.map(barrio => (
+                ) : bloques.map(({ barrio, lista }, bi) => {
+                  const antes = bloques.slice(0, bi).reduce((s, x) => s + x.lista.length, 0);
+                  if (antes >= tope) return null;
+                  return (
                   <Fragment key={barrio}>
                     {barrioFiltro === null && (
                       <tr>
@@ -2735,14 +2769,14 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
                             <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.muted, flexShrink: 0 }} />
                             <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{barrio}</span>
                             <span style={{ fontSize: 10, color: C.dim }}>
-                              {grouped[barrio]?.length ?? 0} punto{(grouped[barrio]?.length ?? 0) !== 1 ? "s" : ""}
-                              {" · "}{grouped[barrio]?.filter(e => e.horaInicio).length ?? 0} programados
+                              {lista.length} punto{lista.length !== 1 ? "s" : ""}
+                              {" · "}{lista.filter(e => e.horaInicio).length} programados
                             </span>
                           </div>
                         </td>
                       </tr>
                     )}
-                    {(grouped[barrio] ?? []).map(entry => (
+                    {lista.slice(0, tope - antes).map(entry => (
                       <TimetableRow
                         key={entry._id}
                         entry={entry}
@@ -2759,9 +2793,26 @@ function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId 
                       />
                     ))}
                   </Fragment>
-                ))}
+                  );
+                })}
+                {(!isLarge || barrioFiltro || qNorm) && totalFiltradas === 0 && (
+                  <tr><td colSpan={canPrice ? 6 : 5} style={{ padding: "30px 20px", textAlign: "center", fontSize: 12, color: C.dim }}>
+                    {qNorm ? `Ningún punto coincide con «${busqueda.trim()}»` : "Sin puntos"}
+                  </td></tr>
+                )}
               </tbody>
             </table>
+            {(!isLarge || barrioFiltro || qNorm) && totalFiltradas > tope && (
+              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, borderTop: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 12, color: C.dim }}>
+                  Mostrando {tope.toLocaleString()} de {totalFiltradas.toLocaleString()} puntos
+                </span>
+                <button onClick={() => setPaginas({ clave: claveLista, n: nPaginas + 1 })} style={{
+                  padding: "5px 12px", borderRadius: 6, background: C.surface2, border: `1px solid ${C.border2}`,
+                  color: C.text, fontSize: 12, cursor: "pointer", fontFamily: font,
+                }}>Mostrar {Math.min(TT_PAGINA, totalFiltradas - tope).toLocaleString()} más</button>
+              </div>
+            )}
           </div>
 
         </div>
