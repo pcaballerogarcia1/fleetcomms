@@ -86,7 +86,7 @@ export function csvLine(line) {
   return out;
 }
 
-async function leerCsv(blob, entries, file, onRow, onBytes) {
+export async function leerCsv(blob, entries, file, onRow, onBytes) {
   const entry = entries.get(file);
   if (!entry) return false;
   let idx = null;
@@ -103,7 +103,7 @@ async function leerCsv(blob, entries, file, onRow, onBytes) {
 }
 
 // ── Utilidades ───────────────────────────────────────────────────────
-const PALETA = ["#5c9bff", "#34d399", "#fb923c", "#f87171", "#a78bfa", "#fbbf24", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
+export const PALETA = ["#5c9bff", "#34d399", "#fb923c", "#f87171", "#a78bfa", "#fbbf24", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
 
 export function tipoRuta(t) {
   const n = Number(t);
@@ -117,7 +117,7 @@ export function tipoRuta(t) {
   return "Otro";
 }
 
-const hhmm = s => {
+export const hhmm = s => {
   const m = /^(\d+):(\d\d)/.exec(s || "");
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
@@ -150,7 +150,7 @@ export function simplificar(pts, tol = 0.00008) {
   return pts.filter((_, i) => keep[i]);
 }
 
-const r5 = x => Math.round(x * 1e5) / 1e5;
+export const r5 = x => Math.round(x * 1e5) / 1e5;
 
 // ── Lectura completa ─────────────────────────────────────────────────
 /**

@@ -4575,6 +4575,12 @@ const PROJECT_STATUS = {
 // Colores disponibles para etiquetar la tarjeta de cada proyecto (franja
 // izquierda) — puramente visual, para distinguir proyectos de un vistazo
 // cuando hay muchos en la misma organización.
+// Tipo de operación de un proyecto (decide qué Planning y Scheduling se ven)
+const TIPOS_PROYECTO = [
+  { id: "puntos", nombre: "Rutas por puntos", detalle: "Residuos, reparto, servicios técnicos: paradas que se visitan" },
+  { id: "lineas", nombre: "Líneas regulares", detalle: "Autobuses: líneas con ida y vuelta, horarios y tiempos de recorrido" },
+];
+
 const PROJECT_COLORS = ["#5c9bff","#34d399","#fb923c","#f87171","#a78bfa","#fbbf24","#f472b6","#22d3ee"];
 
 export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin }) {
@@ -4632,6 +4638,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     const desc   = newModal.descripcion?.trim() || "";
     const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
     const projectOrgId = newModal.orgId || effectiveOrgId;
+    const tipo = newModal.tipo === "lineas" ? "lineas" : "puntos";
     // Nunca caer en `docId` como org_id: un proyecto "huérfano" con su propio
     // id de documento como org_id parece crearse bien (no da ningún error),
     // pero todo lo que cuelga de él (vehículos, planes publicados en Rutas...)
@@ -4643,11 +4650,11 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
 
     // Close modal and navigate immediately (optimistic)
     setNewModal(null);
-    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId });
+    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId, tipo });
 
     // Save in background — alert only on failure
     setDoc(doc(db, "scheduling_projects", docId), {
-      nombre, descripcion: desc, mes, status: "nuevo",
+      nombre, descripcion: desc, mes, status: "nuevo", tipo,
       org_id: projectOrgId,
       planning: null, scheduling: null,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -4682,7 +4689,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
             Cada proyecto contiene su propio planning (paradas) y scheduling (asignación VRP).
           </div>
         </div>
-        <button onClick={() => setNewModal({ nombre: "", descripcion: "", mes: new Date().toISOString().slice(0, 7) })} style={{
+        <button onClick={() => setNewModal({ nombre: "", descripcion: "", mes: new Date().toISOString().slice(0, 7), tipo: "puntos" })} style={{
           padding: "8px 16px", background: C.blue, border: "none", color: "#fff",
           borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font,
           display: "flex", alignItems: "center", gap: 7,
@@ -4739,6 +4746,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p.nombre}</span>
                       {isActive && <span style={{ fontSize: 9, background: C.blueDim, color: C.blueText, borderRadius: 4, padding: "2px 6px", fontWeight: 600 }}>ABIERTO</span>}
+                      {p.tipo === "lineas" && <span title="Proyecto de líneas regulares (autobuses)" style={{ fontSize: 9, background: "rgba(52,211,153,0.12)", color: C.green, border: "1px solid rgba(52,211,153,0.35)", borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>LÍNEAS REGULARES</span>}
                     </div>
                     <div style={{ fontSize: 10, color: C.dim }}>{p.mes} · {dateStr}</div>
                     {p.descripcion && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.descripcion}</div>}
@@ -4898,6 +4906,23 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 </select>
               </div>
             )}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 6 }}>Tipo de operación</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {TIPOS_PROYECTO.map(t => {
+                  const on = (newModal.tipo || "puntos") === t.id;
+                  return (
+                    <button key={t.id} type="button" onClick={() => setNewModal(p => ({ ...p, tipo: t.id }))} style={{
+                      flex: 1, textAlign: "left", padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontFamily: font,
+                      background: on ? C.blueDim : C.surface2, border: `1px solid ${on ? C.blue : C.border}`,
+                    }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: on ? C.blueText : C.text }}>{t.nombre}</div>
+                      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2, lineHeight: 1.35 }}>{t.detalle}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <input autoFocus placeholder="Nombre del proyecto *" value={newModal.nombre}
               onChange={e => setNewModal(p => ({ ...p, nombre: e.target.value }))}
               onKeyDown={e => e.key === "Enter" && createProject()}

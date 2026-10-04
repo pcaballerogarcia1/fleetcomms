@@ -1,6 +1,7 @@
 // Lanza la lectura de un GTFS en un Web Worker (gtfs.worker.js).
-// onProgress(fraccion 0..1, texto) → { paradas, lineas, agencias }
-export function leerGtfs(file, onProgress = () => {}) {
+// modo "red" → { paradas, lineas (con sentidos), dias, agencias }
+// modo "paradas" → { paradas, lineas, agencias }
+export function leerGtfs(file, onProgress = () => {}, modo = "paradas") {
   return new Promise((resolve, reject) => {
     const w = new Worker(new URL("./gtfs.worker.js", import.meta.url), { type: "module" });
     w.onmessage = e => {
@@ -11,9 +12,6 @@ export function leerGtfs(file, onProgress = () => {}) {
       else reject(new Error(m.error));
     };
     w.onerror = e => { w.terminate(); reject(new Error(e.message || "No se ha podido leer el GTFS")); };
-    w.postMessage(file);
+    w.postMessage({ file, modo });
   });
 }
-
-/** ¿El .zip parece un GTFS? (por el nombre; la lectura lo confirma) */
-export const esZip = file => /\.zip$/i.test(file?.name || "");

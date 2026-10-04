@@ -15,6 +15,9 @@ const SchedulingModuleWrapperLazy = lazy(() => import("./scheduling.jsx").then(m
 const RosteringPageLazy  = lazy(() => import("./rostering.jsx").then(m => ({ default: m.RosteringPage })));
 const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ default: m.ControlPage })));
 const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ default: m.AnalyticsPage })));
+// Proyectos de "Líneas regulares" (autobuses): su propio Planning y Scheduling
+const PlanningLineasLazy   = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.PlanningLineasPage })));
+const SchedulingLineasLazy = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.SchedulingLineasPendiente })));
 // LoginScheduling vive en su propio archivo diminuto (sin tirar de
 // Scheduling/Planning/Rostering) — se importa normal porque hace falta
 // de inmediato en /login.
@@ -130,7 +133,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         {/* Historial de cambios de la organización */}
         <AuditButton sesion={sesion} activeProject={activeProject} />
         {/* Ayuda del módulo abierto: preguntas frecuentes con buscador */}
-        <HelpButton sesion={sesion} path={path} />
+        <HelpButton sesion={sesion} path={path} tipo={activeProject?.tipo} />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
@@ -335,6 +338,8 @@ function WorkspaceRouter() {
   }
 
   const [fullscreen, setFullscreen] = useState(false);
+  // Tipo de operación del proyecto: "puntos" (por defecto) o "lineas"
+  const esLineas = activeProject?.tipo === "lineas";
 
   // Mientras Firebase Auth inicializa
   if (sesion === undefined) return (
@@ -371,10 +376,12 @@ function WorkspaceRouter() {
             pointerEvents: path === "/planning" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <PlanningPageLazy
-                sesion={sesion} onLogout={logout}
-                projectId={activeProject._id} embedded
-              />
+              {esLineas
+                ? <PlanningLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} />
+                : <PlanningPageLazy
+                    sesion={sesion} onLogout={logout}
+                    projectId={activeProject._id} embedded
+                  />}
             </Suspense>
           </div>
         )}
@@ -387,12 +394,12 @@ function WorkspaceRouter() {
             pointerEvents: path === "/scheduling" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <SchedulingModuleWrapperLazy
+              {esLineas ? <SchedulingLineasLazy /> : <SchedulingModuleWrapperLazy
                 vehicles={vehicles} workers={workers}
                 loadingV={loadingV} loadingW={loadingW}
                 activeProject={activeProject} onProjectUpdate={updateProject}
                 orgId={effectiveOrgId} sesion={sesion}
-              />
+              />}
             </Suspense>
           </div>
         )}

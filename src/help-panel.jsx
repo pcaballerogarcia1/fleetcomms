@@ -11,8 +11,10 @@ const C = {
 const font = '"Inter","Segoe UI",system-ui,sans-serif';
 const RUTAS = { "/planning": "planning", "/scheduling": "scheduling", "/rostering": "rostering", "/control": "control", "/analytics": "analytics" };
 
-export function HelpButton({ sesion, path }) {
-  const modulo = RUTAS[path];
+export function HelpButton({ sesion, path, tipo }) {
+  // En proyectos de "Líneas regulares", Planning y Scheduling tienen su propia ayuda
+  const base = RUTAS[path];
+  const modulo = tipo === "lineas" && (base === "planning" || base === "scheduling") ? `${base}_lineas` : base;
   const [open, setOpen] = useState(false);
   if (!sesion?.uid || !modulo) return null;
   return (

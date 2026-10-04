@@ -6,7 +6,6 @@ import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } from "./layer-store.js";
-import { leerGtfs } from "./gtfs-import.js";
 import { LineasPanel } from "./gtfs-lineas.jsx";
 import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur } from "./price-store.js";
 import { logAudit, logAuditGrouped } from "./audit.js";
@@ -1165,7 +1164,7 @@ function DepotIcon({ size = 16 }) {
   );
 }
 
-function Sidebar({ layers, setLayers, onUpload, uploading, uploadText, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
+function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
   const [manualLat, setManualLat] = useState("");
@@ -1488,13 +1487,12 @@ function Sidebar({ layers, setLayers, onUpload, uploading, uploadText, depots, s
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
             >
               {uploading
-                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> {uploadText || "Procesando…"}</>
-                : "Subir CSV / KML / Excel / GTFS"}
+                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
+                : "Subir CSV / KML / Excel"}
             </button>
             <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.7 }}>
               <div>CSV: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
               <div>Excel: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Latitud</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Longitud</code></div>
-              <div>GTFS: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>.zip</code> con la red</div>
             </div>
           </div>
         )}
@@ -1730,7 +1728,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, uploadText, depots, s
       {/* Filtro por tipo de fracción / tipo de contenedor — a diferencia de
           Barrios (que es solo leyenda de color), estas SÍ filtran el mapa y
           la lista: clic para activar, clic otra vez para quitar el filtro. */}
-      {/* Líneas de las capas GTFS: elegir una filtra el mapa y dibuja su recorrido */}
+      {/* Líneas de capas GTFS importadas antes de existir los proyectos de
+          «Líneas regulares» (ya no se pueden subir aquí): se siguen viendo */}
       <LineasPanel grupos={gtfsGrupos} sel={lineaSel} onSel={setLineaSel} verTodas={verTodasLineas} setVerTodas={setVerTodasLineas} />
 
       <FilterChipsSection
@@ -3111,7 +3110,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   }
 
   const [uploading, setUploading]           = useState(false);
-  const [uploadText, setUploadText]         = useState("");
   const [depotUploading, setDepotUploading] = useState(false);
   const [errors, setErrors]                 = useState([]);
   const [tab, setTab]                       = useState("mapa");
@@ -3168,36 +3166,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
       const ext = file.name.split(".").pop().toLowerCase();
       const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
 
-      // GTFS (.zip): paradas como capa + líneas con su recorrido (gtfs-parse.js)
-      if (ext === "zip") {
-        if (!projectId) { newErrors.push(`${file.name}: abre un proyecto para importar un GTFS`); continue; }
-        try {
-          setUploadText("Leyendo GTFS…");
-          const g = await leerGtfs(file, (f, t) => setUploadText(`${t.replace(/….*$/, "")} ${Math.round(f * 100)} %`));
-          if (!g.paradas.length) { newErrors.push(`${file.name}: el GTFS no tiene paradas con coordenadas`); continue; }
-          const id = Date.now() + Math.random();
-          const docId = `${projectId}_${id}`;
-          setLayers(prev => [...prev, { id, name, type: "gtfs", color, markers: g.paradas, visible: true, _docId: docId, totalMarkers: g.paradas.length, totalLineas: g.lineas.length }]);
-          setUploadText("Guardando en la nube…");
-          const cloud = await uploadLayerMarkers(docId, projectId, g.paradas);
-          const lineasCloud = await uploadLayerMarkers(docId, projectId, g.lineas, { clave: `${docId}__lineas`, prefijo: "l" });
-          setGtfsLineas(prev => ({ ...prev, [docId]: { v: lineasCloud.v, lineas: g.lineas } }));
-          setLayers(prev => prev.map(l => l._docId === docId ? { ...l, _cloudV: cloud.v } : l));
-          await setDoc(doc(db, "planning_layers", docId), {
-            id, name, type: "gtfs", color, visible: true, markers: [], cloud, totalMarkers: g.paradas.length,
-            lineasCloud, totalLineas: g.lineas.length, agencias: g.agencias,
-            projectId, orgId, createdAt: serverTimestamp(),
-          });
-          logAudit({ modulo: "Planning", accion: "Importó un GTFS", detalle: `${name} · ${g.paradas.length} paradas · ${g.lineas.length} líneas` });
-        } catch (e) {
-          console.error("GTFS:", e);
-          newErrors.push(`${file.name}: ${e.message || e}`);
-        } finally {
-          setUploadText("");
-        }
-        continue;
-      }
-
       let result;
       try {
         if (ext === "csv") {
@@ -3207,7 +3175,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         } else if (ext === "xlsx") {
           result = await parseXLSX(file);
         } else {
-          newErrors.push(`${file.name}: formato no soportado (solo CSV, KML, XLSX y GTFS en .zip)`);
+          newErrors.push(`${file.name}: formato no soportado (solo CSV, KML y XLSX)${ext === "zip" ? " — un GTFS de autobuses va en un proyecto de «Líneas regulares»" : ""}`);
           continue;
         }
       } catch (e) {
@@ -3406,7 +3374,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               setLayers={setLayers}
               onUpload={handleUpload}
               uploading={uploading}
-              uploadText={uploadText}
               gtfsGrupos={gtfsGrupos}
               lineaSel={lineaSel}
               setLineaSel={setLineaSel}

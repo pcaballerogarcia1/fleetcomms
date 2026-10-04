@@ -18,15 +18,9 @@ export const AYUDA = {
       tags: "subir cargar archivo csv kml xlsx capa paradas contenedores",
     },
     {
-      q: "¿Cómo importo una red de transporte (GTFS)?",
-      a: "Con el mismo botón \"Subir CSV / KML / Excel / GTFS\", eligiendo el .zip del GTFS. Se crea una capa con todas las paradas y aparece la sección \"Líneas GTFS\".",
-      pasos: [
-        "Pulsa \"Subir CSV / KML / Excel / GTFS\" y elige el .zip (redes grandes como la de una capital tardan 20–60 segundos).",
-        "En \"Líneas GTFS\" busca una línea y pínchala: el mapa muestra solo sus paradas y dibuja su recorrido. \"quitar filtro\" vuelve a mostrarlo todo.",
-        "\"Ver el recorrido de todas las líneas\" dibuja la red completa.",
-        "Cada parada lleva en su ficha las líneas que pasan por ella.",
-      ],
-      tags: "gtfs autobús autobuses líneas red transporte paradas recorrido zip operador",
+      q: "¿Puedo importar un GTFS de autobuses aquí?",
+      a: "No: las redes de autobuses (GTFS) van en un proyecto de \"Líneas regulares\", que tiene su propio Planning con ida y vuelta, tiempos de recorrido y tipos de vehículo por línea. Créalo desde Proyectos → \"+ Nuevo proyecto\" eligiendo \"Líneas regulares\". Las capas GTFS importadas antes en este Planning se siguen viendo.",
+      tags: "gtfs autobús autobuses líneas red transporte zip operador",
     },
     {
       q: "Subí el archivo pero no aparece ningún punto",
@@ -304,6 +298,56 @@ export const AYUDA = {
     },
   ],
 
+  // Proyectos de "Líneas regulares" (autobuses)
+  planning_lineas: [
+    {
+      q: "¿Cómo cargo la red de líneas?",
+      a: "Con \"Importar red (GTFS .zip)\" en el panel izquierdo. Sirve el GTFS que publica el operador o el consorcio de transportes; una red grande tarda menos de un minuto.",
+      pasos: [
+        "Pulsa \"Importar red (GTFS .zip)\" y elige el archivo.",
+        "Al terminar verás todas las líneas en la lista y en el mapa.",
+        "Para actualizarla, \"Sustituir red\": la configuración de las líneas que se llamen igual se conserva.",
+      ],
+      tags: "gtfs importar red líneas autobús consorcio operador zip",
+    },
+    {
+      q: "¿Qué es la ida (outbound) y la vuelta (inbound)?",
+      a: "Los dos sentidos de cada línea, según el GTFS. En el mapa la ida va en línea continua y la vuelta en discontinua. En la ficha de la línea, \"Ida y vuelta\" muestra la cabecera de destino, el número de paradas, la longitud, el horario y los viajes de cada sentido; \"Ver las paradas en orden\" despliega la secuencia.",
+      tags: "ida vuelta sentido outbound inbound cabecera secuencia paradas",
+    },
+    {
+      q: "¿De dónde salen los viajes por tipo de día?",
+      a: "Del calendario del GTFS. Para cada tipo (laborable, sábado, domingo/festivo) se toma como referencia el día de ese tipo con más servicio, y se cuentan los viajes de ese día. Las fechas de referencia aparecen arriba en el panel.",
+      tags: "laborable sábado festivo domingo calendario viajes día referencia",
+    },
+    {
+      q: "¿Cómo se calculan los tiempos de recorrido?",
+      a: "Pestaña \"Tiempos\" de la línea: minutos de cabecera a cabecera en cada franja horaria, con la mediana de los viajes de un laborable. Si un valor no te cuadra, escríbelo encima y queda como corregido (en ámbar); vacíalo para volver al calculado.",
+      pasos: [
+        "La regulación en cabecera es el margen mínimo entre la llegada de un viaje y la salida del siguiente.",
+        "Estos tiempos y la regulación son los que usará el Scheduling de líneas.",
+      ],
+      tags: "tiempo recorrido franja hora punta valle regulación cabecera minutos corregir",
+    },
+    {
+      q: "¿Cómo indico qué autobuses pueden hacer una línea?",
+      a: "Pestaña \"Vehículos\" de la línea: marca los tipos que admite (microbús, midibús, estándar 12 m, articulado 18 m, eléctrico, interurbano) y, si quieres, uno como preferente. Sin marcar ninguno, vale cualquiera.",
+      tags: "tipología vehículo tipo autobús articulado midibús eléctrico preferente",
+    },
+    {
+      q: "¿Por qué no veo Timetable ni los puntos del Planning normal?",
+      a: "Porque este proyecto es de \"Líneas regulares\": el Planning de puntos (residuos, reparto…) es para otro tipo de proyecto. El tipo se elige al crear el proyecto.",
+      tags: "timetable puntos residuos tipo proyecto",
+    },
+  ],
+  scheduling_lineas: [
+    {
+      q: "¿Qué hará el Scheduling de líneas?",
+      a: "Encadenar los viajes de cada línea en vehículos (respetando la tipología de cada línea y la regulación en cabecera) y repartirlos en turnos de conductor con los tiempos de conducción y relevos. Está en desarrollo; de momento prepara la red en Planning.",
+      tags: "scheduling vehículos turnos conductor viajes bloques",
+    },
+  ],
+
   analytics: [
     {
       q: "¿De dónde salen los datos?",
@@ -343,7 +387,7 @@ export const AYUDA = {
   ],
 };
 
-export const TITULO = { planning: "Planning", scheduling: "Scheduling", rostering: "Rostering", control: "Control", analytics: "Analytics" };
+export const TITULO = { planning: "Planning", scheduling: "Scheduling", planning_lineas: "Planning de líneas", scheduling_lineas: "Scheduling de líneas", rostering: "Rostering", control: "Control", analytics: "Analytics" };
 
 const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
