@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams } from "./lineas-store.js";
-import { generarServicio, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS } from "./lineas-sched.js";
+import { generarServicio, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, esCalendario, nombreDia, viajesDia } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -234,7 +234,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
 }
 
 // ── Restricciones (mismo formato que las del Scheduling de puntos) ──────
-function Restricciones({ p, onChange }) {
+function Restricciones({ p, onChange, red }) {
   const set = (k, v) => onChange({ [k]: v });
   const row = (label, children) => (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -270,11 +270,7 @@ function Restricciones({ p, onChange }) {
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", flexShrink: 0, animation: "sched-fadein .15s ease both" }}>
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>Restricciones</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
-        {row("Tipo de día", (
-          <select value={p.dia} onChange={e => set("dia", e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none" }}>
-            {TIPOS_DIA.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
-        ))}
+        {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={v => set("dia", v)} ancho={280} />)}
         {row("Regulación en cabecera por defecto", numInput("regulacion", "min (si la línea no tiene la suya)"))}
         {row("Margen para un vacío por cochera", numInput("margenVacio", "min entre bloques del mismo autobús"))}
         {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
@@ -320,6 +316,101 @@ function Perfil({ perfil }) {
   );
 }
 
+// ── Selector de calendario: tipos de día y calendarios del GTFS ─────────
+const COLORES_CAL = ["#5c9bff", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#22d3ee", "#f87171", "#a3e635", "#e879f9", "#2dd4bf", "#facc15"];
+const MESES_L = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const fechaLarga = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+
+function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
+  const [abierto, setAbierto] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!abierto) return;
+    const fuera = e => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [abierto]);
+  const cals = useMemo(() => red.calendarios || [], [red]);
+  const colorDe = useMemo(() => new Map(cals.map((c, i) => [c.id, COLORES_CAL[i % COLORES_CAL.length]])), [cals]);
+  const calDeFecha = useMemo(() => { const m = new Map(); for (const c of cals) for (const f of c.fechas) m.set(f, c); return m; }, [cals]);
+  // meses que cubre el GTFS
+  const meses = useMemo(() => {
+    const fs = [...calDeFecha.keys()].sort();
+    if (!fs.length) return [];
+    const out = [];
+    for (let y = +fs[0].slice(0, 4), m = +fs[0].slice(5, 7) - 1; `${y}-${String(m + 1).padStart(2, "0")}` <= fs.at(-1).slice(0, 7); m === 11 ? (y++, m = 0) : m++) out.push([y, m]);
+    return out.slice(0, 15);
+  }, [calDeFecha]);
+  const elegir = id => { onCambiar(id); setAbierto(false); };
+  const vis = cals.filter(c => !q.trim() || norm(`${c.nombre} ${(c.codigos || []).join(" ")}`).includes(norm(q.trim())));
+  const fila = (id, titulo, detalle, color) => (
+    <button key={id} onClick={() => elegir(id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 6, border: "none", cursor: "pointer", background: valor === id ? C.blueDim : "none", fontFamily: font }}>
+      <span style={{ width: 9, height: 9, borderRadius: 3, background: color || "transparent", border: color ? "none" : `1px solid ${C.dim}`, flexShrink: 0 }} />
+      <span style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: valor === id ? C.blueText : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titulo}</div>
+        <div style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{detalle}</div>
+      </span>
+    </button>
+  );
+  const titulo = { fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, padding: "8px 8px 4px", textTransform: "uppercase" };
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button onClick={() => setAbierto(a => !a)} title="Calendario del escenario" style={{ display: "flex", alignItems: "center", gap: 6, maxWidth: ancho, padding: "5px 10px", borderRadius: 6, background: C.surface2, border: `1px solid ${abierto ? C.blue : C.border2}`, color: C.text, fontSize: 11.5, cursor: "pointer", fontFamily: font }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={esCalendario(valor) ? colorDe.get(valor) || C.blue : C.blue} strokeWidth="2.2"><rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" /></svg>
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nombreDia(valor, red)}</span>
+        <span style={{ color: C.dim, fontSize: 9 }}>▾</span>
+      </button>
+      {abierto && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, width: meses.length ? 720 : 320, maxWidth: "calc(100vw - 32px)", background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.5)", display: "flex", maxHeight: 460 }}>
+          <div style={{ width: 320, flexShrink: 0, borderRight: meses.length ? `1px solid ${C.border}` : "none", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ overflowY: "auto", padding: 6, flex: 1 }}>
+              <div style={titulo}>Tipo de día · día de referencia</div>
+              {TIPOS_DIA.map(t => fila(t.id, t.nombre, red.dias?.[t.id] ? `como el ${fechaLarga(red.dias[t.id])} (el de más servicio)` : "sin servicio", null))}
+              <div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Calendarios del GTFS{cals.length ? ` (${cals.length})` : ""}</span>
+              </div>
+              {cals.length > 8 && (
+                <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar calendario o código…" style={{ width: "calc(100% - 16px)", margin: "0 8px 4px", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
+              )}
+              {vis.map(c => fila(c.id, c.nombre, `${c.fechas.length} día${c.fechas.length > 1 ? "s" : ""} · ${num(c.viajes)} viajes${c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}`, colorDe.get(c.id)))}
+              {!cals.length && <div style={{ fontSize: 11, color: C.dim, padding: "4px 8px 8px", lineHeight: 1.5 }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planning («Sustituir red») para elegir cualquiera.</div>}
+            </div>
+          </div>
+          {meses.length > 0 && (
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px 16px", alignContent: "start" }}>
+              <div style={{ gridColumn: "1 / -1", fontSize: 10.5, color: C.dim }}>Pincha un día para usar su calendario. Cada color es un calendario distinto.</div>
+              {meses.map(([y, m]) => {
+                const primero = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7; // lunes = 0
+                const nDias = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+                return (
+                  <div key={`${y}-${m}`}>
+                    <div style={{ fontSize: 11, color: C.text, fontWeight: 600, marginBottom: 4 }}>{MESES_L[m]} {y}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+                      {["L", "M", "X", "J", "V", "S", "D"].map(d => <div key={d} style={{ fontSize: 8.5, color: C.dim, textAlign: "center" }}>{d}</div>)}
+                      {Array.from({ length: primero }, (_, i) => <div key={`v${i}`} />)}
+                      {Array.from({ length: nDias }, (_, i) => {
+                        const f = `${y}-${String(m + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+                        const c = calDeFecha.get(f);
+                        const sel = c && c.id === valor;
+                        return (
+                          <button key={f} disabled={!c} onClick={() => elegir(c.id)} title={c ? `${fechaLarga(f)} · ${c.nombre}` : `${fechaLarga(f)} · sin servicio en el GTFS`}
+                            style={{ height: 20, borderRadius: 4, border: sel ? "1.5px solid #fff" : "1px solid transparent", padding: 0, fontSize: 9.5, fontFamily: mono, cursor: c ? "pointer" : "default",
+                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? "#0b1220" : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Horarios de salida ──────────────────────────────────────────────────
 function Horarios({ red, cfg, diaInicial }) {
   const [dia, setDia] = useState(diaInicial || "laborable");
@@ -344,17 +435,13 @@ function Horarios({ red, cfg, diaInicial }) {
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: "14px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2 }}>
-            {TIPOS_DIA.map(t => (
-              <button key={t.id} onClick={() => setDia(t.id)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: dia === t.id ? C.blue : "none", color: dia === t.id ? "#fff" : C.muted, fontSize: 11, fontWeight: dia === t.id ? 600 : 400, fontFamily: font }}>{t.nombre}</button>
-            ))}
-          </div>
-          {red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
+          <SelectorCalendario red={red} valor={dia} onCambiar={setDia} ancho={420} />
+          {!esCalendario(dia) && red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
         </div>
         {linea && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${linea.sentidos.length}, minmax(320px, 1fr))`, gap: 16 }}>
             {linea.sentidos.map(s => {
-              const { lista: salidas, aproximado } = salidasDe(s, dia);
+              const { lista: salidas, aproximado } = salidasDe(s, dia, red);
               const porHora = new Map();
               for (const m of salidas) { const h = Math.floor(m / 60); if (!porHora.has(h)) porHora.set(h, []); porHora.get(h).push(m % 60); }
               return (
@@ -400,7 +487,7 @@ function Horarios({ red, cfg, diaInicial }) {
 }
 
 // ── Optimizar: prueba estrategias dentro de las restricciones ───────────
-function PanelOptimizar({ p, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones }) {
+function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones }) {
   const hayPrecios = p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0;
   const corriendo = opt.estado === "corriendo";
   const lim = [p.flotaMax > 0 && `flota ${p.flotaMax} autobuses`, p.conductoresMax > 0 && `${p.conductoresMax} conductores`].filter(Boolean);
@@ -422,7 +509,7 @@ function PanelOptimizar({ p, objetivo, setObjetivo, opt, onOptimizar, onAplicar,
           })}
         </div>
         <span style={{ fontSize: 11, color: C.dim }}>
-          Límites: {lim.length ? lim.join(" · ") : "ninguno"} · {TIPOS_DIA.find(t => t.id === p.dia)?.nombre} ·{" "}
+          Límites: {lim.length ? lim.join(" · ") : "ninguno"} · {diaNombre} ·{" "}
           <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11, fontFamily: font }}>cambiar en Restricciones</button>
         </span>
         <button onClick={onOptimizar} disabled={corriendo} style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
@@ -506,6 +593,7 @@ export function SchedulingLineasPage({ projectId }) {
 
   const red = estado.red;
   const params = { ...PARAMS_DEFECTO, lineas: null, ...(guardados || {}), ...cambios };
+  if (esCalendario(params.dia) && red && !red.calendarios?.some(c => c.id === params.dia)) params.dia = "laborable";
   const paradasPorId = useMemo(() => new Map((red?.paradas || []).map(p => [p.id, p])), [red]);
   const pendientes = Object.keys(cambios).length > 0;
 
@@ -520,7 +608,7 @@ export function SchedulingLineasPage({ projectId }) {
         setRes(r);
         setCambios({});
         guardarSchedParams(projectId, { ...p, lineas: p.lineas || null }).catch(() => {});
-        logAudit({ modulo: "Scheduling", accion: "Generó el escenario de líneas", detalle: `${TIPOS_DIA.find(t => t.id === p.dia)?.nombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${r.kpis.turnos} turnos` });
+        logAudit({ modulo: "Scheduling", accion: "Generó el escenario de líneas", detalle: `${r.diaNombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${r.kpis.turnos} turnos` });
       } finally {
         setCalculando(false);
       }
@@ -595,7 +683,7 @@ export function SchedulingLineasPage({ projectId }) {
   );
 
   const nLineas = params.lineas ? params.lineas.length : red.lineas.length;
-  const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + (x.viajes?.[params.dia] || 0), 0), 0);
+  const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + viajesDia(x, params.dia, red), 0), 0);
   const btnSec = { padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
   const btnExcel = { padding: "5px 10px", background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.3)", color: "#34d399", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
   const icoDescarga = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
@@ -615,6 +703,7 @@ export function SchedulingLineasPage({ projectId }) {
               </button>
               {panelLineas && <SelectorLineas lineas={red.lineas} elegidas={params.lineas} onCambiar={ids => setCambios(c => ({ ...c, lineas: ids }))} onCerrar={() => setPanelLineas(false)} />}
             </div>
+            <SelectorCalendario red={red} valor={params.dia} onCambiar={v => setCambios(c => ({ ...c, dia: v }))} ancho={260} />
             {sep}
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
               {[["vehicles", "Vehículos"], ["workers", "Trabajadores"]].map(([v, l]) => (
@@ -629,7 +718,7 @@ export function SchedulingLineasPage({ projectId }) {
               {sep}
               <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
                 <span><span style={{ fontWeight: 700, color: C.green }}>{res.kpis.viajes.toLocaleString("es-ES")}</span> <span style={{ color: C.dim }}>viajes</span></span>
-                <span><span style={{ fontWeight: 700, color: C.blue }}>{TIPOS_DIA.find(t => t.id === res.params.dia)?.nombre}</span></span>
+                <span><span style={{ fontWeight: 700, color: C.blue }}>{res.diaNombre}</span></span>
                 <span><span style={{ fontWeight: 700, color: C.amber }}>{num(res.kpis.km)}</span> <span style={{ color: C.dim }}>km</span></span>
               </div>
               {sep}
@@ -648,8 +737,8 @@ export function SchedulingLineasPage({ projectId }) {
             }}>{calculando ? "Generando…" : pendientes ? "Generar con los cambios" : "Generar escenario"}</button>
           </div>
 
-          {showC && <Restricciones p={params} onChange={ch => setCambios(c => ({ ...c, ...ch }))} />}
-          {showOpt && <PanelOptimizar p={params} objetivo={objetivo} setObjetivo={setObjetivo} opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)} />}
+          {showC && <Restricciones p={params} red={red} onChange={ch => setCambios(c => ({ ...c, ...ch }))} />}
+          {showOpt && <PanelOptimizar p={params} diaNombre={nombreDia(params.dia, red)} objetivo={objetivo} setObjetivo={setObjetivo} opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)} />}
           {res && ((res.params.flotaMax > 0 && res.kpis.autobuses > res.params.flotaMax) || (res.params.conductoresMax > 0 && res.kpis.turnos > res.params.conductoresMax)) && (
             <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.3)" }}>
               El escenario no cabe en los recursos disponibles:
@@ -697,7 +786,7 @@ function cambiosKpi(res) {
     "Eficiencia vehículo": { ocultar: true },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
     "Km": { sub: `${num(k.horasServicio)} h con viajeros`, ayuda: "Kilómetros de todos los viajes del día (sin los vacíos por cochera)." },
-    "Paradas": { l: "Viajes", sub: TIPOS_DIA.find(t => t.id === res.params.dia)?.nombre, subColor: C.dim, ayuda: "Viajes del tipo de día elegido en las líneas del escenario." },
+    "Paradas": { l: "Viajes", sub: res.diaNombre, subColor: C.dim, ayuda: "Viajes del calendario elegido en las líneas del escenario." },
     "Avisos": { ayuda: "Turnos que incumplen la conducción UE 561/2006 o el descanso del Estatuto (art. 34.4)." },
     ...(costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, res.params) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
   };

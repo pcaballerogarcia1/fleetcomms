@@ -49,8 +49,18 @@ const hhmmAMin = s => {
   return m ? Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(m[3]) * 1440 : 0) : null;
 };
 
-/** Salidas de un sentido ese tipo de día; si la red es antigua (sin horas), repartidas entre la primera y la última */
-export function salidasDe(sentido, dia) {
+/**
+ * Salidas de un sentido ese día: un tipo de día (laborable/sabado/festivo, su
+ * día de referencia) o un calendario del GTFS ("cal:3", necesita la red).
+ * Si la red es antigua (sin horas), repartidas entre la primera y la última.
+ */
+export function salidasDe(sentido, dia, red) {
+  if (esCalendario(dia)) {
+    const cal = red?.calendarios?.find(c => c.id === dia);
+    if (!cal || !sentido.porServicio) return { lista: [], aproximado: !sentido.porServicio };
+    const set = new Set(cal.servicios);
+    return { lista: sentido.porServicio.filter(([k]) => set.has(k)).flatMap(([, l]) => l).sort((a, b) => a - b), aproximado: false };
+  }
   if (Array.isArray(sentido.salidas?.[dia])) return { lista: sentido.salidas[dia], aproximado: false };
   const n = sentido.viajes?.[dia] || 0;
   const a = hhmmAMin(sentido.primera), b = hhmmAMin(sentido.ultima);
@@ -100,7 +110,7 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
   for (const veh of vehiculos) {
     veh.relevos = piezas.filter(pz => pz.vehiculo === veh.id).map(pz => ({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno }));
   }
-  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p };
+  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p, diaNombre: nombreDia(p.dia, red) };
 }
 
 function viajesDelDia(red, cfg, p) {
@@ -114,7 +124,7 @@ function viajesDelDia(red, cfg, p) {
     const c = cfg[l.id];
     for (const s of l.sentidos) {
       if (!s.paradas.length) continue;
-      const { lista, aproximado: ap } = salidasDe(s, p.dia);
+      const { lista, aproximado: ap } = salidasDe(s, p.dia, red);
       if (ap && lista.length) aproximado = true;
       for (const dep of lista) {
         const dur = duracionViaje(s, dep, c);
@@ -367,4 +377,8 @@ export function kpisServicio(viajes, vehiculos, turnos, autobuses = []) {
   };
 }
 
-export const nombreDia = id => TIPOS_DIA.find(t => t.id === id)?.nombre || id;
+export const esCalendario = dia => typeof dia === "string" && dia.startsWith("cal:");
+/** Nombre de un tipo de día o de un calendario de la red */
+export const nombreDia = (id, red) => (esCalendario(id) ? red?.calendarios?.find(c => c.id === id)?.nombre || "Calendario que ya no está en la red" : TIPOS_DIA.find(t => t.id === id)?.nombre || id);
+/** Viajes de un sentido ese día */
+export const viajesDia = (sentido, dia, red) => (esCalendario(dia) ? salidasDe(sentido, dia, red).lista.length : sentido.viajes?.[dia] || 0);

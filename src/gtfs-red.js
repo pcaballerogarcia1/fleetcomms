@@ -5,6 +5,10 @@
 //     del patrón más habitual, la cabecera y el recorrido;
 //   · viajes por tipo de día (laborable, sábado, domingo/festivo), tomando
 //     como referencia el día de cada tipo con más servicio del calendario;
+//   · calendarios: los días del GTFS agrupados por el conjunto de servicios
+//     que funcionan (mismo conjunto = mismo horario), con nombre legible
+//     ("Lunes a viernes · 7 sep – 18 dic"); cada sentido guarda sus salidas
+//     por servicio para sacar las de cualquier calendario;
 //   · tiempo de recorrido de cabecera a cabecera por franja horaria
 //     (mediana de los viajes de un laborable).
 // Lee el zip por trozos (stop_times de cientos de MB) en el orden que
@@ -31,6 +35,35 @@ const mediana = a => { if (!a.length) return null; const s = [...a].sort((x, y) 
 const fecha = s => (/^\d{8}$/.test(s) ? new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8))) : null);
 const ymd = d => d.toISOString().slice(0, 10);
 const claseDia = d => { const w = d.getUTCDay(); return w === 0 ? "festivo" : w === 6 ? "sabado" : "laborable"; };
+
+const SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const SEMANA_PL = ["Domingos", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábados"];
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const diaMes = f => `${+f.slice(8, 10)} ${MESES[+f.slice(5, 7) - 1]}`;
+
+/** Nombre de un calendario a partir de sus fechas (yyyy-mm-dd ordenadas) */
+export function nombreCalendario(fechas) {
+  if (!fechas.length) return "Sin días";
+  const sem = f => new Date(f + "T00:00:00Z").getUTCDay();
+  if (fechas.length === 1) return `Solo el ${SEMANA[sem(fechas[0])]} ${diaMes(fechas[0])}`;
+  const cuenta = [0, 0, 0, 0, 0, 0, 0];
+  for (const f of fechas) cuenta[sem(f)]++;
+  const max = Math.max(...cuenta);
+  // días de la semana "propios" del calendario; los demás son días sueltos (festivos, puentes…)
+  const propios = cuenta.map((n, w) => (n >= 2 && n >= max * 0.3 ? w : -1)).filter(w => w >= 0);
+  const sueltos = fechas.filter(f => !propios.includes(sem(f))).length;
+  const orden = propios.map(w => (w + 6) % 7).sort((a, b) => a - b).map(x => (x + 1) % 7); // lunes primero
+  let semana;
+  const seguidos = orden.length > 2 && orden.every((w, i) => i === 0 || (w + 6) % 7 === (orden[i - 1] + 6) % 7 + 1);
+  const lista = fs => fs.map((f, i) => (i < fs.length - 1 && f.slice(5, 7) === fs[i + 1].slice(5, 7) ? String(+f.slice(8, 10)) : diaMes(f))).join(", ").replace(/, ([^,]+)$/, " y $1");
+  if (!orden.length) return fechas.length <= 5 ? `Días ${lista(fechas)}` : `${fechas.length} días sueltos · ${diaMes(fechas[0])} – ${diaMes(fechas.at(-1))}`;
+  if (orden.length === 7) semana = "Todos los días";
+  else if (seguidos) semana = `${SEMANA_PL[orden[0]]} a ${SEMANA[orden.at(-1)]}`;
+  else semana = orden.map((w, i) => (i ? SEMANA[w] : SEMANA_PL[w])).join(orden.length === 2 ? " y " : ", ");
+  if (orden.length === 1 && orden[0] === 0 && sueltos) semana = "Domingos y festivos";
+  else if (sueltos) semana += ` y ${sueltos} día${sueltos > 1 ? "s" : ""} más`;
+  return `${semana} · ${diaMes(fechas[0])} – ${diaMes(fechas.at(-1))}`;
+}
 
 export function kmTrazado(pts) {
   let km = 0;
@@ -177,6 +210,28 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
   }
   const sinCalendario = !porFecha.size; // feeds sin calendario: todo cuenta como laborable
 
+  // Calendarios: fechas con el mismo conjunto de servicios (con viajes)
+  const servDeFecha = new Map();
+  servDias.forEach((ds, k) => {
+    if (!viajesPorServ[k]) return;
+    for (const d of ds) { if (!servDeFecha.has(d)) servDeFecha.set(d, []); servDeFecha.get(d).push(k); }
+  });
+  const servNombre = [];
+  for (const [id, k] of servIdx) servNombre[k] = id;
+  const porConjunto = new Map();
+  for (const [d, ks] of [...servDeFecha].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const clave = ks.sort((a, b) => a - b).join(",");
+    if (!porConjunto.has(clave)) porConjunto.set(clave, { servicios: ks, fechas: [] });
+    porConjunto.get(clave).fechas.push(d);
+  }
+  const calendarios = [...porConjunto.values()]
+    .sort((a, b) => b.fechas.length - a.fechas.length || (a.fechas[0] < b.fechas[0] ? -1 : 1))
+    .map((c, i) => ({
+      id: `cal:${i + 1}`, nombre: nombreCalendario(c.fechas), servicios: c.servicios, fechas: c.fechas,
+      codigos: c.servicios.slice(0, 4).map(k => servNombre[k]), // service_id del GTFS (en muchas empresas, ya es el nombre)
+      viajes: c.servicios.reduce((n, k) => n + viajesPorServ[k], 0),
+    }));
+
   // Agregados por línea y sentido
   paso("Calculando sentidos y tiempos de recorrido…");
   const grupos = new Map(); // "r|dir" → [viajes]
@@ -200,6 +255,14 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     // Viajes y horas de salida (minutos desde las 00:00, >1440 = madrugada
     // del día siguiente) de cada tipo de día: lo que encadena el Scheduling
     const viajes = {}, salidas = {};
+    // salidas por servicio: [[servicio, [min…]], …] (las de cualquier calendario)
+    const porServ = new Map();
+    for (const v of vs) {
+      if (vIni[v] < 0) continue;
+      if (!porServ.has(vServ[v])) porServ.set(vServ[v], []);
+      porServ.get(vServ[v]).push(vIni[v]);
+    }
+    const porServicio = [...porServ].map(([k, l]) => [k, l.sort((a, b) => a - b)]);
     for (const t of TIPOS_DIA) {
       const delDia = sinCalendario ? (t.id === "laborable" ? vs : []) : vs.filter(v => activo[t.id].has(vServ[v]));
       viajes[t.id] = delDia.length;
@@ -218,7 +281,7 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     }
     const s = {
       dir, nombre: dir === 0 ? "Ida" : "Vuelta", cabecera: cab,
-      paradas: pat.map(p => paradas[p].id), trazado: [], km: null, viajes, salidas,
+      paradas: pat.map(p => paradas[p].id), trazado: [], km: null, viajes, salidas, porServicio,
       primera: minToHHMM(primera), ultima: minToHHMM(ultima),
       tiempos: FRANJAS.filter(f => porFranja.has(f.id)).map(f => ({ franja: f.id, min: mediana(porFranja.get(f.id)), viajes: porFranja.get(f.id).length })),
     };
@@ -267,6 +330,7 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     paradas: paradas.filter(p => usadas.has(p.id)),
     lineas: salida,
     dias: Object.fromEntries(TIPOS_DIA.map(t => [t.id, dias[t.id]?.d || null])),
+    calendarios,
     agencias: [...agencias.values()].filter(Boolean),
     viajesPartidos: partidos.size,
   };

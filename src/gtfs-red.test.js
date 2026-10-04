@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
-import { parseGtfsRed, franjaDe, kmTrazado } from "./gtfs-red.js";
+import { parseGtfsRed, franjaDe, kmTrazado, nombreCalendario } from "./gtfs-red.js";
+import { salidasDe, generarServicio, nombreDia } from "./lineas-sched.js";
 import { tiempoEfectivo } from "./lineas-store.js";
 import { vi } from "vitest";
 vi.mock("./firebase.js", () => ({ db: {} }));
@@ -52,6 +53,34 @@ describe("red de líneas desde GTFS", () => {
     const c2 = r.lineas.find(l => l.id === "C2");
     expect(c2).toMatchObject({ nombre: "C2", largo: "Circular", color: "#00aa00", agencia: "EMT Prueba" });
     expect(c2.sentidos[0]).toMatchObject({ cabecera: "Ayuntamiento", paradas: ["P2", "P3", "P2"] });
+  });
+
+  it("calendarios: días con los mismos servicios, con nombre, y sus salidas", async () => {
+    const r = await parseGtfsRed(red());
+    // LAB funciona lun 5, mar 6, jue 8 y vie 9 (el mié 7 quitado); SAB el sáb 10
+    expect(r.calendarios.map(c => ({ id: c.id, fechas: c.fechas, codigos: c.codigos, viajes: c.viajes }))).toEqual([
+      { id: "cal:1", fechas: ["2026-10-05", "2026-10-06", "2026-10-08", "2026-10-09"], codigos: ["LAB"], viajes: 4 },
+      { id: "cal:2", fechas: ["2026-10-10"], codigos: ["SAB"], viajes: 1 },
+    ]);
+    expect(r.calendarios[1].nombre).toBe("Solo el sábado 10 oct");
+    const ida = r.lineas.find(l => l.id === "L1").sentidos[0];
+    expect(salidasDe(ida, "cal:1", r)).toEqual({ lista: [420, 1020], aproximado: false });
+    expect(salidasDe(ida, "cal:2", r).lista).toEqual([540]);
+    expect(salidasDe(ida, "laborable", r).lista).toEqual([420, 1020]); // los tipos de día siguen igual
+    expect(generarServicio(r, {}, { dia: "cal:2" }).kpis.viajes).toBe(1);
+    expect(nombreDia("cal:2", r)).toBe("Solo el sábado 10 oct");
+    expect(nombreDia("cal:9", r)).toMatch(/ya no está/);
+  });
+
+  it("nombre de los calendarios", () => {
+    const dias = (desde, n, paso = 1) => Array.from({ length: n }, (_, k) => new Date(Date.UTC(2026, 8, desde + k * paso)).toISOString().slice(0, 10));
+    const lab = dias(7, 5).concat(dias(14, 5), dias(21, 5)); // lun 7 – vie 25 sep
+    expect(nombreCalendario(lab)).toBe("Lunes a viernes · 7 sep – 25 sep");
+    expect(nombreCalendario(dias(13, 4, 7).concat(["2026-10-12"]).sort())).toBe("Domingos y festivos · 13 sep – 12 oct");
+    expect(nombreCalendario(dias(12, 3, 7))).toBe("Sábados · 12 sep – 26 sep");
+    expect(nombreCalendario(["2026-09-24", "2026-09-26", "2026-10-02"])).toBe("Días 24, 26 sep y 2 oct");
+    expect(nombreCalendario(["2026-09-24", "2026-09-26", "2026-10-01"])).toBe("Jueves y 1 día más · 24 sep – 1 oct");
+    expect(nombreCalendario(dias(11, 4, 7))).toBe("Viernes · 11 sep – 2 oct");
   });
 
   it("sin calendario: todo cuenta como laborable", async () => {

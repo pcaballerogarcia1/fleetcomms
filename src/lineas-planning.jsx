@@ -324,6 +324,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
               <div>{estado.ficha.archivo || "Red importada"} · {(estado.ficha.totalLineas || 0).toLocaleString("es-ES")} líneas · {(estado.ficha.totalMarkers || 0).toLocaleString("es-ES")} paradas</div>
               {estado.ficha.agencias?.length > 0 && <div>Operadores: {estado.ficha.agencias.join(", ")}</div>}
               <div>Días de referencia: {TIPOS_DIA.map(t => `${t.nombre.split(" ")[0].toLowerCase()} ${fmtFecha(estado.ficha.dias?.[t.id])}`).join(" · ")}</div>
+              {red?.calendarios?.length > 0 && <div>{red.calendarios.length} calendario{red.calendarios.length > 1 ? "s" : ""} en el GTFS (se eligen en Scheduling)</div>}
               {configuradas > 0 && <div style={{ color: C.amber }}>{configuradas} línea(s) con configuración propia</div>}
             </div>
           )}
