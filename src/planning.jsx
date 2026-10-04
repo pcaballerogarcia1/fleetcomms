@@ -6,6 +6,8 @@ import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, where, getDoc, writeBatch, getDocs } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } from "./layer-store.js";
+import { leerGtfs } from "./gtfs-import.js";
+import { LineasPanel } from "./gtfs-lineas.jsx";
 import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur } from "./price-store.js";
 import { logAudit, logAuditGrouped } from "./audit.js";
 
@@ -467,7 +469,7 @@ function parseKMLPlanning(rawText) {
 // ── POPUP HTML ────────────────────────────────────────────────────
 function makePopupHtml(marker, color) {
   const skip = new Set(["lat","lng","latitude","longitude","latitud","longitud"]);
-  const entries = Object.entries(marker).filter(([k]) => !skip.has(k.toLowerCase()));
+  const entries = Object.entries(marker).filter(([k]) => !skip.has(k.toLowerCase()) && !k.startsWith("_"));
 
   const title = marker.nombre || marker.name || marker.id || marker.pa || "";
   const rows = entries
@@ -536,7 +538,7 @@ function routeStats(pts) {
   return { km, minAt30: Math.round(km / 30 * 60) };
 }
 
-function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId, windowedKeys, nombreOverrides }) {
+function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMapStyle, addPointMode = false, onMapClickAddPoint, projectId, windowedKeys, nombreOverrides, recorridos = null }) {
   const divRef    = useRef(null);
   const mapRef    = useRef(null);
   const tileRef          = useRef(null);
@@ -546,6 +548,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
   const canvasOverlayRef  = useRef(null); // raw canvas overlay for large datasets
   const selPolyRef    = useRef(null);
   const selPinsRef    = useRef([]);
+  const recorridosRef = useRef(null); // trazados de líneas GTFS
   const [showStylePicker, setShowStylePicker] = useState(false);
   const currentStyle = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
 
@@ -586,6 +589,14 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
     const L = window.L;
     if (!L || !mapRef.current) return;
     const map = mapRef.current;
+
+    // Recorridos de líneas GTFS (debajo de las paradas)
+    if (recorridosRef.current) { try { map.removeLayer(recorridosRef.current); } catch { /* ya no estaba */ } recorridosRef.current = null; }
+    if (recorridos?.length) {
+      const renderer = L.canvas({ padding: 0.3 });
+      recorridosRef.current = L.layerGroup(recorridos.flatMap(r => r.trazados.map(t =>
+        L.polyline(t, { color: r.color, weight: r.grosor || 3, opacity: r.opacidad ?? 0.9, renderer, interactive: false })))).addTo(map);
+    }
 
     // Remove previous Leaflet marker layers
     leafletLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
@@ -812,7 +823,12 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       allPoints.push([d.lat, d.lng]);
     });
 
-    if (allPoints.length > 0) {
+    const foco = recorridos?.find(r => r.encuadrar);
+    if (foco) {
+      map.invalidateSize();
+      const b = L.latLngBounds(foco.trazados.flat());
+      if (b.isValid()) map.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+    } else if (allPoints.length > 0) {
       map.invalidateSize();
       let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
       for (const [lat, lng] of allPoints) {
@@ -821,7 +837,7 @@ function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle, setMap
       }
       map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [40, 40], maxZoom: 16 });
     }
-  }, [layers, depots, barrioColors, windowedKeys, nombreOverrides]);
+  }, [layers, depots, barrioColors, windowedKeys, nombreOverrides, recorridos]);
 
   // Draw / update selection polyline and numbered pins
   useEffect(() => {
@@ -1149,7 +1165,7 @@ function DepotIcon({ size = 16 }) {
   );
 }
 
-function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter }) {
+function Sidebar({ layers, setLayers, onUpload, uploading, uploadText, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
   const [manualLat, setManualLat] = useState("");
@@ -1193,6 +1209,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
       deleteDoc(doc(db, "planning_layers", docId));
       if (layer?.localOnly || layer?.cloud) idbDel(docId);
       if (layer?.cloud) deleteLayerPieces(docId, layer.cloud);
+      if (layer?.lineasCloud) { deleteLayerPieces(docId, layer.lineasCloud, { clave: `${docId}__lineas` }); idbDel(`${docId}__lineas`); }
       if (layer?.chunked && layer.chunkCount) {
         for (let ci = 0; ci < layer.chunkCount; ci++) {
           deleteDoc(doc(db, "planning_layers", `${docId}_c${ci}`));
@@ -1471,12 +1488,13 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
             >
               {uploading
-                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
-                : "Subir CSV / KML / Excel"}
+                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> {uploadText || "Procesando…"}</>
+                : "Subir CSV / KML / Excel / GTFS"}
             </button>
             <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.7 }}>
               <div>CSV: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
               <div>Excel: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Latitud</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Longitud</code></div>
+              <div>GTFS: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>.zip</code> con la red</div>
             </div>
           </div>
         )}
@@ -1712,6 +1730,9 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
       {/* Filtro por tipo de fracción / tipo de contenedor — a diferencia de
           Barrios (que es solo leyenda de color), estas SÍ filtran el mapa y
           la lista: clic para activar, clic otra vez para quitar el filtro. */}
+      {/* Líneas de las capas GTFS: elegir una filtra el mapa y dibuja su recorrido */}
+      <LineasPanel grupos={gtfsGrupos} sel={lineaSel} onSel={setLineaSel} verTodas={verTodasLineas} setVerTodas={setVerTodasLineas} />
+
       <FilterChipsSection
         label="Tipo de fracción"
         layers={layers}
@@ -2754,6 +2775,10 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   const orgId = sesion?.org_id ?? null;
 
   const [layers,       setLayers]       = useState([]);
+  // GTFS: líneas de cada capa ({ docId: { v, lineas } }), línea elegida y "ver todas"
+  const [gtfsLineas, setGtfsLineas]         = useState({});
+  const [lineaSel, setLineaSel]             = useState(null);
+  const [verTodasLineas, setVerTodasLineas] = useState(false);
   const [depots,       setDepots]       = useState([]);
   const [barrioColors, setBarrioColors] = useState({});
   const [mapStyle,     setMapStyle]     = useState("dark");
@@ -2875,6 +2900,22 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
     });
     return () => unsub();
   }, [projectId]);
+
+  // ── Líneas de las capas GTFS: bloque aparte en la misma capa (layer-store)
+  const lineasCargando = useRef(new Set());
+  useEffect(() => {
+    for (const l of layers) {
+      const lc = l.lineasCloud, docId = l._docId;
+      if (!lc || !docId || gtfsLineas[docId]?.v === lc.v || lineasCargando.current.has(`${docId}:${lc.v}`)) continue;
+      lineasCargando.current.add(`${docId}:${lc.v}`);
+      loadLayerMarkers(docId, lc, { clave: `${docId}__lineas` })
+        .then(lineas => setGtfsLineas(prev => ({ ...prev, [docId]: { v: lc.v, lineas } })))
+        .catch(e => console.error("Líneas GTFS:", e))
+        .finally(() => lineasCargando.current.delete(`${docId}:${lc.v}`));
+    }
+  }, [layers, gtfsLineas]);
+  // Al cambiar de proyecto, ninguna línea elegida
+  useEffect(() => { setLineaSel(null); setVerTodasLineas(false); }, [projectId]);
 
   // ── Franjas horarias y nombres editados: viven en una colección aparte
   // (scheduling_projects/{id}/timetable) de los marcadores del mapa
@@ -3019,6 +3060,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   }
 
   const [uploading, setUploading]           = useState(false);
+  const [uploadText, setUploadText]         = useState("");
   const [depotUploading, setDepotUploading] = useState(false);
   const [errors, setErrors]                 = useState([]);
   const [tab, setTab]                       = useState("mapa");
@@ -3075,6 +3117,36 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
       const ext = file.name.split(".").pop().toLowerCase();
       const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
 
+      // GTFS (.zip): paradas como capa + líneas con su recorrido (gtfs-parse.js)
+      if (ext === "zip") {
+        if (!projectId) { newErrors.push(`${file.name}: abre un proyecto para importar un GTFS`); continue; }
+        try {
+          setUploadText("Leyendo GTFS…");
+          const g = await leerGtfs(file, (f, t) => setUploadText(`${t.replace(/….*$/, "")} ${Math.round(f * 100)} %`));
+          if (!g.paradas.length) { newErrors.push(`${file.name}: el GTFS no tiene paradas con coordenadas`); continue; }
+          const id = Date.now() + Math.random();
+          const docId = `${projectId}_${id}`;
+          setLayers(prev => [...prev, { id, name, type: "gtfs", color, markers: g.paradas, visible: true, _docId: docId, totalMarkers: g.paradas.length, totalLineas: g.lineas.length }]);
+          setUploadText("Guardando en la nube…");
+          const cloud = await uploadLayerMarkers(docId, projectId, g.paradas);
+          const lineasCloud = await uploadLayerMarkers(docId, projectId, g.lineas, { clave: `${docId}__lineas`, prefijo: "l" });
+          setGtfsLineas(prev => ({ ...prev, [docId]: { v: lineasCloud.v, lineas: g.lineas } }));
+          setLayers(prev => prev.map(l => l._docId === docId ? { ...l, _cloudV: cloud.v } : l));
+          await setDoc(doc(db, "planning_layers", docId), {
+            id, name, type: "gtfs", color, visible: true, markers: [], cloud, totalMarkers: g.paradas.length,
+            lineasCloud, totalLineas: g.lineas.length, agencias: g.agencias,
+            projectId, orgId, createdAt: serverTimestamp(),
+          });
+          logAudit({ modulo: "Planning", accion: "Importó un GTFS", detalle: `${name} · ${g.paradas.length} paradas · ${g.lineas.length} líneas` });
+        } catch (e) {
+          console.error("GTFS:", e);
+          newErrors.push(`${file.name}: ${e.message || e}`);
+        } finally {
+          setUploadText("");
+        }
+        continue;
+      }
+
       let result;
       try {
         if (ext === "csv") {
@@ -3084,7 +3156,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         } else if (ext === "xlsx") {
           result = await parseXLSX(file);
         } else {
-          newErrors.push(`${file.name}: formato no soportado (solo CSV, KML y XLSX)`);
+          newErrors.push(`${file.name}: formato no soportado (solo CSV, KML, XLSX y GTFS en .zip)`);
           continue;
         }
       } catch (e) {
@@ -3147,11 +3219,25 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
 
   const initials = ((sesion.nombre?.[0] ?? "") + (sesion.apellidos?.[0] ?? "")).toUpperCase();
 
-  const hasActiveFilter = !!searchQuery.trim() || !!fraccionFilter || !!contenedorFilter;
+  // GTFS: línea elegida y recorridos a dibujar
+  const lineaActiva = lineaSel ? (gtfsLineas[lineaSel.docId]?.lineas || []).find(x => x.id === lineaSel.id) || null : null;
+  const recorridos = useMemo(() => {
+    if (lineaActiva) return [{ color: lineaActiva.color, trazados: lineaActiva.trazados, grosor: 4, encuadrar: true }];
+    if (!verTodasLineas) return null;
+    const visibles = new Set(layers.filter(l => l.visible).map(l => l._docId));
+    return Object.entries(gtfsLineas).filter(([d]) => visibles.has(d))
+      .flatMap(([, g]) => g.lineas.map(x => ({ color: x.color, trazados: x.trazados, grosor: 2, opacidad: 0.55 })));
+  }, [lineaActiva, verTodasLineas, gtfsLineas, layers]);
+  const gtfsGrupos = useMemo(() => layers.filter(l => gtfsLineas[l._docId])
+    .map(l => ({ docId: l._docId, capa: l.name, lineas: gtfsLineas[l._docId].lineas })), [layers, gtfsLineas]);
+
+  const hasActiveFilter = !!searchQuery.trim() || !!fraccionFilter || !!contenedorFilter || !!lineaActiva;
   const filteredLayers = hasActiveFilter
     ? layers.map(l => ({
         ...l,
+        ...(lineaActiva && l._docId === lineaSel.docId ? { color: lineaActiva.color } : {}),
         markers: (l.markers ?? []).filter(m => {
+          if (lineaActiva && l._docId === lineaSel.docId && !m._r?.includes(lineaActiva.id)) return false;
           if (searchQuery.trim() && !Object.values(m).some(v => String(v ?? "").toLowerCase().includes(searchQuery.toLowerCase()))) return false;
           if (fraccionFilter && getFraccion(m) !== fraccionFilter) return false;
           if (contenedorFilter && getContenedor(m) !== contenedorFilter) return false;
@@ -3269,6 +3355,12 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               setLayers={setLayers}
               onUpload={handleUpload}
               uploading={uploading}
+              uploadText={uploadText}
+              gtfsGrupos={gtfsGrupos}
+              lineaSel={lineaSel}
+              setLineaSel={setLineaSel}
+              verTodasLineas={verTodasLineas}
+              setVerTodasLineas={setVerTodasLineas}
               depots={depots}
               setDepots={setDepots}
               onDepotImport={handleDepotImport}
@@ -3291,7 +3383,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               contenedorFilter={contenedorFilter}
               setContenedorFilter={setContenedorFilter}
             />
-            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} />
+            <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} recorridos={recorridos} />
           </>
         ) : (
           <TabTimetable layers={layers} projectId={projectId} orgId={orgId}

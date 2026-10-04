@@ -18,6 +18,17 @@ export const AYUDA = {
       tags: "subir cargar archivo csv kml xlsx capa paradas contenedores",
     },
     {
+      q: "¿Cómo importo una red de transporte (GTFS)?",
+      a: "Con el mismo botón \"Subir CSV / KML / Excel / GTFS\", eligiendo el .zip del GTFS. Se crea una capa con todas las paradas y aparece la sección \"Líneas GTFS\".",
+      pasos: [
+        "Pulsa \"Subir CSV / KML / Excel / GTFS\" y elige el .zip (redes grandes como la de una capital tardan 20–60 segundos).",
+        "En \"Líneas GTFS\" busca una línea y pínchala: el mapa muestra solo sus paradas y dibuja su recorrido. \"quitar filtro\" vuelve a mostrarlo todo.",
+        "\"Ver el recorrido de todas las líneas\" dibuja la red completa.",
+        "Cada parada lleva en su ficha las líneas que pasan por ella.",
+      ],
+      tags: "gtfs autobús autobuses líneas red transporte paradas recorrido zip operador",
+    },
+    {
       q: "Subí el archivo pero no aparece ningún punto",
       a: "Casi siempre es que la app no reconoce las columnas de coordenadas, o que las coordenadas están en otro sistema (UTM).",
       pasos: [

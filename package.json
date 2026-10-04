@@ -13,6 +13,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-operanzia \"vitest run -c vitest.rules.config.js\""
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "firebase": "^12.13.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

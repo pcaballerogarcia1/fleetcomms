@@ -43,6 +43,9 @@ function proyectoDePrueba() {
   store.set("planning_layers/src_2", { id: 2, name: "Grande", markers: [], cloud: { v: "a", n: 2 }, projectId: "src", orgId: "org1" });
   store.set("planning_layers/src_2/trozos/a_0", { projectId: "src", v: "a", i: 0, data: "bytes0" });
   store.set("planning_layers/src_2/trozos/a_1", { projectId: "src", v: "a", i: 1, data: "bytes1" });
+  store.set("planning_layers/src_5", { id: 5, type: "gtfs", markers: [], cloud: { v: "g", n: 1 }, lineasCloud: { v: "lg", n: 1 }, projectId: "src" });
+  store.set("planning_layers/src_5/trozos/g_0", { projectId: "src", v: "g", i: 0, data: "paradas" });
+  store.set("planning_layers/src_5/trozos/lg_0", { projectId: "src", v: "lg", i: 0, data: "lineas" });
   store.set("planning_layers/src_3", { id: 3, chunked: true, projectId: "src" });
   store.set("planning_layers/src_3_c0", { layerId: 3, chunkIndex: 0, markers: [{ lat: 5 }], projectId: "src" });
   store.set("planning_layers/src_viejo", { id: 4, name: "Local", localOnly: true, projectId: "src" });
@@ -84,6 +87,9 @@ describe("duplicar proyecto", () => {
     expect(store.get("planning_layers/dst_2")).toMatchObject({ cloud: { v: "a", n: 2 }, projectId: "dst" });
     expect(store.get("planning_layers/dst_2/trozos/a_1")).toEqual({ projectId: "dst", v: "a", i: 1, data: "bytes1" });
     expect(store.get("planning_layers/dst_3_c0")).toMatchObject({ layerId: 3, projectId: "dst" });
+    expect(store.get("planning_layers/dst_5")).toMatchObject({ type: "gtfs", lineasCloud: { v: "lg" }, projectId: "dst" });
+    expect(store.get("planning_layers/dst_5/trozos/lg_0")).toMatchObject({ data: "lineas", projectId: "dst" });
+    expect(store.get("planning_layers/dst_5/trozos/g_0")).toMatchObject({ data: "paradas" });
     expect(store.get("planning_layers/dst_viejo")).toMatchObject({ localOnly: false, cloud: { v: "nv" }, projectId: "dst" });
     expect(store.get("planning_depots/dst")).toMatchObject({ depots: [{ nombre: "COCHERA" }], projectId: "dst" });
     expect(store.get("planning_settings/dst")).toEqual({ defaultDuracion: 6 });

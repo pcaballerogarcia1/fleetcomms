@@ -103,11 +103,14 @@ export async function duplicarProyecto(src, nombre, { onPaso = () => {}, newId =
       // Los trozos antes que la ficha: al aparecer la ficha, el mapa los
       // descarga. Se leen por su nombre ({v}_{i}): las reglas no dejan
       // listar la subcolección (se comprueban por el projectId de cada trozo).
-      const { v, n } = data.cloud;
-      for (let i = 0; i < n; i++) {
-        const t = await getDoc(doc(db, "planning_layers", d.id, "trozos", `${v}_${i}`));
-        if (!t.exists()) throw new Error(`Falta un trozo de la capa «${data.name || d.id}» en la nube`);
-        await setDoc(doc(db, "planning_layers", nuevo, "trozos", `${v}_${i}`), reasignar(t.data(), newId));
+      // Una capa GTFS tiene además el bloque de sus líneas (lineasCloud).
+      for (const bloque of [data.cloud, data.lineasCloud].filter(Boolean)) {
+        const { v, n } = bloque;
+        for (let i = 0; i < n; i++) {
+          const t = await getDoc(doc(db, "planning_layers", d.id, "trozos", `${v}_${i}`));
+          if (!t.exists()) throw new Error(`Falta un trozo de la capa «${data.name || d.id}» en la nube`);
+          await setDoc(doc(db, "planning_layers", nuevo, "trozos", `${v}_${i}`), reasignar(t.data(), newId));
+        }
       }
       await setDoc(doc(db, "planning_layers", nuevo), reasignar(data, newId));
     } else if (data.localOnly) {
