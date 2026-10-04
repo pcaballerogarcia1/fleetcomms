@@ -12,12 +12,16 @@
 //    Cada cadena de viajes es un "bloque". Después, los bloques se reparten
 //    entre autobuses físicos: uno puede hacer un bloque de mañana y otro de
 //    tarde si entre medias hay margen para el vacío (por cochera).
-// 2) Turnos de conductor (crew scheduling), como se hace en el sector:
-//    cada bloque se corta en piezas de como mucho 4h30 de conducción (relevo
-//    en cabecera) y las piezas se emparejan en turnos de dos piezas con una
-//    pausa de al menos 45 min entre ellas y sin pasar de la jornada máxima.
-//    Así se cumple la conducción UE 561/2006 y el descanso del Estatuto; lo
-//    que aun así no cuadra queda como aviso del turno.
+// 2) Turnos de conductor (crew scheduling): cada bloque se corta en piezas
+//    (relevo en cabecera) y cada conductor va encadenando piezas de
+//    cualquier autobús, con el tiempo de relevo o de desplazamiento entre
+//    ellas, hasta llenar su jornada: tantas piezas como quepan. Se cumplen
+//    como obligación (no como aviso) la amplitud y la jornada máximas, la
+//    conducción continua y diaria (UE 561/2006), el descanso de 15 min
+//    (Estatuto, art. 34.4), las piezas y las jornadas partidas máximas. Los
+//    huecos cortos entre piezas son trabajo pagado; los largos, jornada
+//    partida. Al final se intenta deshacer los turnos más cortos repartiendo
+//    sus piezas entre los demás.
 // 3) Optimizar: prueba varias estrategias (qué autobús coge cada viaje, dónde
 //    se corta la pieza, cómo se emparejan) que cumplen todas las
 //    restricciones y se queda con la mejor para el objetivo elegido.
@@ -27,21 +31,26 @@ import { franjaDe, TIPOS_DIA } from "./gtfs-red.js";
 export const PARAMS_DEFECTO = {
   dia: "laborable",
   regulacion: 5,        // min, si la línea no tiene la suya
-  jornadaMax: 480,      // min de trabajo por turno (suma de sus piezas)
+  jornadaMax: 480,      // min de trabajo por turno (piezas + huecos cortos entre ellas)
   piezaMax: 240,        // min de una pieza (de relevo a relevo)
   amplitudMax: 540,     // min de la primera salida a la última llegada del turno (pausa incluida)
   entreLineas: true,    // un autobús puede seguir con otra línea en la misma cabecera
   margenVacio: 30,      // min entre dos bloques del mismo autobús (ir y volver de cochera)
   conduccionContinuaMax: 270, pausaConduccionMin: 45, conduccionDiariaMax: 540,
   jornadaSinPausaMax: 360, pausaJornadaMin: 15,
+  maxPiezas: 8,         // piezas por turno como mucho
+  maxPartidos: 1,       // huecos largos (jornada partida) por turno
+  huecoNoPagado: 60,    // min: un hueco entre piezas desde este largo no se paga (jornada partida)
+  relevoMin: 5,         // min para relevar en la misma cabecera
+  desplazamiento: 20,   // min para ir a otra cabecera a coger otra pieza
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
   conductoresMax: null, // conductores disponibles ese día
   // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
   eleccion: "ultimo",   // "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
-  corte: "max",         // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min
-  emparejar: "primera", // "primera": la pausa más corta · "llena": el turno más cerca de la jornada máxima
+  corte: 120,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min
+  emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas
 };
 
 const hhmmAMin = s => {
@@ -106,10 +115,9 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
   const { viajes, find, aproximado } = viajesDelDia(red, cfg, p);
   const vehiculos = programarVehiculos(viajes, cfg, find, p);
   const autobuses = repartirAutobuses(vehiculos, p);
-  const { turnos, piezas } = programarTurnos(vehiculos, p);
-  for (const veh of vehiculos) {
-    veh.relevos = piezas.filter(pz => pz.vehiculo === veh.id).map(pz => ({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno }));
-  }
+  const { turnos, piezas } = programarTurnos(vehiculos, p, find);
+  const porVehiculo = new Map(vehiculos.map(v => [v.id, (v.relevos = [])]));
+  for (const pz of [...piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
   return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p, diaNombre: nombreDia(p.dia, red) };
 }
 
@@ -195,50 +203,134 @@ function repartirAutobuses(vehiculos, p) {
 }
 
 // 2) Turnos de conductor
-function programarTurnos(vehiculos, p) {
-  // piezas de cada bloque…
+function cortarPiezas(vehiculos, p, find) {
   const piezas = [];
   for (const veh of vehiculos) {
     let lim = p.piezaMax;
     if (p.corte === "equilibrado") {
-      // mismas piezas que con "max" pero de largo parecido (las muy cortas emparejan mal)
+      // piezas de largo parecido (las muy cortas se aprovechan peor)
       const n = Math.ceil((veh.fin - veh.inicio) / p.piezaMax);
       lim = Math.min(p.piezaMax, Math.ceil((veh.fin - veh.inicio) / n) + 20);
     } else if (typeof p.corte === "number") lim = Math.min(p.piezaMax, p.corte);
-    let pz = null;
+    let pz = null, previa = null;
     for (const v of veh.viajes) {
       const dur = v.arr - v.dep;
-      if (pz && (pz.conduccion + dur > p.conduccionContinuaMax || v.arr - pz.inicio > lim)) { piezas.push(pz); pz = null; }
-      if (!pz) pz = { vehiculo: veh.id, inicio: v.dep, fin: v.arr, conduccion: 0, viajes: [] };
-      pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += dur;
+      if (pz && (pz.conduccion + dur > p.conduccionContinuaMax || v.arr - pz.inicio > lim)) { piezas.push(pz); previa = pz; pz = null; }
+      if (!pz) pz = { vehiculo: veh.id, inicio: v.dep, fin: v.arr, conduccion: 0, viajes: [], previa, o: find ? find(v.o) : v.o };
+      pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += dur; pz.d = find ? find(v.d) : v.d;
     }
     if (pz) piezas.push(pz);
   }
-  // …emparejadas en turnos de dos piezas (pausa ≥ 45 min, amplitud y jornada máximas)
-  piezas.sort((x, y) => x.inicio - y.inicio);
-  const usada = new Uint8Array(piezas.length);
-  const turnos = [];
-  for (let i = 0; i < piezas.length; i++) {
-    if (usada[i]) continue;
-    usada[i] = 1;
-    const a1 = piezas[i];
-    let par = -1;
-    for (let j = i + 1; j < piezas.length; j++) {
-      const b1 = piezas[j];
-      if (b1.inicio - a1.inicio > p.amplitudMax) break;
-      if (usada[j] || b1.inicio < a1.fin + p.pausaConduccionMin) continue;
-      if (b1.fin - a1.inicio > p.amplitudMax || (a1.fin - a1.inicio) + (b1.fin - b1.inicio) > p.jornadaMax) continue;
-      if (a1.conduccion + b1.conduccion > p.conduccionDiariaMax) continue;
-      if (p.emparejar !== "llena") { par = j; break; } // la primera que encaja: menos tiempo muerto entre piezas
-      if (par < 0 || (b1.fin - b1.inicio) > (piezas[par].fin - piezas[par].inicio)) par = j; // la que más llena el turno
-    }
-    const pzs = [a1];
-    if (par >= 0) { usada[par] = 1; pzs.push(piezas[par]); }
-    turnos.push(cerrarTurno({ piezas: pzs }, p));
+  return piezas;
+}
+
+// Estado de un turno al añadirle una pieza (null si no cabe)
+function anadir(t, pz, p) {
+  let hueco = 0, partido = false;
+  if (t) {
+    const ultima = t.piezas[t.piezas.length - 1];
+    hueco = pz.inicio - t.fin;
+    const sigue = pz.previa === ultima; // sigue en el mismo autobús: no hay relevo
+    if (hueco < (sigue ? 0 : t.d === pz.o ? p.relevoMin : p.desplazamiento)) return null;
+    if (t.piezas.length >= p.maxPiezas) return null;
+    partido = hueco >= p.huecoNoPagado;
+    if (partido && t.partidos >= p.maxPartidos) return null;
   }
-  turnos.sort((x, y) => x.inicio - y.inicio);
-  turnos.forEach((t, i) => { t.id = i + 1; for (const pz of t.piezas) pz.turno = t.id; });
-  return { turnos, piezas };
+  const inicio = t ? t.inicio : pz.inicio;
+  if (pz.fin - inicio > p.amplitudMax) return null;
+  const trabajo = (t ? t.trabajo : 0) + (partido ? 0 : hueco) + (pz.fin - pz.inicio);
+  if (trabajo > p.jornadaMax) return null;
+  const conduccion = (t ? t.conduccion : 0) + pz.conduccion;
+  if (p.aplicar561 && conduccion > p.conduccionDiariaMax) return null;
+  // conducción continua: se acumula hasta juntar la pausa (puede partirse en 15 + 30)
+  let seguido = t ? t.seguido : 0, pausaAcum = t ? t.pausaAcum : 0, hay15 = t ? t.hay15 : false, finPrev = t ? t.fin : null;
+  for (const v of pz.viajes) {
+    if (finPrev != null) {
+      const h = v.dep - finPrev;
+      if (h >= 15) { pausaAcum += h; hay15 = true; }
+      if (pausaAcum >= p.pausaConduccionMin) { seguido = 0; pausaAcum = 0; }
+    }
+    seguido += v.arr - v.dep;
+    if (p.aplicar561 && seguido > p.conduccionContinuaMax) return null;
+    finPrev = v.arr;
+  }
+  if (pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // Estatuto: 15 min si pasa de 6 h
+  return { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0) };
+}
+// Rehace un turno desde cero con sus piezas en orden (null si no vale)
+function validar(piezas, p) {
+  const orden = [...piezas].sort((a, b) => a.inicio - b.inicio);
+  let t = null;
+  for (let i = 0; i < orden.length; i++) {
+    const x = anadir(t, orden[i], p);
+    if (!x) return null;
+    t = { ...x, piezas: orden.slice(0, i + 1) };
+  }
+  return t;
+}
+
+function programarTurnos(vehiculos, p, find) {
+  const piezas = cortarPiezas(vehiculos, p, find);
+  piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
+  // Cada pieza va al conductor que mejor la aprovecha: el que sigue en ese
+  // autobús, si no el que menos espera ("primera") o el que lleva más horas
+  // ("llena"); si no cabe en ninguno, entra un conductor nuevo.
+  const turnos = [];
+  let activos = [];
+  const deLaPieza = new Map(); // pieza → turno (para seguir en el mismo autobús)
+  for (let i = 0; i < piezas.length; i++) {
+    const pz = piezas[i];
+    if (i % 200 === 0) activos = activos.filter(t => t.inicio + p.amplitudMax > pz.inicio);
+    let mejor = null, nuevo = null, nota = -Infinity;
+    const previo = pz.previa && deLaPieza.get(pz.previa);
+    if (previo) { const x = anadir(previo, pz, p); if (x) { mejor = previo; nuevo = x; nota = Infinity; } }
+    if (!mejor) {
+      for (const t of activos) {
+        if (t.fin > pz.inicio || t.inicio + p.amplitudMax < pz.fin) continue;
+        const x = anadir(t, pz, p);
+        if (!x) continue;
+        const n = p.emparejar === "llena" ? x.trabajo * 1000 - (pz.inicio - t.fin) : -(pz.inicio - t.fin) * 1000 + x.trabajo;
+        if (n > nota) { nota = n; mejor = t; nuevo = x; }
+      }
+    }
+    if (mejor) { Object.assign(mejor, nuevo); mejor.piezas.push(pz); deLaPieza.set(pz, mejor); continue; }
+    const t0 = anadir(null, pz, p);
+    const t = t0 ? { ...t0, piezas: [pz] } : { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0 };
+    turnos.push(t); activos.push(t); deLaPieza.set(pz, t);
+  }
+  // Repaso: deshacer los turnos cortos metiendo sus piezas en otros
+  const porInicio = () => [...turnos].sort((a, b) => a.inicio - b.inicio);
+  let lista = porInicio();
+  const cortos = [...turnos].filter(t => t.trabajo < p.jornadaMax * 0.6).sort((a, b) => a.trabajo - b.trabajo);
+  const quitados = new Set();
+  let intentos = 0;
+  for (const c of cortos) {
+    if (quitados.has(c) || intentos > 400000) continue;
+    const cambios = []; // [turno, estado anterior]
+    let ok = true;
+    for (const pz of c.piezas) {
+      let destino = null, estado = null;
+      for (const t of lista) {
+        if (t.inicio > pz.fin) break;
+        if (t === c || quitados.has(t) || t.fin + p.amplitudMax < pz.inicio || Math.max(t.fin, pz.fin) - Math.min(t.inicio, pz.inicio) > p.amplitudMax) continue;
+        if (t.piezas.some(x => x.inicio < pz.fin && pz.inicio < x.fin)) continue;
+        intentos++;
+        const x = validar([...t.piezas, pz], p);
+        if (x && (!estado || x.trabajo > estado.trabajo)) { destino = t; estado = x; }
+      }
+      if (!destino) { ok = false; break; }
+      cambios.push([destino, { ...destino }]);
+      Object.assign(destino, estado);
+    }
+    if (ok) quitados.add(c);
+    else for (const [t, antes] of cambios.reverse()) Object.assign(t, antes);
+    if (ok) lista = lista.filter(t => t !== c);
+  }
+  const finales = turnos.filter(t => !quitados.has(t)).map(t => cerrarTurno({ piezas: [...t.piezas].sort((a, b) => a.inicio - b.inicio) }, p));
+  finales.sort((x, y) => x.inicio - y.inicio);
+  finales.forEach((t, i) => { t.id = i + 1; for (const pz of t.piezas) pz.turno = t.id; });
+  for (const pz of piezas) { delete pz.previa; }
+  return { turnos: finales, piezas };
 }
 
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
@@ -250,6 +342,7 @@ export function resumenServicio(res) {
   const r1 = x => (x == null ? null : Math.round(x * 10) / 10);
   return {
     viajes: k.viajes, autobuses: k.autobuses, pico: k.pico, bloques: k.bloques, turnos: k.turnos, turnosDosPiezas: k.turnosDosPiezas,
+    piezasMedias: Math.round((k.piezasMedias || 0) * 10) / 10,
     horasPagadas: r1(k.horasPagadas), horasServicio: r1(k.horasServicio), km: r1(k.km), avisos: k.turnosConAviso,
     eficienciaPersonal: k.eficienciaPersonal == null ? null : Math.round(k.eficienciaPersonal * 1000) / 1000,
   };
@@ -270,11 +363,11 @@ export const OBJETIVOS = [
 /** Nombre corto de una estrategia para enseñarla */
 export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
   const corte = v.corte === "equilibrado" ? "piezas equilibradas"
-    : typeof v.corte === "number" && v.corte < piezaMax ? `piezas ≤ ${Math.floor(v.corte / 60)}h${String(v.corte % 60).padStart(2, "0")}` : "piezas largas";
+    : typeof v.corte === "number" && v.corte < piezaMax ? `piezas de hasta ${Math.floor(v.corte / 60)}h${String(v.corte % 60).padStart(2, "0")}` : "piezas largas";
   return [
     v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera",
     corte,
-    v.emparejar === "llena" ? "turnos llenos" : "pausa corta",
+    v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas",
     v.entreLineas === false ? "sin cambiar de línea" : null,
   ].filter(Boolean).join(" · ");
 }
@@ -289,34 +382,46 @@ export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "au
   const p = { ...PARAMS_DEFECTO, ...opciones };
   const { viajes, find } = viajesDelDia(red, cfg, p);
   const km = viajes.reduce((s, v) => s + v.km, 0);
+  const cortes = ["max", 180, 150, 120, 90].filter(c => typeof c !== "number" || c < p.piezaMax);
+  const deTurnos = cortes.flatMap(corte => ["primera", "llena"].map(emparejar => ({ corte, emparejar })));
   const deVehiculos = [];
   for (const eleccion of ["ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) deVehiculos.push({ eleccion, entreLineas });
-  const cortes = ["max", "equilibrado", p.piezaMax - 30, p.piezaMax - 60].filter(c => typeof c !== "number" || c >= 90);
-  const deTurnos = cortes.flatMap(corte => ["primera", "llena"].map(emparejar => ({ corte, emparejar })));
-  const total = deVehiculos.length * deTurnos.length;
+  // Dos fases (cada pasada de turnos cuesta segundos en redes grandes): todas
+  // las formas de hacer turnos con los autobuses de siempre, y las mejores con
+  // las otras formas de encadenar los autobuses.
+  const total = deTurnos.length + (deVehiculos.length - 1) * 2;
   const probadas = [];
-  for (const dv of deVehiculos) {
-    const q = { ...p, ...dv };
-    const vehiculos = programarVehiculos(viajes, cfg, find, q);
-    const autobuses = repartirAutobuses(vehiculos, q).length;
-    for (const dt of deTurnos) {
-      const { turnos } = programarTurnos(vehiculos, { ...q, ...dt });
-      const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
-      const r = {
-        estrategia: { ...dv, ...dt }, autobuses, turnos: turnos.length, horasPagadas,
-        avisos: turnos.filter(t => t.avisos.length).length,
-        coste: costeDia({ horasPagadas, km, autobuses }, p),
-      };
-      r.cumple = !(p.flotaMax > 0 && autobuses > p.flotaMax) && !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
-      r.nombre = nombreEstrategia(r.estrategia, p.piezaMax);
-      probadas.push(r);
-      onProgreso?.(probadas.length, total);
+  const vehiculosDe = new Map();
+  const probar = (dv, dt) => {
+    const clave = JSON.stringify(dv);
+    if (!vehiculosDe.has(clave)) {
+      const q = { ...p, ...dv };
+      const vehiculos = programarVehiculos(viajes, cfg, find, q);
+      vehiculosDe.set(clave, { vehiculos, autobuses: repartirAutobuses(vehiculos, q).length });
     }
-  }
+    const { vehiculos, autobuses } = vehiculosDe.get(clave);
+    const { turnos } = programarTurnos(vehiculos, { ...p, ...dv, ...dt }, find);
+    const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
+    const r = {
+      estrategia: { ...dv, ...dt }, autobuses, turnos: turnos.length, horasPagadas,
+      avisos: turnos.filter(t => t.avisos.length).length,
+      piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
+      coste: costeDia({ horasPagadas, km, autobuses }, p),
+    };
+    r.cumple = !(p.flotaMax > 0 && autobuses > p.flotaMax) && !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
+    r.nombre = nombreEstrategia(r.estrategia, p.piezaMax);
+    probadas.push(r);
+    onProgreso?.(probadas.length, total);
+  };
   const exceso = r => Math.max(0, p.flotaMax > 0 ? r.autobuses - p.flotaMax : 0) + Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
   const clave = r => [exceso(r), r.avisos, ...(objetivo === "conductores" ? [r.turnos, r.horasPagadas, r.autobuses]
     : objetivo === "coste" && r.coste != null ? [r.coste, r.autobuses] : [r.autobuses, r.turnos, r.horasPagadas])];
-  probadas.sort((a, b) => { const x = clave(a), y = clave(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
+  const ordenar = () => probadas.sort((a, b) => { const x = clave(a), y = clave(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
+  for (const dt of deTurnos) probar(deVehiculos[0], dt);
+  ordenar();
+  const mejores = probadas.slice(0, 2).map(r => ({ corte: r.estrategia.corte, emparejar: r.estrategia.emparejar }));
+  for (const dv of deVehiculos.slice(1)) for (const dt of mejores) probar(dv, dt);
+  ordenar();
   return { probadas, objetivo };
 }
 
@@ -327,7 +432,8 @@ function cerrarTurno(t, p) {
   t.inicio = t.piezas[0].inicio;
   t.fin = t.piezas.at(-1).fin;
   t.duracion = t.fin - t.inicio; // amplitud
-  t.trabajo = t.piezas.reduce((s, pz) => s + (pz.fin - pz.inicio), 0);
+  t.trabajo = t.duracion - t.piezas.slice(1).reduce((s, pz, i) => { const h = pz.inicio - t.piezas[i].fin; return s + (h >= p.huecoNoPagado ? h : 0); }, 0);
+  t.partidos = t.piezas.slice(1).filter((pz, i) => pz.inicio - t.piezas[i].fin >= p.huecoNoPagado).length;
   t.conduccion = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
   t.vehiculos = [...new Set(t.piezas.map(pz => pz.vehiculo))];
   // Conducción continua: se acumula hasta una pausa de pausaConduccionMin
@@ -383,7 +489,9 @@ export function kpisServicio(viajes, vehiculos, turnos, autobuses = []) {
     eficiencia: enLinea ? servicio / enLinea : null, // tiempo con viajeros / tiempo del autobús en línea
     km: viajes.reduce((s, v) => s + v.km, 0),
     turnos: turnos.length,
-    turnosDosPiezas: turnos.filter(t => t.piezas.length === 2).length,
+    turnosDosPiezas: turnos.filter(t => t.piezas.length >= 2).length, // con relevo (dos o más piezas)
+    piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
+    turnosPartidos: turnos.filter(t => t.partidos > 0).length,
     turnosConAviso: turnos.filter(t => t.avisos.length).length,
     horasPagadas: pagado / 60,
     eficienciaPersonal: pagado ? conduccion / pagado : null, // conducción / tiempo de trabajo

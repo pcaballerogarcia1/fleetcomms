@@ -71,18 +71,33 @@ describe("scheduling de líneas: turnos de conductor", () => {
   const salidas = Array.from({ length: 37 }, (_, k) => h(5) + k * 30);
   const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 25), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 25, viajes: 1 })) }] }] };
 
-  it("piezas de ≤4h30 de conducción y turnos de dos piezas con pausa, sin avisos", () => {
+  it("turnos de varias piezas de distintos autobuses que cumplen todas las restricciones", () => {
     const r = generarServicio(red, {}, { dia: "laborable" });
     expect(r.turnos.length).toBeGreaterThan(1);
+    expect(Math.max(...r.turnos.map(t => t.piezas.length))).toBeGreaterThanOrEqual(2);
     for (const t of r.turnos) {
-      for (const pz of t.piezas) expect(pz.conduccion).toBeLessThanOrEqual(270);
+      expect(t.piezas.length).toBeLessThanOrEqual(8);
       expect(t.trabajo).toBeLessThanOrEqual(480);
       expect(t.duracion).toBeLessThanOrEqual(540);
-      if (t.piezas.length === 2) expect(t.piezas[1].inicio - t.piezas[0].fin).toBeGreaterThanOrEqual(45);
+      expect(t.partidos).toBeLessThanOrEqual(1);
+      t.piezas.slice(1).forEach((pz, i) => expect(pz.inicio).toBeGreaterThanOrEqual(t.piezas[i].fin)); // sin solaparse
       expect(t.avisos).toEqual([]);
     }
     // todos los viajes los hace algún turno, una sola vez
     expect(r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes)).length).toBe(r.kpis.viajes);
+  });
+
+  it("con piezas más cortas y más piezas por turno hacen falta menos o los mismos conductores; con 1 pieza, uno por pieza", () => {
+    const largo = generarServicio(red, {}, { dia: "laborable", corte: "max", maxPiezas: 2 });
+    const corto = generarServicio(red, {}, { dia: "laborable", corte: 120, maxPiezas: 8 });
+    expect(corto.kpis.turnos).toBeLessThanOrEqual(largo.kpis.turnos);
+    const una = generarServicio(red, {}, { dia: "laborable", maxPiezas: 1 });
+    expect(una.turnos.every(t => t.piezas.length === 1)).toBe(true);
+  });
+
+  it("sin jornadas partidas no hay huecos largos", () => {
+    const r = generarServicio(red, {}, { dia: "laborable", maxPartidos: 0 });
+    for (const t of r.turnos) t.piezas.slice(1).forEach((pz, i) => expect(pz.inicio - t.piezas[i].fin).toBeLessThan(60));
   });
 
   it("perfil de vehículos a la vez", () => {
@@ -120,6 +135,7 @@ describe("scheduling de líneas: optimizar", () => {
         for (const pz of t.piezas) expect(pz.fin - pz.inicio).toBeLessThanOrEqual(200);
         expect(t.trabajo).toBeLessThanOrEqual(480);
         expect(t.duracion).toBeLessThanOrEqual(540);
+        expect(t.avisos).toEqual([]);
       }
       expect(r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes)).length).toBe(r.kpis.viajes);
     }
@@ -138,7 +154,7 @@ describe("scheduling de líneas: resumen por calendario", () => {
     const r = generarServicio(RED, {}, { dia: "laborable" });
     const x = resumenServicio(r);
     expect(x).toMatchObject({ viajes: r.kpis.viajes, autobuses: r.kpis.autobuses, turnos: r.kpis.turnos, avisos: 0 });
-    expect(Object.keys(x).length).toBeLessThan(12);
+    expect(Object.keys(x).length).toBeLessThan(15);
     expect(costeDia(x, { costeVehiculoDia: 100 })).toBe(100 * r.kpis.autobuses);
   });
 });

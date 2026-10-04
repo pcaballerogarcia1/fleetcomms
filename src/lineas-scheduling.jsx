@@ -47,7 +47,7 @@ function filasDe(res, modo) {
     const viajes = t.piezas.flatMap(pz => pz.viajes);
     const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
-    return fila(`T${t.id}`, t.piezas.length === 2 ? "2 piezas" : "1 pieza", viajes, {
+    return fila(`T${t.id}`, `${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos ? " · partido" : ""}`, viajes, {
       tramosPausa, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
     });
@@ -276,10 +276,15 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
         {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
         {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
         {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
-        {row("Pausa mínima entre piezas", numInput("pausaConduccionMin", "min"))}
-        {row("Jornada de trabajo máxima (suma de piezas)", numInput("jornadaMax", "min"))}
+        {row("Pausa de conducción (UE 561, se puede partir 15 + 30)", numInput("pausaConduccionMin", "min"))}
+        {row("Jornada de trabajo máxima (piezas + huecos cortos)", numInput("jornadaMax", "min"))}
         {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
         {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
+        {row("Piezas por turno, como mucho", numInput("maxPiezas", "piezas"))}
+        {row("Jornadas partidas por turno, como mucho", numInput("maxPartidos", "huecos largos (0 = sin partidos)"))}
+        {row("Hueco que ya no se paga (jornada partida)", numInput("huecoNoPagado", "min o más entre dos piezas"))}
+        {row("Tiempo de relevo en la misma cabecera", numInput("relevoMin", "min"))}
+        {row("Tiempo para ir a otra cabecera", numInput("desplazamiento", "min entre piezas en cabeceras distintas"))}
         {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
         {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
         {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
@@ -290,8 +295,8 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px" }}>Estrategia de este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
-        {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[30, 60].map(m => p.piezaMax - m).filter(m => m >= 90).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
-        {row("Cómo se emparejan las piezas", sel("emparejar", [["primera", "Pausa entre piezas más corta"], ["llena", "Turnos más llenos"]]))}
+        {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
+        {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
       </div>
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
         Los tiempos de recorrido por franja, la regulación propia de cada línea y los tipos de vehículo que admite se configuran en Planning, en la ficha de cada línea.
@@ -536,7 +541,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
             <thead><tr>
               <th style={{ ...th, textAlign: "left" }}>#</th>
               <th style={{ ...th, textAlign: "left" }}>Estrategia</th>
-              <th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>{hayPrecios && <th style={th}>Coste/día</th>}<th style={th} />
+              <th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Piezas/turno</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>{hayPrecios && <th style={th}>Coste/día</th>}<th style={th} />
             </tr></thead>
             <tbody>
               {opt.probadas.slice(0, 8).map((r, i) => (
@@ -545,6 +550,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
                   <td style={{ ...td, textAlign: "left", fontFamily: font, fontSize: 11.5, color: C.muted }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa de los límites</span>}</td>
                   <td style={{ ...td, color: r.autobuses === mejor.autobuses ? C.text : C.muted }}>{num(r.autobuses)}</td>
                   <td style={{ ...td, color: r.turnos === mejor.turnos ? C.text : C.muted }}>{num(r.turnos)}</td>
+                  <td style={{ ...td, color: C.muted }}>{r.piezasMedias != null ? r.piezasMedias.toFixed(1).replace(".", ",") : "—"}</td>
                   <td style={td}>{num(r.horasPagadas)}</td>
                   <td style={{ ...td, color: r.avisos ? C.red : C.dim }}>{r.avisos}</td>
                   {hayPrecios && <td style={td}>{r.coste != null ? `${num(r.coste)} €` : "—"}</td>}
@@ -812,14 +818,14 @@ export function SchedulingLineasPage({ projectId }) {
           {/* ── TOOLBAR (como la del Scheduling de puntos) ── */}
           <div style={{ padding: "0 16px", height: 46, borderBottom: `1px solid ${C.border}`, background: C.card, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ position: "relative" }}>
-              <button onClick={() => setPanelLineas(v => !v)} title="Líneas que entran en el escenario" style={{ padding: "5px 11px", background: C.greenDim, border: `1px solid ${C.green}44`, color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <button onClick={() => setPanelLineas(v => !v)} title="Líneas que entran en el escenario" style={{ padding: "5px 11px", background: C.greenDim, border: `1px solid ${C.green}44`, color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6, flexShrink: 0, whiteSpace: "nowrap" }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                 {totalViajes.toLocaleString("es-ES")} viajes · {nLineas === red.lineas.length ? `${nLineas} líneas` : `${nLineas} de ${red.lineas.length} líneas`}
               </button>
               {panelLineas && <SelectorLineas lineas={red.lineas} elegidas={params.lineas} onCambiar={ids => setCambios(c => ({ ...c, lineas: ids }))} onCerrar={() => setPanelLineas(false)} />}
             </div>
             <SelectorCalendario red={red} valor={dia} onCambiar={cambiarDia} ancho={260} />
-            {infoCal?.objetivo && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} style={{ fontSize: 10.5, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>Optimizado · {OBJETIVOS.find(o => o.id === infoCal.objetivo)?.nombre.toLowerCase()}</span>}
+            {infoCal?.objetivo && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} style={{ fontSize: 10.5, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>Optimizado: {OBJETIVOS.find(o => o.id === infoCal.objetivo)?.nombre.toLowerCase()}</span>}
             {sep}
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
               {[["vehicles", "Vehículos"], ["workers", "Trabajadores"]].map(([v, l]) => (
@@ -831,11 +837,6 @@ export function SchedulingLineasPage({ projectId }) {
               Restricciones
             </button>
             {res && <>
-              {sep}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
-                <span><span style={{ fontWeight: 700, color: C.green }}>{res.kpis.viajes.toLocaleString("es-ES")}</span> <span style={{ color: C.dim }}>viajes</span></span>
-                <span><span style={{ fontWeight: 700, color: C.amber }}>{num(res.kpis.km)}</span> <span style={{ color: C.dim }}>km</span></span>
-              </div>
               {sep}
               <button onClick={() => exportar("vehiculos")} title="Descargar los autobuses en Excel" style={btnExcel}>{icoDescarga} Vehículos</button>
               <button onClick={() => exportar("turnos")} title="Descargar los turnos de conductor en Excel" style={btnExcel}>{icoDescarga} Trabajadores</button>
@@ -1024,7 +1025,7 @@ function cambiosKpi(res, p = res.params) {
   const k = res.kpis;
   return {
     "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
-    "Turnos": { sub: `${num(k.turnosDosPiezas)} de dos piezas`, ayuda: "Turnos de conductor: una o dos piezas con relevo en cabecera y pausa entre ellas." },
+    "Turnos": { sub: `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
     "Eficiencia vehículo": { ocultar: true },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
     "Km": { sub: `${num(k.horasServicio)} h con viajeros`, ayuda: "Kilómetros de todos los viajes del día (sin los vacíos por cochera)." },
