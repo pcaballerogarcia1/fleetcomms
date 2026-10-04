@@ -387,17 +387,3 @@ export function PlanningLineasPage({ projectId, orgId }) {
     </div>
   );
 }
-
-/** Scheduling de un proyecto de Líneas regulares: todavía no (Fase 2) */
-export function SchedulingLineasPendiente() {
-  return (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
-      <div style={{ maxWidth: 520, padding: 28, textAlign: "center" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 10 }}>Scheduling de líneas regulares</div>
-        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-          Aquí se encadenarán los viajes de cada línea en vehículos (respetando la tipología de cada línea y la regulación en cabecera) y se repartirán en turnos de conductor con los tiempos de conducción y relevos. Está en desarrollo; mientras tanto, prepara la red en Planning.
-        </div>
-      </div>
-    </div>
-  );
-}

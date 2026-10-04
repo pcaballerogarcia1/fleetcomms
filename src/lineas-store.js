@@ -81,3 +81,12 @@ export function tiempoEfectivo(sentido, franja, cfgLinea) {
   const t = sentido.tiempos?.find(x => x.franja === franja);
   return { min: t?.min ?? null, manual: false, viajes: t?.viajes ?? 0 };
 }
+
+// Parámetros del Scheduling de líneas (tipo de día, líneas, límites):
+// planning_settings/{proyecto}.lineasSched
+export function watchSchedParams(projectId, cb) {
+  return onSnapshot(doc(db, "planning_settings", projectId), s => cb(s.exists() ? s.data().lineasSched || null : null), () => cb(null));
+}
+export function guardarSchedParams(projectId, params) {
+  return setDoc(doc(db, "planning_settings", projectId), { lineasSched: params, updatedAt: serverTimestamp() }, { merge: true });
+}

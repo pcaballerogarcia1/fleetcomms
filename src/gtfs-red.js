@@ -197,8 +197,14 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     const cab = masComun(base.map(v => vCab[v]).filter(Boolean)) || paradas[pat[pat.length - 1]]?.nombre || "";
     const sh = masComun(base.map(v => vShape[v]).filter(Boolean));
     if (sh) { if (!shapesQuiero.has(sh)) shapesQuiero.set(sh, []); shapesQuiero.get(sh).push([r, dir]); }
-    const viajes = {};
-    for (const t of TIPOS_DIA) viajes[t.id] = sinCalendario ? (t.id === "laborable" ? vs.length : 0) : vs.filter(v => activo[t.id].has(vServ[v])).length;
+    // Viajes y horas de salida (minutos desde las 00:00, >1440 = madrugada
+    // del día siguiente) de cada tipo de día: lo que encadena el Scheduling
+    const viajes = {}, salidas = {};
+    for (const t of TIPOS_DIA) {
+      const delDia = sinCalendario ? (t.id === "laborable" ? vs : []) : vs.filter(v => activo[t.id].has(vServ[v]));
+      viajes[t.id] = delDia.length;
+      salidas[t.id] = delDia.map(v => vIni[v]).filter(x => x >= 0).sort((a, b) => a - b);
+    }
     const porFranja = new Map();
     let primera = null, ultima = null;
     for (const v of base) {
@@ -212,7 +218,7 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     }
     const s = {
       dir, nombre: dir === 0 ? "Ida" : "Vuelta", cabecera: cab,
-      paradas: pat.map(p => paradas[p].id), trazado: [], km: null, viajes,
+      paradas: pat.map(p => paradas[p].id), trazado: [], km: null, viajes, salidas,
       primera: minToHHMM(primera), ultima: minToHHMM(ultima),
       tiempos: FRANJAS.filter(f => porFranja.has(f.id)).map(f => ({ franja: f.id, min: mediana(porFranja.get(f.id)), viajes: porFranja.get(f.id).length })),
     };

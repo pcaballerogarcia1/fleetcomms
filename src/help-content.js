@@ -342,9 +342,34 @@ export const AYUDA = {
   ],
   scheduling_lineas: [
     {
-      q: "¿Qué hará el Scheduling de líneas?",
-      a: "Encadenar los viajes de cada línea en vehículos (respetando la tipología de cada línea y la regulación en cabecera) y repartirlos en turnos de conductor con los tiempos de conducción y relevos. Está en desarrollo; de momento prepara la red en Planning.",
-      tags: "scheduling vehículos turnos conductor viajes bloques",
+      q: "¿Cómo genero el servicio?",
+      a: "Elige el tipo de día (laborable, sábado o domingo/festivo) y, si quieres, solo algunas líneas, y pulsa \"Generar servicio\". Con la red de Planning se encadenan los viajes en autobuses y se reparten en turnos de conductor. Si cambias algo, el botón pasa a \"Generar con los cambios\".",
+      tags: "generar servicio día laborable sábado festivo líneas",
+    },
+    {
+      q: "¿Qué diferencia hay entre autobuses, bloques y pico?",
+      a: "Un bloque es lo que un autobús hace seguido, sin pasar por cochera. Un mismo autobús puede hacer un bloque de mañana y otro de tarde si entre medias hay margen para ir y volver de cochera (\"Ajustes\" → margen para un vacío). \"Autobuses\" es la flota necesaria; el pico, los que están en servicio a la vez en el peor momento (la curva de debajo).",
+      tags: "autobuses bloques pico flota necesaria vacío cochera",
+    },
+    {
+      q: "¿Cómo se encadenan los viajes?",
+      a: "Por hora de salida: cada viaje va a un autobús que esté libre en esa cabecera con la regulación cumplida (la de la línea o la de \"Ajustes\") y de un tipo que admita la línea; si no hay ninguno, se añade otro. Las dos cabeceras de una línea cuentan como el mismo sitio. En \"Ajustes\" puedes impedir que un autobús cambie de línea.",
+      tags: "encadenar viajes regulación cabecera tipo vehículo cambiar línea",
+    },
+    {
+      q: "¿Cómo se hacen los turnos de conductor?",
+      a: "Cada bloque se corta en piezas con relevo en cabecera (como mucho la pieza máxima y nunca más de 4h30 conduciendo) y las piezas se emparejan en turnos de dos con al menos 45 min de pausa, sin pasar de la jornada de trabajo ni de la amplitud máximas (\"Ajustes\"). En el Gantt, las marcas blancas \"T12\" son los relevos; la pestaña \"Turnos\" lista cada turno con sus piezas.",
+      tags: "turnos conductor piezas relevo pausa jornada amplitud 561 estatuto",
+    },
+    {
+      q: "¿Qué significan las eficiencias?",
+      a: "Eficiencia vehículo: tiempo con viajeros / tiempo del autobús en línea (lo demás es regulación y esperas). Eficiencia personal: conducción / tiempo de trabajo de los turnos.",
+      tags: "eficiencia vehículo personal indicadores",
+    },
+    {
+      q: "Sale un aviso de horarios aproximados",
+      a: "La red se importó antes de que se guardaran las horas de salida de cada viaje, así que se reparten entre la primera y la última. Vuelve a importar el GTFS en Planning (\"Sustituir red\") para usar los horarios exactos; la configuración de las líneas se conserva.",
+      tags: "aproximado horarios salidas reimportar",
     },
   ],
 

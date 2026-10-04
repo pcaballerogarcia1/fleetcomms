@@ -17,7 +17,7 @@ const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ defau
 const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ default: m.AnalyticsPage })));
 // Proyectos de "Líneas regulares" (autobuses): su propio Planning y Scheduling
 const PlanningLineasLazy   = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.PlanningLineasPage })));
-const SchedulingLineasLazy = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.SchedulingLineasPendiente })));
+const SchedulingLineasLazy = lazy(() => import("./lineas-scheduling.jsx").then(m => ({ default: m.SchedulingLineasPage })));
 // LoginScheduling vive en su propio archivo diminuto (sin tirar de
 // Scheduling/Planning/Rostering) — se importa normal porque hace falta
 // de inmediato en /login.
@@ -394,7 +394,7 @@ function WorkspaceRouter() {
             pointerEvents: path === "/scheduling" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              {esLineas ? <SchedulingLineasLazy /> : <SchedulingModuleWrapperLazy
+              {esLineas ? <SchedulingLineasLazy key={activeProject._id} projectId={activeProject._id} /> : <SchedulingModuleWrapperLazy
                 vehicles={vehicles} workers={workers}
                 loadingV={loadingV} loadingW={loadingW}
                 activeProject={activeProject} onProjectUpdate={updateProject}
