@@ -18,6 +18,9 @@
 //    pausa de al menos 45 min entre ellas y sin pasar de la jornada máxima.
 //    Así se cumple la conducción UE 561/2006 y el descanso del Estatuto; lo
 //    que aun así no cuadra queda como aviso del turno.
+// 3) Optimizar: prueba varias estrategias (qué autobús coge cada viaje, dónde
+//    se corta la pieza, cómo se emparejan) que cumplen todas las
+//    restricciones y se queda con la mejor para el objetivo elegido.
 
 import { franjaDe, TIPOS_DIA } from "./gtfs-red.js";
 
@@ -31,6 +34,14 @@ export const PARAMS_DEFECTO = {
   margenVacio: 30,      // min entre dos bloques del mismo autobús (ir y volver de cochera)
   conduccionContinuaMax: 270, pausaConduccionMin: 45, conduccionDiariaMax: 540,
   jornadaSinPausaMax: 360, pausaJornadaMin: 15,
+  aplicar561: true,     // avisos de conducción UE 561/2006
+  costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
+  flotaMax: null,       // autobuses disponibles (límite del optimizador)
+  conductoresMax: null, // conductores disponibles ese día
+  // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
+  eleccion: "ultimo",   // "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
+  corte: "max",         // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min
+  emparejar: "primera", // "primera": la pausa más corta · "llena": el turno más cerca de la jornada máxima
 };
 
 const hhmmAMin = s => {
@@ -82,6 +93,17 @@ const admite = (cfg, tipo) => !cfg?.tipos?.length || tipo == null || cfg.tipos.i
  */
 export function generarServicio(red, cfg = {}, opciones = {}) {
   const p = { ...PARAMS_DEFECTO, ...opciones };
+  const { viajes, find, aproximado } = viajesDelDia(red, cfg, p);
+  const vehiculos = programarVehiculos(viajes, cfg, find, p);
+  const autobuses = repartirAutobuses(vehiculos, p);
+  const { turnos, piezas } = programarTurnos(vehiculos, p);
+  for (const veh of vehiculos) {
+    veh.relevos = piezas.filter(pz => pz.vehiculo === veh.id).map(pz => ({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno }));
+  }
+  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p };
+}
+
+function viajesDelDia(red, cfg, p) {
   const elegidas = (red?.lineas || []).filter(l => !p.lineas || p.lineas.includes(l.id));
   const find = cabeceras(elegidas);
   let aproximado = false;
@@ -104,8 +126,11 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
     }
   }
   viajes.sort((a, b) => a.dep - b.dep || a.arr - b.arr);
+  return { viajes, find, aproximado };
+}
 
-  // 1) Vehículos
+// 1) Vehículos: bloques de viajes encadenados en cabecera
+function programarVehiculos(viajes, cfg, find, p) {
   const vehiculos = [];
   const esperando = new Map(); // cabecera → [vehículo]
   for (const v of viajes) {
@@ -118,7 +143,7 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
       if (veh.libre > v.dep) continue;
       if (!p.entreLineas && veh.linea !== v.linea) continue;
       if (!admite(c, veh.tipo)) continue;
-      if (mejor < 0 || veh.libre > cola[mejor].libre) mejor = k;
+      if (mejor < 0 || (p.eleccion === "primero" ? veh.libre < cola[mejor].libre : veh.libre > cola[mejor].libre)) mejor = k;
     }
     let veh;
     if (mejor >= 0) { veh = cola[mejor]; cola.splice(mejor, 1); }
@@ -136,8 +161,11 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
     veh.lineas = [...new Set(veh.viajes.map(x => x.nombre))];
     delete veh.libre; delete veh.linea;
   }
+  return vehiculos;
+}
 
-  // Autobuses físicos: bloques sin solaparse (con el margen del vacío)
+// Autobuses físicos: bloques sin solaparse (con el margen del vacío)
+function repartirAutobuses(vehiculos, p) {
   const autobuses = [];
   for (const veh of [...vehiculos].sort((x, y) => x.inicio - y.inicio)) {
     let mejor = null;
@@ -153,14 +181,24 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
     veh.autobus = mejor.id;
   }
   autobuses.forEach(b => { delete b.libre; });
+  return autobuses;
+}
 
-  // 2) Turnos de conductor: piezas de cada bloque…
+// 2) Turnos de conductor
+function programarTurnos(vehiculos, p) {
+  // piezas de cada bloque…
   const piezas = [];
   for (const veh of vehiculos) {
+    let lim = p.piezaMax;
+    if (p.corte === "equilibrado") {
+      // mismas piezas que con "max" pero de largo parecido (las muy cortas emparejan mal)
+      const n = Math.ceil((veh.fin - veh.inicio) / p.piezaMax);
+      lim = Math.min(p.piezaMax, Math.ceil((veh.fin - veh.inicio) / n) + 20);
+    } else if (typeof p.corte === "number") lim = Math.min(p.piezaMax, p.corte);
     let pz = null;
     for (const v of veh.viajes) {
       const dur = v.arr - v.dep;
-      if (pz && (pz.conduccion + dur > p.conduccionContinuaMax || v.arr - pz.inicio > p.piezaMax)) { piezas.push(pz); pz = null; }
+      if (pz && (pz.conduccion + dur > p.conduccionContinuaMax || v.arr - pz.inicio > lim)) { piezas.push(pz); pz = null; }
       if (!pz) pz = { vehiculo: veh.id, inicio: v.dep, fin: v.arr, conduccion: 0, viajes: [] };
       pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += dur;
     }
@@ -181,7 +219,8 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
       if (usada[j] || b1.inicio < a1.fin + p.pausaConduccionMin) continue;
       if (b1.fin - a1.inicio > p.amplitudMax || (a1.fin - a1.inicio) + (b1.fin - b1.inicio) > p.jornadaMax) continue;
       if (a1.conduccion + b1.conduccion > p.conduccionDiariaMax) continue;
-      par = j; break; // la primera que encaja: menos tiempo muerto entre piezas
+      if (p.emparejar !== "llena") { par = j; break; } // la primera que encaja: menos tiempo muerto entre piezas
+      if (par < 0 || (b1.fin - b1.inicio) > (piezas[par].fin - piezas[par].inicio)) par = j; // la que más llena el turno
     }
     const pzs = [a1];
     if (par >= 0) { usada[par] = 1; pzs.push(piezas[par]); }
@@ -189,11 +228,72 @@ export function generarServicio(red, cfg = {}, opciones = {}) {
   }
   turnos.sort((x, y) => x.inicio - y.inicio);
   turnos.forEach((t, i) => { t.id = i + 1; for (const pz of t.piezas) pz.turno = t.id; });
-  for (const veh of vehiculos) {
-    veh.relevos = piezas.filter(pz => pz.vehiculo === veh.id).map(pz => ({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno }));
-  }
+  return { turnos, piezas };
+}
 
-  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p };
+/** Coste del día con los precios de Restricciones (null si no hay ninguno) */
+export function costeDia({ horasPagadas, km, autobuses }, p) {
+  if (!(p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0)) return null;
+  return horasPagadas * (p.costeHora || 0) + km * (p.costeKm || 0) + autobuses * (p.costeVehiculoDia || 0);
+}
+
+export const OBJETIVOS = [
+  { id: "autobuses", nombre: "Menos autobuses", ayuda: "Primero la flota; a igualdad, menos turnos y menos horas pagadas." },
+  { id: "conductores", nombre: "Menos conductores", ayuda: "Primero los turnos; a igualdad, menos horas pagadas y menos autobuses." },
+  { id: "coste", nombre: "Menor coste", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." },
+];
+
+/** Nombre corto de una estrategia para enseñarla */
+export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
+  const corte = v.corte === "equilibrado" ? "piezas equilibradas"
+    : typeof v.corte === "number" && v.corte < piezaMax ? `piezas ≤ ${Math.floor(v.corte / 60)}h${String(v.corte % 60).padStart(2, "0")}` : "piezas largas";
+  return [
+    v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera",
+    corte,
+    v.emparejar === "llena" ? "turnos llenos" : "pausa corta",
+    v.entreLineas === false ? "sin cambiar de línea" : null,
+  ].filter(Boolean).join(" · ");
+}
+
+/**
+ * Prueba estrategias que cumplen las restricciones y las ordena de mejor a peor.
+ * Mandan, por este orden: los límites (flotaMax, conductoresMax), los avisos
+ * legales y después el objetivo.
+ * @returns { probadas: [{ estrategia, autobuses, turnos, horasPagadas, avisos, coste, cumple, nombre }], objetivo }
+ */
+export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "autobuses", onProgreso } = {}) {
+  const p = { ...PARAMS_DEFECTO, ...opciones };
+  const { viajes, find } = viajesDelDia(red, cfg, p);
+  const km = viajes.reduce((s, v) => s + v.km, 0);
+  const deVehiculos = [];
+  for (const eleccion of ["ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) deVehiculos.push({ eleccion, entreLineas });
+  const cortes = ["max", "equilibrado", p.piezaMax - 30, p.piezaMax - 60].filter(c => typeof c !== "number" || c >= 90);
+  const deTurnos = cortes.flatMap(corte => ["primera", "llena"].map(emparejar => ({ corte, emparejar })));
+  const total = deVehiculos.length * deTurnos.length;
+  const probadas = [];
+  for (const dv of deVehiculos) {
+    const q = { ...p, ...dv };
+    const vehiculos = programarVehiculos(viajes, cfg, find, q);
+    const autobuses = repartirAutobuses(vehiculos, q).length;
+    for (const dt of deTurnos) {
+      const { turnos } = programarTurnos(vehiculos, { ...q, ...dt });
+      const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
+      const r = {
+        estrategia: { ...dv, ...dt }, autobuses, turnos: turnos.length, horasPagadas,
+        avisos: turnos.filter(t => t.avisos.length).length,
+        coste: costeDia({ horasPagadas, km, autobuses }, p),
+      };
+      r.cumple = !(p.flotaMax > 0 && autobuses > p.flotaMax) && !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
+      r.nombre = nombreEstrategia(r.estrategia, p.piezaMax);
+      probadas.push(r);
+      onProgreso?.(probadas.length, total);
+    }
+  }
+  const exceso = r => Math.max(0, p.flotaMax > 0 ? r.autobuses - p.flotaMax : 0) + Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
+  const clave = r => [exceso(r), r.avisos, ...(objetivo === "conductores" ? [r.turnos, r.horasPagadas, r.autobuses]
+    : objetivo === "coste" && r.coste != null ? [r.coste, r.autobuses] : [r.autobuses, r.turnos, r.horasPagadas])];
+  probadas.sort((a, b) => { const x = clave(a), y = clave(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
+  return { probadas, objetivo };
 }
 
 const hm = m => `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`;
@@ -219,8 +319,8 @@ function cerrarTurno(t, p) {
     peor = Math.max(peor, seguido);
   });
   t.avisos = [];
-  if (peor > p.conduccionContinuaMax) t.avisos.push(`${hm(peor)} de conducción sin la pausa de ${p.pausaConduccionMin} min (máx. ${hm(p.conduccionContinuaMax)}, UE 561/2006)`);
-  if (t.conduccion > p.conduccionDiariaMax) t.avisos.push(`Conducción de ${hm(t.conduccion)}: supera ${hm(p.conduccionDiariaMax)} (UE 561/2006)`);
+  if (p.aplicar561 && peor > p.conduccionContinuaMax) t.avisos.push(`${hm(peor)} de conducción sin la pausa de ${p.pausaConduccionMin} min (máx. ${hm(p.conduccionContinuaMax)}, UE 561/2006)`);
+  if (p.aplicar561 && t.conduccion > p.conduccionDiariaMax) t.avisos.push(`Conducción de ${hm(t.conduccion)}: supera ${hm(p.conduccionDiariaMax)} (UE 561/2006)`);
   if (t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (Estatuto, art. 34.4)`);
   return t;
 }

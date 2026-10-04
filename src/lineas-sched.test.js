@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarServicio, salidasDe, duracionViaje, perfilVehiculos } from "./lineas-sched.js";
+import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, costeDia } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -88,5 +88,47 @@ describe("scheduling de líneas: turnos de conductor", () => {
   it("perfil de vehículos a la vez", () => {
     const p = perfilVehiculos([{ inicio: 0, fin: 30 }, { inicio: 15, fin: 45 }]);
     expect(p.map(x => x.vehiculos)).toEqual([1, 2, 1]);
+  });
+});
+
+describe("scheduling de líneas: optimizar", () => {
+  const salidas = Array.from({ length: 37 }, (_, k) => h(5) + k * 30);
+  const red = { lineas: [
+    { id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 25), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 25, viajes: 1 })) }] },
+    RED.lineas[0], RED.lineas[1],
+  ] };
+
+  it("prueba estrategias, las ordena por el objetivo y la mejor no empeora la de por defecto", () => {
+    const normal = generarServicio(red, {}, { dia: "laborable" });
+    let avance = 0;
+    const { probadas } = optimizarServicio(red, {}, { dia: "laborable" }, { objetivo: "conductores", onProgreso: k => { avance = k; } });
+    expect(probadas.length).toBeGreaterThan(8);
+    expect(avance).toBe(probadas.length);
+    expect(probadas[0].turnos).toBeLessThanOrEqual(normal.kpis.turnos);
+    for (let i = 1; i < probadas.length; i++) expect(probadas[i].avisos * 1e6 + probadas[i].turnos).toBeGreaterThanOrEqual(probadas[0].avisos * 1e6 + probadas[0].turnos);
+    // aplicar la estrategia ganadora da lo mismo que dijo el optimizador
+    const aplicada = generarServicio(red, {}, { dia: "laborable", ...probadas[0].estrategia });
+    expect(aplicada.kpis.turnos).toBe(probadas[0].turnos);
+    expect(aplicada.kpis.autobuses).toBe(probadas[0].autobuses);
+  });
+
+  it("todas las estrategias respetan las restricciones de los turnos", () => {
+    const { probadas } = optimizarServicio(red, {}, { dia: "laborable", piezaMax: 200 });
+    for (const pr of probadas) {
+      const r = generarServicio(red, {}, { dia: "laborable", piezaMax: 200, ...pr.estrategia });
+      for (const t of r.turnos) {
+        for (const pz of t.piezas) expect(pz.fin - pz.inicio).toBeLessThanOrEqual(200);
+        expect(t.trabajo).toBeLessThanOrEqual(480);
+        expect(t.duracion).toBeLessThanOrEqual(540);
+      }
+      expect(r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes)).length).toBe(r.kpis.viajes);
+    }
+  });
+
+  it("marca las que pasan de la flota disponible y el coste usa los precios", () => {
+    const { probadas } = optimizarServicio(red, {}, { dia: "laborable", flotaMax: 1 });
+    expect(probadas.every(p => !p.cumple)).toBe(true);
+    expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, { costeHora: 20, costeKm: 1, costeVehiculoDia: 50 })).toBe(400);
+    expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, {})).toBe(null);
   });
 });

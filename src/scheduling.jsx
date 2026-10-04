@@ -240,8 +240,10 @@ const KPI_AYUDA = {
   "Avisos": "Filas que incumplen alguna regla: conducción UE 561/2006, descanso del Estatuto (art. 34.4), jornada máxima o franja horaria. Detalle en la columna \"!\" de la tabla.",
 };
 
-// Barra de indicadores del escenario, con el cambio respecto a la generación anterior
-function KpiBar({ k, base, onConfigCostes }) {
+// Barra de indicadores del escenario, con el cambio respecto a la generación anterior.
+// `cambios` adapta indicadores sin tocar los de aquí (lo usa el Scheduling de
+// líneas regulares): { "Paradas": { l: "Viajes", sub, ayuda }, "Eficiencia vehículo": { ocultar: true } }
+export function KpiBar({ k, base, onConfigCostes, cambios = {} }) {
   const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
   const num = v => v == null ? "—" : Math.round(v).toLocaleString("es-ES");
   const eur = v => v == null ? "—" : v.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -267,10 +269,13 @@ function KpiBar({ k, base, onConfigCostes }) {
       : { l: "Coste estimado", v: <button onClick={onConfigCostes} style={{ background: "none", border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
     { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
   ];
+  const vistos = items
+    .filter(it => !cambios[it.l]?.ocultar)
+    .map(it => ({ ...it, ...(cambios[it.l] || {}), ayuda: cambios[it.l]?.ayuda || KPI_AYUDA[it.l] }));
   return (
     <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, display: "flex", overflowX: "auto" }}>
-      {items.map((it, i) => (
-        <div key={it.l} title={KPI_AYUDA[it.l]} style={{ padding: "10px 18px", borderRight: i < items.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0, cursor: "help" }}>
+      {vistos.map((it, i) => (
+        <div key={it.l} title={it.ayuda} style={{ padding: "10px 18px", borderRight: i < vistos.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0, cursor: "help" }}>
           <div style={{ display: "flex", alignItems: "baseline" }}>
             <span style={{ fontSize: 20, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
             {it.d}
