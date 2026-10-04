@@ -241,6 +241,20 @@ function programarTurnos(vehiculos, p) {
   return { turnos, piezas };
 }
 
+// Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
+export const CAMPOS_ESTRATEGIA = ["eleccion", "corte", "emparejar", "entreLineas"];
+
+/** Indicadores de un escenario, pequeños para guardarlos por calendario */
+export function resumenServicio(res) {
+  const k = res.kpis;
+  const r1 = x => (x == null ? null : Math.round(x * 10) / 10);
+  return {
+    viajes: k.viajes, autobuses: k.autobuses, pico: k.pico, bloques: k.bloques, turnos: k.turnos, turnosDosPiezas: k.turnosDosPiezas,
+    horasPagadas: r1(k.horasPagadas), horasServicio: r1(k.horasServicio), km: r1(k.km), avisos: k.turnosConAviso,
+    eficienciaPersonal: k.eficienciaPersonal == null ? null : Math.round(k.eficienciaPersonal * 1000) / 1000,
+  };
+}
+
 /** Coste del día con los precios de Restricciones (null si no hay ninguno) */
 export function costeDia({ horasPagadas, km, autobuses }, p) {
   if (!(p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0)) return null;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, costeDia } from "./lineas-sched.js";
+import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, costeDia, resumenServicio } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -130,5 +130,15 @@ describe("scheduling de líneas: optimizar", () => {
     expect(probadas.every(p => !p.cumple)).toBe(true);
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, { costeHora: 20, costeKm: 1, costeVehiculoDia: 50 })).toBe(400);
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, {})).toBe(null);
+  });
+});
+
+describe("scheduling de líneas: resumen por calendario", () => {
+  it("resume los indicadores en pocos campos", () => {
+    const r = generarServicio(RED, {}, { dia: "laborable" });
+    const x = resumenServicio(r);
+    expect(x).toMatchObject({ viajes: r.kpis.viajes, autobuses: r.kpis.autobuses, turnos: r.kpis.turnos, avisos: 0 });
+    expect(Object.keys(x).length).toBeLessThan(12);
+    expect(costeDia(x, { costeVehiculoDia: 100 })).toBe(100 * r.kpis.autobuses);
   });
 });
