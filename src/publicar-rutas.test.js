@@ -31,3 +31,18 @@ describe("workerStopsByDay", () => {
     expect(u).toMatchObject({ pa: "PA-9", calle: "Mayor", num: "3", lat: 40.1, lng: -3.2, realizado: false });
   });
 });
+
+describe("rutas ya publicadas: qué se sustituye", () => {
+  it("un plan con alguna parada hecha está empezado y no se sustituye", async () => {
+    const { planEmpezado } = await import("./publicar-rutas.js");
+    expect(planEmpezado({ ubicaciones: [{}, { realizado: true }] })).toBe(true);
+    expect(planEmpezado({ ubicaciones: [{}, {}] })).toBe(false);
+    expect(planEmpezado({})).toBe(false);
+  });
+  it("el día del plan sale de diaNum o, en los antiguos, de «Día 07»", async () => {
+    const { diaDelPlan } = await import("./publicar-rutas.js");
+    expect(diaDelPlan({ diaNum: 12, diaServicio: "Día 03" })).toBe(12);
+    expect(diaDelPlan({ diaServicio: "Día 07" })).toBe(7);
+    expect(diaDelPlan({})).toBe(null);
+  });
+});

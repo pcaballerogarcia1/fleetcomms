@@ -6,16 +6,49 @@
 //   - su cuadrante del mes, en `cuadrantes/{org}_{YYYY-MM}_{uid}` — una
 //     colección aparte porque los conductores no pueden leer `rostering`.
 //
-// Las paradas salen del escenario de Scheduling guardado en IndexedDB en
-// este navegador (vrp_cache → vrp_{projectId}): en modo libre, las del
-// vehículo y horario que le asignó Optimizar; en modo cuadrante, las suyas
-// propias del escenario.
+// Las paradas salen del escenario de Scheduling de la NUBE (la fuente de
+// verdad, scenario-store.js); la copia de IndexedDB de este navegador solo
+// se usa si no hay nube. En modo libre, las del vehículo y horario que le
+// asignó Optimizar; en modo cuadrante, las suyas propias del escenario.
+//
+// Las rutas (`planes`) de un proyecto y un mes se pueden publicar desde
+// Scheduling (por vehículo y día) o desde Rostering (por trabajador y día).
+// Para no duplicarlas: publicar desde Scheduling sustituye todas las de ese
+// proyecto y mes que no se han empezado, y Rostering avisa (y las quita si
+// se acepta) si hay rutas de Scheduling en ese mes. Las ya empezadas por el
+// conductor no se tocan nunca.
 
 import { db } from "./firebase.js";
 import {
   collection, doc, setDoc, addDoc, deleteDoc, getDocs, query, where,
 } from "firebase/firestore";
 import { hasCoords } from "./vrp-engine.js";
+import { getScenarioMeta, loadScenarioCloud } from "./scenario-store.js";
+
+/** Un plan que el conductor ya ha empezado (alguna parada hecha) no se sustituye */
+export const planEmpezado = data => (data?.ubicaciones || []).some(u => u.realizado);
+
+/** Rutas ya publicadas de un proyecto en un mes, por cualquiera de los dos caminos */
+export async function planesPublicados(orgId, projectId, mes) {
+  const snap = await getDocs(query(collection(db, "planes"), where("org_id", "==", orgId), where("mes", "==", mes)));
+  return snap.docs.filter(d => d.data().projectId === projectId && d.data().origenVRP);
+}
+
+/** Día del mes de un plan (los de Scheduling antiguos solo traen "Día 07") */
+export const diaDelPlan = data => data?.diaNum ?? (Number(String(data?.diaServicio || "").replace(/\D/g, "")) || null);
+
+/**
+ * Escenario para publicar: el de la nube; si no hay, el de este navegador.
+ * @returns { data, origen: "nube" | "navegador" | null }
+ */
+export async function escenarioParaPublicar(projectId) {
+  try {
+    const meta = await getScenarioMeta(projectId);
+    if (meta?.v) return { data: (await loadScenarioCloud(projectId, meta)).data, origen: "nube" };
+  } catch (e) { console.warn("escenario de la nube:", e); }
+  const local = await loadScenario(projectId);
+  return { data: local, origen: local ? "navegador" : null };
+}
 
 // Mismo IndexedDB que usa scheduling.jsx para el escenario completo
 export function loadScenario(projectId) {

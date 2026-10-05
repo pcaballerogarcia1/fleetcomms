@@ -5,14 +5,14 @@ import {
   DEFAULT_ROSTER_RULES, CODE_WINDOWS, ESTATUTO_RULES, ESTATUTO_ARTS,
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
-import { loadScenario, publishWorker } from "./publicar-rutas.js";
+import { publishWorker, escenarioParaPublicar, planesPublicados, planEmpezado } from "./publicar-rutas.js";
 import { logAudit, logAuditGrouped, addCells } from "./audit.js";
 import {
   listenScenarioRoster, saveShiftMoves, listenRosterMonth,
   saveRosterMonth, savedSnapshotOf, saveVehicleCells, mergeCells,
 } from "./roster-store.js";
 import {
-  doc, onSnapshot, setDoc, getDoc, updateDoc, serverTimestamp,
+  doc, onSnapshot, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp,
   collection, query, where,
 } from "firebase/firestore";
 
@@ -661,7 +661,25 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     setPublishModal(null);
     const projectId = activeProject?._id || null;
     const sameMonth = schedRoster?.mes === viewMes;
-    const scenario = projectId && sameMonth ? await loadScenario(projectId) : null;
+    let scenario = null, porQueNo = !projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Scheduling es de otro mes" : null;
+    if (!porQueNo) {
+      const { data } = await escenarioParaPublicar(projectId);
+      if (!data) porQueNo = "no se encuentra el escenario de Scheduling (ni en la nube ni en este navegador)";
+      // el cuadrante es de una generación del escenario: si se ha vuelto a
+      // generar después, sus turnos ya no casan con las paradas
+      else if (schedRoster?.generatedAt && data.stamp && data.stamp !== schedRoster.generatedAt) porQueNo = "el escenario guardado es de otra generación que este cuadrante — vuelve a generar en Scheduling";
+      else scenario = data;
+    }
+    // Rutas ya publicadas desde Scheduling para este mes: se duplicarían
+    if (scenario) {
+      try {
+        const deScheduling = (await planesPublicados(orgId, projectId, viewMes)).filter(d => !d.data().origenRostering && !planEmpezado(d.data()));
+        if (deScheduling.length) {
+          if (!window.confirm(`Hay ${deScheduling.length} ruta(s) de ${viewMes} publicadas desde Scheduling (por vehículo). Si publicas también por trabajador, los conductores las verían repetidas.\n\n¿Quitar las de Scheduling (las no empezadas) y publicar por trabajador?`)) { setPublishModal(null); return; }
+          for (const d of deScheduling) await deleteDoc(d.ref);
+        }
+      } catch (e) { alert("No se pudieron revisar las rutas ya publicadas: " + (e.message || e)); return; }
+    }
     const startMin = activeProject?.scheduling?.constraints?.startMin ?? 360;
     const lines = [];
     let i = 0;
@@ -683,7 +701,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     logAudit({ modulo: "Rostering", accion: "Publicó el cuadrante en Rutas", detalle: `${targets.length} trabajador(es) · ${viewMes}` });
     alert(
       `Publicado en Rutas (${viewMes}):\n\n${lines.join("\n")}` +
-      (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${!projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Scheduling es de otro mes" : "el escenario no está guardado en este navegador — ábrelo en Scheduling primero"}.`)
+      (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${porQueNo}.`)
     );
   }
 

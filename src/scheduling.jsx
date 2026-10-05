@@ -22,7 +22,7 @@ import {
 import { useLang, t } from "./i18n.js";
 // El cálculo de escenarios corre en un hilo aparte: la pantalla no se congela
 import { generateScenarioBg, autoScaleFleetBg } from "./vrp-client.js";
-import { taskToUbicacion } from "./publicar-rutas.js";
+import { taskToUbicacion, planesPublicados, planEmpezado, diaDelPlan } from "./publicar-rutas.js";
 import { saveScenarioRoster } from "./roster-store.js";
 import { saveScenarioCloud, loadScenarioCloud, watchScenarioMeta, newScenarioVersion } from "./scenario-store.js";
 import { logAudit, logAuditGrouped } from "./audit.js";
@@ -3650,6 +3650,13 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     const startMin = constraints.startMin;
     const col = collection(db, "planes");
     try {
+      // Rutas ya publicadas de este proyecto y mes (desde aquí o desde
+      // Rostering): las no empezadas se sustituyen; las empezadas se
+      // conservan y no se vuelven a publicar (antes se duplicaban).
+      const previas = activeProject?._id ? await planesPublicados(orgId, activeProject._id, mes) : [];
+      const empezadas = new Set(previas.filter(d => planEmpezado(d.data())).map(d => `${diaDelPlan(d.data())}|${d.data().vehiculoNombre || ""}`));
+      const aSustituir = previas.filter(d => !planEmpezado(d.data()));
+      let yaEmpezadas = 0;
       // Build all plan documents first, then write concurrently in chunks
       const docs = [];
       // Paradas que NO se publican por el cuadrante ACTUAL de Rostering
@@ -3742,6 +3749,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             .filter(a => hasCoords(a.lat, a.lng))
             .map(a => ({ lat: +a.lat, lng: +a.lng }));
           const dayLabel = `Día ${String(d + 1).padStart(2, "0")}`;
+          if (empezadas.has(`${d + 1}|${row.nombre || row.matricula || ""}`)) { yaEmpezadas++; continue; }
           const nombre = totalDays > 1
             ? `${conductorLabel} · ${dayLabel} · ${mes}`
             : `${conductorLabel} · ${mes}`;
@@ -3750,10 +3758,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             turno: row.turno || "",
             conductorNombre: conductorLabel,
             vehiculoNombre: row.nombre || row.matricula || "",
-            mes, diaServicio: dayLabel,
+            mes, diaServicio: dayLabel, diaNum: d + 1,
             ubicaciones, recorrido,
             fechaSubida: Date.now(),
-            origenVRP: true,
+            origenVRP: true, origenScheduling: true,
             // Para que Analytics (facturación) sepa de qué proyecto es el plan
             projectId: activeProject?._id || null,
             org_id: orgId,
@@ -3775,14 +3783,20 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         if (!ok) { setPublishing(false); return; }
       }
 
-      // Write 50 docs concurrently per round
+      if (aSustituir.length && !confirm(`Ya hay ${aSustituir.length} ruta(s) publicadas de este proyecto en ${mes} que no se han empezado: se sustituirán por estas ${docs.length}.${yaEmpezadas ? ` ${yaEmpezadas} vehículo-día ya empezados se conservan y no se vuelven a publicar.` : ""}\n\n¿Publicar?`)) { setPublishing(false); return; }
+
+      // Primero las nuevas y después se quitan las viejas: si algo falla a
+      // medias puede quedar alguna repetida, pero nunca un conductor sin ruta.
       const CHUNK = 50;
       for (let i = 0; i < docs.length; i += CHUNK) {
         await Promise.all(docs.slice(i, i + CHUNK).map(d => addDoc(col, d)));
       }
+      for (let i = 0; i < aSustituir.length; i += CHUNK) {
+        await Promise.all(aSustituir.slice(i, i + CHUNK).map(d => deleteDoc(d.ref)));
+      }
 
       setPublishModal(null);
-      logAudit({ modulo: "Scheduling", accion: "Publicó los planes en Rutas", detalle: `${docs.length} plan(es)` });
+      logAudit({ modulo: "Scheduling", accion: "Publicó los planes en Rutas", detalle: `${docs.length} plan(es)${aSustituir.length ? ` · sustituye ${aSustituir.length}` : ""}${yaEmpezadas ? ` · ${yaEmpezadas} ya empezados se conservan` : ""}` });
     } catch (e) {
       console.error("publishToRoutes error:", e);
       alert("Error al publicar: " + (e.message || e));
