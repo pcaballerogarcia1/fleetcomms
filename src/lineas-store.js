@@ -82,6 +82,17 @@ export function tiempoEfectivo(sentido, franja, cfgLinea) {
   return { min: t?.min ?? null, manual: false, viajes: t?.viajes ?? 0 };
 }
 
+// Cocheras: el mismo documento que los depots del Planning de puntos
+// (planning_depots/{proyecto}.depots = [{ id, nombre, lat, lng }]), que ya
+// copia el duplicado de proyectos. Cada línea puede fijar la suya en
+// lineasCfg[línea].cochera; si no, el Scheduling usa la más cercana.
+export function watchCocheras(projectId, cb) {
+  return onSnapshot(doc(db, "planning_depots", projectId), s => cb(s.exists() ? s.data().depots || [] : []), () => cb([]));
+}
+export function guardarCocheras(projectId, orgId, depots) {
+  return setDoc(doc(db, "planning_depots", projectId), { depots, projectId, orgId: orgId || null, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 // Parámetros del Scheduling de líneas (tipo de día, líneas, límites):
 // planning_settings/{proyecto}.lineasSched
 export function watchSchedParams(projectId, cb) {

@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, guardarCocheras } from "./lineas-store.js";
 import { logAudit } from "./audit.js";
 
 const C = {
@@ -43,9 +43,20 @@ function useLeaflet() {
   return L;
 }
 
-function MapaRed({ red, linea, paradasPorId }) {
+// km en línea recta (para enseñar a qué distancia queda cada cochera)
+function kmEntre(a, b) {
+  const dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onClickMapa, onMoverCochera }) {
   const L = useLeaflet();
-  const divRef = useRef(null), mapRef = useRef(null), capaRef = useRef(null);
+  const divRef = useRef(null), mapRef = useRef(null), capaRef = useRef(null), cocherasRef = useRef(null);
+  const clickRef = useRef(null);
+  useEffect(() => { clickRef.current = poniendoCochera ? onClickMapa : null; }, [poniendoCochera, onClickMapa]);
+  const moverRef = useRef(onMoverCochera);
+  useEffect(() => { moverRef.current = onMoverCochera; }, [onMoverCochera]);
 
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
@@ -54,6 +65,7 @@ function MapaRed({ red, linea, paradasPorId }) {
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
     mapRef.current = map;
+    map.on("click", e => clickRef.current?.(e.latlng));
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(divRef.current);
     return () => { ro.disconnect(); map.remove(); mapRef.current = null; };
@@ -95,6 +107,32 @@ function MapaRed({ red, linea, paradasPorId }) {
     capaRef.current = g;
   }, [L, red, linea, paradasPorId]);
 
+  // Cocheras: encima de todo, se arrastran para moverlas
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!L || !map) return;
+    if (cocherasRef.current) map.removeLayer(cocherasRef.current);
+    const g = L.layerGroup();
+    for (const c of cocheras) {
+      if (!isFinite(c.lat) || !isFinite(c.lng)) continue;
+      const icono = L.divIcon({
+        className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+        html: '<div style="width:26px;height:26px;border-radius:6px;background:#fb923c;border:2px solid #0b1220;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0b1220" stroke-width="2.4"><path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-8h10v8"/><line x1="7" y1="17" x2="17" y2="17"/></svg></div>',
+      });
+      const m = L.marker([c.lat, c.lng], { icon: icono, draggable: true, zIndexOffset: 1000 }).bindTooltip(`${c.nombre || "Cochera"} · arrastra para moverla`, { direction: "top" });
+      m.on("dragend", () => { const p = m.getLatLng(); moverRef.current?.(c.id, p.lat, p.lng); });
+      m.addTo(g);
+    }
+    g.addTo(map);
+    cocherasRef.current = g;
+  }, [L, cocheras]);
+
+  useEffect(() => {
+    if (divRef.current) divRef.current.style.cursor = poniendoCochera ? "crosshair" : "";
+    const cont = mapRef.current?.getContainer();
+    if (cont) cont.style.cursor = poniendoCochera ? "crosshair" : "";
+  }, [poniendoCochera]);
+
   return <div ref={divRef} style={{ position: "absolute", inset: 0, background: C.bg }} />;
 }
 
@@ -128,7 +166,7 @@ function NumeroEditable({ valor, placeholder, onGuardar, sufijo = "min", ancho =
   );
 }
 
-function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar }) {
+function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras = [] }) {
   const [tab, setTab] = useState("sentidos");
   const [abierto, setAbierto] = useState(null); // sentido con la lista de paradas desplegada
   const tipos = cfg?.tipos || [];
@@ -234,6 +272,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar }) {
 
         {tab === "vehiculos" && (
           <div>
+            <SelectorCocheraLinea linea={linea} cfg={cfg} cocheras={cocheras} paradasPorId={paradasPorId} onCfg={onCfg} />
             <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
               Tipos de vehículo que pueden hacer esta línea. Al planificar, solo se asignarán vehículos de estos tipos (sin marcar ninguno, vale cualquiera).
             </div>
@@ -266,6 +305,62 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar }) {
   );
 }
 
+// Cochera de la línea: fija o la más cercana a su primera cabecera
+function SelectorCocheraLinea({ linea, cfg, cocheras, paradasPorId, onCfg }) {
+  const inicio = paradasPorId.get(linea.sentidos[0]?.paradas[0]);
+  const dist = c => (inicio && isFinite(c.lat) ? kmEntre(inicio, c) * 1.35 : null);
+  const cercana = cocheras.reduce((m, c) => (dist(c) != null && (!m || dist(c) < dist(m)) ? c : m), null);
+  const fija = cocheras.find(c => String(c.id) === String(cfg?.cochera));
+  const km = c => (dist(c) != null ? ` · ${dist(c).toFixed(1).replace(".", ",")} km` : "");
+  return (
+    <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 6 }}>Cochera de la línea</div>
+      {cocheras.length ? (
+        <select value={fija ? String(fija.id) : ""} onChange={e => onCfg({ cochera: e.target.value || null })} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "7px 9px", fontSize: 12, fontFamily: font, outline: "none" }}>
+          <option value="">La más cercana ({cercana?.nombre || "—"}{cercana ? km(cercana) : ""})</option>
+          {cocheras.map(c => <option key={c.id} value={String(c.id)}>{c.nombre || "Cochera"}{km(c)}</option>)}
+        </select>
+      ) : (
+        <div style={{ fontSize: 11, color: C.amber, lineHeight: 1.5 }}>Aún no hay cocheras. Añádelas en la lista de la izquierda («Cocheras») para que el Scheduling calcule las salidas y vueltas a cochera.</div>
+      )}
+      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Los autobuses de esta línea salen de esta cochera y vuelven a ella; los km en vacío se calculan en el Scheduling.</div>
+    </div>
+  );
+}
+
+// Lista de cocheras del proyecto
+function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
+  const [abierto, setAbierto] = useState(true);
+  const usos = c => Object.values(cfg).filter(x => String(x?.cochera) === String(c.id)).length;
+  return (
+    <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, fontFamily: font }}>
+          {abierto ? "▾" : "▸"} Cocheras {cocheras.length ? `(${cocheras.length})` : ""}
+        </button>
+        <button onClick={() => setPoniendo(p => !p)} style={{ marginLeft: "auto", fontSize: 11, padding: "3px 9px", borderRadius: 6, cursor: "pointer", fontFamily: font, fontWeight: 600,
+          background: poniendo ? "#fb923c" : "none", color: poniendo ? "#0b1220" : "#fb923c", border: "1px solid #fb923c88" }}>{poniendo ? "Pincha en el mapa…" : "+ Añadir"}</button>
+      </div>
+      {abierto && (
+        <div style={{ marginTop: 8 }}>
+          {!cocheras.length && <div style={{ fontSize: 11, color: C.amber, lineHeight: 1.5 }}>Sin cochera, el Scheduling no puede calcular las salidas y vueltas a cochera ni sus km en vacío.</div>}
+          {cocheras.map(c => (
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 4, background: "#fb923c", flexShrink: 0 }} />
+              <input defaultValue={c.nombre || ""} placeholder="Nombre de la cochera" onBlur={e => { const n = e.target.value.trim(); if (n && n !== c.nombre) onCambiar(cocheras.map(x => (x.id === c.id ? { ...x, nombre: n } : x))); }}
+                onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "4px 7px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
+              <span title="Líneas que la tienen fijada (el resto usa la más cercana)" style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{usos(c) ? `${usos(c)} lín.` : ""}</span>
+              <button title="Quitar cochera" onClick={() => { if (window.confirm(`¿Quitar la cochera «${c.nombre || "sin nombre"}»?`)) onCambiar(cocheras.filter(x => x.id !== c.id)); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15, padding: "0 2px" }}>×</button>
+            </div>
+          ))}
+          {cocheras.length > 0 && <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>Arrastra la cochera en el mapa para moverla.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Página ────────────────────────────────────────────────────────────
 export function PlanningLineasPage({ projectId, orgId }) {
   const [estado, setEstado] = useState({ ficha: null, red: null, cargando: true });
@@ -278,6 +373,19 @@ export function PlanningLineasPage({ projectId, orgId }) {
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
   useEffect(() => watchCfg(projectId, setCfg), [projectId]);
+  const [cocheras, setCocheras] = useState([]);
+  const [poniendoCochera, setPoniendoCochera] = useState(false);
+  useEffect(() => watchCocheras(projectId, setCocheras), [projectId]);
+  const guardarListaCocheras = lista => {
+    setCocheras(lista);
+    guardarCocheras(projectId, orgId, lista).catch(e => alert("No se pudo guardar la cochera: " + (e.message || e)));
+  };
+  const anadirCochera = ({ lat, lng }) => {
+    setPoniendoCochera(false);
+    const nueva = { id: `c${Date.now().toString(36)}`, nombre: `Cochera ${cocheras.length + 1}`, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, fields: {} };
+    guardarListaCocheras([...cocheras, nueva]);
+    logAudit({ modulo: "Planning", accion: "Añadió una cochera", detalle: nueva.nombre });
+  };
 
   const red = estado.red;
   const paradasPorId = useMemo(() => new Map((red?.paradas || []).map(p => [p.id, p])), [red]);
@@ -329,6 +437,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
             </div>
           )}
         </div>
+        {red && <PanelCocheras cocheras={cocheras} poniendo={poniendoCochera} setPoniendo={setPoniendoCochera} onCambiar={guardarListaCocheras} cfg={cfg} />}
         {red && (
           <div style={{ padding: "10px 14px 6px" }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{
@@ -372,7 +481,13 @@ export function PlanningLineasPage({ projectId, orgId }) {
 
       {/* Mapa */}
       <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-        <MapaRed red={red} linea={linea} paradasPorId={paradasPorId} />
+        <MapaRed red={red} linea={linea} paradasPorId={paradasPorId} cocheras={cocheras} poniendoCochera={poniendoCochera} onClickMapa={anadirCochera}
+          onMoverCochera={(id, lat, lng) => guardarListaCocheras(cocheras.map(c => (c.id === id ? { ...c, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : c)))} />
+        {poniendoCochera && (
+          <div style={{ position: "absolute", left: "50%", top: 12, transform: "translateX(-50%)", zIndex: 600, background: "#fb923c", color: "#0b1220", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>
+            Pincha en el mapa donde está la cochera · <button onClick={() => setPoniendoCochera(false)} style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontWeight: 700, color: "#0b1220", fontFamily: font }}>cancelar</button>
+          </div>
+        )}
         {red && !linea && (
           <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 500, background: "rgba(15,22,35,0.88)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, color: C.muted }}>
             Elige una línea para ver su ida (continua) y vuelta (discontinua)
@@ -381,7 +496,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
       </div>
 
       {linea && (
-        <FichaLinea key={linea.id} linea={linea} cfg={cfg[linea.id]} paradasPorId={paradasPorId} dias={red.dias}
+        <FichaLinea key={linea.id} linea={linea} cfg={cfg[linea.id]} paradasPorId={paradasPorId} dias={red.dias} cocheras={cocheras}
           onCfg={cambios => guardarCfgLinea(projectId, linea.id, cambios).catch(e => alert("No se pudo guardar: " + (e.message || e)))}
           onCerrar={() => setSel(null)} />
       )}

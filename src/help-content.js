@@ -301,6 +301,11 @@ export const AYUDA = {
   // Proyectos de "Líneas regulares" (autobuses)
   planning_lineas: [
     {
+      q: "¿Cómo pongo las cocheras?",
+      a: "En el panel izquierdo, \"Cocheras\" → \"+ Añadir\" y pincha en el mapa donde está. Ponle nombre en la lista y arrástrala en el mapa para moverla. En la ficha de cada línea (pestaña Vehículos) puedes fijar su cochera; si no, el Scheduling usa la más cercana. Sin cocheras no se calculan las salidas y vueltas a cochera ni sus km en vacío.",
+      tags: "cochera cocheras depósito garaje añadir mover vacío",
+    },
+    {
       q: "¿Cómo cargo la red de líneas?",
       a: "Con \"Importar red (GTFS .zip)\" en el panel izquierdo. Sirve el GTFS que publica el operador o el consorcio de transportes; una red grande tarda menos de un minuto.",
       pasos: [
@@ -353,7 +358,7 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo se encadenan los viajes?",
-      a: "Por hora de salida: cada viaje va a un autobús que esté libre en esa cabecera con la regulación cumplida (la de la línea o la de \"Ajustes\") y de un tipo que admita la línea; si no hay ninguno, se añade otro. Las dos cabeceras de una línea cuentan como el mismo sitio. En \"Ajustes\" puedes impedir que un autobús cambie de línea.",
+      a: "Por hora de salida: cada viaje va a un autobús que esté libre en esa cabecera con la regulación cumplida (la de la línea o la de Restricciones) y de un tipo que admita la línea. Si no hay ninguno, puede venir en vacío uno de otra cabecera cercana (hasta los km de Restricciones) que llegue a tiempo; si tampoco, se añade otro autobús. Las dos cabeceras de una línea cuentan como el mismo sitio. En Restricciones puedes impedir que un autobús cambie de línea o que haga vacíos entre cabeceras.",
       tags: "encadenar viajes regulación cabecera tipo vehículo cambiar línea",
     },
     {
@@ -362,8 +367,13 @@ export const AYUDA = {
       tags: "turnos conductor piezas relevo pausa jornada amplitud 561 estatuto",
     },
     {
+      q: "¿Cómo se calculan los km en vacío?",
+      a: "Con las cocheras del Planning: cada bloque sale de la cochera de su línea (la fijada en su ficha o la más cercana) hasta la primera cabecera y vuelve a ella al acabar. A eso se suman los vacíos entre cabeceras. Los vacíos los conduce el conductor y cuentan como trabajo; salen en el Gantt en gris rayado. La distancia es la línea recta por el factor de rodeo, a la velocidad en vacío (los dos en Restricciones). La eficiencia de vehículo es km con viajeros / km totales, y el coste usa los km totales.",
+      tags: "vacío vacíos cochera depósito km kilómetros salida vuelta eficiencia",
+    },
+    {
       q: "¿Qué significan las eficiencias?",
-      a: "Eficiencia vehículo: tiempo con viajeros / tiempo del autobús en línea (lo demás es regulación y esperas). Eficiencia personal: conducción / tiempo de trabajo de los turnos.",
+      a: "Eficiencia vehículo: km con viajeros / km totales (lo demás son vacíos de cochera y entre cabeceras). Eficiencia personal: conducción / tiempo de trabajo de los turnos.",
       tags: "eficiencia vehículo personal indicadores",
     },
     {

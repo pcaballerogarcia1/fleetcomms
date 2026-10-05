@@ -7,8 +7,14 @@
 //    la línea; si no hay ninguno, se añade un autobús. De los libres se coge
 //    el que quedó libre más tarde (menos tiempo parado). Las dos cabeceras de
 //    una misma línea (llegada de la ida ↔ salida de la vuelta) cuentan como
-//    el mismo sitio aunque en el GTFS sean paradas distintas. Sin vacíos
-//    entre cabeceras distintas.
+//    el mismo sitio aunque en el GTFS sean paradas distintas. Si en la misma
+//    cabecera no hay ninguno libre, puede venir en vacío uno de otra cabecera
+//    cercana (hasta vacioMaxKm) que llegue a tiempo.
+//    Con cocheras (Planning), cada bloque empieza saliendo de la cochera de
+//    su línea (o la más cercana) y acaba volviendo a ella: esos vacíos son
+//    "viajes" más del autobús (vacio: true), con sus km y su tiempo, y los
+//    conduce el conductor como cualquier otro. Distancias: línea recta por
+//    un factor de rodeo, a la velocidad en vacío.
 //    Cada cadena de viajes es un "bloque". Después, los bloques se reparten
 //    entre autobuses físicos: uno puede hacer un bloque de mañana y otro de
 //    tarde si entre medias hay margen para el vacío (por cochera).
@@ -35,7 +41,11 @@ export const PARAMS_DEFECTO = {
   piezaMax: 240,        // min de una pieza (de relevo a relevo)
   amplitudMax: 540,     // min de la primera salida a la última llegada del turno (pausa incluida)
   entreLineas: true,    // un autobús puede seguir con otra línea en la misma cabecera
-  margenVacio: 30,      // min entre dos bloques del mismo autobús (ir y volver de cochera)
+  margenVacio: 30,      // min entre dos bloques del mismo autobús, sin cocheras (ir y volver incluido)
+  margenCochera: 10,    // min parado en cochera entre dos bloques del mismo autobús (con cocheras)
+  vacioMaxKm: 5,        // km como mucho de un vacío entre cabeceras (0 = no se hacen)
+  factorRodeo: 1.35,    // km por carretera / km en línea recta
+  velocidadVacio: 25,   // km/h de los vacíos
   conduccionContinuaMax: 270, pausaConduccionMin: 45, conduccionDiariaMax: 540,
   jornadaSinPausaMax: 360, pausaJornadaMin: 15,
   maxPiezas: 8,         // piezas por turno como mucho
@@ -51,6 +61,7 @@ export const PARAMS_DEFECTO = {
   eleccion: "ultimo",   // "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
   corte: 120,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min
   emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas
+  vacios: true,         // vacíos entre cabeceras (hasta vacioMaxKm)
 };
 
 const hhmmAMin = s => {
@@ -110,15 +121,16 @@ const admite = (cfg, tipo) => !cfg?.tipos?.length || tipo == null || cfg.tipos.i
  * @param cfg      { [lineaId]: { tipos, preferente, regulacion, tiempos } }
  * @param opciones { dia, lineas: [ids] | null (todas), regulacion, jornadaMax, entreLineas, … }
  */
-export function generarServicio(red, cfg = {}, opciones = {}) {
+export function generarServicio(red, cfg = {}, opciones = {}, { cocheras = [] } = {}) {
   const p = { ...PARAMS_DEFECTO, ...opciones };
   const { viajes, find, aproximado } = viajesDelDia(red, cfg, p);
-  const vehiculos = programarVehiculos(viajes, cfg, find, p);
+  const geo = geografia(red, cfg, cocheras, p);
+  const vehiculos = programarVehiculos(viajes, cfg, find, p, geo);
   const autobuses = repartirAutobuses(vehiculos, p);
   const { turnos, piezas } = programarTurnos(vehiculos, p, find);
   const porVehiculo = new Map(vehiculos.map(v => [v.id, (v.relevos = [])]));
   for (const pz of [...piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
-  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p, diaNombre: nombreDia(p.dia, red) };
+  return { viajes, vehiculos, autobuses, turnos, kpis: kpisServicio(viajes, vehiculos, turnos, autobuses), perfil: perfilVehiculos(vehiculos), aproximado, params: p, diaNombre: nombreDia(p.dia, red), conCocheras: !!geo?.hayCocheras };
 }
 
 function viajesDelDia(red, cfg, p) {
@@ -147,10 +159,60 @@ function viajesDelDia(red, cfg, p) {
   return { viajes, find, aproximado };
 }
 
+export const ID_COCHERA = id => `cochera:${id}`;
+const COLOR_VACIO = "#64748b";
+const PEGADAS_KM = 0.3; // dos sitios a menos de esto son el mismo (sin vacío)
+function kmRecta([a, b], [c, d]) {
+  const dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a * Math.PI / 180) * Math.cos(c * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+// Coordenadas, distancias y cochera de cada línea (null si la red no tiene coordenadas)
+function geografia(red, cfg, cocheras, p) {
+  if (!red?.paradas?.length) return null;
+  const coord = new Map(red.paradas.map(x => [x.id, [x.lat, x.lng]]));
+  const lista = (cocheras || []).filter(c => isFinite(c.lat) && isFinite(c.lng));
+  for (const c of lista) coord.set(ID_COCHERA(c.id), [c.lat, c.lng]);
+  const km = (a, b) => { const x = coord.get(a), y = coord.get(b); return x && y ? Math.round(kmRecta(x, y) * p.factorRodeo * 10) / 10 : null; };
+  const min = k => Math.max(1, Math.round((k / Math.max(1, p.velocidadVacio)) * 60));
+  const cocheraLinea = new Map();
+  const cocheraDe = (lineaId, paradaInicio) => {
+    if (!lista.length) return null;
+    const fija = cfg[lineaId]?.cochera;
+    if (fija != null && lista.some(c => String(c.id) === String(fija))) return ID_COCHERA(lista.find(c => String(c.id) === String(fija)).id);
+    if (!cocheraLinea.has(lineaId)) {
+      let mejor = null, d = Infinity;
+      for (const c of lista) { const k = km(ID_COCHERA(c.id), paradaInicio); if (k != null && k < d) { d = k; mejor = ID_COCHERA(c.id); } }
+      cocheraLinea.set(lineaId, mejor);
+    }
+    return cocheraLinea.get(lineaId);
+  };
+  return { coord, km, min, cocheraDe, hayCocheras: lista.length > 0, nombres: new Map(lista.map(c => [ID_COCHERA(c.id), c.nombre || "Cochera"])) };
+}
+const vacio = (desde, hasta, dep, minutos, km) => ({
+  vacio: true, linea: null, nombre: "Vacío", color: COLOR_VACIO, dir: 0, sentido: "Vacío", dep, arr: dep + minutos, o: desde, d: hasta, km,
+});
+
 // 1) Vehículos: bloques de viajes encadenados en cabecera
-function programarVehiculos(viajes, cfg, find, p) {
+function programarVehiculos(viajes, cfg, find, p, geo) {
   const vehiculos = [];
   const esperando = new Map(); // cabecera → [vehículo]
+  const vmax = p.vacios === false || !geo ? 0 : p.vacioMaxKm || 0;
+  const raices = [...new Set(viajes.flatMap(v => [find(v.o), find(v.d)]))];
+  const vecinos = new Map(); // cabecera → [[otra, km, min]] a menos de vmax km
+  const vecinosDe = r => {
+    if (!vecinos.has(r)) {
+      const l = [];
+      for (const x of raices) {
+        if (x === r) continue;
+        const k = geo.km(r, x);
+        if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k)]); // paradas pegadas: es la misma cabecera
+      }
+      vecinos.set(r, l.sort((a, b) => a[1] - b[1]).slice(0, 30));
+    }
+    return vecinos.get(r);
+  };
+  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo);
   for (const v of viajes) {
     const c = cfg[v.linea];
     const donde = find(v.o);
@@ -158,14 +220,30 @@ function programarVehiculos(viajes, cfg, find, p) {
     let mejor = -1;
     for (let k = 0; k < cola.length; k++) {
       const veh = cola[k];
-      if (veh.libre > v.dep) continue;
-      if (!p.entreLineas && veh.linea !== v.linea) continue;
-      if (!admite(c, veh.tipo)) continue;
+      if (veh.libre > v.dep || !vale(veh, v, c)) continue;
       if (mejor < 0 || (p.eleccion === "primero" ? veh.libre < cola[mejor].libre : veh.libre > cola[mejor].libre)) mejor = k;
     }
-    let veh;
+    let veh = null;
     if (mejor >= 0) { veh = cola[mejor]; cola.splice(mejor, 1); }
-    else { veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea }; vehiculos.push(veh); }
+    else if (vmax > 0) {
+      // nadie libre aquí: uno de una cabecera cercana que llegue en vacío
+      let elegido = null;
+      for (const [otra, km, minutos] of vecinosDe(donde)) {
+        const q = esperando.get(otra);
+        if (!q?.length) continue;
+        for (let k = 0; k < q.length; k++) {
+          const x = q[k];
+          if (x.libre + minutos > v.dep || !vale(x, v, c)) continue;
+          if (!elegido || km < elegido.km || (km === elegido.km && x.libre > elegido.x.libre)) elegido = { x, q, k, km, minutos, otra };
+        }
+        if (elegido) break; // los vecinos van por distancia: el primero que tiene alguno es el más cerca
+      }
+      if (elegido) {
+        veh = elegido.x; elegido.q.splice(elegido.k, 1);
+        if (elegido.km >= PEGADAS_KM) veh.viajes.push(vacio(veh.viajes.at(-1).d, v.o, veh.libre, elegido.minutos, elegido.km));
+      }
+    }
+    if (!veh) { veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea }; vehiculos.push(veh); }
     veh.viajes.push(v);
     veh.linea = v.linea;
     veh.libre = v.arr + (c?.regulacion ?? p.regulacion);
@@ -174,9 +252,19 @@ function programarVehiculos(viajes, cfg, find, p) {
     esperando.get(fin).push(veh);
   }
   for (const veh of vehiculos) {
+    const reales = veh.viajes.filter(x => !x.vacio);
+    // salida de cochera y vuelta a cochera
+    if (geo?.hayCocheras) {
+      const primero = reales[0], ultimo = reales.at(-1);
+      veh.cochera = geo.cocheraDe(primero.linea, primero.o);
+      const ida = geo.km(veh.cochera, primero.o), vuelta = geo.km(ultimo.d, veh.cochera);
+      if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida); veh.viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida)); }
+      if (vuelta != null && vuelta >= PEGADAS_KM) veh.viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta), vuelta));
+    }
     veh.inicio = veh.viajes[0].dep;
     veh.fin = veh.viajes.at(-1).arr;
-    veh.lineas = [...new Set(veh.viajes.map(x => x.nombre))];
+    veh.lineas = [...new Set(reales.map(x => x.nombre))];
+    veh.kmVacio = Math.round(veh.viajes.reduce((s, x) => s + (x.vacio ? x.km : 0), 0) * 10) / 10;
     delete veh.libre; delete veh.linea;
   }
   return vehiculos;
@@ -188,11 +276,13 @@ function repartirAutobuses(vehiculos, p) {
   for (const veh of [...vehiculos].sort((x, y) => x.inicio - y.inicio)) {
     let mejor = null;
     for (const bus of autobuses) {
-      if (bus.libre + p.margenVacio > veh.inicio) continue;
+      // con cocheras los bloques ya llevan la ida y la vuelta: solo el rato en cochera
+      if (bus.libre + (veh.cochera ? p.margenCochera : p.margenVacio) > veh.inicio) continue;
+      if (veh.cochera && bus.cochera !== veh.cochera) continue;
       if (bus.tipo != null && veh.tipo != null && bus.tipo !== veh.tipo) continue;
       if (!mejor || bus.libre > mejor.libre) mejor = bus;
     }
-    if (!mejor) { mejor = { id: autobuses.length + 1, tipo: veh.tipo, bloques: [], libre: 0 }; autobuses.push(mejor); }
+    if (!mejor) { mejor = { id: autobuses.length + 1, tipo: veh.tipo, bloques: [], libre: 0, cochera: veh.cochera || null }; autobuses.push(mejor); }
     mejor.bloques.push(veh.id);
     mejor.libre = veh.fin;
     if (mejor.tipo == null) mejor.tipo = veh.tipo;
@@ -334,7 +424,7 @@ function programarTurnos(vehiculos, p, find) {
 }
 
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
-export const CAMPOS_ESTRATEGIA = ["eleccion", "corte", "emparejar", "entreLineas"];
+export const CAMPOS_ESTRATEGIA = ["eleccion", "corte", "emparejar", "entreLineas", "vacios"];
 
 /** Indicadores de un escenario, pequeños para guardarlos por calendario */
 export function resumenServicio(res) {
@@ -343,7 +433,7 @@ export function resumenServicio(res) {
   return {
     viajes: k.viajes, autobuses: k.autobuses, pico: k.pico, bloques: k.bloques, turnos: k.turnos, turnosDosPiezas: k.turnosDosPiezas,
     piezasMedias: Math.round((k.piezasMedias || 0) * 10) / 10,
-    horasPagadas: r1(k.horasPagadas), horasServicio: r1(k.horasServicio), km: r1(k.km), avisos: k.turnosConAviso,
+    horasPagadas: r1(k.horasPagadas), horasServicio: r1(k.horasServicio), km: r1(k.km), kmVacio: r1(k.kmVacio || 0), avisos: k.turnosConAviso,
     eficienciaPersonal: k.eficienciaPersonal == null ? null : Math.round(k.eficienciaPersonal * 1000) / 1000,
   };
 }
@@ -369,6 +459,7 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
     corte,
     v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas",
     v.entreLineas === false ? "sin cambiar de línea" : null,
+    v.vacios === false ? "sin vacíos entre cabeceras" : null,
   ].filter(Boolean).join(" · ");
 }
 
@@ -378,14 +469,16 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
  * legales y después el objetivo.
  * @returns { probadas: [{ estrategia, autobuses, turnos, horasPagadas, avisos, coste, cumple, nombre }], objetivo }
  */
-export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "autobuses", onProgreso } = {}) {
+export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "autobuses", onProgreso, cocheras = [] } = {}) {
   const p = { ...PARAMS_DEFECTO, ...opciones };
   const { viajes, find } = viajesDelDia(red, cfg, p);
-  const km = viajes.reduce((s, v) => s + v.km, 0);
+  const geo = geografia(red, cfg, cocheras, p);
+  const kmReales = viajes.reduce((s, v) => s + v.km, 0);
   const cortes = ["max", 180, 150, 120, 90].filter(c => typeof c !== "number" || c < p.piezaMax);
   const deTurnos = cortes.flatMap(corte => ["primera", "llena"].map(emparejar => ({ corte, emparejar })));
   const deVehiculos = [];
-  for (const eleccion of ["ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) deVehiculos.push({ eleccion, entreLineas });
+  const conVacios = p.vacioMaxKm > 0 && geo ? [true, false] : [false];
+  for (const vacios of conVacios) for (const eleccion of ["ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) deVehiculos.push({ eleccion, entreLineas, vacios });
   // Dos fases (cada pasada de turnos cuesta segundos en redes grandes): todas
   // las formas de hacer turnos con los autobuses de siempre, y las mejores con
   // las otras formas de encadenar los autobuses.
@@ -396,14 +489,15 @@ export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "au
     const clave = JSON.stringify(dv);
     if (!vehiculosDe.has(clave)) {
       const q = { ...p, ...dv };
-      const vehiculos = programarVehiculos(viajes, cfg, find, q);
-      vehiculosDe.set(clave, { vehiculos, autobuses: repartirAutobuses(vehiculos, q).length });
+      const vehiculos = programarVehiculos(viajes, cfg, find, q, geo);
+      vehiculosDe.set(clave, { vehiculos, autobuses: repartirAutobuses(vehiculos, q).length, kmVacio: vehiculos.reduce((s, v) => s + (v.kmVacio || 0), 0) });
     }
-    const { vehiculos, autobuses } = vehiculosDe.get(clave);
+    const { vehiculos, autobuses, kmVacio } = vehiculosDe.get(clave);
+    const km = kmReales + kmVacio;
     const { turnos } = programarTurnos(vehiculos, { ...p, ...dv, ...dt }, find);
     const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
     const r = {
-      estrategia: { ...dv, ...dt }, autobuses, turnos: turnos.length, horasPagadas,
+      estrategia: { ...dv, ...dt }, autobuses, turnos: turnos.length, horasPagadas, kmVacio,
       avisos: turnos.filter(t => t.avisos.length).length,
       piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
       coste: costeDia({ horasPagadas, km, autobuses }, p),
@@ -414,8 +508,8 @@ export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivo = "au
     onProgreso?.(probadas.length, total);
   };
   const exceso = r => Math.max(0, p.flotaMax > 0 ? r.autobuses - p.flotaMax : 0) + Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
-  const clave = r => [exceso(r), r.avisos, ...(objetivo === "conductores" ? [r.turnos, r.horasPagadas, r.autobuses]
-    : objetivo === "coste" && r.coste != null ? [r.coste, r.autobuses] : [r.autobuses, r.turnos, r.horasPagadas])];
+  const clave = r => [exceso(r), r.avisos, ...(objetivo === "conductores" ? [r.turnos, r.horasPagadas, r.autobuses, r.kmVacio]
+    : objetivo === "coste" && r.coste != null ? [r.coste, r.autobuses] : [r.autobuses, r.turnos, r.horasPagadas, r.kmVacio])];
   const ordenar = () => probadas.sort((a, b) => { const x = clave(a), y = clave(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
   for (const dt of deTurnos) probar(deVehiculos[0], dt);
   ordenar();
@@ -473,6 +567,7 @@ export function perfilVehiculos(vehiculos, paso = 15) {
 }
 
 export function kpisServicio(viajes, vehiculos, turnos, autobuses = []) {
+  const kmVacio = vehiculos.reduce((s, v) => s + (v.kmVacio || 0), 0);
   const servicio = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
   const enLinea = vehiculos.reduce((s, v) => s + (v.fin - v.inicio), 0);
   const pagado = turnos.reduce((s, t) => s + t.trabajo, 0);
@@ -487,7 +582,9 @@ export function kpisServicio(viajes, vehiculos, turnos, autobuses = []) {
     horasServicio: servicio / 60,
     horasVehiculo: enLinea / 60,
     eficiencia: enLinea ? servicio / enLinea : null, // tiempo con viajeros / tiempo del autobús en línea
-    km: viajes.reduce((s, v) => s + v.km, 0),
+    km: viajes.reduce((s, v) => s + v.km, 0) + kmVacio, // con los vacíos
+    kmVacio,
+    vacios: vehiculos.reduce((s, v) => s + v.viajes.filter(x => x.vacio).length, 0),
     turnos: turnos.length,
     turnosDosPiezas: turnos.filter(t => t.piezas.length >= 2).length, // con relevo (dos o más piezas)
     piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,

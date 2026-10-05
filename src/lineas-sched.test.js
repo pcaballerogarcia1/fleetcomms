@@ -158,3 +158,47 @@ describe("scheduling de líneas: resumen por calendario", () => {
     expect(costeDia(x, { costeVehiculoDia: 100 })).toBe(100 * r.kpis.autobuses);
   });
 });
+
+describe("scheduling de líneas: cocheras y vacíos", () => {
+  // A: X → Y (8:00–8:30). B sale de Z, a ~1 km de Y, a las 8:50. Cochera junto a X.
+  const paradas = [
+    { id: "X", nombre: "X", lat: 40.40, lng: -3.70 }, { id: "Y", nombre: "Y", lat: 40.43, lng: -3.70 },
+    { id: "Z", nombre: "Z", lat: 40.439, lng: -3.70 }, { id: "W", nombre: "W", lat: 40.47, lng: -3.70 },
+  ];
+  const red = { paradas, lineas: [
+    { id: "A", nombre: "A", color: "#f00", sentidos: [sentido(0, ["X", "Y"], [h(8)], 30)] },
+    { id: "B", nombre: "B", color: "#00f", sentidos: [sentido(0, ["Z", "W"], [h(8, 50)], 30)] },
+  ] };
+  const cocheras = [{ id: "c1", nombre: "Norte", lat: 40.395, lng: -3.70 }];
+
+  it("vacío entre cabeceras cercanas: un autobús en vez de dos; con 0 km, dos", () => {
+    const con = generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5 });
+    expect(con.kpis.bloques).toBe(1);
+    const v = con.vehiculos[0].viajes.find(x => x.vacio);
+    expect(v).toMatchObject({ o: "Y", d: "Z" });
+    expect(v.km).toBeGreaterThan(1);
+    expect(con.kpis.kmVacio).toBeCloseTo(v.km, 5);
+    expect(con.kpis.km).toBeCloseTo(20 + v.km, 5);
+    expect(generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 0 }).kpis.bloques).toBe(2);
+    expect(generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5, vacios: false }).kpis.bloques).toBe(2);
+  });
+
+  it("con cochera: salida y vuelta a cochera con sus km y su tiempo, y las conduce un turno", () => {
+    const r = generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5 }, { cocheras });
+    const bus = r.vehiculos[0];
+    expect(bus.cochera).toBe("cochera:c1");
+    expect(bus.viajes[0]).toMatchObject({ vacio: true, o: "cochera:c1", d: "X", arr: h(8) });
+    expect(bus.viajes.at(-1)).toMatchObject({ vacio: true, o: "W", d: "cochera:c1" });
+    expect(bus.inicio).toBeLessThan(h(8));
+    expect(r.conCocheras).toBe(true);
+    expect(r.kpis.viajes).toBe(2); // los vacíos no son viajes con viajeros
+    const conducidos = r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes));
+    expect(conducidos.length).toBe(bus.viajes.length); // viajes y vacíos, todos con conductor
+  });
+
+  it("la cochera fijada en la línea manda sobre la más cercana", () => {
+    const dos = [...cocheras, { id: "c2", nombre: "Sur", lat: 40.50, lng: -3.70 }];
+    const r = generarServicio(red, { A: { cochera: "c2" } }, { dia: "laborable", vacioMaxKm: 5 }, { cocheras: dos });
+    expect(r.vehiculos[0].cochera).toBe("cochera:c2");
+  });
+});

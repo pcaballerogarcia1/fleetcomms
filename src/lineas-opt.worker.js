@@ -7,7 +7,7 @@
 import { optimizarServicio, generarServicio, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO } from "./lineas-sched.js";
 
 self.onmessage = e => {
-  const { tipo, red, cfg, params, objetivo } = e.data;
+  const { tipo, red, cfg, params, objetivo, cocheras = [] } = e.data;
   try {
     if (tipo === "lote") {
       const { dias, optimizar } = e.data;
@@ -17,10 +17,10 @@ self.onmessage = e => {
         let q = { ...params, ...estrategia, dia, entreLineas: params.entreLineas && (estrategia.entreLineas ?? true) };
         let optimizado = false;
         if (optimizar) {
-          const mejor = optimizarServicio(red, cfg, { ...params, dia }, { objetivo }).probadas[0];
+          const mejor = optimizarServicio(red, cfg, { ...params, dia }, { objetivo, cocheras }).probadas[0];
           if (mejor) { q = { ...params, dia, ...mejor.estrategia }; optimizado = true; }
         }
-        const res = generarServicio(red, cfg, q);
+        const res = generarServicio(red, cfg, q, { cocheras });
         const est = Object.fromEntries(CAMPOS_ESTRATEGIA.map(k => [k, q[k] ?? PARAMS_DEFECTO[k]]));
         self.postMessage({ hecho: { dia, estrategia: est, resumen: resumenServicio(res), optimizado } });
       });
@@ -29,7 +29,7 @@ self.onmessage = e => {
     }
     let ultimo = 0;
     const r = optimizarServicio(red, cfg, params, {
-      objetivo,
+      objetivo, cocheras,
       onProgreso: (k, n) => { const ahora = Date.now(); if (k === n || ahora - ultimo > 150) { ultimo = ahora; self.postMessage({ progreso: [k, n] }); } },
     });
     self.postMessage({ ok: r });

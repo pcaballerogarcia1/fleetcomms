@@ -6,8 +6,8 @@
 // (T12) y la pestaña de horarios de salida. El cálculo está en lineas-sched.js.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams } from "./lineas-store.js";
-import { generarServicio, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA } from "./lineas-sched.js";
+import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras } from "./lineas-store.js";
+import { generarServicio, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -25,7 +25,9 @@ const font = "'Inter',system-ui,sans-serif";
 const mono = "'JetBrains Mono','Courier New',monospace";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const hm = m => (m == null ? "—" : `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`);
-const hhmm = m => (m == null ? "—" : minToHHMM(m).slice(0, 5));
+// antes de las 00:00 (un autobús que sale de cochera la víspera): "23:40 (−1)"
+const hhmm = m => (m == null ? "—" : m < 0 ? `${minToHHMM(m + 1440).slice(0, 5)} (−1)` : minToHHMM(m).slice(0, 5));
+const horaEje = m => minToHHMM(((m % 1440) + 1440) % 1440).slice(0, 5);
 const num = n => Math.round(n).toLocaleString("es-ES");
 const nombreTipo = id => TIPOS_VEHICULO.find(t => t.id === id)?.nombre || "";
 const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4];
@@ -59,8 +61,8 @@ function fila(nombre, tipo, viajes, extra) {
   const pausas = (extra.tramosPausa || []).reduce((s, x) => s + (x.fin - x.inicio), 0);
   return {
     nombre, tipo, viajes, inicio, fin, amplitud: fin - inicio, conduccion, pausas,
-    km: viajes.reduce((s, v) => s + v.km, 0), nViajes: viajes.length,
-    lineas: [...new Set(viajes.map(v => v.nombre))], avisos: [], relevos: [], vacios: [], tramosPausa: [], ...extra,
+    km: viajes.reduce((s, v) => s + v.km, 0), kmVacio: viajes.reduce((s, v) => s + (v.vacio ? v.km : 0), 0), nViajes: viajes.filter(v => !v.vacio).length,
+    lineas: [...new Set(viajes.filter(v => !v.vacio).map(v => v.nombre))], avisos: [], relevos: [], vacios: [], tramosPausa: [], ...extra,
   };
 }
 
@@ -68,19 +70,20 @@ const COLS = [
   { k: "avisos", l: "", w: 22, align: "center", t: "Avisos de reglas (pasa el ratón por el !)" },
   { k: "nombre", l: "Recurso", w: 92, align: "left" },
   { k: "tipo", l: "Tipo", w: 86, align: "left" },
-  { k: "inicio", l: "Inicio", w: 50 },
+  { k: "inicio", l: "Inicio", w: 68 },
   { k: "fin", l: "Fin", w: 50 },
   { k: "amplitud", l: "Amplitud", w: 62 },
   { k: "conduccion", l: "Conduc.", w: 58, t: "Tiempo con viajeros" },
   { k: "pausas", l: "Pausas", w: 52, t: "Pausa entre piezas del turno" },
-  { k: "km", l: "Km", w: 52 },
+  { k: "km", l: "Km", w: 52, t: "Km totales, con los vacíos" },
+  { k: "kmVacio", l: "Vacío", w: 50, t: "Km en vacío (cochera y entre cabeceras)" },
   { k: "nViajes", l: "Viajes", w: 50 },
 ];
 const TABLE_W = COLS.reduce((s, c) => s + c.w, 0) + 8;
 const celda = (r, k) => {
   if (k === "inicio" || k === "fin") return hhmm(r[k]);
   if (k === "amplitud" || k === "conduccion" || k === "pausas") return r[k] ? hm(r[k]) : "—";
-  if (k === "km") return Math.round(r.km).toLocaleString("es-ES");
+  if (k === "km" || k === "kmVacio") return Math.round(r[k]).toLocaleString("es-ES");
   return r[k];
 };
 
@@ -106,7 +109,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
   const leftW = vista === "tabla" ? TABLE_W : 200;
   const horas = Array.from({ length: (fin - ini) / 60 + 1 }, (_, k) => ini + k * 60);
   const nombre = id => paradasPorId.get(id)?.nombre || id;
-  const tot = filas.reduce((a, r) => ({ km: a.km + r.km, v: a.v + r.nViajes, c: a.c + r.conduccion }), { km: 0, v: 0, c: 0 });
+  const tot = filas.reduce((a, r) => ({ km: a.km + r.km, kv: a.kv + r.kmVacio, v: a.v + r.nViajes, c: a.c + r.conduccion }), { km: 0, kv: 0, v: 0, c: 0 });
 
   const barraBtn = (on) => ({ padding: "3px 8px", borderRadius: 4, border: "none", cursor: "pointer", fontFamily: font, fontSize: 10.5, background: on ? C.blue : "none", color: on ? "#fff" : C.muted, fontWeight: on ? 600 : 400 });
   return (
@@ -142,7 +145,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
             )) : <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, paddingLeft: 8 }}>{modo === "vehicles" ? "AUTOBÚS" : "TURNO"}</span>}
           </div>
           <div style={{ position: "relative", width: ancho, height: 30, flexShrink: 0 }}>
-            {horas.map(h => <span key={h} style={{ position: "absolute", left: X(h), top: 9, fontSize: 10, color: C.dim, fontFamily: mono, transform: "translateX(-50%)" }}>{hhmm(h)}</span>)}
+            {horas.map(h => <span key={h} style={{ position: "absolute", left: X(h), top: 9, fontSize: 10, color: C.dim, fontFamily: mono, transform: "translateX(-50%)" }}>{horaEje(h)}</span>)}
           </div>
         </div>
 
@@ -153,7 +156,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
                 <div key={col.k} title={col.k === "avisos" && r.avisos.length ? r.avisos.map(a => `• ${a}`).join("\n") : col.k === "nombre" && r.detalle ? r.detalle : undefined}
                   style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: col.k === "nombre" || col.k === "tipo" ? font : mono,
                     fontSize: col.k === "nombre" ? 11.5 : 10.5, fontWeight: col.k === "nombre" ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    color: col.k === "avisos" ? C.red : col.k === "amplitud" ? C.green : col.k === "km" ? C.orange : col.k === "nombre" ? C.text : C.muted }}>
+                    color: col.k === "avisos" ? C.red : col.k === "amplitud" ? C.green : col.k === "km" ? C.orange : col.k === "kmVacio" ? "#94a3b8" : col.k === "nombre" ? C.text : C.muted }}>
                   {col.k === "avisos" ? (r.avisos.length ? "!" : "") : celda(r, col.k)}
                 </div>
               )) : (
@@ -166,7 +169,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
             <div style={{ position: "relative", width: ancho, flexShrink: 0 }}>
               {horas.map(h => <div key={h} style={{ position: "absolute", left: X(h), top: 0, bottom: 0, width: 1, background: "rgba(88,130,225,0.07)" }} />)}
               {r.vacios.map((x, i) => (
-                <div key={`v${i}`} title={`Vacío por cochera ${hhmm(x.inicio)}–${hhmm(x.fin)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.36, height: ROW_H * 0.28,
+                <div key={`v${i}`} title={`Sin servicio (en cochera) ${hhmm(x.inicio)}–${hhmm(x.fin)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.36, height: ROW_H * 0.28,
                   background: "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c55 6px, #fb923c55 12px)", borderRadius: 3, opacity: 0.6 }} />
               ))}
               {r.tramosPausa.map((x, i) => (
@@ -180,11 +183,15 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
                     onMouseEnter={e => setTip({ x, r, cx: e.clientX, cy: e.clientY })}
                     onMouseMove={e => setTip(t => (t ? { ...t, cx: e.clientX, cy: e.clientY } : t))}
                     onMouseLeave={() => setTip(null)}
-                    style={{
+                    style={x.vacio ? {
+                      position: "absolute", left: X(x.dep), width: w, top: 9, height: ROW_H - 18, borderRadius: 3,
+                      background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
+                      color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
+                    } : {
                       position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
                       background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
                       overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
-                    }}>{w > 20 ? x.nombre : ""}</div>
+                    }}>{x.vacio ? (w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
               })}
               {r.relevos.map((x, i) => (
@@ -205,7 +212,8 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
               <span style={{ width: COLS[6].w, textAlign: "right", padding: "0 5px", whiteSpace: "nowrap" }}>{num(tot.c / 60)} h</span>
               <span style={{ width: COLS[7].w }} />
               <span style={{ width: COLS[8].w, textAlign: "right", padding: "0 5px" }}>{num(tot.km)}</span>
-              <span style={{ width: COLS[9].w, textAlign: "right", padding: "0 5px" }}>{num(tot.v)}</span>
+              <span style={{ width: COLS[9].w, textAlign: "right", padding: "0 5px" }}>{num(tot.kv)}</span>
+              <span style={{ width: COLS[10].w, textAlign: "right", padding: "0 5px" }}>{num(tot.v)}</span>
             </div>
           </div>
         )}
@@ -221,8 +229,8 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
       {tip && (
         <div style={{ position: "fixed", left: Math.min(tip.cx + 14, window.innerWidth - 280), top: Math.max(tip.cy - 80, 8), background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "11px 14px", zIndex: 2000, boxShadow: "0 8px 28px rgba(0,0,0,.6)", fontSize: 12, color: C.text, minWidth: 200, maxWidth: 280, pointerEvents: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <span style={{ minWidth: 30, padding: "1px 5px", borderRadius: 4, background: tip.x.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{tip.x.nombre}</span>
-            <span style={{ fontSize: 10.5, color: C.muted }}>{tip.x.sentido}</span>
+            <span style={{ minWidth: 30, padding: "1px 5px", borderRadius: 4, background: tip.x.color, color: tip.x.vacio ? "#fff" : "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{tip.x.nombre}</span>
+            <span style={{ fontSize: 10.5, color: C.muted }}>{tip.x.vacio ? (String(tip.x.o).startsWith("cochera:") ? "salida de cochera" : String(tip.x.d).startsWith("cochera:") ? "vuelta a cochera" : "entre cabeceras") : tip.x.sentido}</span>
           </div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.dep)} {nombre(tip.x.o)}</div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.arr)} {nombre(tip.x.d)}</div>
@@ -272,7 +280,10 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />)}
         {row("Regulación en cabecera por defecto", numInput("regulacion", "min (si la línea no tiene la suya)"))}
-        {row("Margen para un vacío por cochera", numInput("margenVacio", "min entre bloques del mismo autobús"))}
+        {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min (la ida y la vuelta ya se calculan)"))}
+        {row("Vacíos entre cabeceras, como mucho", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
+        {row("Velocidad de los vacíos", numInput("velocidadVacio", "km/h"))}
+        {row("Factor de rodeo (carretera / línea recta)", decInput("factorRodeo", "× la distancia en línea recta", 0.05))}
         {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
         {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
         {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
@@ -296,6 +307,7 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
         {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
+        {row("Vacíos entre cabeceras", sel("vacios", [[true, "Sí, si ahorran autobuses"], [false, "No (cada autobús sigue en su cabecera)"]]))}
         {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
       </div>
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
@@ -541,7 +553,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
             <thead><tr>
               <th style={{ ...th, textAlign: "left" }}>#</th>
               <th style={{ ...th, textAlign: "left" }}>Estrategia</th>
-              <th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Piezas/turno</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>{hayPrecios && <th style={th}>Coste/día</th>}<th style={th} />
+              <th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Piezas/turno</th><th style={th}>Km vacío</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>{hayPrecios && <th style={th}>Coste/día</th>}<th style={th} />
             </tr></thead>
             <tbody>
               {opt.probadas.slice(0, 8).map((r, i) => (
@@ -551,6 +563,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
                   <td style={{ ...td, color: r.autobuses === mejor.autobuses ? C.text : C.muted }}>{num(r.autobuses)}</td>
                   <td style={{ ...td, color: r.turnos === mejor.turnos ? C.text : C.muted }}>{num(r.turnos)}</td>
                   <td style={{ ...td, color: C.muted }}>{r.piezasMedias != null ? r.piezasMedias.toFixed(1).replace(".", ",") : "—"}</td>
+                  <td style={{ ...td, color: C.muted }}>{num(r.kmVacio || 0)}</td>
                   <td style={td}>{num(r.horasPagadas)}</td>
                   <td style={{ ...td, color: r.avisos ? C.red : C.dim }}>{r.avisos}</td>
                   {hayPrecios && <td style={td}>{r.coste != null ? `${num(r.coste)} €` : "—"}</td>}
@@ -576,7 +589,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
 //   porCalendario: { [dia]: { estrategia, objetivo, resumen, clave } } }
 // `clave` resume con qué se calculó (restricciones, líneas, estrategia y la
 // configuración de las líneas): si ya no coincide, el resumen está desactualizado.
-const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar"]; // entreLineas además es restricción
+const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "vacios"]; // entreLineas además es restricción
 const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
 const sinCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => !campos.includes(k)));
 const soloCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => campos.includes(k)));
@@ -584,7 +597,7 @@ function hashTexto(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h
 const claveEscenario = (p, cfgTxt) => hashTexto(JSON.stringify(Object.keys(p).filter(k => !CAMPOS_COSTE.includes(k)).sort().map(k => [k, p[k]])) + cfgTxt);
 const mismaEstrategia = (a = {}, b = {}) => CAMPOS_ESTRATEGIA.every(k => (a[k] ?? PARAMS_DEFECTO[k]) === (b[k] ?? PARAMS_DEFECTO[k]));
 const baseDeResumen = (r, p) => (r ? {
-  vehicleCount: r.autobuses, turnos: r.turnos, eficPersonal: r.eficienciaPersonal, totalKm: r.km, totalStops: r.viajes, avisos: r.avisos, coste: costeDia(r, p),
+  vehicleCount: r.autobuses, turnos: r.turnos, eficPersonal: r.eficienciaPersonal, totalKm: r.km, eficVehiculo: r.km ? (r.km - (r.kmVacio || 0)) / r.km : null, totalStops: r.viajes, avisos: r.avisos, coste: costeDia(r, p),
 } : null);
 const MAX_EN_MEMORIA = 5; // escenarios completos guardados en memoria (los de Roma ocupan)
 
@@ -612,9 +625,12 @@ export function SchedulingLineasPage({ projectId }) {
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
   useEffect(() => watchCfg(projectId, setCfg), [projectId]);
   useEffect(() => watchSchedParams(projectId, setGuardados), [projectId]);
+  const [cocheras, setCocheras] = useState([]);
+  useEffect(() => watchCocheras(projectId, setCocheras), [projectId]);
 
   const red = estado.red;
-  const cfgTxt = useMemo(() => JSON.stringify(cfg), [cfg]);
+  // la clave de cada escenario también cambia si se mueven las cocheras
+  const cfgTxt = useMemo(() => JSON.stringify(cfg) + JSON.stringify(cocheras.map(c => [c.id, c.lat, c.lng])), [cfg, cocheras]);
   const { porCalendario = {}, ...guardadoTop } = guardados || {};
   const existe = d => !esCalendario(d) || !!red?.calendarios?.some(c => c.id === d);
   const diaGuardado = existe(guardadoTop.dia) ? guardadoTop.dia : "laborable";
@@ -630,7 +646,7 @@ export function SchedulingLineasPage({ projectId }) {
   const actual = cache[dia];
   const res = actual?.res || null;
   const opt = optPorDia[dia] || { estado: "nada", progreso: [0, 0] };
-  const paradasPorId = useMemo(() => new Map((red?.paradas || []).map(p => [p.id, p])), [red]);
+  const paradasPorId = useMemo(() => new Map([...(red?.paradas || []).map(p => [p.id, p]), ...cocheras.map(c => [ID_COCHERA(c.id), { nombre: `Cochera ${c.nombre || ""}`.trim() }])]), [red, cocheras]);
   const pendientes = Object.keys(cambios).length > 0;
 
   function guardarCalendario(d, datos) {
@@ -643,7 +659,7 @@ export function SchedulingLineasPage({ projectId }) {
     setCalculando(true);
     setTimeout(() => {
       try {
-        const r = generarServicio(red, cfg, p);
+        const r = generarServicio(red, cfg, p, { cocheras });
         const resumen = resumenServicio(r);
         const clave = claveEscenario(p, cfgTxt);
         const est = soloCampos(p, CAMPOS_ESTRATEGIA);
@@ -711,7 +727,7 @@ export function SchedulingLineasPage({ projectId }) {
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setO({ estado: "nada", progreso: [0, 0], error: e.message || "error en el cálculo" }); };
     // el optimizador puede probar a no cambiar de línea solo si la restricción lo permite
-    w.postMessage({ red, cfg, params: { ...p, entreLineas: p.entreLineasGlobal }, objetivo: obj });
+    w.postMessage({ red, cfg, cocheras, params: { ...p, entreLineas: p.entreLineasGlobal }, objetivo: obj });
   }
   function aplicarOpt(i) {
     const r = opt.probadas?.[i];
@@ -751,7 +767,7 @@ export function SchedulingLineasPage({ projectId }) {
       if (hechos[dia]) generar(paramsPara(dia, {}, hechos[dia]));
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setLote(null); alert(`No se ha podido terminar: ${e.message || "error en el cálculo"}`); };
-    w.postMessage({ tipo: "lote", red, cfg, params: base, objetivo: obj, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {} })) });
+    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivo: obj, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {} })) });
   }
   function pararLote() { workerRef.current?.terminate(); workerRef.current = null; setLote(null); }
 
@@ -865,6 +881,11 @@ export function SchedulingLineasPage({ projectId }) {
             </div>
           )}
 
+          {res && !res.conCocheras && (
+            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(251,191,36,0.08)", borderBottom: "1px solid rgba(251,191,36,0.3)" }}>
+              Sin cocheras: no se calculan las salidas ni las vueltas a cochera ni sus km en vacío. Añádelas en Planning («Cocheras»).
+            </div>
+          )}
           {res?.aproximado && (
             <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(251,191,36,0.08)", borderBottom: "1px solid rgba(251,191,36,0.3)" }}>
               Esta red se importó sin las horas de salida de cada viaje: se han repartido entre la primera y la última de cada sentido. Vuelve a importar el GTFS en Planning («Sustituir red») para usar los horarios exactos.
@@ -895,8 +916,8 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
   const calc = filasCal.filter(f => porCalendario[f.id]?.resumen);
   const tot = calc.reduce((a, f) => {
     const r = porCalendario[f.id].resumen, c = costeDia(r, precios);
-    return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + r.horasPagadas * f.dias, km: a.km + r.km * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos) };
-  }, { dias: 0, viajes: 0, horas: 0, km: 0, coste: null, buses: 0, turnos: 0 });
+    return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + r.horasPagadas * f.dias, km: a.km + r.km * f.dias, kmVacio: a.kmVacio + (r.kmVacio || 0) * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos) };
+  }, { dias: 0, viajes: 0, horas: 0, km: 0, kmVacio: 0, coste: null, buses: 0, turnos: 0 });
   const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "7px 10px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "6px 10px", fontFamily: mono, fontSize: 11.5, textAlign: "right", whiteSpace: "nowrap" };
   const boton = (texto, onClick, principal, titulo) => (
@@ -923,6 +944,7 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
         <td style={{ ...td, color: col }}>{x ? num(x.viajes) : f.viajesGtfs != null ? <span style={{ color: C.dim }}>{num(f.viajesGtfs)}</span> : "—"}</td>
         <td style={{ ...td, color: col, fontWeight: 700 }}>{x ? num(x.autobuses) : "—"}</td>
         <td style={{ ...td, color: col, fontWeight: 700 }}>{x ? num(x.turnos) : "—"}</td>
+        <td style={{ ...td, color: viejo ? C.dim : C.muted }}>{x ? num(x.kmVacio || 0) : "—"}</td>
         <td style={{ ...td, color: col }}>{x ? num(x.horasPagadas) : "—"}</td>
         <td style={{ ...td, color: x?.avisos ? C.red : C.dim }}>{x ? x.avisos : "—"}</td>
         {hayPrecios && <td style={{ ...td, color: col }}>{c != null ? `${num(c)} €` : "—"}</td>}
@@ -943,7 +965,7 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
   };
   const cabeceraTabla = (
     <thead><tr>
-      <th style={{ ...th, textAlign: "left" }}>Calendario</th><th style={th}>Días</th><th style={th}>Viajes/día</th><th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>
+      <th style={{ ...th, textAlign: "left" }}>Calendario</th><th style={th}>Días</th><th style={th}>Viajes/día</th><th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Km vacío</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>
       {hayPrecios && <th style={th}>Coste/día</th>}{hayPrecios && <th style={th}>Coste periodo</th>}<th style={{ ...th, textAlign: "left" }}>Estado</th><th style={th} />
     </tr></thead>
   );
@@ -989,6 +1011,7 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
                 <td style={{ ...td, color: C.text }} title="Viajes de todo el periodo">{num(tot.viajes)}</td>
                 <td style={{ ...td, color: C.text, fontWeight: 700 }} title="Flota necesaria: el máximo de un día">{num(tot.buses)} máx.</td>
                 <td style={{ ...td, color: C.text, fontWeight: 700 }} title="Turnos del día con más">{num(tot.turnos)} máx.</td>
+                <td style={{ ...td, color: C.text }} title="Km en vacío de todo el periodo">{num(tot.kmVacio)}</td>
                 <td style={{ ...td, color: C.text }} title="Horas pagadas de todo el periodo">{num(tot.horas)}</td>
                 <td style={td} />
                 {hayPrecios && <td style={td} />}
@@ -1014,8 +1037,8 @@ function kpisBarra(res, p) {
   const pagado = res.turnos.reduce((s, t) => s + t.trabajo, 0);
   const coste = costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses }, p);
   return {
-    vehiculos: k.autobuses, pvr: k.pico, turnos: k.turnos, paradas: k.viajes, km: k.km, kmVacio: 0,
-    conduccion, trabajo: 0, pagado, eficVehiculo: null, eficPersonal: k.eficienciaPersonal, coste,
+    vehiculos: k.autobuses, pvr: k.pico, turnos: k.turnos, paradas: k.viajes, km: k.km, kmVacio: k.kmVacio || 0,
+    conduccion, trabajo: 0, pagado, eficVehiculo: k.km ? (k.km - (k.kmVacio || 0)) / k.km : null, eficPersonal: k.eficienciaPersonal, coste,
     avisos: res.turnos.reduce((s, t) => s + t.avisos.length, 0), filasConAviso: k.turnosConAviso, sinAsignar: 0,
     // campos con los nombres que usa la comparación ▲▼
     vehicleCount: k.autobuses, totalKm: k.km, totalStops: k.viajes,
@@ -1026,9 +1049,9 @@ function cambiosKpi(res, p = res.params) {
   return {
     "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
     "Turnos": { sub: `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
-    "Eficiencia vehículo": { ocultar: true },
+    "Eficiencia vehículo": { sub: `km con viajeros / km totales · ${num(k.km - (k.kmVacio || 0))} / ${num(k.km)}`, ayuda: "Parte de los km que se hacen con viajeros: el resto son vacíos (salir y volver a cochera, ir a otra cabecera)." },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
-    "Km": { sub: `${num(k.horasServicio)} h con viajeros`, ayuda: "Kilómetros de todos los viajes del día (sin los vacíos por cochera)." },
+    "Km": { sub: `${num(k.kmVacio || 0)} en vacío · ${num(k.vacios || 0)} vacíos`, ayuda: "Kilómetros del día: los de los viajes y los vacíos (salida y vuelta a cochera, y entre cabeceras)." },
     "Paradas": { l: "Viajes", sub: res.diaNombre, subColor: C.dim, ayuda: "Viajes del calendario elegido en las líneas del escenario." },
     "Avisos": { ayuda: "Turnos que incumplen la conducción UE 561/2006 o el descanso del Estatuto (art. 34.4)." },
     ...(costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
