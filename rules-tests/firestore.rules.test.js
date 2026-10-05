@@ -94,9 +94,26 @@ describe("roles y perfiles", () => {
   it("nadie puede cambiarse de organización", async () => {
     await assertFails(updateDoc(doc(as("adminA"), "usuarios/adminA"), { org_id: "orgB" }));
   });
-  it("no se puede crear un perfil en una organización que no existe", async () => {
+  it("nadie puede crearse su propio perfil (ni en una organización que existe)", async () => {
+    // registrarse en Firebase Auth es libre: lo que no puede es darse de alta en una organización
+    await assertFails(setDoc(doc(as("nuevo"), "usuarios/nuevo"), { rol: "admin", org_id: "orgA" }));
+    await assertFails(setDoc(doc(as("nuevo"), "usuarios/nuevo"), { rol: "conductor", org_id: "orgA" }));
     await assertFails(setDoc(doc(as("nuevo"), "usuarios/nuevo"), { rol: "admin", org_id: "orgInventada" }));
-    await assertSucceeds(setDoc(doc(as("nuevo"), "usuarios/nuevo"), { rol: "conductor", org_id: "orgA" }));
+    // y sin perfil no ve nada
+    await assertFails(getDoc(doc(as("nuevo"), "planes/planA")));
+  });
+  it("el alta la hace un admin o intermedio de la organización, con los roles que puede dar", async () => {
+    await assertSucceeds(setDoc(doc(as("adminA"), "usuarios/n1"), { rol: "conductor", org_id: "orgA" }));
+    await assertSucceeds(setDoc(doc(as("adminA"), "usuarios/n2"), { rol: "admin", org_id: "orgA" }));
+    await assertFails(setDoc(doc(as("adminA"), "usuarios/n3"), { rol: "superadmin", org_id: "orgA" }));
+    await assertFails(setDoc(doc(as("adminA"), "usuarios/n4"), { rol: "conductor", org_id: "orgB" })); // en otra organización, no
+    await assertSucceeds(setDoc(doc(as("interA"), "usuarios/n5"), { rol: "conductor", org_id: "orgA" }));
+    await assertFails(setDoc(doc(as("interA"), "usuarios/n6"), { rol: "admin", org_id: "orgA" }));
+    await assertFails(setDoc(doc(as("condA"), "usuarios/n7"), { rol: "conductor", org_id: "orgA" }));
+    await assertSucceeds(setDoc(doc(as("sa"), "usuarios/n8"), { rol: "admin", org_id: "orgB" }));
+  });
+  it("no se puede pisar el perfil de alguien que ya existe", async () => {
+    await assertFails(setDoc(doc(as("adminA"), "usuarios/adminB"), { rol: "conductor", org_id: "orgA" }));
   });
 });
 

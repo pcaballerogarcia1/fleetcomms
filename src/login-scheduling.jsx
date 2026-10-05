@@ -1,10 +1,6 @@
-import { useState, useEffect } from "react";
-import { db, auth, secondaryAuth, secondaryDb, getUserProfileSafe } from "./firebase.js";
-import {
-  collection, query, where, limit, getDocs,
-  doc, setDoc, serverTimestamp,
-} from "firebase/firestore";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { useState } from "react";
+import { auth, getUserProfileSafe } from "./firebase.js";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 // Extracted out of scheduling.jsx so the login screen doesn't have to
 // download the Scheduling/Planning/Rostering bundle just to show a form —
@@ -41,18 +37,11 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
 export function LoginScheduling({ onLogin }) {
   const [email,     setEmail]     = useState("");
   const [password,  setPassword]  = useState("");
-  const [nombre,    setNombre]    = useState("");
-  const [orgId,     setOrgId]     = useState("default");
   const [err,       setErr]       = useState("");
   const [loading,   setLoading]   = useState(false);
-  const [mode,      setMode]      = useState("checking"); // checking | login | setup
-
-  // Detecta si hay algún admin en Firestore; si no, muestra setup
-  useEffect(() => {
-    getDocs(query(collection(db, "usuarios"), where("rol", "==", "admin"), limit(1)))
-      .then(snap => setMode(snap.empty ? "setup" : "login"))
-      .catch(() => setMode("login"));
-  }, []);
+  // Antes había un modo "Configuración inicial" que creaba un administrador
+  // autoregistrándose. Ya no se puede (las reglas lo impiden): los
+  // administradores de cada organización los da de alta el superadmin.
 
   async function login() {
     if (!email || !password) { setErr("Introduce email y contraseña."); return; }
@@ -77,28 +66,6 @@ export function LoginScheduling({ onLogin }) {
     setLoading(false);
   }
 
-  async function setup() {
-    if (!email || !password || !nombre) { setErr("Rellena todos los campos."); return; }
-    if (password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres."); return; }
-    setLoading(true); setErr("");
-    try {
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-      const profile = {
-        nombre: nombre.trim(), apellidos: "", email,
-        rol: "admin", org_id: orgId.trim() || "default",
-        activo: true, createdAt: serverTimestamp(),
-      };
-      await setDoc(doc(secondaryDb, "usuarios", cred.user.uid), profile);
-      await secondaryAuth.signOut();
-      // Now sign in as the new user
-      const cred2 = await signInWithEmailAndPassword(auth, email, password);
-      onLogin({ uid: cred2.user.uid, ...profile });
-    } catch (e) {
-      setErr(e.message || "Error al crear el administrador.");
-    }
-    setLoading(false);
-  }
-
   const iStyle = {
     width: "100%", background: "rgba(255,255,255,0.04)",
     border: `1px solid ${C.border}`, color: C.text,
@@ -106,13 +73,7 @@ export function LoginScheduling({ onLogin }) {
     boxSizing: "border-box", fontFamily: font, outline: "none",
   };
 
-  if (mode === "checking") return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: C.muted, fontFamily: font, fontSize: 13 }}>Cargando…</div>
-    </div>
-  );
-
-  const onEnter = e => e.key === "Enter" && (mode === "setup" ? setup() : login());
+  const onEnter = e => e.key === "Enter" && login();
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
@@ -120,23 +81,13 @@ export function LoginScheduling({ onLogin }) {
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operanzia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
-            {mode === "setup" ? "Configuración inicial" : "Planning & Scheduling"}
+            Planning &amp; Scheduling
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            {mode === "setup" ? "No hay administradores. Crea el primero." : "Acceso para administradores"}
+            Acceso para administradores
           </div>
         </div>
 
-        {mode === "setup" && (
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Nombre</label>
-            <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" autoComplete="name" onKeyDown={onEnter}
-              style={{ ...iStyle, borderColor: nombre ? `${C.blue}44` : C.border }}
-              onFocus={e => e.target.style.borderColor = `${C.blue}66`}
-              onBlur={e  => e.target.style.borderColor = nombre ? `${C.blue}44` : C.border}
-            />
-          </div>
-        )}
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Email</label>
           <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="admin@empresa.com" autoComplete="email" onKeyDown={onEnter}
@@ -145,33 +96,22 @@ export function LoginScheduling({ onLogin }) {
             onBlur={e  => e.target.style.borderColor = email ? `${C.blue}44` : C.border}
           />
         </div>
-        <div style={{ marginBottom: mode === "setup" ? 14 : 20 }}>
+        <div style={{ marginBottom: 20 }}>
           <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>Contraseña</label>
           <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="••••••••"
-            autoComplete={mode === "setup" ? "new-password" : "current-password"} onKeyDown={onEnter}
+            autoComplete="current-password" onKeyDown={onEnter}
             style={{ ...iStyle, borderColor: password ? `${C.blue}44` : C.border }}
             onFocus={e => e.target.style.borderColor = `${C.blue}66`}
             onBlur={e  => e.target.style.borderColor = password ? `${C.blue}44` : C.border}
           />
         </div>
-        {mode === "setup" && (
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>ID de organización</label>
-            <input value={orgId} onChange={e => setOrgId(e.target.value)} placeholder="default" autoComplete="off" onKeyDown={onEnter}
-              style={{ ...iStyle, borderColor: orgId ? `${C.blue}44` : C.border }}
-              onFocus={e => e.target.style.borderColor = `${C.blue}66`}
-              onBlur={e  => e.target.style.borderColor = orgId ? `${C.blue}44` : C.border}
-            />
-          </div>
-        )}
-
         {err && (
           <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {err}
           </div>
         )}
-        <button onClick={mode === "setup" ? setup : login} disabled={loading} style={{
+        <button onClick={login} disabled={loading} style={{
           width: "100%", padding: "11px", fontSize: 13, fontWeight: 600,
           background: loading ? C.blueDim : C.blue, border: "none",
           color: loading ? C.blueText : "#fff",
@@ -182,17 +122,11 @@ export function LoginScheduling({ onLogin }) {
           onMouseLeave={e => { if (!loading) e.currentTarget.style.background = C.blue; }}
         >
           {loading
-            ? <><span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(163,196,252,.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {mode === "setup" ? "Creando…" : "Accediendo…"}</>
-            : (mode === "setup" ? "Crear administrador" : "Acceder")
+            ? <><span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(163,196,252,.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Accediendo…</>
+            : "Acceder"
           }
         </button>
 
-        {/* No hay botón manual para pasar a modo "setup" — eso permitía a
-            cualquier visitante de la pantalla de login crearse una cuenta
-            de admin para el org_id que quisiera, sin pasar por el
-            superadmin. El modo "setup" solo debe activarse automáticamente
-            (arriba, al detectar que no existe ningún admin en todo el
-            sistema todavía). */}
       </div>
     </div>
   );
