@@ -9,11 +9,18 @@ import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces, localGet } fro
 import { LineasPanel } from "./gtfs-lineas.jsx";
 import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur } from "./price-store.js";
 import { logAudit, logAuditGrouped } from "./audit.js";
+import { cambiarDocumento } from "./concurrencia.js";
 
 // ── IndexedDB para markers grandes (evita límite 1MB de Firestore) ──
 const _IDB_NAME = 'operanzia_v1';
 const _IDB_STORE = 'layer_markers';
 let _idbConn = null;
+
+// Depots del proyecto: cada cambio se aplica sobre la lista del servidor
+// (concurrencia.js) — antes se guardaba la lista de la pantalla entera.
+const cambiarDepots = (projectId, orgId, cambio) => cambiarDocumento(doc(db, "planning_depots", projectId), datos => ({
+  depots: cambio(datos?.depots || []), projectId, orgId: orgId || datos?.orgId || null, updatedAt: serverTimestamp(),
+}));
 function _idbOpen() {
   if (!_idbConn) _idbConn = new Promise((res, rej) => {
     const req = indexedDB.open(_IDB_NAME, 1);
@@ -1360,9 +1367,8 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                   const newDepot = { id: Date.now() + Math.random(), lat, lng, nombre: manualName.trim() || `Depot ${depots.length + 1}`, fields: {} };
                   if (projectId) {
                     setSavingManualDepot(true);
-                    const merged = [...depots, newDepot];
                     try {
-                      await setDoc(doc(db, "planning_depots", projectId), { depots: merged, projectId, orgId, updatedAt: serverTimestamp() }, { merge: true });
+                      await cambiarDepots(projectId, orgId, l => [...l, newDepot]);
                     } catch (e) {
                       console.error("Error al guardar el depot:", e);
                       window.alert("No se ha podido guardar el depot: " + (e.message || "error desconocido"));
@@ -1446,8 +1452,7 @@ function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, on
                 <button
                   onClick={() => {
                     if (projectId) {
-                      const filtered = depots.filter(x => x.id !== d.id);
-                      setDoc(doc(db, "planning_depots", projectId), { depots: filtered, projectId, orgId, updatedAt: serverTimestamp() }, { merge: true })
+                      cambiarDepots(projectId, orgId, l => l.filter(x => x.id !== d.id))
                         .catch(e => { console.error("Error al borrar el depot:", e); window.alert("No se ha podido borrar el depot: " + (e.message || "error desconocido")); });
                     } else {
                       setDepots(prev => prev.filter(x => x.id !== d.id));
@@ -3143,10 +3148,9 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         ),
       }));
       if (projectId) {
-        const merged = [...depots, ...newDepots];
-        setDoc(doc(db, "planning_depots", projectId), {
-          depots: merged, projectId, orgId, updatedAt: serverTimestamp(),
-        });
+        // sobre la lista del servidor: varios archivos (o varias personas) a la vez no se pisan
+        await cambiarDepots(projectId, orgId, l => [...l, ...newDepots])
+          .catch(e => newErrors.push(`${file.name}: no se pudo guardar (${e.message || e})`));
       } else {
         setDepots(prev => [...prev, ...newDepots]);
       }

@@ -4,6 +4,7 @@ import { db, auth, secondaryAuth, getUserProfileSafe } from "./firebase.js";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, query, where, orderBy, limit, setDoc, getDoc, getDocFromServer,
+  runTransaction, arrayUnion,
 } from "firebase/firestore";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
@@ -11,6 +12,7 @@ import {
 } from "firebase/auth";
 import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
 import { setErrorUser } from "./error-report.js";
+import { parcheDe, cambiarEnLista } from "./concurrencia.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -61,6 +63,8 @@ function useCollection(colName, orderField = "fecha", orgId = null, superAdmin =
   }, [colName, orgId, superAdmin, limitN]);
   return { data, loading };
 }
+
+const nuevoComentario = (usuarioId, texto) => ({ usuarioId, texto, fecha: Date.now() });
 
 async function fbAdd(colName, data) {
   return await addDoc(collection(db, colName), { ...data, fecha: serverTimestamp() });
@@ -744,30 +748,36 @@ function DetallePlan({plan,sesion,onBack,onUpdate}){
   const proxima=pendientes[0];
   const tasaColor=tasa===100?C.green:tasa>50?C.orange:C.red;
 
+  // Cada cambio es de UNA parada: se pinta ya en pantalla y se guarda
+  // aplicado sobre lo que haya en el servidor (concurrencia.js), para no
+  // pisar las paradas que otra persona marque a la vez en el mismo plan.
+  function cambiarParada(id,cambio){
+    onUpdate({...plan,ubicaciones:ubicaciones.map(u=>u.id!==id?u:cambio(u))},{ubicId:id,cambio});
+  }
   function marcarUbic(id,val){
-    onUpdate({...plan,ubicaciones:ubicaciones.map(u=>u.id!==id?u:{...u,realizado:val,realizadoPor:val?sesion.id:null,realizadoEn:val?Date.now():null,elementos:val?u.elementos.map(e=>({...e,realizado:true})):u.elementos})});
+    cambiarParada(id,u=>({...u,realizado:val,realizadoPor:val?sesion.id:null,realizadoEn:val?Date.now():null,elementos:val?(u.elementos||[]).map(e=>({...e,realizado:true})):u.elementos}));
   }
   function marcarQR(ubicId,qr,val){
-    onUpdate({...plan,ubicaciones:ubicaciones.map(u=>{
-      if(u.id!==ubicId)return u;
-      const elems=u.elementos.map(e=>e.codiQR===qr?{...e,realizado:val}:e);
+    cambiarParada(ubicId,u=>{
+      const elems=(u.elementos||[]).map(e=>e.codiQR===qr?{...e,realizado:val}:e);
       const todos=elems.length>0&&elems.every(e=>e.realizado);
       return{...u,elementos:elems,realizado:todos,realizadoPor:todos?sesion.id:null,realizadoEn:todos?Date.now():null};
-    })});
+    });
   }
   function guardarNota(){
-    onUpdate({...plan,ubicaciones:ubicaciones.map(u=>u.id!==notaId?u:{...u,nota:notaText})});
+    const texto=notaText;
+    cambiarParada(notaId,u=>({...u,nota:texto}));
     setNotaId(null);setNotaText("");
   }
   function guardarParte(ubicId, parte, finalizar){
-    onUpdate({...plan,ubicaciones:ubicaciones.map(u=>u.id!==ubicId?u:{
+    cambiarParada(ubicId,u=>({
       ...u,
       parte,
       // Si se finaliza, marcar la parada como realizada
       realizado: finalizar?true:u.realizado,
       realizadoPor: finalizar?sesion.id:u.realizadoPor,
       realizadoEn: finalizar?Date.now():u.realizadoEn,
-    })});
+    }));
     if(finalizar) setParteUbicId(null);
   }
   function sel(id){
@@ -1129,9 +1139,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   if(verCuadrante) return <MiCuadrante sesion={sesion} onBack={()=>setVerCuadrante(false)}/>;
 
   if(planActivo){
-    return <DetallePlan plan={planActivo} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated)=>{
+    return <DetallePlan plan={planActivo} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated,cambio)=>{
       setPlanActivo(updated);
-      fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
+      if(cambio) cambiarEnLista(doc(db,"planes",updated._id),"ubicaciones",cambio.ubicId,cambio.cambio,updated.ubicaciones).catch(e=>console.error("Guardando parada:",e));
+      else fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
     }}/>;
   }
 
@@ -1479,8 +1490,8 @@ function ModuloIncidencias({sesion,usuarios}){
   }
   async function agregarCom(inc){
     if(!comentario.trim())return;
-    const nuevos=[...(inc.comentarios||[]),{usuarioId:sesion.uid,texto:comentario,fecha:Date.now()}];
-    await fbUpdate("incidencias",inc._id,{comentarios:nuevos});
+    // arrayUnion: se añade al servidor, no se pisa lo que haya escrito otro
+    await fbUpdate("incidencias",inc._id,{comentarios:arrayUnion(nuevoComentario(sesion.uid,comentario))});
     setCom("");
   }
   async function cambiarEstado(inc,est){
@@ -1735,15 +1746,25 @@ function ModuloInventario({sesion,usuarios}){
     const cant=parseInt(formMov.cantidad)||0;
     if(cant<=0){setErrForm("La cantidad debe ser mayor que 0");return;}
     if(formMov.tipo==="salida" && cant > prodActual.stock){setErrForm(`Stock insuficiente. Disponible: ${prodActual.stock} ${prodActual.unidad}`);return;}
-    const nuevoStock = formMov.tipo==="entrada" ? prodActual.stock+cant : prodActual.stock-cant;
-    await fbUpdate("inventario",selId,{stock:nuevoStock});
-    await fbAdd("movimientos",{
-      productoId:selId,
-      tipo:formMov.tipo, cantidad:cant,
-      vehiculo:formMov.vehiculo, motivo:formMov.motivo, nota:formMov.nota,
-      stockAntes:prodActual.stock, stockDespues:nuevoStock,
-      usuarioId:sesion.uid, org_id:sesion.org_id,
-    });
+    // En una transacción: con el stock REAL del servidor (otro puede haber
+    // movido stock mientras), y el movimiento se escribe a la vez.
+    let antes, despues;
+    try{
+      await runTransaction(db, async tx=>{
+        const ref=doc(db,"inventario",selId);
+        const s=await tx.get(ref);
+        antes=s.data()?.stock||0;
+        if(formMov.tipo==="salida" && cant>antes) throw Object.assign(new Error(`Stock insuficiente. Disponible: ${antes} ${prodActual.unidad}`),{stock:true});
+        despues=formMov.tipo==="entrada"?antes+cant:antes-cant;
+        tx.update(ref,{stock:despues});
+        tx.set(doc(collection(db,"movimientos")),{
+          productoId:selId, tipo:formMov.tipo, cantidad:cant,
+          vehiculo:formMov.vehiculo, motivo:formMov.motivo, nota:formMov.nota,
+          stockAntes:antes, stockDespues:despues,
+          usuarioId:sesion.uid, org_id:sesion.org_id, fecha:serverTimestamp(),
+        });
+      });
+    }catch(e){ setErrForm(e.stock?e.message:"No se pudo registrar el movimiento (¿sin conexión?): "+(e.message||e)); return; }
     setFormMov({tipo:"salida",cantidad:1,vehiculo:"",motivo:"",nota:""});
     setErrForm(""); setVista("detalle");
   }
@@ -2293,7 +2314,14 @@ export default function App(){
   })();
 
   async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
-  async function updatePlan(plan){ await fbUpdate("planes",plan._id,plan); }
+  // Solo los campos que han cambiado, y los comentarios se AÑADEN (antes se
+  // guardaba el plan entero y pisaba lo que hubiera cambiado otro, p. ej.
+  // las paradas que un conductor marcaba a la vez).
+  async function updatePlan(plan){
+    const orig=planes.find(p=>p._id===plan._id);
+    const parche=parcheDe(orig||{},plan);
+    if(Object.keys(parche).length) await fbUpdate("planes",plan._id,parche);
+  }
   async function deletePlan(id){ await fbDelete("planes",id); }
 
   // Pantalla de carga mientras Firebase inicializa auth

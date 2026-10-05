@@ -79,4 +79,41 @@ cuadrante y lo dice.
 | Publicar escribe muchos documentos sin transacción. | Mitigado: primero escribe las nuevas y luego quita las viejas (si falla a medias puede quedar alguna repetida, nunca un conductor sin ruta). |
 | `planning_timetable` sin regla. | Código antiguo sin uso real; pendiente de quitar. |
 | `max_usuarios` de la organización solo se comprueba en la interfaz. | Pendiente (necesita alta en servidor, plan Blaze). |
-| Cambios a mano del Scheduling de líneas: la lista se sobrescribe entera; dos personas a la vez pierden cambios. | Pendiente: punto 2 (concurrencia). |
+| Cambios a mano del Scheduling de líneas: la lista se sobrescribía entera; dos personas a la vez perdían cambios. | **Corregido** (ver sección 8). |
+
+## 8. Varias personas a la vez (concurrencia)
+
+Firestore guarda lo último que llega. El patrón peligroso es «leo una lista o
+un número, lo cambio en mi pantalla y guardo el valor entero»: la segunda
+persona borra sin saberlo lo que hizo la primera. Herramientas en
+`src/concurrencia.js`:
+
+- **Transacción sobre la versión del servidor** (`cambiarEnLista`,
+  `cambiarDocumento`): se lee lo que hay, se aplica *solo mi cambio* y se
+  guarda; si otro escribió entre medias, Firestore repite la operación.
+- **Añadir sin reescribir** (`arrayUnion`, `parcheDe`): comentarios y listas
+  que solo crecen.
+- **Escribir solo los campos cambiados** (`mergeFields` / parches).
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| Marcar paradas (app Field) | lista de paradas entera | transacción sobre la parada; **sin conexión** se guarda en cola como antes (el conductor tiene que poder trabajar sin cobertura) |
+| Tareas correctivas (app Field) | el plan entero | solo los campos cambiados; comentarios con `arrayUnion` |
+| Comentarios de incidencias | lista entera | `arrayUnion` |
+| Stock del inventario | «stock que veo ± cantidad» | transacción con el stock real; el movimiento se escribe en la misma transacción; avisa si no hay stock |
+| Depots (Planning de puntos) y cocheras (líneas) | lista entera (y la importación de varios archivos a la vez se pisaba a sí misma) | transacción |
+| Cambios a mano del Scheduling de líneas | lista entera | transacción; si otra persona cambia el mismo calendario, cada pantalla se recalcula con la lista del servidor |
+| Restricciones del Scheduling de líneas | todas al generar | solo las que ha cambiado esa persona |
+| Reglas, horas y convenio de Rostering | documento entero | cada regla, las horas de cada trabajador y el convenio por separado |
+
+Ya estaban bien: el escenario de Scheduling de puntos (versión base y aviso de
+conflicto), el cuadrante de Rostering (casilla a casilla) y la configuración
+por línea (campo a campo).
+
+Se acepta «gana el último» en: la ficha de un vehículo o trabajador editada
+por dos personas a la vez, el resumen del proyecto al generar y los
+resúmenes por calendario (son deterministas: el último cálculo es igual de
+válido).
+
+Tests: `rules-tests/concurrencia.rules.test.js` simula a varias personas
+escribiendo a la vez contra el emulador con las reglas reales.

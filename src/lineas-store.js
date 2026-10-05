@@ -10,6 +10,7 @@
 import { db } from "./firebase.js";
 import { doc, setDoc, onSnapshot, serverTimestamp, deleteField, query, collection, where } from "firebase/firestore";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces } from "./layer-store.js";
+import { cambiarDocumento } from "./concurrencia.js";
 
 export const TIPOS_VEHICULO = [
   { id: "micro", nombre: "Microbús", detalle: "hasta ~25 plazas" },
@@ -89,8 +90,12 @@ export function tiempoEfectivo(sentido, franja, cfgLinea) {
 export function watchCocheras(projectId, cb) {
   return onSnapshot(doc(db, "planning_depots", projectId), s => cb(s.exists() ? s.data().depots || [] : []), () => cb([]));
 }
-export function guardarCocheras(projectId, orgId, depots) {
-  return setDoc(doc(db, "planning_depots", projectId), { depots, projectId, orgId: orgId || null, updatedAt: serverTimestamp() }, { merge: true });
+// Cambio sobre la lista del servidor (transacción): dos personas añadiendo o
+// moviendo cocheras a la vez no se pisan. `cambio(lista)` devuelve la nueva.
+export function cambiarCocheras(projectId, orgId, cambio) {
+  return cambiarDocumento(doc(db, "planning_depots", projectId), datos => ({
+    depots: cambio(datos?.depots || []), projectId, orgId: orgId || datos?.orgId || null, updatedAt: serverTimestamp(),
+  }));
 }
 
 // Parámetros del Scheduling de líneas (tipo de día, líneas, límites):
@@ -100,4 +105,20 @@ export function watchSchedParams(projectId, cb) {
 }
 export function guardarSchedParams(projectId, params) {
   return setDoc(doc(db, "planning_settings", projectId), { lineasSched: params, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Cambios a mano de un calendario, sobre la lista del servidor (transacción):
+ * si otra persona ha movido piezas del mismo calendario a la vez, su cambio
+ * no se pierde. `cambio(lista)` devuelve la lista nueva; `extra` se guarda
+ * junto (resumen, claves…). Devuelve { antes, despues }.
+ */
+export async function cambiarManuales(projectId, dia, cambio, extra = {}) {
+  let antes = [], despues = [];
+  await cambiarDocumento(doc(db, "planning_settings", projectId), datos => {
+    antes = datos?.lineasSched?.porCalendario?.[dia]?.manuales || [];
+    despues = cambio(antes);
+    return { lineasSched: { porCalendario: { [dia]: { ...extra, manuales: despues } } }, updatedAt: serverTimestamp() };
+  });
+  return { antes, despues };
 }

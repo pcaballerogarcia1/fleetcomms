@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, guardarCocheras } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras } from "./lineas-store.js";
 import { logAudit } from "./audit.js";
 
 const C = {
@@ -347,11 +347,11 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
           {cocheras.map(c => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
               <span style={{ width: 14, height: 14, borderRadius: 4, background: "#fb923c", flexShrink: 0 }} />
-              <input defaultValue={c.nombre || ""} placeholder="Nombre de la cochera" onBlur={e => { const n = e.target.value.trim(); if (n && n !== c.nombre) onCambiar(cocheras.map(x => (x.id === c.id ? { ...x, nombre: n } : x))); }}
+              <input defaultValue={c.nombre || ""} placeholder="Nombre de la cochera" onBlur={e => { const n = e.target.value.trim(); if (n && n !== c.nombre) onCambiar(l => l.map(x => (x.id === c.id ? { ...x, nombre: n } : x))); }}
                 onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "4px 7px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
               <span title="Líneas que la tienen fijada (el resto usa la más cercana)" style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{usos(c) ? `${usos(c)} lín.` : ""}</span>
-              <button title="Quitar cochera" onClick={() => { if (window.confirm(`¿Quitar la cochera «${c.nombre || "sin nombre"}»?`)) onCambiar(cocheras.filter(x => x.id !== c.id)); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15, padding: "0 2px" }}>×</button>
+              <button title="Quitar cochera" onClick={() => { if (window.confirm(`¿Quitar la cochera «${c.nombre || "sin nombre"}»?`)) onCambiar(l => l.filter(x => x.id !== c.id)); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15, padding: "0 2px" }}>×</button>
             </div>
           ))}
           {cocheras.length > 0 && <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>Arrastra la cochera en el mapa para moverla.</div>}
@@ -376,14 +376,15 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const [cocheras, setCocheras] = useState([]);
   const [poniendoCochera, setPoniendoCochera] = useState(false);
   useEffect(() => watchCocheras(projectId, setCocheras), [projectId]);
-  const guardarListaCocheras = lista => {
-    setCocheras(lista);
-    guardarCocheras(projectId, orgId, lista).catch(e => alert("No se pudo guardar la cochera: " + (e.message || e)));
+  // cada cambio se aplica sobre la lista del servidor (no se pisa a otros)
+  const cambiarListaCocheras = cambio => {
+    setCocheras(l => cambio(l));
+    cambiarCocheras(projectId, orgId, cambio).catch(e => alert("No se pudo guardar la cochera: " + (e.message || e)));
   };
   const anadirCochera = ({ lat, lng }) => {
     setPoniendoCochera(false);
     const nueva = { id: `c${Date.now().toString(36)}`, nombre: `Cochera ${cocheras.length + 1}`, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, fields: {} };
-    guardarListaCocheras([...cocheras, nueva]);
+    cambiarListaCocheras(l => [...l, nueva]);
     logAudit({ modulo: "Planning", accion: "Añadió una cochera", detalle: nueva.nombre });
   };
 
@@ -437,7 +438,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
             </div>
           )}
         </div>
-        {red && <PanelCocheras cocheras={cocheras} poniendo={poniendoCochera} setPoniendo={setPoniendoCochera} onCambiar={guardarListaCocheras} cfg={cfg} />}
+        {red && <PanelCocheras cocheras={cocheras} poniendo={poniendoCochera} setPoniendo={setPoniendoCochera} onCambiar={cambiarListaCocheras} cfg={cfg} />}
         {red && (
           <div style={{ padding: "10px 14px 6px" }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{
@@ -482,7 +483,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
       {/* Mapa */}
       <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
         <MapaRed red={red} linea={linea} paradasPorId={paradasPorId} cocheras={cocheras} poniendoCochera={poniendoCochera} onClickMapa={anadirCochera}
-          onMoverCochera={(id, lat, lng) => guardarListaCocheras(cocheras.map(c => (c.id === id ? { ...c, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : c)))} />
+          onMoverCochera={(id, lat, lng) => cambiarListaCocheras(l => l.map(c => (c.id === id ? { ...c, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : c)))} />
         {poniendoCochera && (
           <div style={{ position: "absolute", left: "50%", top: 12, transform: "translateX(-50%)", zIndex: 600, background: "#fb923c", color: "#0b1220", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>
             Pincha en el mapa donde está la cochera · <button onClick={() => setPoniendoCochera(false)} style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontWeight: 700, color: "#0b1220", fontFamily: font }}>cancelar</button>

@@ -6,7 +6,7 @@
 // (T12) y la pestaña de horarios de salida. El cálculo está en lineas-sched.js.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales } from "./lineas-store.js";
 import { generarVehiculos, generarTurnos, moverViaje, moverPieza, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
@@ -665,6 +665,7 @@ export function SchedulingLineasPage({ projectId }) {
   const [nota, setNota] = useState(null); // { texto, error } abajo, unos segundos
   useEffect(() => { if (!nota) return; const t = setTimeout(() => setNota(null), nota.error ? 6000 : 4500); return () => clearTimeout(t); }, [nota]);
   const autoRef = useRef(false);
+  const escribiendoRef = useRef(0); // transacciones de cambios a mano en curso
   const workerRef = useRef(null);
   useEffect(() => () => workerRef.current?.terminate(), []);
 
@@ -729,6 +730,7 @@ export function SchedulingLineasPage({ projectId }) {
           r = conT(generarTurnos(veh, p));
         } else r = conT(generarTurnos(conV(generarVehiculos(red, cfg, p, { cocheras }))));
         const aplicados = lista.filter(o => !fallidos.some(f => f.clave === o.clave && f.tipo === o.tipo && f.destino === o.destino));
+        if (meta.aviso && !fallidos.length) setNota({ texto: meta.aviso });
         if (fallidos.length) setNota({ texto: `${fallidos.length} cambio${fallidos.length > 1 ? "s" : ""} a mano ya no encaja${fallidos.length > 1 ? "n" : ""} y se ha${fallidos.length > 1 ? "n" : ""} quitado: ${fallidos[0].error}`, error: true });
         const resumen = resumenServicio(r);
         const clave = r.turnos ? claveEscenario(p, cfgTxt) : null;
@@ -744,7 +746,10 @@ export function SchedulingLineasPage({ projectId }) {
         setCambios({});
         setDiaSel(p.dia);
         const top = { ...sinCampos(p, [...CAMPOS_ESTRATEGIA, "entreLineasGlobal"]), entreLineas: p.entreLineasGlobal, lineas: p.lineas || null, ...soloCampos(PARAMS_DEFECTO, ESTRATEGIA_UI) };
-        guardarSchedParams(projectId, top).catch(() => {});
+        // solo lo que esta persona ha cambiado: si otra cambió a la vez otra
+        // restricción, no se le deshace (antes se guardaban todas)
+        const cambiados = Object.fromEntries(Object.entries(top).filter(([k, v]) => k === "dia" || JSON.stringify(guardadoTop[k] ?? PARAMS_DEFECTO[k] ?? null) !== JSON.stringify(v ?? null)));
+        guardarSchedParams(projectId, cambiados).catch(() => {});
         guardarCalendario(p.dia, {
           estrategia: est, resumen, claveV, clave, manuales: aplicados,
           objetivoV: meta.objetivoV ?? (previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, est) ? previo.objetivoV ?? null : null),
@@ -781,12 +786,26 @@ export function SchedulingLineasPage({ projectId }) {
     const r = tipo === "viaje" ? moverViaje(c.res, clave, destino) : moverPieza(c.res, clave, destino);
     if (r.error) { setNota({ texto: `No se puede: ${r.error}`, error: true }); return; }
     const previos = c.manuales || [];
+    const op = { tipo, clave, destino };
     // mover una expedición rehace los vehículos: los cambios de turnos ya no valen
-    const manuales = tipo === "viaje" ? [...previos.filter(o => o.tipo === "viaje"), { tipo, clave, destino }] : [...previos, { tipo, clave, destino }];
+    const anadir = l => (tipo === "viaje" ? [...l.filter(o => o.tipo === "viaje"), op] : [...l, op]);
+    const manuales = anadir(previos);
     const clv = r.turnos ? c.clave : null;
     setCache(m => ({ ...m, [dia]: { ...c, res: r, base: baseDeResumen(resumenServicio(c.res), params), clave: clv, manuales, t: Date.now() } }));
     const prev = porCalendario[dia] || {};
-    guardarCalendario(dia, { manuales, resumen: resumenServicio(r), claveV: c.claveV, clave: clv, objetivoT: r.turnos ? prev.objetivoT ?? null : null });
+    const d = dia;
+    escribiendoRef.current++;
+    // la operación se añade a la lista del SERVIDOR: si otra persona movió
+    // piezas de este calendario a la vez, se conservan y se recalcula con todas
+    cambiarManuales(projectId, d, anadir, { resumen: resumenServicio(r), claveV: c.claveV, clave: clv, objetivoT: r.turnos ? prev.objetivoT ?? null : null })
+      .then(({ antes, despues }) => {
+        if (JSON.stringify(antes) !== JSON.stringify(previos)) {
+          setNota({ texto: "Otra persona ha cambiado este calendario a la vez: se recalcula con sus cambios y los tuyos." });
+          calcular(paramsPara(d), "ambos", { manuales: despues });
+        }
+      })
+      .catch(e => setNota({ texto: `No se pudo guardar el cambio: ${e.message || e}`, error: true }))
+      .finally(() => { escribiendoRef.current--; });
     const avisos = (tipo === "viaje"
       ? r.vehiculos.find(v => v.viajes.some(x => !x.vacio && claveViaje(x) === clave))?.avisos
       : r.turnos.find(t => t.piezas.some(x => clavePieza(x) === clave))?.avisos) || [];
@@ -795,7 +814,14 @@ export function SchedulingLineasPage({ projectId }) {
     logAudit({ modulo: "Scheduling", accion: tipo === "viaje" ? "Movió a mano una expedición" : "Movió a mano una pieza", detalle: `${nombreDia(dia, red)} · ${clave} → ${donde}` });
   }
   const manualesActuales = actual?.manuales || [];
-  const deshacer = () => calcular(params, "ambos", { manuales: manualesActuales.slice(0, -1) });
+  const deshacer = () => {
+    const ultima = JSON.stringify(manualesActuales.at(-1));
+    escribiendoRef.current++;
+    cambiarManuales(projectId, dia, l => { const i = l.map(o => JSON.stringify(o)).lastIndexOf(ultima); return i < 0 ? l : [...l.slice(0, i), ...l.slice(i + 1)]; })
+      .then(({ despues }) => calcular(params, "ambos", { manuales: despues }))
+      .catch(e => setNota({ texto: `No se pudo deshacer: ${e.message || e}`, error: true }))
+      .finally(() => { escribiendoRef.current--; });
+  };
   const quitarManuales = () => { if (window.confirm(`¿Quitar los ${manualesActuales.length} cambios a mano de este calendario?`)) calcular(params, "ambos", { manuales: [] }); };
   // generar u optimizar un paso quita los cambios a mano de ese paso
   const perderManuales = f => {
@@ -880,6 +906,20 @@ export function SchedulingLineasPage({ projectId }) {
     w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {}, manuales: optimizarTodos ? [] : (cache[d]?.manuales ?? porCalendario[d]?.manuales ?? []) })) });
   }
   function pararLote() { workerRef.current?.terminate(); workerRef.current = null; setLote(null); }
+
+  // Otra persona ha cambiado los cambios a mano del calendario que se ve:
+  // se recalcula con la lista del servidor (si no, se pisarían)
+  const manualesServidor = JSON.stringify(porCalendario[dia]?.manuales || []);
+  useEffect(() => {
+    const c = cache[dia];
+    if (!c?.res || calculando || lote || escribiendoRef.current) return;
+    if (JSON.stringify(c.manuales || []) === manualesServidor) return;
+    if (porCalendario[dia]?.claveV && porCalendario[dia].claveV !== c.claveV) return; // otro escenario: lo resuelve «Desactualizado»
+    // en diferido: agrupa varios cambios seguidos del servidor en un solo recálculo
+    const t = setTimeout(() => calcular(paramsPara(dia), "ambos", { manuales: JSON.parse(manualesServidor), aviso: "Otra persona ha cambiado este calendario: se actualiza con sus cambios." }), 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualesServidor, dia]);
 
   useEffect(() => {
     if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; calcular(params, "ambos", { conservar: true }); }

@@ -13,7 +13,7 @@ import {
 } from "./roster-store.js";
 import {
   doc, onSnapshot, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp,
-  collection, query, where,
+  collection, query, where, deleteField, FieldPath,
 } from "firebase/firestore";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
@@ -859,9 +859,20 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     setConvenio(newConvenio);
     setRules(newRules);
     setHorasPorTrabajador(newHoras);
-    if (rulesDocId) setDoc(doc(db, "rostering", rulesDocId), {
-      org_id: orgId, rules: newRules, horasPorTrabajador: newHoras, convenio: newConvenio, updatedAt: serverTimestamp(),
-    });
+    if (!rulesDocId) return;
+    // Solo lo que ha cambiado (cada regla, las horas de cada trabajador y el
+    // convenio por separado): antes se reescribía el documento entero y dos
+    // personas editando a la vez se deshacían los cambios.
+    const dif = (x, y) => JSON.stringify(x ?? null) !== JSON.stringify(y ?? null);
+    const datos = { org_id: orgId, updatedAt: serverTimestamp(), rules: {}, horasPorTrabajador: {} };
+    const campos = ["org_id", "updatedAt"];
+    for (const [k, v] of Object.entries(newRules)) if (dif(rules[k], v)) { datos.rules[k] = v; campos.push(new FieldPath("rules", k)); }
+    for (const k of new Set([...Object.keys(horasPorTrabajador), ...Object.keys(newHoras)])) {
+      if (dif(horasPorTrabajador[k], newHoras[k])) { datos.horasPorTrabajador[k] = newHoras[k] === undefined ? deleteField() : newHoras[k]; campos.push(new FieldPath("horasPorTrabajador", k)); }
+    }
+    if (dif(convenio, newConvenio)) { datos.convenio = newConvenio; campos.push("convenio"); }
+    if (campos.length > 2) setDoc(doc(db, "rostering", rulesDocId), datos, { mergeFields: campos })
+      .catch(e => alert("No se pudieron guardar las reglas: " + (e.message || e)));
   }
 
   // Escritura del documento del mes (cuadrante + asignaciones juntos, para
