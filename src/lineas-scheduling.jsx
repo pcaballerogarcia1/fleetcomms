@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras } from "./lineas-store.js";
-import { generarServicio, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA } from "./lineas-sched.js";
+import { generarServicio, generarVehiculos, generarTurnos, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -70,7 +70,7 @@ const COLS = [
   { k: "avisos", l: "", w: 22, align: "center", t: "Avisos de reglas (pasa el ratón por el !)" },
   { k: "nombre", l: "Recurso", w: 92, align: "left" },
   { k: "tipo", l: "Tipo", w: 86, align: "left" },
-  { k: "inicio", l: "Inicio", w: 68 },
+  { k: "inicio", l: "Inicio", w: 80 },
   { k: "fin", l: "Fin", w: 50 },
   { k: "amplitud", l: "Amplitud", w: 62 },
   { k: "conduccion", l: "Conduc.", w: 58, t: "Tiempo con viajeros" },
@@ -108,6 +108,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
   const ancho = (fin - ini) * px;
   const leftW = vista === "tabla" ? TABLE_W : 200;
   const horas = Array.from({ length: (fin - ini) / 60 + 1 }, (_, k) => ini + k * 60);
+  const cadaH = px * 60 < 20 ? 4 : px * 60 < 40 ? 2 : 1; // etiquetas del eje sin montarse
   const nombre = id => paradasPorId.get(id)?.nombre || id;
   const tot = filas.reduce((a, r) => ({ km: a.km + r.km, kv: a.kv + r.kmVacio, v: a.v + r.nViajes, c: a.c + r.conduccion }), { km: 0, kv: 0, v: 0, c: 0 });
 
@@ -145,7 +146,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
             )) : <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, paddingLeft: 8 }}>{modo === "vehicles" ? "AUTOBÚS" : "TURNO"}</span>}
           </div>
           <div style={{ position: "relative", width: ancho, height: 30, flexShrink: 0 }}>
-            {horas.map(h => <span key={h} style={{ position: "absolute", left: X(h), top: 9, fontSize: 10, color: C.dim, fontFamily: mono, transform: "translateX(-50%)" }}>{horaEje(h)}</span>)}
+            {horas.filter((h, i) => i % cadaH === 0).map(h => <span key={h} style={{ position: "absolute", left: X(h), top: 9, fontSize: 10, color: C.dim, fontFamily: mono, transform: "translateX(-50%)" }}>{horaEje(h)}</span>)}
           </div>
         </div>
 
@@ -191,7 +192,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
                       position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
                       background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
                       overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
-                    }}>{x.vacio ? (w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
+                    }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
               })}
               {r.relevos.map((x, i) => (
@@ -230,7 +231,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
         <div style={{ position: "fixed", left: Math.min(tip.cx + 14, window.innerWidth - 280), top: Math.max(tip.cy - 80, 8), background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "11px 14px", zIndex: 2000, boxShadow: "0 8px 28px rgba(0,0,0,.6)", fontSize: 12, color: C.text, minWidth: 200, maxWidth: 280, pointerEvents: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <span style={{ minWidth: 30, padding: "1px 5px", borderRadius: 4, background: tip.x.color, color: tip.x.vacio ? "#fff" : "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{tip.x.nombre}</span>
-            <span style={{ fontSize: 10.5, color: C.muted }}>{tip.x.vacio ? (String(tip.x.o).startsWith("cochera:") ? "salida de cochera" : String(tip.x.d).startsWith("cochera:") ? "vuelta a cochera" : "entre cabeceras") : tip.x.sentido}</span>
+            <span style={{ fontSize: 10.5, color: C.muted }}>{tip.x.sentido}</span>
           </div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.dep)} {nombre(tip.x.o)}</div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.arr)} {nombre(tip.x.d)}</div>
@@ -243,7 +244,9 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
 
 // ── Restricciones (mismo formato que las del Scheduling de puntos) ──────
 function Restricciones({ p, onChange, red, onCambiarDia }) {
-  const set = (k, v) => onChange({ [k]: v });
+  // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
+  const set = (k, v) => onChange(k === "vacioKm" ? { vacioKm: v, vacios: v !== 0 } : { [k]: v });
+  const titulo = t => <div style={{ fontSize: 11, color: C.blueText, fontWeight: 700, marginBottom: 10 }}>{t}</div>;
   const row = (label, children) => (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
       <label style={{ fontSize: 11, color: C.muted, width: 230, flexShrink: 0 }}>{label}</label>
@@ -276,39 +279,51 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
   );
   return (
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", flexShrink: 0, animation: "sched-fadein .15s ease both" }}>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>Restricciones</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Restricciones</span>
         {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />)}
-        {row("Regulación en cabecera por defecto", numInput("regulacion", "min (si la línea no tiene la suya)"))}
-        {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min (la ida y la vuelta ya se calculan)"))}
-        {row("Vacíos entre cabeceras, como mucho", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
-        {row("Velocidad de los vacíos", numInput("velocidadVacio", "km/h"))}
-        {row("Factor de rodeo (carretera / línea recta)", decInput("factorRodeo", "× la distancia en línea recta", 0.05))}
-        {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
-        {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
-        {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
-        {row("Pausa de conducción (UE 561, se puede partir 15 + 30)", numInput("pausaConduccionMin", "min"))}
-        {row("Jornada de trabajo máxima (piezas + huecos cortos)", numInput("jornadaMax", "min"))}
-        {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
-        {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
-        {row("Piezas por turno, como mucho", numInput("maxPiezas", "piezas"))}
-        {row("Jornadas partidas por turno, como mucho", numInput("maxPartidos", "huecos largos (0 = sin partidos)"))}
-        {row("Hueco que ya no se paga (jornada partida)", numInput("huecoNoPagado", "min o más entre dos piezas"))}
-        {row("Tiempo de relevo en la misma cabecera", numInput("relevoMin", "min"))}
-        {row("Tiempo para ir a otra cabecera", numInput("desplazamiento", "min entre piezas en cabeceras distintas"))}
-        {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
-        {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
-        {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
-        {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
-        {row("Coste por km", decInput("costeKm", "€/km"))}
-        {row("No aplicar tiempos de conducción UE 561/2006", check("aplicar561", true))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
+        <div>
+          {titulo("Paso 1 · Vehículos")}
+          {row("Regulación en cabecera por defecto", numInput("regulacion", "min (si la línea no tiene la suya)"))}
+          {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
+          {row("Vacíos entre cabeceras, como mucho", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
+          {row("Velocidad de los vacíos", numInput("velocidadVacio", "km/h"))}
+          {row("Factor de rodeo (carretera / línea recta)", decInput("factorRodeo", "× la distancia en línea recta", 0.05))}
+          {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min (la ida y la vuelta ya se calculan)"))}
+          {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
+          {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
+          {row("Coste por km", decInput("costeKm", "€/km (con los vacíos)"))}
+        </div>
+        <div>
+          {titulo("Paso 2 · Trabajadores")}
+          {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
+          {row("Jornada de trabajo máxima (piezas + huecos cortos)", numInput("jornadaMax", "min"))}
+          {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
+          {row("Piezas por turno, como mucho", numInput("maxPiezas", "piezas"))}
+          {row("Jornadas partidas por turno, como mucho", numInput("maxPartidos", "huecos largos (0 = sin partidos)"))}
+          {row("Hueco que ya no se paga (jornada partida)", numInput("huecoNoPagado", "min o más entre dos piezas"))}
+          {row("Tiempo de relevo en la misma cabecera", numInput("relevoMin", "min"))}
+          {row("Tiempo para ir a otra cabecera", numInput("desplazamiento", "min entre piezas en cabeceras distintas"))}
+          {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
+          {row("Pausa de conducción (UE 561, se puede partir 15 + 30)", numInput("pausaConduccionMin", "min"))}
+          {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
+          {row("No aplicar tiempos de conducción UE 561/2006", check("aplicar561", true))}
+          {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
+          {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
+        </div>
       </div>
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px" }}>Estrategia de este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
-        {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
-        {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
-        {row("Vacíos entre cabeceras", sel("vacios", [[true, "Sí, si ahorran autobuses"], [false, "No (cada autobús sigue en su cabecera)"]]))}
-        {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
+        <div>
+          {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
+          {row("Vacíos entre cabeceras", sel("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]]))}
+        </div>
+        <div>
+          {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
+          {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
+        </div>
       </div>
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
         Los tiempos de recorrido por franja, la regulación propia de cada línea y los tipos de vehículo que admite se configuran en Planning, en la ficha de cada línea.
@@ -504,33 +519,41 @@ function Horarios({ red, cfg, diaInicial }) {
 }
 
 // ── Optimizar: prueba estrategias dentro de las restricciones ───────────
-function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado }) {
-  const hayPrecios = p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0;
+function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado }) {
+  const veh = fase === "vehiculos";
+  const objetivos = veh ? OBJETIVOS_VEHICULOS : OBJETIVOS_TURNOS;
+  const hayPrecio = o => !o.precios || o.precios.some(k => p[k] > 0);
   const corriendo = opt.estado === "corriendo";
-  const lim = [p.flotaMax > 0 && `flota ${p.flotaMax} autobuses`, p.conductoresMax > 0 && `${p.conductoresMax} conductores`].filter(Boolean);
-  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase" };
+  const lim = veh ? (p.flotaMax > 0 ? `flota ${p.flotaMax} autobuses` : null) : (p.conductoresMax > 0 ? `${p.conductoresMax} conductores` : null);
+  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
   const td = { padding: "5px 8px", fontFamily: mono, fontSize: 11.5, textAlign: "right", color: C.text };
   const mejor = opt.probadas?.[0];
+  const conCoste = opt.probadas?.some(r => r.coste != null);
+  const columnas = veh
+    ? [["Autobuses", r => num(r.autobuses), r => r.autobuses === mejor.autobuses], ["Bloques", r => num(r.bloques)], ["Vacíos", r => num(r.vacios)], ["Km vacío", r => num(r.kmVacio), r => r.kmVacio === mejor.kmVacio], ...(conCoste ? [["Coste/día", r => (r.coste != null ? `${num(r.coste)} €` : "—")]] : [])]
+    : [["Turnos", r => num(r.turnos), r => r.turnos === mejor.turnos], ["Piezas/turno", r => r.piezasMedias.toFixed(1).replace(".", ",")], ["Horas pagadas", r => num(r.horasPagadas), r => r.horasPagadas === mejor.horasPagadas], ["Avisos", r => r.avisos], ...(conCoste ? [["Coste personal", r => (r.coste != null ? `${num(r.coste)} €` : "—")]] : [])];
   return (
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", flexShrink: 0, animation: "sched-fadein .15s ease both", maxHeight: "45vh", overflowY: "auto" }}>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>Optimizar este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· {diaNombre} · los demás calendarios no cambian</span></div>
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>
+        Optimizar {veh ? "paso 1 · vehículos" : "paso 2 · turnos"} <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· {diaNombre} · {veh ? "después se rehacen los turnos en el paso 2" : "sobre los vehículos del paso 1, sin cambiarlos"}</span>
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: C.muted }}>Objetivo</span>
         <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {OBJETIVOS.map(o => {
-            const off = o.id === "coste" && !hayPrecios;
+          {objetivos.map(o => {
+            const off = !hayPrecio(o);
             return (
-              <button key={o.id} disabled={off} onClick={() => setObjetivo(o.id)} title={off ? "Pon algún precio en Restricciones (€/h, €/autobús·día o €/km)" : o.ayuda}
+              <button key={o.id} disabled={off} onClick={() => setObjetivo(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda}
                 style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? C.blue : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>
             );
           })}
         </div>
         <span style={{ fontSize: 11, color: C.dim }}>
-          Límites: {lim.length ? lim.join(" · ") : "ninguno"} ·{" "}
+          Límite: {lim || "ninguno"} ·{" "}
           <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11, fontFamily: font }}>cambiar en Restricciones</button>
         </span>
         <button onClick={onOptimizar} disabled={corriendo || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
-          {corriendo ? `Probando ${opt.progreso[0]} de ${opt.progreso[1] || "…"}` : "Optimizar"}
+          {corriendo ? `Probando ${opt.progreso[0]} de ${opt.progreso[1] || "…"}` : veh ? "Optimizar vehículos" : "Optimizar turnos"}
         </button>
       </div>
       {corriendo && (
@@ -539,34 +562,25 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
         </div>
       )}
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8 }}>
-        Prueba distintas formas de encadenar los viajes en los autobuses, de cortar las piezas y de emparejarlas en turnos. Todas respetan las Restricciones. Mandan, por este orden: los límites de flota y conductores, que no haya avisos legales y después el objetivo.
+        {veh
+          ? "Prueba distintas formas de encadenar los viajes en los autobuses: qué autobús coge cada viaje, hasta cuántos km se hacen vacíos entre cabeceras y si un autobús cambia de línea. Mandan la flota disponible y después el objetivo."
+          : "Prueba distintos largos de pieza y formas de repartirlas entre los conductores, sin tocar los autobuses. Todas respetan las Restricciones. Mandan los conductores disponibles, que no haya avisos legales y después el objetivo."}
       </div>
       {opt.error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 8 }}>No se ha podido optimizar: {opt.error}</div>}
       {opt.estado === "hecho" && mejor && (
         <>
-          {!mejor.cumple && (
-            <div style={{ fontSize: 11.5, color: C.red, marginTop: 10 }}>
-              Ninguna combinación cabe en los límites: la mejor necesita {mejor.autobuses} autobuses y {mejor.turnos} conductores. Hay que quitar viajes, relajar restricciones o ampliar la flota/plantilla.
-            </div>
-          )}
+          {!mejor.cumple && <div style={{ fontSize: 11.5, color: C.red, marginTop: 10 }}>Ninguna combinación cabe en {veh ? "la flota disponible" : "los conductores disponibles"}: hay que quitar viajes, relajar restricciones o ampliar {veh ? "la flota" : "la plantilla"}.</div>}
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
             <thead><tr>
-              <th style={{ ...th, textAlign: "left" }}>#</th>
-              <th style={{ ...th, textAlign: "left" }}>Estrategia</th>
-              <th style={th}>Autobuses</th><th style={th}>Turnos</th><th style={th}>Piezas/turno</th><th style={th}>Km vacío</th><th style={th}>Horas pagadas</th><th style={th}>Avisos</th>{hayPrecios && <th style={th}>Coste/día</th>}<th style={th} />
+              <th style={{ ...th, textAlign: "left" }}>#</th><th style={{ ...th, textAlign: "left" }}>Estrategia</th>
+              {columnas.map(([t]) => <th key={t} style={th}>{t}</th>)}<th style={th} />
             </tr></thead>
             <tbody>
               {opt.probadas.slice(0, 8).map((r, i) => (
                 <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(52,211,153,0.07)" : "none" }}>
                   <td style={{ ...td, textAlign: "left", color: i === 0 ? C.green : C.dim }}>{i + 1}</td>
-                  <td style={{ ...td, textAlign: "left", fontFamily: font, fontSize: 11.5, color: C.muted }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa de los límites</span>}</td>
-                  <td style={{ ...td, color: r.autobuses === mejor.autobuses ? C.text : C.muted }}>{num(r.autobuses)}</td>
-                  <td style={{ ...td, color: r.turnos === mejor.turnos ? C.text : C.muted }}>{num(r.turnos)}</td>
-                  <td style={{ ...td, color: C.muted }}>{r.piezasMedias != null ? r.piezasMedias.toFixed(1).replace(".", ",") : "—"}</td>
-                  <td style={{ ...td, color: C.muted }}>{num(r.kmVacio || 0)}</td>
-                  <td style={td}>{num(r.horasPagadas)}</td>
-                  <td style={{ ...td, color: r.avisos ? C.red : C.dim }}>{r.avisos}</td>
-                  {hayPrecios && <td style={td}>{r.coste != null ? `${num(r.coste)} €` : "—"}</td>}
+                  <td style={{ ...td, textAlign: "left", fontFamily: font, fontSize: 11.5, color: C.muted }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa del límite</span>}</td>
+                  {columnas.map(([t, f, igual]) => <td key={t} style={{ ...td, color: igual ? (igual(r) ? C.text : C.muted) : C.muted }}>{f(r)}</td>)}
                   <td style={{ ...td, width: 110, whiteSpace: "nowrap" }}>
                     {opt.aplicada === i
                       ? <span style={{ fontSize: 11, color: C.green, fontFamily: font }}>En el escenario</span>
@@ -576,7 +590,7 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
               ))}
             </tbody>
           </table>
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{opt.probadas.length} combinaciones probadas. La primera ya está aplicada al escenario; los ▲▼ de los indicadores comparan con el anterior.</div>
+          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{opt.probadas.length} combinaciones probadas. La primera ya está aplicada{veh ? "; los turnos se rehacen en el paso 2" : ""}.</div>
         </>
       )}
     </div>
@@ -584,22 +598,29 @@ function PanelOptimizar({ p, diaNombre, objetivo, setObjetivo, opt, onOptimizar,
 }
 
 // ── Página ─────────────────────────────────────────────────────────────
-// Un escenario por calendario: estrategia, indicadores y ▲▼ propios.
+// Un escenario por calendario, en dos pasos (1 vehículos, 2 trabajadores),
+// con su estrategia, indicadores y ▲▼ propios.
 // lineasSched = { ...restricciones comunes, dia (el último visto),
-//   porCalendario: { [dia]: { estrategia, objetivo, resumen, clave } } }
-// `clave` resume con qué se calculó (restricciones, líneas, estrategia y la
-// configuración de las líneas): si ya no coincide, el resumen está desactualizado.
-const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "vacios"]; // entreLineas además es restricción
+//   porCalendario: { [dia]: { estrategia, objetivoV, objetivoT, resumen, claveV, clave } } }
+// claveV resume con qué se hicieron los vehículos y clave, todo (también los
+// turnos): si ya no coinciden, está desactualizado. resumen.turnos es null
+// si solo se ha hecho el paso 1.
+const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "vacios", "vacioKm"]; // entreLineas además es restricción
 const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
+// lo que cambia los vehículos (el resto solo cambia los turnos)
+const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
 const sinCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => !campos.includes(k)));
 const soloCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => campos.includes(k)));
 function hashTexto(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 const claveEscenario = (p, cfgTxt) => hashTexto(JSON.stringify(Object.keys(p).filter(k => !CAMPOS_COSTE.includes(k)).sort().map(k => [k, p[k]])) + cfgTxt);
-const mismaEstrategia = (a = {}, b = {}) => CAMPOS_ESTRATEGIA.every(k => (a[k] ?? PARAMS_DEFECTO[k]) === (b[k] ?? PARAMS_DEFECTO[k]));
+const claveVehiculos = (p, cfgTxt) => hashTexto(JSON.stringify(CLAVES_VEHICULOS.map(k => [k, p[k] ?? null])) + cfgTxt);
+const mismos = (campos, a = {}, b = {}) => campos.every(k => (a[k] ?? PARAMS_DEFECTO[k]) === (b[k] ?? PARAMS_DEFECTO[k]));
 const baseDeResumen = (r, p) => (r ? {
-  vehicleCount: r.autobuses, turnos: r.turnos, eficPersonal: r.eficienciaPersonal, totalKm: r.km, eficVehiculo: r.km ? (r.km - (r.kmVacio || 0)) / r.km : null, totalStops: r.viajes, avisos: r.avisos, coste: costeDia(r, p),
+  vehicleCount: r.autobuses, turnos: r.turnos, eficPersonal: r.eficienciaPersonal, totalKm: r.km, eficVehiculo: r.km ? (r.km - (r.kmVacio || 0)) / r.km : null, totalStops: r.viajes, avisos: r.avisos,
+  coste: r.turnos == null ? null : costeDia(r, p),
 } : null);
 const MAX_EN_MEMORIA = 5; // escenarios completos guardados en memoria (los de Roma ocupan)
+const nombreObjetivo = id => OBJETIVOS.find(o => o.id === id)?.nombre.toLowerCase();
 
 export function SchedulingLineasPage({ projectId }) {
   const [subTab, setSubTab] = useState("escenario");
@@ -608,15 +629,16 @@ export function SchedulingLineasPage({ projectId }) {
   const [guardados, setGuardados] = useState(undefined);
   const [cambios, setCambios] = useState({});
   const [diaSel, setDiaSel] = useState(null);
-  const [cache, setCache] = useState({}); // dia → { res, base, clave, t }
+  const [cache, setCache] = useState({}); // dia → { res, base, claveV, clave, t }
   const [calculando, setCalculando] = useState(false);
-  const [modo, setModo] = useState("vehicles");
+  const [modo, setModo] = useState("vehicles"); // paso: "vehicles" 1 o "workers" 2
   const [showC, setShowC] = useState(false);
   const [filtro, setFiltro] = useState("");
   const [panelLineas, setPanelLineas] = useState(false);
   const [showOpt, setShowOpt] = useState(false);
-  const [objetivo, setObjetivo] = useState("autobuses");
-  const [optPorDia, setOptPorDia] = useState({});
+  const [objetivoV, setObjetivoV] = useState("autobuses");
+  const [objetivoT, setObjetivoT] = useState("conductores");
+  const [optPorDia, setOptPorDia] = useState({}); // "dia|fase" → estado de la optimización
   const [lote, setLote] = useState(null); // { optimizar, progreso: [i, n], dia }
   const autoRef = useRef(false);
   const workerRef = useRef(null);
@@ -635,6 +657,7 @@ export function SchedulingLineasPage({ projectId }) {
   const existe = d => !esCalendario(d) || !!red?.calendarios?.some(c => c.id === d);
   const diaGuardado = existe(guardadoTop.dia) ? guardadoTop.dia : "laborable";
   const dia = diaSel && existe(diaSel) ? diaSel : diaGuardado || "laborable";
+  const fase = modo === "workers" ? "turnos" : "vehiculos";
 
   // Parámetros de un calendario: restricciones comunes + su estrategia
   function paramsPara(d, extra = {}, estrategia) {
@@ -645,28 +668,41 @@ export function SchedulingLineasPage({ projectId }) {
   const params = paramsPara(dia, cambios);
   const actual = cache[dia];
   const res = actual?.res || null;
-  const opt = optPorDia[dia] || { estado: "nada", progreso: [0, 0] };
+  const optDe = (d, f) => optPorDia[`${d}|${f}`] || { estado: "nada", progreso: [0, 0] };
+  const opt = optDe(dia, fase);
   const paradasPorId = useMemo(() => new Map([...(red?.paradas || []).map(p => [p.id, p]), ...cocheras.map(c => [ID_COCHERA(c.id), { nombre: `Cochera ${c.nombre || ""}`.trim() }])]), [red, cocheras]);
   const pendientes = Object.keys(cambios).length > 0;
+  const enMemoriaValido = (d, p) => {
+    const c = cache[d];
+    return c && (c.res.turnos ? c.clave === claveEscenario(p, cfgTxt) : c.claveV === claveVehiculos(p, cfgTxt));
+  };
 
   function guardarCalendario(d, datos) {
     return guardarSchedParams(projectId, { porCalendario: { [d]: datos } }).catch(() => {});
   }
 
-  // Genera el escenario de un calendario (meta.objetivo: si viene de Optimizar)
-  function generar(p = params, meta = {}) {
+  // Calcula un calendario: "vehiculos" (paso 1, sin turnos), "turnos" (paso 2
+  // sobre los vehículos que hay) o "ambos". meta.objetivoV/T: si viene de Optimizar.
+  function calcular(p = params, que = "ambos", meta = {}) {
     if (!red) return;
     setCalculando(true);
     setTimeout(() => {
       try {
-        const r = generarServicio(red, cfg, p, { cocheras });
+        const claveV = claveVehiculos(p, cfgTxt);
+        let r;
+        if (que === "vehiculos") r = generarVehiculos(red, cfg, p, { cocheras });
+        else if (que === "turnos") {
+          const c = cache[p.dia];
+          const veh = c?.res && c.claveV === claveV ? c.res : generarVehiculos(red, cfg, p, { cocheras });
+          r = generarTurnos(veh, p);
+        } else r = generarServicio(red, cfg, p, { cocheras });
         const resumen = resumenServicio(r);
-        const clave = claveEscenario(p, cfgTxt);
+        const clave = r.turnos ? claveEscenario(p, cfgTxt) : null;
         const est = soloCampos(p, CAMPOS_ESTRATEGIA);
         const previo = porCalendario[p.dia];
         setCache(c => {
           const antes = c[p.dia]?.res ? resumenServicio(c[p.dia].res) : previo?.resumen;
-          const n = { ...c, [p.dia]: { res: r, base: baseDeResumen(antes, p), clave, t: Date.now() } };
+          const n = { ...c, [p.dia]: { res: r, base: baseDeResumen(antes, p), claveV, clave, t: Date.now() } };
           const sobran = Object.keys(n).sort((x, y) => n[y].t - n[x].t).slice(MAX_EN_MEMORIA);
           for (const k of sobran) delete n[k];
           return n;
@@ -675,26 +711,33 @@ export function SchedulingLineasPage({ projectId }) {
         setDiaSel(p.dia);
         const top = { ...sinCampos(p, [...CAMPOS_ESTRATEGIA, "entreLineasGlobal"]), entreLineas: p.entreLineasGlobal, lineas: p.lineas || null, ...soloCampos(PARAMS_DEFECTO, ESTRATEGIA_UI) };
         guardarSchedParams(projectId, top).catch(() => {});
-        guardarCalendario(p.dia, { estrategia: est, objetivo: meta.objetivo ?? (previo && mismaEstrategia(previo.estrategia, est) ? previo.objetivo ?? null : null), resumen, clave });
-        logAudit({ modulo: "Scheduling", accion: "Generó el escenario de líneas", detalle: `${r.diaNombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${r.kpis.turnos} turnos` });
+        guardarCalendario(p.dia, {
+          estrategia: est, resumen, claveV, clave,
+          objetivoV: meta.objetivoV ?? (previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, est) ? previo.objetivoV ?? null : null),
+          objetivoT: r.turnos ? meta.objetivoT ?? (previo?.clave && mismos(CAMPOS_ESTRATEGIA, previo.estrategia, est) ? previo.objetivoT ?? null : null) : null,
+        });
+        logAudit({
+          modulo: "Scheduling", accion: que === "vehiculos" ? "Generó los vehículos de líneas" : que === "turnos" ? "Generó los turnos de líneas" : "Generó el escenario de líneas",
+          detalle: `${r.diaNombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${Math.round(r.kpis.kmVacio || 0)} km en vacío${r.turnos ? ` · ${r.kpis.turnos} turnos` : ""}`,
+        });
       } finally {
         setCalculando(false);
       }
     }, 30);
   }
 
-  // Cambiar de calendario: si ya está calculado y al día se enseña, si no se genera
+  // Cambiar de calendario: si ya está calculado y al día se enseña, si no se calculan los dos pasos
   function cambiarDia(d) {
     const extra = sinCampos(cambios, ESTRATEGIA_UI); // la estrategia a medio tocar era del otro calendario
     const p = paramsPara(d, extra);
     setPanelLineas(false);
-    if (!Object.keys(extra).length && cache[d] && cache[d].clave === claveEscenario(p, cfgTxt)) {
+    if (!Object.keys(extra).length && enMemoriaValido(d, p)) {
       setCambios({});
       setDiaSel(d);
       guardarSchedParams(projectId, { dia: d }).catch(() => {});
       return;
     }
-    generar(p);
+    calcular(p, "ambos");
   }
 
   function nuevoWorker() {
@@ -703,14 +746,15 @@ export function SchedulingLineasPage({ projectId }) {
     workerRef.current = w;
     return w;
   }
-  const objetivoValido = p => (objetivo === "coste" && !(p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0) ? "autobuses" : objetivo);
+  const hayPreciosVeh = p => p.costeVehiculoDia > 0 || p.costeKm > 0;
+  const objetivoVehValido = p => (objetivoV === "coste" && !hayPreciosVeh(p) ? "autobuses" : objetivoV);
 
-  // Optimizar el calendario que se está viendo (en un worker)
+  // Optimizar un paso del calendario que se está viendo (en un worker)
   function optimizar() {
     if (!red || opt.estado === "corriendo" || lote) return;
-    const p = params, d = p.dia;
-    const obj = objetivoValido(p);
-    const setO = f => setOptPorDia(m => ({ ...m, [d]: typeof f === "function" ? f(m[d] || {}) : f }));
+    const p = params, d = p.dia, f = fase;
+    const obj = f === "vehiculos" ? objetivoVehValido(p) : objetivoT;
+    const setO = x => setOptPorDia(m => ({ ...m, [`${d}|${f}`]: typeof x === "function" ? x(m[`${d}|${f}`] || {}) : x }));
     setPanelLineas(false);
     setO({ estado: "corriendo", progreso: [0, 0] });
     const w = nuevoWorker();
@@ -721,30 +765,31 @@ export function SchedulingLineasPage({ projectId }) {
       const { probadas } = e.data.ok;
       setO({ estado: "hecho", progreso: [0, 0], probadas, params: p, objetivo: obj, aplicada: 0 });
       if (probadas[0]) {
-        generar({ ...p, ...probadas[0].estrategia }, { objetivo: obj });
-        logAudit({ modulo: "Scheduling", accion: "Optimizó el escenario de líneas", detalle: `${nombreDia(d, red)} · ${OBJETIVOS.find(o => o.id === obj)?.nombre} · ${probadas[0].autobuses} autobuses · ${probadas[0].turnos} turnos · ${probadas[0].nombre}` });
+        calcular({ ...p, ...probadas[0].estrategia }, f, f === "vehiculos" ? { objetivoV: obj } : { objetivoT: obj });
+        logAudit({ modulo: "Scheduling", accion: f === "vehiculos" ? "Optimizó los vehículos de líneas" : "Optimizó los turnos de líneas", detalle: `${nombreDia(d, red)} · ${OBJETIVOS.find(o => o.id === obj)?.nombre} · ${probadas[0].nombre}` });
       }
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setO({ estado: "nada", progreso: [0, 0], error: e.message || "error en el cálculo" }); };
-    // el optimizador puede probar a no cambiar de línea solo si la restricción lo permite
-    w.postMessage({ red, cfg, cocheras, params: { ...p, entreLineas: p.entreLineasGlobal }, objetivo: obj });
+    // vehículos: puede probar a no cambiar de línea solo si la restricción lo permite;
+    // turnos: con los vehículos tal cual están
+    w.postMessage({ tipo: f, red, cfg, cocheras, params: f === "vehiculos" ? { ...p, entreLineas: p.entreLineasGlobal } : p, objetivo: obj });
   }
   function aplicarOpt(i) {
     const r = opt.probadas?.[i];
     if (!r) return;
-    setOptPorDia(m => ({ ...m, [dia]: { ...opt, aplicada: i } }));
-    generar({ ...opt.params, ...r.estrategia }, { objetivo: opt.objetivo });
+    setOptPorDia(m => ({ ...m, [`${dia}|${fase}`]: { ...opt, aplicada: i } }));
+    calcular({ ...opt.params, ...r.estrategia }, fase, fase === "vehiculos" ? { objetivoV: opt.objetivo } : { objetivoT: opt.objetivo });
   }
 
   // Calcular u optimizar varios calendarios, uno detrás de otro (en un worker)
   function calcularLote(dias, optimizarTodos) {
     if (!red || lote || !dias.length) return;
     const globales = paramsPara(dias[0], {}, {});
-    const obj = objetivoValido(globales);
+    const objV = objetivoVehValido(globales), objT = objetivoT;
     // restricciones comunes + la estrategia por defecto (cada calendario pone la suya encima)
     const base = { ...sinCampos(globales, ["entreLineasGlobal", "dia"]), entreLineas: globales.entreLineasGlobal };
     const hechos = {};
-    setLote({ optimizar: optimizarTodos, progreso: [0, dias.length], dia: dias[0], objetivo: obj });
+    setLote({ optimizar: optimizarTodos, progreso: [0, dias.length], dia: dias[0] });
     const w = nuevoWorker();
     w.onmessage = e => {
       const m = e.data;
@@ -753,37 +798,39 @@ export function SchedulingLineasPage({ projectId }) {
         const { dia: d, estrategia, resumen, optimizado } = m.hecho;
         hechos[d] = estrategia;
         const previo = porCalendario[d];
+        const q = paramsPara(d, {}, estrategia);
         guardarCalendario(d, {
-          estrategia, resumen, clave: claveEscenario(paramsPara(d, {}, estrategia), cfgTxt),
-          objetivo: optimizado ? obj : previo && mismaEstrategia(previo.estrategia, estrategia) ? previo.objetivo ?? null : null,
+          estrategia, resumen, claveV: claveVehiculos(q, cfgTxt), clave: claveEscenario(q, cfgTxt),
+          objetivoV: optimizado ? objV : previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, estrategia) ? previo.objetivoV ?? null : null,
+          objetivoT: optimizado ? objT : previo?.clave && mismos(CAMPOS_ESTRATEGIA, previo.estrategia, estrategia) ? previo.objetivoT ?? null : null,
         });
         return;
       }
       w.terminate(); workerRef.current = null;
       setLote(null);
       if (m.error) { alert(`No se ha podido terminar: ${m.error}`); return; }
-      logAudit({ modulo: "Scheduling", accion: optimizarTodos ? "Optimizó todos los calendarios de líneas" : "Calculó los calendarios de líneas", detalle: `${dias.length} calendarios${optimizarTodos ? ` · ${OBJETIVOS.find(o => o.id === obj)?.nombre}` : ""}` });
-      // el calendario que se está viendo ha cambiado de estrategia: se regenera
-      if (hechos[dia]) generar(paramsPara(dia, {}, hechos[dia]));
+      logAudit({ modulo: "Scheduling", accion: optimizarTodos ? "Optimizó todos los calendarios de líneas" : "Calculó los calendarios de líneas", detalle: `${dias.length} calendarios${optimizarTodos ? ` · ${nombreObjetivo(objV)} · ${nombreObjetivo(objT)}` : ""}` });
+      // el calendario que se está viendo ha cambiado: se recalcula
+      if (hechos[dia]) calcular(paramsPara(dia, {}, hechos[dia]), "ambos");
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setLote(null); alert(`No se ha podido terminar: ${e.message || "error en el cálculo"}`); };
-    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivo: obj, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {} })) });
+    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {} })) });
   }
   function pararLote() { workerRef.current?.terminate(); workerRef.current = null; setLote(null); }
 
   useEffect(() => {
-    if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; generar(); }
+    if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; calcular(params, "ambos"); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [red, guardados]);
 
   async function exportar(tipo) {
-    if (!res) return;
+    if (!res || (tipo === "turnos" && !res.turnos)) return;
     const XLSX = await import("xlsx");
     const nom = id => paradasPorId.get(id)?.nombre || id;
     const filas = tipo === "vehiculos"
-      ? res.vehiculos.flatMap(v => v.viajes.map(x => ({ "Autobús": v.autobus, "Bloque": v.id, "Tipo": nombreTipo(v.tipo), "Línea": x.nombre, "Sentido": x.sentido, "Salida": hhmm(x.dep), "Llegada": hhmm(x.arr), "Desde": nom(x.o), "Hasta": nom(x.d), "Km": x.km })))
+      ? res.vehiculos.flatMap(v => v.viajes.map(x => ({ "Autobús": v.autobus, "Bloque": v.id, "Tipo": nombreTipo(v.tipo), "Línea": x.vacio ? (x.hacia ? `Vacío → ${x.hacia}` : "Vacío") : x.nombre, "Sentido": x.sentido, "Salida": hhmm(x.dep), "Llegada": hhmm(x.arr), "Desde": nom(x.o), "Hasta": nom(x.d), "Km": x.km, "En vacío": x.vacio ? "sí" : "" })))
       : res.turnos.flatMap(t => t.piezas.flatMap((pz, i) => pz.viajes.map(x => ({
-          "Turno": `T${t.id}`, "Pieza": i + 1, "Autobús": res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus, "Línea": x.nombre, "Sentido": x.sentido,
+          "Turno": `T${t.id}`, "Pieza": i + 1, "Autobús": res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus, "Línea": x.vacio ? "Vacío" : x.nombre, "Sentido": x.sentido,
           "Salida": hhmm(x.dep), "Llegada": hhmm(x.arr), "Desde": nom(x.o), "Hasta": nom(x.d), "Inicio turno": hhmm(t.inicio), "Fin turno": hhmm(t.fin), "Avisos": t.avisos.join(" · "),
         }))));
     const wb = XLSX.utils.book_new();
@@ -821,13 +868,22 @@ export function SchedulingLineasPage({ projectId }) {
   const sep = <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />;
   const infoCal = porCalendario[dia];
   const restriccionesUI = { ...params, entreLineas: params.entreLineasGlobal };
+  const sinTurnos = res && !res.turnos;
+  const etiquetaOpt = [infoCal?.objetivoV && `vehículos: ${nombreObjetivo(infoCal.objetivoV)}`, infoCal?.objetivoT && `turnos: ${nombreObjetivo(infoCal.objetivoT)}`].filter(Boolean).join(" · ");
+  const paso = (v, n, l, aviso) => (
+    <button key={v} onClick={() => setModo(v)} title={aviso || undefined} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 4, border: "none", cursor: "pointer", background: modo === v ? C.blue : "none", color: modo === v ? "#fff" : C.muted, fontSize: 11, fontWeight: modo === v ? 600 : 400, fontFamily: font }}>
+      <span style={{ width: 16, height: 16, borderRadius: 8, fontSize: 9.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: modo === v ? "#fff" : C.bg, color: modo === v ? C.blue : C.muted }}>{n}</span>
+      {l}
+      {aviso && <span style={{ width: 7, height: 7, borderRadius: 4, background: C.amber }} />}
+    </button>
+  );
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {cabecera}
       {subTab === "horarios" ? <Horarios red={red} cfg={cfg} diaInicial={params.dia} /> : subTab === "calendarios" ? (
-        <ResumenCalendarios red={red} porCalendario={porCalendario} claveDe={d => claveEscenario(paramsPara(d), cfgTxt)} precios={params} diaActual={dia}
-          objetivo={objetivo} setObjetivo={setObjetivo} lote={lote} pendientes={pendientes} ocupado={opt.estado === "corriendo"}
+        <ResumenCalendarios red={red} porCalendario={porCalendario} claveDe={d => claveEscenario(paramsPara(d), cfgTxt)} claveVDe={d => claveVehiculos(paramsPara(d), cfgTxt)} precios={params} diaActual={dia}
+          objetivoV={objetivoV} setObjetivoV={setObjetivoV} objetivoT={objetivoT} setObjetivoT={setObjetivoT} lote={lote} pendientes={pendientes} ocupado={opt.estado === "corriendo"}
           onVer={d => { setSubTab("escenario"); cambiarDia(d); }} onLote={calcularLote} onParar={pararLote} onRestricciones={() => { setSubTab("escenario"); setShowC(true); }} />
       ) : (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -840,13 +896,12 @@ export function SchedulingLineasPage({ projectId }) {
               </button>
               {panelLineas && <SelectorLineas lineas={red.lineas} elegidas={params.lineas} onCambiar={ids => setCambios(c => ({ ...c, lineas: ids }))} onCerrar={() => setPanelLineas(false)} />}
             </div>
-            <SelectorCalendario red={red} valor={dia} onCambiar={cambiarDia} ancho={260} />
-            {infoCal?.objetivo && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} style={{ fontSize: 10.5, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>Optimizado: {OBJETIVOS.find(o => o.id === infoCal.objetivo)?.nombre.toLowerCase()}</span>}
+            <SelectorCalendario red={red} valor={dia} onCambiar={cambiarDia} ancho={240} />
+            {etiquetaOpt && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} style={{ fontSize: 10.5, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>Optimizado · {etiquetaOpt}</span>}
             {sep}
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
-              {[["vehicles", "Vehículos"], ["workers", "Trabajadores"]].map(([v, l]) => (
-                <button key={v} onClick={() => setModo(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: modo === v ? C.blue : "none", color: modo === v ? "#fff" : C.muted, fontSize: 11, fontWeight: modo === v ? 600 : 400, fontFamily: font }}>{l}</button>
-              ))}
+              {paso("vehicles", 1, "Vehículos")}
+              {paso("workers", 2, "Trabajadores", sinTurnos ? "Faltan los turnos de estos vehículos" : null)}
             </div>
             <button onClick={() => setShowC(s => !s)} style={{ ...btnSec, background: showC ? C.surface2 : "none", border: `1px solid ${showC ? C.border2 : C.border}`, color: showC ? C.text : C.muted }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="11" y1="18" x2="13" y2="18" /></svg>
@@ -854,23 +909,25 @@ export function SchedulingLineasPage({ projectId }) {
             </button>
             {res && <>
               {sep}
-              <button onClick={() => exportar("vehiculos")} title="Descargar los autobuses en Excel" style={btnExcel}>{icoDescarga} Vehículos</button>
-              <button onClick={() => exportar("turnos")} title="Descargar los turnos de conductor en Excel" style={btnExcel}>{icoDescarga} Trabajadores</button>
+              {modo === "vehicles"
+                ? <button onClick={() => exportar("vehiculos")} title="Descargar los autobuses, con los vacíos, en Excel" style={btnExcel}>{icoDescarga} Vehículos</button>
+                : <button onClick={() => exportar("turnos")} disabled={!res.turnos} title="Descargar los turnos de conductor en Excel" style={{ ...btnExcel, opacity: res.turnos ? 1 : 0.4 }}>{icoDescarga} Trabajadores</button>}
             </>}
             <div style={{ flex: 1 }} />
-            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" style={{ width: 140, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
-            <button onClick={() => setShowOpt(s => !s)} title="Buscar el mejor escenario de este calendario dentro de las restricciones" style={{ ...btnSec, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: showOpt ? C.blueDim : "none", border: `1px solid ${showOpt ? C.blue : C.border2}`, color: showOpt ? C.blueText : C.text }}>
+            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" style={{ width: 130, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
+            <button onClick={() => setShowOpt(s => !s)} title={modo === "vehicles" ? "Buscar los mejores vehículos de este calendario" : "Buscar los mejores turnos sobre estos vehículos"} style={{ ...btnSec, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: showOpt ? C.blueDim : "none", border: `1px solid ${showOpt ? C.blue : C.border2}`, color: showOpt ? C.blueText : C.text }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></svg>
-              {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : "Optimizar"}
+              {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
-            <button onClick={() => { setPanelLineas(false); generar(); }} disabled={calculando} style={{
+            <button onClick={() => { setPanelLineas(false); calcular(params, fase); }} disabled={calculando} style={{
               padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0b1220" : "#fff",
-              fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0,
-            }}>{calculando ? "Generando…" : pendientes ? "Generar con los cambios" : "Generar escenario"}</button>
+              fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0, whiteSpace: "nowrap",
+            }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} />}
-          {showOpt && <PanelOptimizar p={params} diaNombre={nombreDia(dia, red)} objetivo={objetivo} setObjetivo={setObjetivo} opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
+          {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
+            opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
           {res && ((params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax) || (params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax)) && (
             <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.3)" }}>
@@ -894,8 +951,21 @@ export function SchedulingLineasPage({ projectId }) {
 
           {res && <KpiBar k={kpisBarra(res, params)} base={actual.base} onConfigCostes={() => setShowC(true)} cambios={cambiosKpi(res, params)} />}
           {res && <Perfil perfil={res.perfil} />}
-          {res ? <Gantt key={`${modo}|${res.params.dia}`} res={res} modo={modo} filtro={filtro} paradasPorId={paradasPorId} />
-            : <div style={{ padding: 20, color: C.muted, fontSize: 13 }}>{calculando ? "Generando…" : "Pulsa «Generar escenario»."}</div>}
+          {res && modo === "workers" && !res.turnos ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ textAlign: "center", maxWidth: 460 }}>
+                <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 6 }}>Paso 2 · Turnos de conductor</div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
+                  Los vehículos de este calendario ({num(res.kpis.autobuses)} autobuses, {num(res.kpis.bloques)} bloques, {num(res.kpis.kmVacio || 0)} km en vacío) aún no tienen turnos. Se hacen sobre esos bloques sin cambiarlos.
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                  <button onClick={() => calcular(params, "turnos")} disabled={calculando} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{calculando ? "Generando…" : "Generar turnos"}</button>
+                  <button onClick={() => setShowOpt(true)} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${C.border2}`, background: "none", color: C.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Optimizar turnos…</button>
+                </div>
+              </div>
+            </div>
+          ) : res ? <Gantt key={`${modo}|${res.params.dia}|${!!res.turnos}`} res={res} modo={modo} filtro={filtro} paradasPorId={paradasPorId} />
+            : <div style={{ padding: 20, color: C.muted, fontSize: 13 }}>{calculando ? "Generando…" : "Pulsa «Generar vehículos»."}</div>}
         </div>
       )}
     </div>
@@ -903,11 +973,16 @@ export function SchedulingLineasPage({ projectId }) {
 }
 
 // ── Resumen de todos los calendarios ────────────────────────────────────
-function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, objetivo, setObjetivo, lote, pendientes, ocupado, onVer, onLote, onParar, onRestricciones }) {
+function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, precios, diaActual, objetivoV, setObjetivoV, objetivoT, setObjetivoT, lote, pendientes, ocupado, onVer, onLote, onParar, onRestricciones }) {
   const cals = red.calendarios || [];
   const filasTipo = TIPOS_DIA.map(t => ({ id: t.id, nombre: t.nombre, detalle: red.dias?.[t.id] ? `día de referencia ${fechaLarga(red.dias[t.id])}` : "sin servicio", dias: null }));
   const filasCal = cals.map((c, i) => ({ id: c.id, nombre: c.nombre, detalle: c.codigos?.join(", "), dias: c.fechas.length, color: COLORES_CAL[i % COLORES_CAL.length], viajesGtfs: c.viajes }));
-  const estadoDe = id => { const r = porCalendario[id]; return !r?.resumen ? "nada" : r.clave !== claveDe(id) ? "viejo" : "ok"; };
+  const estadoDe = id => {
+    const r = porCalendario[id];
+    if (!r?.resumen) return "nada";
+    if (r.resumen.turnos == null) return r.claveV === claveVDe(id) ? "sinTurnos" : "viejo";
+    return r.clave !== claveDe(id) ? "viejo" : "ok";
+  };
   const hayPrecios = precios.costeHora > 0 || precios.costeKm > 0 || precios.costeVehiculoDia > 0;
   const todas = [...filasTipo, ...filasCal];
   const pendientesCalc = todas.filter(f => estadoDe(f.id) !== "ok").map(f => f.id);
@@ -915,8 +990,8 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
   // totales del periodo (solo calendarios del GTFS, que no se solapan)
   const calc = filasCal.filter(f => porCalendario[f.id]?.resumen);
   const tot = calc.reduce((a, f) => {
-    const r = porCalendario[f.id].resumen, c = costeDia(r, precios);
-    return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + r.horasPagadas * f.dias, km: a.km + r.km * f.dias, kmVacio: a.kmVacio + (r.kmVacio || 0) * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos) };
+    const r = porCalendario[f.id].resumen, c = r.turnos == null ? null : costeDia(r, precios);
+    return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + (r.horasPagadas || 0) * f.dias, km: a.km + r.km * f.dias, kmVacio: a.kmVacio + (r.kmVacio || 0) * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos ?? 0) };
   }, { dias: 0, viajes: 0, horas: 0, km: 0, kmVacio: 0, coste: null, buses: 0, turnos: 0 });
   const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "7px 10px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "6px 10px", fontFamily: mono, fontSize: 11.5, textAlign: "right", whiteSpace: "nowrap" };
@@ -926,7 +1001,7 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
   const fila = f => {
     const r = porCalendario[f.id], est = estadoDe(f.id), x = r?.resumen;
     const viejo = est === "viejo";
-    const c = x ? costeDia(x, precios) : null;
+    const c = x && x.turnos != null ? costeDia(x, precios) : null;
     const enCurso = lote?.dia === f.id;
     const col = viejo ? C.dim : C.text;
     return (
@@ -943,22 +1018,23 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
         <td style={{ ...td, color: C.muted }}>{f.dias ?? "—"}</td>
         <td style={{ ...td, color: col }}>{x ? num(x.viajes) : f.viajesGtfs != null ? <span style={{ color: C.dim }}>{num(f.viajesGtfs)}</span> : "—"}</td>
         <td style={{ ...td, color: col, fontWeight: 700 }}>{x ? num(x.autobuses) : "—"}</td>
-        <td style={{ ...td, color: col, fontWeight: 700 }}>{x ? num(x.turnos) : "—"}</td>
+        <td style={{ ...td, color: col, fontWeight: 700 }}>{x && x.turnos != null ? num(x.turnos) : "—"}</td>
         <td style={{ ...td, color: viejo ? C.dim : C.muted }}>{x ? num(x.kmVacio || 0) : "—"}</td>
-        <td style={{ ...td, color: col }}>{x ? num(x.horasPagadas) : "—"}</td>
-        <td style={{ ...td, color: x?.avisos ? C.red : C.dim }}>{x ? x.avisos : "—"}</td>
+        <td style={{ ...td, color: col }}>{x && x.horasPagadas != null ? num(x.horasPagadas) : "—"}</td>
+        <td style={{ ...td, color: x?.avisos ? C.red : C.dim }}>{x && x.avisos != null ? x.avisos : "—"}</td>
         {hayPrecios && <td style={{ ...td, color: col }}>{c != null ? `${num(c)} €` : "—"}</td>}
         {hayPrecios && <td style={{ ...td, color: col }}>{c != null && f.dias ? `${num(c * f.dias)} €` : "—"}</td>}
         <td style={{ ...td, textAlign: "left", fontFamily: font, fontSize: 11 }}>
           {enCurso ? <span style={{ color: C.amber }}>{lote.optimizar ? "Optimizando…" : "Calculando…"}</span>
             : est === "nada" ? <span style={{ color: C.dim }}>Sin calcular</span>
-            : viejo ? <span style={{ color: C.amber }} title="Han cambiado las restricciones, las líneas o su configuración desde que se calculó">Desactualizado</span>
-            : r.objetivo ? <span style={{ color: C.green }} title={nombreEstrategia(r.estrategia || {}, precios.piezaMax)}>Optimizado · {OBJETIVOS.find(o => o.id === r.objetivo)?.nombre.toLowerCase()}</span>
+            : viejo ? <span style={{ color: C.amber }} title="Han cambiado las restricciones, las líneas, las cocheras o su configuración desde que se calculó">Desactualizado</span>
+            : est === "sinTurnos" ? <span style={{ color: C.amber }} title="Solo se ha hecho el paso 1 (vehículos)">Faltan los turnos</span>
+            : r.objetivoV || r.objetivoT ? <span style={{ color: C.green }} title={nombreEstrategia(r.estrategia || {}, precios.piezaMax)}>Optimizado · {[r.objetivoV && nombreObjetivo(r.objetivoV), r.objetivoT && nombreObjetivo(r.objetivoT)].filter(Boolean).join(" · ")}</span>
             : <span style={{ color: C.muted }} title={nombreEstrategia(r.estrategia || {}, precios.piezaMax)}>Calculado</span>}
         </td>
         <td style={td}><div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
           <button onClick={() => onVer(f.id)} style={{ padding: "3px 10px", borderRadius: 5, background: "none", border: `1px solid ${C.border2}`, color: C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font }}>Ver</button>
-          <button onClick={() => onLote([f.id], true)} disabled={!!bloqueo} title={bloqueo || `Optimizar solo este calendario (${OBJETIVOS.find(o => o.id === objetivo)?.nombre.toLowerCase()})`} style={{ padding: "3px 10px", borderRadius: 5, background: "none", border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, cursor: bloqueo ? "not-allowed" : "pointer", opacity: bloqueo ? 0.5 : 1, fontFamily: font }}>Optimizar</button>
+          <button onClick={() => onLote([f.id], true)} disabled={!!bloqueo} title={bloqueo || `Optimizar solo este calendario: vehículos (${nombreObjetivo(objetivoV)}) y turnos (${nombreObjetivo(objetivoT)})`} style={{ padding: "3px 10px", borderRadius: 5, background: "none", border: `1px solid ${C.border2}`, color: C.text, fontSize: 11, cursor: bloqueo ? "not-allowed" : "pointer", opacity: bloqueo ? 0.5 : 1, fontFamily: font }}>Optimizar</button>
         </div></td>
       </tr>
     );
@@ -972,13 +1048,17 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div style={{ padding: "0 16px", minHeight: 46, borderBottom: `1px solid ${C.border}`, background: C.card, flexShrink: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: C.muted }}>Objetivo al optimizar</span>
-        <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {OBJETIVOS.map(o => {
-            const off = o.id === "coste" && !hayPrecios;
-            return <button key={o.id} disabled={off} onClick={() => setObjetivo(o.id)} title={off ? "Pon algún precio en Restricciones" : o.ayuda} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? C.blue : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
-          })}
-        </div>
+        {[["Paso 1 · Vehículos", OBJETIVOS_VEHICULOS, objetivoV, setObjetivoV], ["Paso 2 · Turnos", OBJETIVOS_TURNOS, objetivoT, setObjetivoT]].map(([t, lista, val, set]) => (
+          <div key={t} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: C.muted }}>{t}</span>
+            <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
+              {lista.map(o => {
+                const off = o.precios && !o.precios.some(k => precios[k] > 0);
+                return <button key={o.id} disabled={off} onClick={() => set(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda} style={{ padding: "4px 9px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: val === o.id ? C.blue : "none", color: val === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: val === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
+              })}
+            </div>
+          </div>
+        ))}
         {!hayPrecios && <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11, fontFamily: font }}>poner precios para ver el coste</button>}
         <div style={{ flex: 1 }} />
         {lote ? (
@@ -989,8 +1069,8 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
           </>
         ) : (
           <>
-            {boton(`Calcular pendientes (${pendientesCalc.length})`, () => onLote(pendientesCalc, false), false, "Calcula con su estrategia los calendarios sin calcular o desactualizados")}
-            {boton(`Optimizar todos (${todas.length})`, () => onLote(todas.map(f => f.id), true), true, "Optimiza cada calendario por separado con el objetivo elegido")}
+            {boton(`Calcular pendientes (${pendientesCalc.length})`, () => onLote(pendientesCalc, false), false, "Calcula los dos pasos, con su estrategia, de los calendarios sin calcular, sin turnos o desactualizados")}
+            {boton(`Optimizar todos (${todas.length})`, () => onLote(todas.map(f => f.id), true), true, "Optimiza cada calendario por separado: primero los vehículos y después los turnos, con los objetivos elegidos")}
           </>
         )}
       </div>
@@ -1033,13 +1113,14 @@ function ResumenCalendarios({ red, porCalendario, claveDe, precios, diaActual, o
 // Indicadores en el formato de la KpiBar del Scheduling de puntos
 function kpisBarra(res, p) {
   const k = res.kpis;
-  const conduccion = res.turnos.reduce((s, t) => s + t.conduccion, 0);
-  const pagado = res.turnos.reduce((s, t) => s + t.trabajo, 0);
-  const coste = costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses }, p);
+  const turnos = res.turnos || [];
+  const conduccion = turnos.reduce((s, t) => s + t.conduccion, 0);
+  const pagado = turnos.reduce((s, t) => s + t.trabajo, 0);
+  const coste = res.turnos ? costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses }, p) : null;
   return {
     vehiculos: k.autobuses, pvr: k.pico, turnos: k.turnos, paradas: k.viajes, km: k.km, kmVacio: k.kmVacio || 0,
     conduccion, trabajo: 0, pagado, eficVehiculo: k.km ? (k.km - (k.kmVacio || 0)) / k.km : null, eficPersonal: k.eficienciaPersonal, coste,
-    avisos: res.turnos.reduce((s, t) => s + t.avisos.length, 0), filasConAviso: k.turnosConAviso, sinAsignar: 0,
+    avisos: turnos.reduce((s, t) => s + t.avisos.length, 0), filasConAviso: k.turnosConAviso, sinAsignar: 0,
     // campos con los nombres que usa la comparación ▲▼
     vehicleCount: k.autobuses, totalKm: k.km, totalStops: k.viajes,
   };
@@ -1048,13 +1129,14 @@ function cambiosKpi(res, p = res.params) {
   const k = res.kpis;
   return {
     "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
-    "Turnos": { sub: `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
+    "Turnos": { sub: res.turnos ? `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos` : "falta el paso 2 (turnos)", subColor: res.turnos ? undefined : C.amber, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
     "Eficiencia vehículo": { sub: `km con viajeros / km totales · ${num(k.km - (k.kmVacio || 0))} / ${num(k.km)}`, ayuda: "Parte de los km que se hacen con viajeros: el resto son vacíos (salir y volver a cochera, ir a otra cabecera)." },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
     "Km": { sub: `${num(k.kmVacio || 0)} en vacío · ${num(k.vacios || 0)} vacíos`, ayuda: "Kilómetros del día: los de los viajes y los vacíos (salida y vuelta a cochera, y entre cabeceras)." },
     "Paradas": { l: "Viajes", sub: res.diaNombre, subColor: C.dim, ayuda: "Viajes del calendario elegido en las líneas del escenario." },
     "Avisos": { ayuda: "Turnos que incumplen la conducción UE 561/2006 o el descanso del Estatuto (art. 34.4)." },
-    ...(costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
+    ...(!res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { v: "—", sub: "falta el paso 2 (turnos)" } }),
+    ...(res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
   };
 }
 

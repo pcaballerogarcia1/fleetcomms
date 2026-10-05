@@ -348,8 +348,13 @@ export const AYUDA = {
   scheduling_lineas: [
     {
       q: "¿Cómo genero el servicio?",
-      a: "Elige el tipo de día (laborable, sábado o domingo/festivo) y, si quieres, solo algunas líneas, y pulsa \"Generar servicio\". Con la red de Planning se encadenan los viajes en autobuses y se reparten en turnos de conductor. Si cambias algo, el botón pasa a \"Generar con los cambios\".",
-      tags: "generar servicio día laborable sábado festivo líneas",
+      a: "En dos pasos, como en Optibus o GoalSystem. Elige el calendario y, si quieres, solo algunas líneas. Paso 1 · Vehículos: \"Generar vehículos\" (u \"Optimizar vehículos\") encadena los viajes en autobuses, con las salidas y vueltas a cochera y los vacíos entre cabeceras. Paso 2 · Trabajadores: \"Generar turnos\" (u \"Optimizar turnos\") hace los turnos de conductor sobre esos bloques, sin cambiarlos. Si rehaces los vehículos, el paso 2 avisa de que faltan los turnos. Si cambias algo, el botón pasa a \"… con los cambios\".",
+      pasos: [
+        "Paso 1 · Vehículos: optimiza con el objetivo que quieras (menos autobuses, menos km en vacío o menor coste).",
+        "Revisa el Gantt de autobuses: los vacíos salen en gris rayado con la línea a la que van (→L2).",
+        "Paso 2 · Trabajadores: optimiza los turnos (menos conductores o menos horas pagadas).",
+      ],
+      tags: "generar servicio vehículos trabajadores turnos pasos optimizar calendario líneas",
     },
     {
       q: "¿Qué diferencia hay entre autobuses, bloques y pico?",

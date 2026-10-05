@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, costeDia, resumenServicio } from "./lineas-sched.js";
+import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -113,22 +113,25 @@ describe("scheduling de líneas: optimizar", () => {
     RED.lineas[0], RED.lineas[1],
   ] };
 
-  it("prueba estrategias, las ordena por el objetivo y la mejor no empeora la de por defecto", () => {
+  it("paso 2: con los vehículos fijos prueba turnos, los ordena y la mejor no empeora la de por defecto", () => {
     const normal = generarServicio(red, {}, { dia: "laborable" });
     let avance = 0;
-    const { probadas } = optimizarServicio(red, {}, { dia: "laborable" }, { objetivo: "conductores", onProgreso: k => { avance = k; } });
-    expect(probadas.length).toBeGreaterThan(8);
+    const { probadas } = optimizarTurnos(red, {}, { dia: "laborable" }, { objetivo: "conductores", onProgreso: k => { avance = k; } });
+    expect(probadas.length).toBeGreaterThanOrEqual(8);
     expect(avance).toBe(probadas.length);
     expect(probadas[0].turnos).toBeLessThanOrEqual(normal.kpis.turnos);
     for (let i = 1; i < probadas.length; i++) expect(probadas[i].avisos * 1e6 + probadas[i].turnos).toBeGreaterThanOrEqual(probadas[0].avisos * 1e6 + probadas[0].turnos);
-    // aplicar la estrategia ganadora da lo mismo que dijo el optimizador
-    const aplicada = generarServicio(red, {}, { dia: "laborable", ...probadas[0].estrategia });
+    // los turnos no tocan los vehículos y aplicar la ganadora da lo mismo
+    const veh = generarVehiculos(red, {}, { dia: "laborable" });
+    expect(veh.turnos).toBe(null);
+    expect(veh.kpis.turnos).toBe(null);
+    const aplicada = generarTurnos(veh, probadas[0].estrategia);
     expect(aplicada.kpis.turnos).toBe(probadas[0].turnos);
-    expect(aplicada.kpis.autobuses).toBe(probadas[0].autobuses);
+    expect(aplicada.kpis.autobuses).toBe(veh.kpis.autobuses);
   });
 
-  it("todas las estrategias respetan las restricciones de los turnos", () => {
-    const { probadas } = optimizarServicio(red, {}, { dia: "laborable", piezaMax: 200 });
+  it("todas las estrategias de turnos respetan las restricciones", () => {
+    const { probadas } = optimizarTurnos(red, {}, { dia: "laborable", piezaMax: 200 });
     for (const pr of probadas) {
       const r = generarServicio(red, {}, { dia: "laborable", piezaMax: 200, ...pr.estrategia });
       for (const t of r.turnos) {
@@ -141,9 +144,12 @@ describe("scheduling de líneas: optimizar", () => {
     }
   });
 
-  it("marca las que pasan de la flota disponible y el coste usa los precios", () => {
-    const { probadas } = optimizarServicio(red, {}, { dia: "laborable", flotaMax: 1 });
+  it("paso 1: marca las que pasan de la flota disponible; los dos pasos seguidos", () => {
+    const { probadas } = optimizarVehiculos(red, {}, { dia: "laborable", flotaMax: 1 });
+    expect(probadas.length).toBeGreaterThan(1);
     expect(probadas.every(p => !p.cumple)).toBe(true);
+    const ambos = optimizarServicio(red, {}, { dia: "laborable" });
+    expect(Object.keys(ambos.estrategia)).toEqual(expect.arrayContaining(["eleccion", "corte", "emparejar"]));
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, { costeHora: 20, costeKm: 1, costeVehiculoDia: 50 })).toBe(400);
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, {})).toBe(null);
   });
@@ -181,19 +187,30 @@ describe("scheduling de líneas: cocheras y vacíos", () => {
     expect(con.kpis.km).toBeCloseTo(20 + v.km, 5);
     expect(generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 0 }).kpis.bloques).toBe(2);
     expect(generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5, vacios: false }).kpis.bloques).toBe(2);
+    expect(generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5, vacioKm: 0.5 }).kpis.bloques).toBe(2); // radio de la estrategia
+    expect(v).toMatchObject({ tipo: "cabecera", hacia: "B", sentido: "Vacío a cabecera de la B" });
   });
 
   it("con cochera: salida y vuelta a cochera con sus km y su tiempo, y las conduce un turno", () => {
     const r = generarServicio(red, {}, { dia: "laborable", vacioMaxKm: 5 }, { cocheras });
     const bus = r.vehiculos[0];
     expect(bus.cochera).toBe("cochera:c1");
-    expect(bus.viajes[0]).toMatchObject({ vacio: true, o: "cochera:c1", d: "X", arr: h(8) });
+    expect(bus.viajes[0]).toMatchObject({ vacio: true, tipo: "salida", hacia: "A", o: "cochera:c1", d: "X", arr: h(8) });
     expect(bus.viajes.at(-1)).toMatchObject({ vacio: true, o: "W", d: "cochera:c1" });
     expect(bus.inicio).toBeLessThan(h(8));
     expect(r.conCocheras).toBe(true);
     expect(r.kpis.viajes).toBe(2); // los vacíos no son viajes con viajeros
     const conducidos = r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes));
     expect(conducidos.length).toBe(bus.viajes.length); // viajes y vacíos, todos con conductor
+  });
+
+  it("aplicar la mejor estrategia de vehículos da lo mismo que dijo el optimizador", () => {
+    const { probadas } = optimizarVehiculos(red, {}, { dia: "laborable" }, { cocheras, objetivo: "kmVacio" });
+    for (const pr of probadas.slice(0, 3)) {
+      const g = generarVehiculos(red, {}, { dia: "laborable", ...pr.estrategia }, { cocheras });
+      expect(g.kpis.autobuses).toBe(pr.autobuses);
+      expect(g.kpis.kmVacio).toBeCloseTo(pr.kmVacio, 5);
+    }
   });
 
   it("la cochera fijada en la línea manda sobre la más cercana", () => {
