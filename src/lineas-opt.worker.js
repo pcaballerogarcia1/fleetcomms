@@ -4,7 +4,7 @@
 //  · { tipo: "lote", red, cfg, cocheras, params, dias: [{ dia, estrategia }], optimizar, objetivoVehiculos, objetivoTurnos }
 //    → calcula (u optimiza, los dos pasos) varios calendarios y manda el
 //      resumen de cada uno según termina
-import { optimizarVehiculos, optimizarTurnos, generarServicio, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO } from "./lineas-sched.js";
+import { optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO } from "./lineas-sched.js";
 
 self.onmessage = e => {
   const { tipo, red, cfg, params, objetivo, cocheras = [] } = e.data;
@@ -12,7 +12,7 @@ self.onmessage = e => {
     if (tipo === "lote") {
       const { dias, optimizar, objetivoVehiculos, objetivoTurnos } = e.data;
       // params.entreLineas es la restricción; la estrategia de cada calendario solo puede quitarlo
-      dias.forEach(({ dia, estrategia = {} }, i) => {
+      dias.forEach(({ dia, estrategia = {}, manuales = [] }, i) => {
         self.postMessage({ progreso: [i, dias.length], dia });
         let q = { ...params, ...estrategia, dia, entreLineas: params.entreLineas && (estrategia.entreLineas ?? true) };
         let optimizado = false;
@@ -23,9 +23,14 @@ self.onmessage = e => {
           q = { ...q, ...(t?.estrategia || {}) };
           optimizado = true;
         }
-        const res = generarServicio(red, cfg, q, { cocheras });
+        // los cambios a mano del calendario (si no se optimiza), en su paso
+        const ops = optimizar ? [] : manuales;
+        const v = aplicarCambios(generarVehiculos(red, cfg, q, { cocheras }), ops.filter(o => o.tipo === "viaje"));
+        const t = aplicarCambios(generarTurnos(v.res), ops.filter(o => o.tipo === "pieza"));
+        const fallidos = [...v.fallidos, ...t.fallidos];
         const est = Object.fromEntries(CAMPOS_ESTRATEGIA.map(k => [k, q[k] ?? PARAMS_DEFECTO[k]]));
-        self.postMessage({ hecho: { dia, estrategia: est, resumen: resumenServicio(res), optimizado } });
+        const aplicados = ops.filter(o => !fallidos.some(f => f.clave === o.clave && f.tipo === o.tipo && f.destino === o.destino));
+        self.postMessage({ hecho: { dia, estrategia: est, resumen: resumenServicio(t.res), optimizado, manuales: aplicados } });
       });
       self.postMessage({ fin: true });
       return;

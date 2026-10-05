@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio } from "./lineas-sched.js";
+import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -217,5 +217,77 @@ describe("scheduling de líneas: cocheras y vacíos", () => {
     const dos = [...cocheras, { id: "c2", nombre: "Sur", lat: 40.50, lng: -3.70 }];
     const r = generarServicio(red, { A: { cochera: "c2" } }, { dia: "laborable", vacioMaxKm: 5 }, { cocheras: dos });
     expect(r.vehiculos[0].cochera).toBe("cochera:c2");
+  });
+});
+
+describe("scheduling de líneas: cambios a mano", () => {
+  const paradas = [
+    { id: "X", nombre: "X", lat: 40.40, lng: -3.70 }, { id: "Y", nombre: "Y", lat: 40.43, lng: -3.70 },
+    { id: "Z", nombre: "Z", lat: 40.439, lng: -3.70 }, { id: "W", nombre: "W", lat: 40.47, lng: -3.70 },
+  ];
+  // A: X→Y a las 7 y a las 12; B: Z→W a las 8 (sin vacíos: tres autobuses). Si la
+  // expedición cae a menos de 1 h de un bloque se une a él; si no, otro bloque del autobús.
+  const red = { paradas, lineas: [
+    { id: "A", nombre: "A", color: "#f00", sentidos: [sentido(0, ["X", "Y"], [h(7), h(12)], 30)] },
+    { id: "B", nombre: "B", color: "#00f", sentidos: [sentido(0, ["Z", "W"], [h(8)], 30)] },
+  ] };
+  const cocheras = [{ id: "c1", nombre: "Norte", lat: 40.395, lng: -3.70 }];
+  const base = () => generarVehiculos(red, {}, { dia: "laborable", vacioMaxKm: 0, margenCochera: 600 }, { cocheras }); // un autobús por bloque
+
+  it("mover una expedición a otro autobús rehace los vacíos y deja los turnos por hacer", () => {
+    const v = base();
+    const conB = v.vehiculos.find(b => b.viajes.some(x => x.linea === "B"));
+    const conA = v.vehiculos.find(b => b.viajes.some(x => x.linea === "A" && x.dep === h(7)));
+    expect(conB.autobus).not.toBe(conA.autobus);
+    const viajeB = conB.viajes.find(x => !x.vacio);
+    const m = moverViaje(v, claveViaje(viajeB), conA.autobus);
+    expect(m.error).toBeUndefined();
+    const bloque = m.vehiculos.find(b => b.viajes.includes(viajeB));
+    expect(bloque.autobus).toBe(conA.autobus);
+    // vacío de Y (fin de la A) a Z (inicio de la B) con su línea de destino
+    expect(bloque.viajes.find(x => x.tipo === "cabecera")).toMatchObject({ o: "Y", d: "Z", hacia: "B" });
+    expect(m.kpis.autobuses).toBeLessThan(v.kpis.autobuses);
+    expect(m.turnos).toBe(null);
+    expect(v.vehiculos.find(b => b.id === conB.id).viajes).toContain(viajeB); // el de entrada no se toca
+    // solaparse no se puede; a un autobús nuevo, sí
+    const otraA = v.vehiculos.flatMap(b => b.viajes).find(x => x.linea === "A" && x.dep === h(7));
+    expect(moverViaje(m, claveViaje({ ...otraA, dep: h(7) }), bloque.autobus).error).toBeTruthy();
+    expect(moverViaje(v, claveViaje(viajeB), null).kpis.autobuses).toBe(v.kpis.autobuses);
+  });
+
+  it("si no llega a tiempo queda un aviso en el bloque", () => {
+    const red2 = { paradas, lineas: [
+      { id: "A", nombre: "A", color: "#f00", sentidos: [sentido(0, ["X", "Y"], [h(7)], 30)] },
+      { id: "B", nombre: "B", color: "#00f", sentidos: [sentido(0, ["Z", "W"], [h(7, 32)], 30)] },
+    ] };
+    const v = generarVehiculos(red2, {}, { dia: "laborable", vacioMaxKm: 0 }, { cocheras });
+    const viajeB = v.vehiculos.flatMap(b => b.viajes).find(x => x.linea === "B");
+    const busA = v.vehiculos.find(b => b.viajes.some(x => x.linea === "A")).autobus;
+    const m = moverViaje(v, claveViaje(viajeB), busA);
+    expect(m.vehiculos.find(b => b.viajes.includes(viajeB)).avisos[0]).toMatch(/No llega a tiempo a la B/);
+  });
+
+  it("mover una pieza a otro turno: se recalcula con sus avisos; solaparse no se puede", () => {
+    const salidas = Array.from({ length: 37 }, (_, k) => h(5) + k * 30);
+    const red3 = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 25), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 25, viajes: 1 })) }] }] };
+    const r = generarServicio(red3, {}, { dia: "laborable" });
+    const [t1] = r.turnos;
+    const ultimo = r.turnos.at(-1);
+    const pz = t1.piezas[0];
+    const m = moverPieza(r, clavePieza(pz), ultimo.id);
+    expect(m.error).toBeUndefined();
+    const nuevo = m.turnos.find(t => t.id === ultimo.id);
+    expect(nuevo.piezas.map(clavePieza)).toContain(clavePieza(pz));
+    expect(nuevo.avisos.some(a => /Amplitud/.test(a))).toBe(true);
+    expect(m.turnos.flatMap(t => t.piezas).length).toBe(r.turnos.flatMap(t => t.piezas).length);
+    // la misma pieza al turno con el que se solapa: no
+    const solapado = r.turnos.find(t => t !== t1 && t.piezas.some(x => x.inicio < pz.fin && pz.inicio < x.fin));
+    if (solapado) expect(moverPieza(r, clavePieza(pz), solapado.id).error).toMatch(/solapa/);
+    // a un turno nuevo
+    expect(moverPieza(r, clavePieza(pz), null).kpis.turnos).toBeGreaterThanOrEqual(r.kpis.turnos);
+    // guardar y volver a aplicar da lo mismo
+    const otra = aplicarCambios(generarServicio(red3, {}, { dia: "laborable" }), [{ tipo: "pieza", clave: clavePieza(pz), destino: ultimo.id }]);
+    expect(otra.fallidos).toEqual([]);
+    expect(otra.res.kpis.turnos).toBe(m.kpis.turnos);
   });
 });

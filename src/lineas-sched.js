@@ -137,7 +137,7 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
   const autobuses = repartirAutobuses(vehiculos, p);
   for (const v of vehiculos) v.relevos = [];
   return {
-    viajes, vehiculos, autobuses, turnos: null, find, kpis: kpisServicio(viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos),
+    viajes, vehiculos, autobuses, turnos: null, find, ctx: { geo, cfg }, kpis: kpisServicio(viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos),
     aproximado, params: p, diaNombre: nombreDia(p.dia, red), conCocheras: !!geo?.hayCocheras,
   };
 }
@@ -573,6 +573,7 @@ export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivoVehicu
 }
 
 const hm = m => `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`;
+const reloj = m => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; };
 
 function cerrarTurno(t, p) {
   const viajes = t.piezas.flatMap(pz => pz.viajes);
@@ -599,6 +600,18 @@ function cerrarTurno(t, p) {
   if (p.aplicar561 && peor > p.conduccionContinuaMax) t.avisos.push(`${hm(peor)} de conducción sin la pausa de ${p.pausaConduccionMin} min (máx. ${hm(p.conduccionContinuaMax)}, UE 561/2006)`);
   if (p.aplicar561 && t.conduccion > p.conduccionDiariaMax) t.avisos.push(`Conducción de ${hm(t.conduccion)}: supera ${hm(p.conduccionDiariaMax)} (UE 561/2006)`);
   if (t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (Estatuto, art. 34.4)`);
+  // lo que el cálculo automático ya cumple siempre, pero un cambio a mano puede romper
+  if (t.duracion > p.amplitudMax) t.avisos.push(`Amplitud de ${hm(t.duracion)}: supera ${hm(p.amplitudMax)}`);
+  if (t.trabajo > p.jornadaMax) t.avisos.push(`Jornada de trabajo de ${hm(t.trabajo)}: supera ${hm(p.jornadaMax)}`);
+  if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
+  if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
+  t.piezas.slice(1).forEach((pz, i) => {
+    const a = t.piezas[i], hueco = pz.inicio - a.fin;
+    if (hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(a.inicio)} y las ${reloj(pz.inicio)} se solapan`); return; }
+    const sigue = a.vehiculo === pz.vehiculo; // sigue en el mismo autobús: no hay relevo
+    const hace = sigue ? 0 : a.d != null && a.d === pz.o ? p.relevoMin : p.desplazamiento;
+    if (hueco < hace) t.avisos.push(`Solo ${hueco} min para ${a.d === pz.o ? "relevar" : "ir a otra cabecera"} a las ${reloj(pz.inicio)} (hacen falta ${hace})`);
+  });
   return t;
 }
 
@@ -656,3 +669,154 @@ export const esCalendario = dia => typeof dia === "string" && dia.startsWith("ca
 export const nombreDia = (id, red) => (esCalendario(id) ? red?.calendarios?.find(c => c.id === id)?.nombre || "Calendario que ya no está en la red" : TIPOS_DIA.find(t => t.id === id)?.nombre || id);
 /** Viajes de un sentido ese día */
 export const viajesDia = (sentido, dia, red) => (esCalendario(dia) ? salidasDe(sentido, dia, red).lista.length : sentido.viajes?.[dia] || 0);
+
+// ── Cambios a mano ─────────────────────────────────────────────────────
+// Mover una expedición de un autobús a otro (paso 1) o una pieza de un turno
+// a otro (paso 2). Devuelven un escenario nuevo (no tocan el de entrada) o
+// { error } si no se puede (se solapa). Lo que se puede hacer pero incumple
+// algo (no llega a tiempo, amplitud…) se deja y queda como aviso.
+// Las claves no dependen de la estrategia, así que los cambios se pueden
+// guardar y volver a aplicar sobre el mismo escenario recalculado.
+export const claveViaje = v => `${v.linea}|${v.dir}|${v.dep}`;
+export const clavePieza = pz => `${pz.vehiculo}|${pz.inicio}`;
+
+// Rehace un bloque con sus expediciones: vacíos entre cabeceras, salida y vuelta a cochera
+function montarBloque(veh, reales, r) {
+  const { geo, cfg = {} } = r.ctx || {};
+  const p = r.params, find = r.find || (x => x);
+  const ord = [...reales].sort((a, b) => a.dep - b.dep);
+  const viajes = [], avisos = [];
+  ord.forEach((v, i) => {
+    if (i > 0) {
+      const a = ord[i - 1];
+      const reg = cfg[a.linea]?.regulacion ?? p.regulacion;
+      const km = find(a.d) === find(v.o) ? 0 : geo ? geo.km(a.d, v.o) : null;
+      if (km == null) avisos.push(`De la ${a.nombre} a la ${v.nombre}: cabeceras distintas sin coordenadas para el vacío`);
+      else if (km >= PEGADAS_KM) {
+        const m = geo.min(km);
+        viajes.push(vacio(a.d, v.o, Math.max(a.arr, Math.min(a.arr + reg, v.dep - m)), m, km, "cabecera", v.nombre));
+        if (a.arr + reg + m > v.dep) avisos.push(`No llega a tiempo a la ${v.nombre} de las ${reloj(v.dep)}: vacío de ${String(km).replace(".", ",")} km (${m} min) y ${reg} min de regulación`);
+      } else if (a.arr + reg > v.dep) avisos.push(`Solo ${v.dep - a.arr} min de regulación antes de la ${v.nombre} de las ${reloj(v.dep)} (mín. ${reg})`);
+    }
+    viajes.push(v);
+  });
+  veh.cochera = null;
+  if (geo?.hayCocheras && ord.length) {
+    const primero = ord[0], ultimo = ord.at(-1);
+    veh.cochera = geo.cocheraDe(primero.linea, primero.o);
+    const ida = geo.km(veh.cochera, primero.o), vuelta = geo.km(ultimo.d, veh.cochera);
+    if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida); viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida, "salida", primero.nombre)); }
+    if (vuelta != null && vuelta >= PEGADAS_KM) viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta), vuelta, "vuelta"));
+  }
+  veh.viajes = viajes;
+  veh.inicio = viajes[0].dep;
+  veh.fin = viajes.at(-1).arr;
+  veh.lineas = [...new Set(ord.map(x => x.nombre))];
+  veh.kmVacio = Math.round(viajes.reduce((t, x) => t + (x.vacio ? x.km : 0), 0) * 10) / 10;
+  veh.avisos = avisos;
+  veh.manual = true;
+  return veh;
+}
+
+export function moverViaje(res, clave, busDestino) {
+  const origen = res.vehiculos.find(b => b.viajes.some(v => !v.vacio && claveViaje(v) === clave));
+  if (!origen) return { error: "No se encuentra esa expedición" };
+  const viaje = origen.viajes.find(v => !v.vacio && claveViaje(v) === clave);
+  if (busDestino != null && origen.autobus === busDestino) return { error: "Ya está en ese autobús" };
+  let vehiculos = [...res.vehiculos];
+  let autobuses = res.autobuses.map(b => ({ ...b, bloques: [...b.bloques] }));
+  const bloque = id => vehiculos.find(v => v.id === id);
+  let destino = null, bus = null;
+  if (busDestino != null) {
+    bus = autobuses.find(b => b.id === busDestino);
+    if (!bus) return { error: `No existe el autobús ${busDestino}` };
+    for (const b of bus.bloques.map(bloque)) for (const x of b.viajes) {
+      if (!x.vacio && x.dep < viaje.arr && viaje.dep < x.arr) return { error: `Se solapa con la ${x.nombre} de las ${reloj(x.dep)}–${reloj(x.arr)} del autobús ${busDestino}` };
+    }
+    // el bloque de ese autobús en el que cae (o el más cercano a menos de 1 h)
+    let mejor = Infinity;
+    for (const b of bus.bloques.map(bloque)) {
+      const d = viaje.dep < b.inicio ? b.inicio - viaje.arr : viaje.dep > b.fin ? viaje.dep - b.fin : 0;
+      if (d <= 60 && d < mejor) { mejor = d; destino = b; }
+    }
+  }
+  // quitarla de su bloque
+  const resto = origen.viajes.filter(v => !v.vacio && v !== viaje);
+  if (resto.length) vehiculos = vehiculos.map(v => (v === origen ? montarBloque({ ...origen }, resto, res) : v));
+  else {
+    vehiculos = vehiculos.filter(v => v !== origen);
+    autobuses = autobuses.map(b => ({ ...b, bloques: b.bloques.filter(id => id !== origen.id) })).filter(b => b.bloques.length);
+    if (bus) bus = autobuses.find(b => b.id === bus.id) || null;
+  }
+  // ponerla en el destino
+  if (destino) {
+    const d = vehiculos.find(v => v.id === destino.id);
+    vehiculos = vehiculos.map(v => (v === d ? montarBloque({ ...d }, [...d.viajes.filter(x => !x.vacio), viaje], res) : v));
+  } else {
+    const id = Math.max(0, ...res.vehiculos.map(v => v.id)) + 1;
+    if (!bus) {
+      bus = { id: Math.max(0, ...res.autobuses.map(b => b.id)) + 1, tipo: origen.tipo, bloques: [], cochera: null };
+      autobuses.push(bus);
+    }
+    bus.bloques.push(id);
+    vehiculos.push(montarBloque({ id, tipo: origen.tipo, autobus: bus.id, relevos: [] }, [viaje], res));
+  }
+  // bloques del mismo autobús que se pisan (falta tiempo en cochera)
+  for (const b of autobuses) {
+    b.bloques.sort((x, y) => bloque(x).inicio - bloque(y).inicio);
+    const lista = b.bloques.map(bloque);
+    lista.slice(1).forEach((x, i) => {
+      const margen = x.cochera ? res.params.margenCochera : res.params.margenVacio;
+      if (lista[i].fin + margen > x.inicio) {
+        const nuevo = { ...x, avisos: [...(x.avisos || []), `Empieza a las ${reloj(x.inicio)} y el bloque anterior de este autobús acaba a las ${reloj(lista[i].fin)}`] };
+        vehiculos = vehiculos.map(v => (v === x ? nuevo : v));
+      }
+    });
+    if (b.cochera == null) b.cochera = bloque(b.bloques[0])?.cochera ?? null;
+  }
+  // los turnos eran de los vehículos de antes: hay que rehacerlos (paso 2)
+  vehiculos = vehiculos.map(v => (v.relevos?.length ? { ...v, relevos: [] } : v));
+  return { ...res, vehiculos, autobuses, turnos: null, kpis: kpisServicio(res.viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos) };
+}
+
+export function moverPieza(res, clave, turnoDestino) {
+  if (!res.turnos) return { error: "Aún no hay turnos" };
+  const origen = res.turnos.find(t => t.piezas.some(pz => clavePieza(pz) === clave));
+  if (!origen) return { error: "No se encuentra esa pieza" };
+  const pz = origen.piezas.find(x => clavePieza(x) === clave);
+  if (turnoDestino === origen.id) return { error: "Ya está en ese turno" };
+  const p = res.params;
+  let destino = null;
+  if (turnoDestino != null) {
+    destino = res.turnos.find(t => t.id === turnoDestino);
+    if (!destino) return { error: `No existe el turno T${turnoDestino}` };
+    const choca = destino.piezas.find(x => x.inicio < pz.fin && pz.inicio < x.fin);
+    if (choca) return { error: `Se solapa con la pieza de las ${reloj(choca.inicio)}–${reloj(choca.fin)} del turno T${turnoDestino}` };
+  }
+  const id = destino ? destino.id : Math.max(0, ...res.turnos.map(t => t.id)) + 1;
+  const movida = { ...pz, turno: id };
+  const orden = l => l.sort((a, b) => a.inicio - b.inicio);
+  let turnos = [];
+  for (const t of res.turnos) {
+    if (t === origen) { const resto = t.piezas.filter(x => x !== pz); if (resto.length) turnos.push(cerrarTurno({ id: t.id, piezas: resto }, p)); }
+    else if (t === destino) turnos.push(cerrarTurno({ id: t.id, piezas: orden([...t.piezas, movida]) }, p));
+    else turnos.push(t);
+  }
+  if (!destino) turnos.push(cerrarTurno({ id, piezas: [movida] }, p));
+  for (const t of turnos) t.manual = t.manual || t.id === id || t.id === origen.id;
+  // relevos del autobús de la pieza
+  const piezasBus = orden(turnos.flatMap(t => t.piezas.filter(x => x.vehiculo === pz.vehiculo)));
+  const vehiculos = res.vehiculos.map(v => (v.id === pz.vehiculo ? { ...v, relevos: piezasBus.map(x => ({ inicio: x.inicio, fin: x.fin, turno: x.turno })) } : v));
+  return { ...res, vehiculos, turnos, kpis: kpisServicio(res.viajes, vehiculos, turnos, res.autobuses) };
+}
+
+/** Vuelve a aplicar cambios guardados ([{ tipo: "viaje" | "pieza", clave, destino }]); los que ya no encajan se saltan */
+export function aplicarCambios(res, cambios = []) {
+  let r = res;
+  const fallidos = [];
+  for (const c of cambios) {
+    const x = c.tipo === "viaje" ? moverViaje(r, c.clave, c.destino) : moverPieza(r, c.clave, c.destino);
+    if (x.error) fallidos.push({ ...c, error: x.error }); else r = x;
+  }
+  return { res: r, fallidos };
+}

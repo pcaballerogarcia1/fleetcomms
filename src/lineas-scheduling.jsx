@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras } from "./lineas-store.js";
-import { generarServicio, generarVehiculos, generarTurnos, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
+import { generarVehiculos, generarTurnos, moverViaje, moverPieza, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -42,7 +42,9 @@ function filasDe(res, modo) {
       const viajes = bloques.flatMap(x => x.viajes);
       const vacios = bloques.slice(1).map((x, i) => ({ inicio: bloques[i].fin, fin: x.inicio }));
       const relevos = bloques.flatMap(x => x.relevos);
-      return fila(`Bus ${b.id}`, nombreTipo(b.tipo) || "—", viajes, { vacios, relevos, bloques: bloques.length });
+      return fila(`Bus ${b.id}`, nombreTipo(b.tipo) || "—", viajes, {
+        id: b.id, vacios, relevos, bloques: bloques.length, avisos: bloques.flatMap(x => x.avisos || []), manual: bloques.some(x => x.manual),
+      });
     });
   }
   return res.turnos.map(t => {
@@ -50,8 +52,9 @@ function filasDe(res, modo) {
     const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
     return fila(`T${t.id}`, `${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos ? " · partido" : ""}`, viajes, {
-      tramosPausa, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`,
+      id: t.id, tramosPausa, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
+      piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
     });
   });
 }
@@ -81,19 +84,22 @@ const COLS = [
 ];
 const TABLE_W = COLS.reduce((s, c) => s + c.w, 0) + 8;
 const celda = (r, k) => {
+  if (k === "nombre") return r.manual ? `${r.nombre} ✎` : r.nombre;
   if (k === "inicio" || k === "fin") return hhmm(r[k]);
   if (k === "amplitud" || k === "conduccion" || k === "pausas") return r[k] ? hm(r[k]) : "—";
   if (k === "km" || k === "kmVacio") return Math.round(r[k]).toLocaleString("es-ES");
   return r[k];
 };
 
-function Gantt({ res, modo, filtro, paradasPorId }) {
+function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   const [vista, setVista] = useState(() => { try { return localStorage.getItem("fc_gantt_vista") || "tabla"; } catch { return "tabla"; } });
   const cambiarVista = v => { setVista(v); try { localStorage.setItem("fc_gantt_vista", v); } catch { /* sin almacenamiento */ } };
   const [px, setPx] = useState(1);
   const [orden, setOrden] = useState(null); // { k, dir }
   const [n, setN] = useState(PAGINA);
   const [tip, setTip] = useState(null);
+  const [arr, setArr] = useState(null); // lo que se arrastra: { tipo, clave, origen }
+  const [sobre, setSobre] = useState(null); // fila donde se soltaría (id, o "nuevo")
   const todas = useMemo(() => filasDe(res, modo), [res, modo]);
   const filas = useMemo(() => {
     const t = norm(filtro).trim();
@@ -110,6 +116,12 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
   const horas = Array.from({ length: (fin - ini) / 60 + 1 }, (_, k) => ini + k * 60);
   const cadaH = px * 60 < 20 ? 4 : px * 60 < 40 ? 2 : 1; // etiquetas del eje sin montarse
   const nombre = id => paradasPorId.get(id)?.nombre || id;
+  const claveDe = (x, r) => (modo === "vehicles" ? claveViaje(x) : r.piezaDe?.get(x));
+  const soltar = destino => { if (arr && onMover) onMover(arr.tipo, arr.clave, destino); setArr(null); setSobre(null); };
+  const zonaDe = id => ({
+    onDragOver: e => { if (!arr || id === arr.origen) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (sobre !== id) setSobre(id); },
+    onDrop: e => { e.preventDefault(); soltar(id); },
+  });
   const tot = filas.reduce((a, r) => ({ km: a.km + r.km, kv: a.kv + r.kmVacio, v: a.v + r.nViajes, c: a.c + r.conduccion }), { km: 0, kv: 0, v: 0, c: 0 });
 
   const barraBtn = (on) => ({ padding: "3px 8px", borderRadius: 4, border: "none", cursor: "pointer", fontFamily: font, fontSize: 10.5, background: on ? C.blue : "none", color: on ? "#fff" : C.muted, fontWeight: on ? 600 : 400 });
@@ -150,8 +162,14 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
           </div>
         </div>
 
+        {arr && (
+          <div {...zonaDe("nuevo")} style={{ position: "sticky", top: 30, left: 0, zIndex: 6, width: "100%", maxWidth: "100vw", height: 30, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 600,
+            background: sobre === "nuevo" ? "rgba(52,211,153,0.25)" : "rgba(52,211,153,0.10)", color: C.green, border: `1px dashed ${C.green}`, boxSizing: "border-box" }}>
+            Suelta aquí para {modo === "vehicles" ? "un autobús nuevo" : "un turno nuevo"} · o sobre {modo === "vehicles" ? "otro autobús" : "otro turno"}
+          </div>
+        )}
         {filas.slice(0, n).map((r, ri) => (
-          <div key={r.nombre} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", width: leftW + ancho }}>
+          <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(92,155,255,0.18)" : ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
             <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 4, background: ri % 2 ? "#141d30" : C.bg, display: "flex", alignItems: "center", padding: "0 4px", borderRight: `1px solid ${C.border}` }}>
               {vista === "tabla" ? COLS.map(col => (
                 <div key={col.k} title={col.k === "avisos" && r.avisos.length ? r.avisos.map(a => `• ${a}`).join("\n") : col.k === "nombre" && r.detalle ? r.detalle : undefined}
@@ -181,10 +199,13 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
                 const w = Math.max(2, (x.arr - x.dep) * px - 1);
                 return (
                   <div key={i} className="sched-block"
-                    onMouseEnter={e => setTip({ x, r, cx: e.clientX, cy: e.clientY })}
+                    draggable={!!onMover && !x.vacio}
+                    onDragStart={e => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", claveDe(x, r) || ""); setTip(null); setArr({ tipo: modo === "vehicles" ? "viaje" : "pieza", clave: claveDe(x, r), origen: r.id }); }}
+                    onDragEnd={() => { setArr(null); setSobre(null); }}
+                    onMouseEnter={e => !arr && setTip({ x, r, cx: e.clientX, cy: e.clientY })}
                     onMouseMove={e => setTip(t => (t ? { ...t, cx: e.clientX, cy: e.clientY } : t))}
                     onMouseLeave={() => setTip(null)}
-                    style={x.vacio ? {
+                    style={{ ...(arr && !x.vacio && claveDe(x, r) === arr.clave ? { opacity: 0.4, outline: "2px solid #fff" } : {}), cursor: onMover && !x.vacio ? "grab" : "default", ...(x.vacio ? {
                       position: "absolute", left: X(x.dep), width: w, top: 9, height: ROW_H - 18, borderRadius: 3,
                       background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
                       color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
@@ -192,7 +213,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
                       position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
                       background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
                       overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
-                    }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
+                    }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
               })}
               {r.relevos.map((x, i) => (
@@ -236,6 +257,7 @@ function Gantt({ res, modo, filtro, paradasPorId }) {
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.dep)} {nombre(tip.x.o)}</div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.arr)} {nombre(tip.x.d)}</div>
           <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>{tip.x.arr - tip.x.dep} min · {tip.x.km.toLocaleString("es-ES")} km · {tip.r.nombre}{tip.r.detalle ? ` (${tip.r.detalle})` : ""}</div>
+          {onMover && !tip.x.vacio && <div style={{ fontSize: 10, color: C.blueText, marginTop: 4 }}>Arrastra para {modo === "vehicles" ? "llevar la expedición a otro autobús" : "llevar la pieza entera a otro turno"}</div>}
         </div>
       )}
     </div>
@@ -640,6 +662,8 @@ export function SchedulingLineasPage({ projectId }) {
   const [objetivoT, setObjetivoT] = useState("conductores");
   const [optPorDia, setOptPorDia] = useState({}); // "dia|fase" → estado de la optimización
   const [lote, setLote] = useState(null); // { optimizar, progreso: [i, n], dia }
+  const [nota, setNota] = useState(null); // { texto, error } abajo, unos segundos
+  useEffect(() => { if (!nota) return; const t = setTimeout(() => setNota(null), nota.error ? 6000 : 4500); return () => clearTimeout(t); }, [nota]);
   const autoRef = useRef(false);
   const workerRef = useRef(null);
   useEffect(() => () => workerRef.current?.terminate(), []);
@@ -683,26 +707,36 @@ export function SchedulingLineasPage({ projectId }) {
 
   // Calcula un calendario: "vehiculos" (paso 1, sin turnos), "turnos" (paso 2
   // sobre los vehículos que hay) o "ambos". meta.objetivoV/T: si viene de Optimizar.
+  // Cambios a mano: meta.manuales (lista a aplicar), meta.conservar (los
+  // guardados); si no, generar un paso quita los cambios a mano de ese paso.
   function calcular(p = params, que = "ambos", meta = {}) {
     if (!red) return;
     setCalculando(true);
     setTimeout(() => {
       try {
         const claveV = claveVehiculos(p, cfgTxt);
+        const previos = cache[p.dia]?.manuales ?? porCalendario[p.dia]?.manuales ?? [];
+        const lista = meta.manuales ?? (meta.conservar ? previos : que === "turnos" ? previos.filter(o => o.tipo === "viaje") : []);
+        const opsV = lista.filter(o => o.tipo === "viaje"), opsT = lista.filter(o => o.tipo === "pieza");
+        const fallidos = [];
+        const conV = x => { if (!opsV.length) return x; const a = aplicarCambios(x, opsV); fallidos.push(...a.fallidos); return a.res; };
+        const conT = x => { if (!opsT.length) return x; const a = aplicarCambios(x, opsT); fallidos.push(...a.fallidos); return a.res; };
         let r;
-        if (que === "vehiculos") r = generarVehiculos(red, cfg, p, { cocheras });
+        if (que === "vehiculos") r = conV(generarVehiculos(red, cfg, p, { cocheras }));
         else if (que === "turnos") {
           const c = cache[p.dia];
-          const veh = c?.res && c.claveV === claveV ? c.res : generarVehiculos(red, cfg, p, { cocheras });
-          r = generarTurnos(veh, p);
-        } else r = generarServicio(red, cfg, p, { cocheras });
+          const veh = c?.res && c.claveV === claveV ? c.res : conV(generarVehiculos(red, cfg, p, { cocheras }));
+          r = conT(generarTurnos(veh, p));
+        } else r = conT(generarTurnos(conV(generarVehiculos(red, cfg, p, { cocheras }))));
+        const aplicados = lista.filter(o => !fallidos.some(f => f.clave === o.clave && f.tipo === o.tipo && f.destino === o.destino));
+        if (fallidos.length) setNota({ texto: `${fallidos.length} cambio${fallidos.length > 1 ? "s" : ""} a mano ya no encaja${fallidos.length > 1 ? "n" : ""} y se ha${fallidos.length > 1 ? "n" : ""} quitado: ${fallidos[0].error}`, error: true });
         const resumen = resumenServicio(r);
         const clave = r.turnos ? claveEscenario(p, cfgTxt) : null;
         const est = soloCampos(p, CAMPOS_ESTRATEGIA);
         const previo = porCalendario[p.dia];
         setCache(c => {
           const antes = c[p.dia]?.res ? resumenServicio(c[p.dia].res) : previo?.resumen;
-          const n = { ...c, [p.dia]: { res: r, base: baseDeResumen(antes, p), claveV, clave, t: Date.now() } };
+          const n = { ...c, [p.dia]: { res: r, base: baseDeResumen(antes, p), claveV, clave, manuales: aplicados, t: Date.now() } };
           const sobran = Object.keys(n).sort((x, y) => n[y].t - n[x].t).slice(MAX_EN_MEMORIA);
           for (const k of sobran) delete n[k];
           return n;
@@ -712,7 +746,7 @@ export function SchedulingLineasPage({ projectId }) {
         const top = { ...sinCampos(p, [...CAMPOS_ESTRATEGIA, "entreLineasGlobal"]), entreLineas: p.entreLineasGlobal, lineas: p.lineas || null, ...soloCampos(PARAMS_DEFECTO, ESTRATEGIA_UI) };
         guardarSchedParams(projectId, top).catch(() => {});
         guardarCalendario(p.dia, {
-          estrategia: est, resumen, claveV, clave,
+          estrategia: est, resumen, claveV, clave, manuales: aplicados,
           objetivoV: meta.objetivoV ?? (previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, est) ? previo.objetivoV ?? null : null),
           objetivoT: r.turnos ? meta.objetivoT ?? (previo?.clave && mismos(CAMPOS_ESTRATEGIA, previo.estrategia, est) ? previo.objetivoT ?? null : null) : null,
         });
@@ -737,8 +771,37 @@ export function SchedulingLineasPage({ projectId }) {
       guardarSchedParams(projectId, { dia: d }).catch(() => {});
       return;
     }
-    calcular(p, "ambos");
+    calcular(p, "ambos", { conservar: true });
   }
+
+  // Mover a mano una expedición (paso 1) o una pieza (paso 2)
+  function mover(tipo, clave, destino) {
+    const c = cache[dia];
+    if (!c?.res) return;
+    const r = tipo === "viaje" ? moverViaje(c.res, clave, destino) : moverPieza(c.res, clave, destino);
+    if (r.error) { setNota({ texto: `No se puede: ${r.error}`, error: true }); return; }
+    const previos = c.manuales || [];
+    // mover una expedición rehace los vehículos: los cambios de turnos ya no valen
+    const manuales = tipo === "viaje" ? [...previos.filter(o => o.tipo === "viaje"), { tipo, clave, destino }] : [...previos, { tipo, clave, destino }];
+    const clv = r.turnos ? c.clave : null;
+    setCache(m => ({ ...m, [dia]: { ...c, res: r, base: baseDeResumen(resumenServicio(c.res), params), clave: clv, manuales, t: Date.now() } }));
+    const prev = porCalendario[dia] || {};
+    guardarCalendario(dia, { manuales, resumen: resumenServicio(r), claveV: c.claveV, clave: clv, objetivoT: r.turnos ? prev.objetivoT ?? null : null });
+    const avisos = (tipo === "viaje"
+      ? r.vehiculos.find(v => v.viajes.some(x => !x.vacio && claveViaje(x) === clave))?.avisos
+      : r.turnos.find(t => t.piezas.some(x => clavePieza(x) === clave))?.avisos) || [];
+    const donde = destino == null ? (tipo === "viaje" ? "a un autobús nuevo" : "a un turno nuevo") : tipo === "viaje" ? `al autobús ${destino}` : `al turno T${destino}`;
+    setNota({ texto: `${tipo === "viaje" ? "Expedición movida" : "Pieza movida"} ${donde}${avisos.length ? ` · ojo: ${avisos[0]}` : ""}${tipo === "viaje" && c.res.turnos ? " · los turnos hay que rehacerlos (paso 2)" : ""}`, error: avisos.length > 0 });
+    logAudit({ modulo: "Scheduling", accion: tipo === "viaje" ? "Movió a mano una expedición" : "Movió a mano una pieza", detalle: `${nombreDia(dia, red)} · ${clave} → ${donde}` });
+  }
+  const manualesActuales = actual?.manuales || [];
+  const deshacer = () => calcular(params, "ambos", { manuales: manualesActuales.slice(0, -1) });
+  const quitarManuales = () => { if (window.confirm(`¿Quitar los ${manualesActuales.length} cambios a mano de este calendario?`)) calcular(params, "ambos", { manuales: [] }); };
+  // generar u optimizar un paso quita los cambios a mano de ese paso
+  const perderManuales = f => {
+    const n = f === "vehiculos" ? manualesActuales.length : manualesActuales.filter(o => o.tipo === "pieza").length;
+    return !n || window.confirm(`Se perderán ${n} cambio${n > 1 ? "s" : ""} a mano de ${f === "vehiculos" ? "vehículos y turnos" : "turnos"}. ¿Seguir?`);
+  };
 
   function nuevoWorker() {
     workerRef.current?.terminate();
@@ -751,7 +814,7 @@ export function SchedulingLineasPage({ projectId }) {
 
   // Optimizar un paso del calendario que se está viendo (en un worker)
   function optimizar() {
-    if (!red || opt.estado === "corriendo" || lote) return;
+    if (!red || opt.estado === "corriendo" || lote || !perderManuales(fase)) return;
     const p = params, d = p.dia, f = fase;
     const obj = f === "vehiculos" ? objetivoVehValido(p) : objetivoT;
     const setO = x => setOptPorDia(m => ({ ...m, [`${d}|${f}`]: typeof x === "function" ? x(m[`${d}|${f}`] || {}) : x }));
@@ -800,7 +863,7 @@ export function SchedulingLineasPage({ projectId }) {
         const previo = porCalendario[d];
         const q = paramsPara(d, {}, estrategia);
         guardarCalendario(d, {
-          estrategia, resumen, claveV: claveVehiculos(q, cfgTxt), clave: claveEscenario(q, cfgTxt),
+          estrategia, resumen, claveV: claveVehiculos(q, cfgTxt), clave: claveEscenario(q, cfgTxt), manuales: m.hecho.manuales || [],
           objetivoV: optimizado ? objV : previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, estrategia) ? previo.objetivoV ?? null : null,
           objetivoT: optimizado ? objT : previo?.clave && mismos(CAMPOS_ESTRATEGIA, previo.estrategia, estrategia) ? previo.objetivoT ?? null : null,
         });
@@ -811,15 +874,15 @@ export function SchedulingLineasPage({ projectId }) {
       if (m.error) { alert(`No se ha podido terminar: ${m.error}`); return; }
       logAudit({ modulo: "Scheduling", accion: optimizarTodos ? "Optimizó todos los calendarios de líneas" : "Calculó los calendarios de líneas", detalle: `${dias.length} calendarios${optimizarTodos ? ` · ${nombreObjetivo(objV)} · ${nombreObjetivo(objT)}` : ""}` });
       // el calendario que se está viendo ha cambiado: se recalcula
-      if (hechos[dia]) calcular(paramsPara(dia, {}, hechos[dia]), "ambos");
+      if (hechos[dia]) calcular(paramsPara(dia, {}, hechos[dia]), "ambos", { conservar: !optimizarTodos });
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setLote(null); alert(`No se ha podido terminar: ${e.message || "error en el cálculo"}`); };
-    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {} })) });
+    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {}, manuales: optimizarTodos ? [] : (cache[d]?.manuales ?? porCalendario[d]?.manuales ?? []) })) });
   }
   function pararLote() { workerRef.current?.terminate(); workerRef.current = null; setLote(null); }
 
   useEffect(() => {
-    if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; calcular(params, "ambos"); }
+    if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; calcular(params, "ambos", { conservar: true }); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [red, guardados]);
 
@@ -919,12 +982,19 @@ export function SchedulingLineasPage({ projectId }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></svg>
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
-            <button onClick={() => { setPanelLineas(false); calcular(params, fase); }} disabled={calculando} style={{
+            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) calcular(params, fase); }} disabled={calculando} style={{
               padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0b1220" : "#fff",
               fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0, whiteSpace: "nowrap",
             }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
+          {manualesActuales.length > 0 && (
+            <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(92,155,255,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+              <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(o => o.tipo === "viaje").length} de vehículos, {manualesActuales.filter(o => o.tipo === "pieza").length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
+              <button onClick={deshacer} disabled={calculando} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 5, padding: "2px 9px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Deshacer el último</button>
+              <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
+            </div>
+          )}
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
             opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
@@ -959,14 +1029,18 @@ export function SchedulingLineasPage({ projectId }) {
                   Los vehículos de este calendario ({num(res.kpis.autobuses)} autobuses, {num(res.kpis.bloques)} bloques, {num(res.kpis.kmVacio || 0)} km en vacío) aún no tienen turnos. Se hacen sobre esos bloques sin cambiarlos.
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                  <button onClick={() => calcular(params, "turnos")} disabled={calculando} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{calculando ? "Generando…" : "Generar turnos"}</button>
+                  <button onClick={() => calcular(params, "turnos", { conservar: true })} disabled={calculando} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{calculando ? "Generando…" : "Generar turnos"}</button>
                   <button onClick={() => setShowOpt(true)} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${C.border2}`, background: "none", color: C.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Optimizar turnos…</button>
                 </div>
               </div>
             </div>
-          ) : res ? <Gantt key={`${modo}|${res.params.dia}|${!!res.turnos}`} res={res} modo={modo} filtro={filtro} paradasPorId={paradasPorId} />
+          ) : res ? <Gantt key={`${modo}|${res.params.dia}|${!!res.turnos}`} res={res} modo={modo} filtro={filtro} paradasPorId={paradasPorId} onMover={calculando ? null : mover} />
             : <div style={{ padding: 20, color: C.muted, fontSize: 13 }}>{calculando ? "Generando…" : "Pulsa «Generar vehículos»."}</div>}
         </div>
+      )}
+      {nota && (
+        <div onClick={() => setNota(null)} style={{ position: "fixed", left: "50%", bottom: 22, transform: "translateX(-50%)", zIndex: 3000, maxWidth: "min(760px, calc(100vw - 32px))", padding: "9px 16px", borderRadius: 9, fontSize: 12.5, cursor: "pointer",
+          background: nota.error ? "#3a1620" : "#0d2f22", border: `1px solid ${nota.error ? C.red : C.green}`, color: nota.error ? "#fecaca" : "#bbf7d0", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}>{nota.texto}</div>
       )}
     </div>
   );
