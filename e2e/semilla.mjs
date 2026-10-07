@@ -17,7 +17,7 @@ export const USUARIOS = {
 export const mesActual = () => new Date().toISOString().slice(0, 7);
 
 // JSON → formato REST de Firestore
-function valor(v) {
+export function valor(v) {
   if (v === null || v === undefined) return { nullValue: null };
   if (v instanceof Date) return { timestampValue: v.toISOString() }; // como serverTimestamp()
   if (typeof v === "boolean") return { booleanValue: v };

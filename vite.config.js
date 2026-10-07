@@ -5,6 +5,23 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { configDefaults } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
+// Entorno de pruebas: las vistas previas de Vercel (cualquier rama que no
+// sea main) usan el proyecto de Firebase de pruebas, nunca el real. Son los
+// datos públicos de la app web (como los de producción en firebase.js.js).
+// Si en Vercel se ponen variables VITE_FIREBASE_*, mandan esas.
+const PRUEBAS = {
+  VITE_FIREBASE_API_KEY: "AIzaSyDfsCXOt8HZGZjdgEKl7b8oh_1frAwyFnk",
+  VITE_FIREBASE_AUTH_DOMAIN: "operanzia-pruebas.firebaseapp.com",
+  VITE_FIREBASE_PROJECT_ID: "operanzia-pruebas",
+  VITE_FIREBASE_STORAGE_BUCKET: "operanzia-pruebas.firebasestorage.app",
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "583227156396",
+  VITE_FIREBASE_APP_ID: "1:583227156396:web:5557bf6ac24244709cbc09",
+};
+if (process.env.VERCEL_ENV === "preview" || process.env.ENTORNO === "pruebas") {
+  process.env.VITE_ENTORNO = "pruebas";
+  for (const [k, v] of Object.entries(PRUEBAS)) process.env[k] ||= v;
+}
+
 export default defineConfig({
   // Versión (commit) en cada error registrado — ver error-report.js
   define: { __APP_VERSION__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || "local").slice(0, 7)) },

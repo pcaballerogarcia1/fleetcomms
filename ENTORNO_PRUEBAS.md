@@ -12,45 +12,41 @@ En cada push, GitHub Actions (`.github/workflows/ci.yml`) ejecuta:
 
 Si algo falla, el commit sale en rojo en GitHub y te llega un email.
 
-**Ojo:** Vercel despliega igualmente. Para que no se publique nada roto, trabaja en una rama (ver el punto 3) y pásala a `main` solo cuando esté en verde.
+**Ojo:** Vercel despliega igualmente. Para que no se publique nada roto, prueba primero en la rama `pruebas` (ver el punto 3) y pásalo a `main` solo cuando esté en verde.
 
-## 2. Proyecto de Firebase de pruebas (una sola vez, unos 10 min)
+## 2. Entorno de pruebas (ya montado, 2026-10-07)
 
-1. En https://console.firebase.google.com, **Añadir proyecto** y llámalo `operanzia-pruebas`.
-2. Dentro del proyecto:
-   - **Firestore Database**: créala en la misma región que producción.
-   - **Authentication**: activa Correo/contraseña.
-3. **Configuración del proyecto** → Tus apps → **Web (`</>`)** → copia los valores de `firebaseConfig`.
-4. Sube las reglas y los índices al proyecto de pruebas:
+- **Proyecto de Firebase aparte:** `operanzia-pruebas` («Operanzia PRUEBAS»),
+  con su propia base de datos, usuarios, reglas e índices. Nada de lo que
+  pase ahí toca a los clientes ni gasta su cuota diaria.
+  (La base de datos quedó en EE. UU. —`nam5`— en vez de Europa; da igual
+  porque solo tiene datos inventados.)
+- **La app elige sola el proyecto:** las vistas previas de Vercel (cualquier
+  rama que no sea `main`) se compilan contra pruebas (`vite.config.js`), y
+  salen con un cartel naranja «PRUEBAS» abajo y «[PRUEBAS]» en la pestaña.
+  `main` sigue yendo a producción. No hace falta tocar nada en Vercel; si
+  algún día se ponen allí variables `VITE_FIREBASE_*`, mandan esas.
+- **Datos de ejemplo:** `node scripts/sembrar-pruebas.mjs` crea (o rehace)
+  la empresa «pruebas» con 5 usuarios, flota, plantilla, rutas, incidencias e
+  inventario. Contraseña de todos: `Pruebas-2026`.
 
-   ```
-   firebase deploy --only firestore:rules,firestore:indexes --project operanzia-pruebas
-   ```
+  | Usuario | Rol |
+  |---|---|
+  | superadmin@operanzia-pruebas.test | superadmin |
+  | admin@operanzia-pruebas.test | admin |
+  | jefe@operanzia-pruebas.test | intermedio (jefe de tráfico) |
+  | conductor1@operanzia-pruebas.test | conductor |
+  | conductor2@operanzia-pruebas.test | conductor |
 
-5. Crea allí una organización y un usuario de prueba, igual que en producción, desde el panel de superadmin.
+- **Al cambiar las reglas o los índices**, desplegarlos también en pruebas:
+  `npx firebase deploy --only firestore --project operanzia-pruebas`.
 
-## 3. Vercel: vista previa apuntando a pruebas
+## 3. Cómo se trabaja
 
-Vercel ya crea un despliegue de vista previa (una URL propia) por cada rama que no sea `main`. Para que esas vistas previas usen la base de datos de pruebas:
-
-1. Vercel → proyecto **fleetcomms** → Settings → Environment Variables.
-2. Añade estas variables marcando **solo "Preview"** (no Production), con los valores del paso 2.3:
-
-   | Variable | Valor |
-   |---|---|
-   | `VITE_FIREBASE_API_KEY` | apiKey |
-   | `VITE_FIREBASE_AUTH_DOMAIN` | authDomain |
-   | `VITE_FIREBASE_PROJECT_ID` | projectId |
-   | `VITE_FIREBASE_STORAGE_BUCKET` | storageBucket |
-   | `VITE_FIREBASE_MESSAGING_SENDER_ID` | messagingSenderId |
-   | `VITE_FIREBASE_APP_ID` | appId |
-
-3. A partir de ahí:
-   - Cada cambio va en una rama, por ejemplo `git checkout -b mejora-x`, y luego `git push`.
-   - Vercel te da una URL de vista previa que usa **la base de datos de pruebas**.
-   - Cuando esté probado y la comprobación de GitHub en verde, se pasa a `main` y se publica.
-
-Sin estas variables, la app usa producción (como hasta ahora), así que no cambia nada hasta que las añadas.
+1. Los cambios se suben a la rama **`pruebas`** (`git push origin HEAD:pruebas`).
+2. Vercel la publica en la dirección de pruebas (fija para esa rama).
+3. Se prueba ahí con los usuarios de arriba.
+4. Si todo va bien, se pasa a `main` y se publica en app.operanzia.com.
 
 ## 4. Copias de seguridad automáticas de Firestore (5 min)
 

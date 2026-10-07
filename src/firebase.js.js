@@ -55,6 +55,23 @@ if (env.VITE_EMULADORES) {
   connectAuthEmulator(secondaryAuth, `http://${host}:9099`, { disableWarnings: true });
 }
 
+// Entorno de pruebas (vistas previas de Vercel, ver vite.config.js): un
+// cartel fijo para que nadie lo confunda con la app real. No tapa clics.
+export const ES_PRUEBAS = env.VITE_ENTORNO === "pruebas";
+if (ES_PRUEBAS && typeof document !== "undefined") {
+  const poner = () => {
+    if (document.getElementById("cartel-pruebas")) return;
+    const c = document.createElement("div");
+    c.id = "cartel-pruebas";
+    c.textContent = "PRUEBAS · datos de prueba, no es la app real";
+    c.style.cssText = "position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:99999;pointer-events:none;"
+      + "background:#f59e0b;color:#111;font:700 11px system-ui,sans-serif;letter-spacing:.04em;padding:4px 12px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);opacity:.92";
+    document.body.appendChild(c);
+    document.title = "[PRUEBAS] " + document.title.replace(/^\[PRUEBAS\] /, "");
+  };
+  if (document.body) poner(); else document.addEventListener("DOMContentLoaded", poner);
+}
+
 // ── COLECCIONES ───────────────────────────────────────────────────
 export const COL = {
   orgs:             "orgs",
