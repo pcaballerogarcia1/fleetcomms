@@ -1,11 +1,19 @@
+/* global process */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { configDefaults } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   // Versión (commit) en cada error registrado — ver error-report.js
   define: { __APP_VERSION__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || "local").slice(0, 7)) },
+  // Compilación de medida (MEDIR=1, solo en local o en la CI, nunca en
+  // Vercel): Firestore pasa por src/medidor-firestore.js, que cuenta las
+  // lecturas y escrituras de cada pantalla (ver e2e/).
+  resolve: process.env.MEDIR
+    ? { alias: [{ find: /^firebase\/firestore$/, replacement: fileURLToPath(new URL("./src/medidor-firestore.js", import.meta.url)) }] }
+    : {},
   plugins: [
     react(),
     VitePWA({
@@ -43,5 +51,5 @@ export default defineConfig({
     }),
   ],
   // Los tests de reglas van aparte (necesitan el emulador): npm run test:rules
-  test: { exclude: [...configDefaults.exclude, "rules-tests/**"] },
+  test: { exclude: [...configDefaults.exclude, "rules-tests/**", "e2e/**"] },
 })

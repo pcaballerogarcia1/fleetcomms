@@ -51,7 +51,15 @@ export function reportError({ tipo = "error", mensaje, stack = "" } = {}) {
   return true;
 }
 
-const texto = v => (v instanceof Error ? v.message : typeof v === "string" ? v : (() => { try { return JSON.stringify(v); } catch { return String(v); } })());
+// Con el código de Firestore delante (p. ej. "resource-exhausted: Quota exceeded.")
+const texto = v => (v instanceof Error ? (v.code ? `${v.code}: ` : "") + v.message : typeof v === "string" ? v : (() => { try { return JSON.stringify(v); } catch { return String(v); } })());
+
+// Avisos de Firestore que solo salen por consola y hay que enterarse: listeners
+// que fallan, permisos, consultas sin su índice compuesto (failed-precondition,
+// pasa si se despliega la app antes que firestore.indexes.json) y la cuota
+// diaria del plan gratuito agotada (resource-exhausted: la app deja de cargar).
+const AVISO_FIRESTORE = /Uncaught Error in snapshot listener|FirebaseError|permission-denied|Missing or insufficient permissions|failed-precondition|requires an index|resource-exhausted|Quota exceeded/i;
+export const esAvisoFirestore = msg => AVISO_FIRESTORE.test(String(msg || ""));
 
 export function initErrorReporting() {
   if (installed || typeof window === "undefined") return;
@@ -68,7 +76,7 @@ export function initErrorReporting() {
   console.error = (...args) => {
     orig(...args);
     const msg = args.map(texto).join(" ");
-    if (/Uncaught Error in snapshot listener|FirebaseError|permission-denied|Missing or insufficient permissions/i.test(msg)) {
+    if (esAvisoFirestore(msg)) {
       reportError({ tipo: "firestore", mensaje: msg, stack: args.find(a => a instanceof Error)?.stack || new Error().stack });
     }
   };

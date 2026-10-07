@@ -8,7 +8,7 @@ vi.mock("firebase/firestore", () => ({
   serverTimestamp: () => "ts",
   onSnapshot: vi.fn(), query: vi.fn(), orderBy: vi.fn(), limit: vi.fn(),
 }));
-const { reportError, setErrorUser, errorKey, groupErrors, MAX_POR_SESION } = await import("./error-report.js");
+const { reportError, setErrorUser, errorKey, groupErrors, MAX_POR_SESION, esAvisoFirestore } = await import("./error-report.js");
 
 describe("aviso de errores", () => {
   beforeEach(() => { added.length = 0; });
@@ -44,5 +44,11 @@ describe("aviso de errores", () => {
     expect(g[0]).toMatchObject({ veces: 2, ultimo: 20 });
     expect(g[0].usuarios.size).toBe(2);
     expect(errorKey("a 1", "at f (x.js:1:2)")).toBe(errorKey("a 2", "at f (x.js:9:9)"));
+  });
+  it("se entera de los avisos de Firestore que importan: índices que faltan y cuota agotada", () => {
+    expect(esAvisoFirestore("planes compartidos failed-precondition: The query requires an index. You can create it here: https://…")).toBe(true);
+    expect(esAvisoFirestore("movimientos: resource-exhausted: Quota exceeded.")).toBe(true);
+    expect(esAvisoFirestore("[fichaje] error leyendo: permission-denied: Missing or insufficient permissions.")).toBe(true);
+    expect(esAvisoFirestore("Error al calcular la ruta: sin coordenadas")).toBe(false);
   });
 });

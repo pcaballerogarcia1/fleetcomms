@@ -943,14 +943,21 @@ function FichajeWidget({ sesion }){
   const [expanded, setExpanded] = useState(false);
   const [, forceTick] = useState(0); // refresca el cronómetro cada minuto mientras hay fichaje abierto
 
+  // El fichaje abierto y los últimos cerrados (antes se descargaba toda la
+  // historia del conductor en cada apertura: ver e2e/informe-lecturas.md).
   useEffect(()=>{
     if(!sesion?.id) return;
-    const q = query(collection(db,"fichajes"), where("uid","==",sesion.id));
+    const q = query(collection(db,"fichajes"), where("uid","==",sesion.id), where("estado","==","abierto"), limit(5));
     return onSnapshot(q, snap=>{
-      const docs = snap.docs.map(d=>({_id:d.id,...d.data()}));
-      setFichajeAbierto(docs.find(f=>f.estado==="abierto") || null);
-      setRecientes(docs.filter(f=>f.estado==="cerrado").sort((a,b)=>(b.horaEntrada||0)-(a.horaEntrada||0)).slice(0,5));
+      setFichajeAbierto(snap.docs.map(d=>({_id:d.id,...d.data()}))[0] || null);
     }, e=>{ console.error("[fichaje] error leyendo:", e); setFichajeAbierto(null); });
+  },[sesion?.id]);
+  useEffect(()=>{
+    if(!sesion?.id) return;
+    const q = query(collection(db,"fichajes"), where("uid","==",sesion.id), orderBy("horaEntrada","desc"), limit(6));
+    return onSnapshot(q, snap=>{
+      setRecientes(snap.docs.map(d=>({_id:d.id,...d.data()})).filter(f=>f.estado==="cerrado").slice(0,5));
+    }, e=>console.error("[fichaje] error leyendo los últimos:", e));
   },[sesion?.id]);
 
   useEffect(()=>{
@@ -1060,6 +1067,9 @@ function FichajeWidget({ sesion }){
 function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [tipoActivo,setTipoActivo]   = useState(null); // null = portada
   const [planActivo,setPlanActivo]   = useState(null);
+  // Cambios de paradas de esta persona que aún se están guardando: se pintan
+  // encima de la versión del servidor (ver planMostrado)
+  const [pendientes,setPendientes]   = useState({}); // ubicId → [cambio]
   const [showUpload,setShowUpload]   = useState(false);
   const [showNuevaTarea,setShowNT]   = useState(false);
   const [subiendo,setSubiendo]       = useState(false);
@@ -1130,19 +1140,33 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const planesKML   = planes.filter(p=>p.tipo!=="corr");
   const tareasCorr  = planes.filter(p=>p.tipo==="corr");
 
-  // Si hay plan KML activo, mostrar detalle.
-  // Renderiza desde el estado local optimista (planActivo), no desde `planes`:
-  // cada marca de parada dispara un onSnapshot (propio o de cualquier otro
-  // plan del mismo mes en cualquier dispositivo) que antes sobrescribía la
-  // vista con la versión del servidor, obligando a esperar el round-trip
-  // completo de Firestore antes de ver el check ✓ — muy notorio en 4G.
+  // Si hay plan activo, mostrar detalle: la versión del SERVIDOR (así se ven
+  // las paradas que marcan otros a la vez) con los cambios propios que aún
+  // se están guardando pintados encima, para que el ✓ salga al instante sin
+  // esperar la ida y vuelta a Firestore (muy notorio en 4G).
   if(verCuadrante) return <MiCuadrante sesion={sesion} onBack={()=>setVerCuadrante(false)}/>;
 
   if(planActivo){
-    return <DetallePlan plan={planActivo} sesion={sesion} onBack={()=>{setPlanActivo(null);}} onUpdate={(updated,cambio)=>{
-      setPlanActivo(updated);
-      if(cambio) cambiarEnLista(doc(db,"planes",updated._id),"ubicaciones",cambio.ubicId,cambio.cambio,updated.ubicaciones).catch(e=>console.error("Guardando parada:",e));
-      else fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
+    const fresco=planes.find(p=>p._id===planActivo._id)||planActivo;
+    let ubic=fresco.ubicaciones||[];
+    for(const [id,cambios] of Object.entries(pendientes)) for(const c of cambios) ubic=ubic.map(u=>String(u.id)===id?c(u):u);
+    const planMostrado={...fresco,ubicaciones:ubic};
+    return <DetallePlan plan={planMostrado} sesion={sesion} onBack={()=>{setPlanActivo(null);setPendientes({});}} onUpdate={(updated,cambio)=>{
+      if(!cambio){
+        setPlanActivo(updated);
+        fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
+        return;
+      }
+      const id=String(cambio.ubicId);
+      setPendientes(p=>({...p,[id]:[...(p[id]||[]),cambio.cambio]}));
+      // deja de pintarlo encima cuando ya ha tenido tiempo de llegar del servidor
+      const soltar=()=>setTimeout(()=>setPendientes(p=>{
+        const l=(p[id]||[]).filter(f=>f!==cambio.cambio); const n={...p};
+        if(l.length) n[id]=l; else delete n[id];
+        return n;
+      }),1500);
+      cambiarEnLista(doc(db,"planes",updated._id),"ubicaciones",cambio.ubicId,cambio.cambio,updated.ubicaciones)
+        .then(soltar,e=>{console.error("Guardando parada:",e);soltar();});
     }}/>;
   }
 
@@ -1469,7 +1493,7 @@ function ListaPlanes({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 
 // ── INCIDENCIAS ───────────────────────────────────────────────────
 function ModuloIncidencias({sesion,usuarios}){
-  const {data:incidencias} = useCollection("incidencias","fecha",sesion.org_id);
+  const {data:incidencias} = useCollection("incidencias","fecha",sesion.org_id,false,100); // las 100 más recientes
   const [vista,setVista]=useState("feed");
   const [filtro,setFiltro]=useState("todas");
   const [selId,setSelId]=useState(null);
@@ -1703,9 +1727,16 @@ const PRODUCTOS_DEMO = [
 
 function ModuloInventario({sesion,usuarios}){
   const {data:productos}   = useCollection("inventario","nombre",sesion.org_id);
-  const {data:movimientos} = useCollection("movimientos","fecha",sesion.org_id);
   const [vista,setVista]           = useState("lista");
   const [selId,setSelId]           = useState(null);
+  // Solo los movimientos del producto abierto (antes se descargaban los de
+  // toda la organización para enseñar la lista de productos)
+  const [movimientos,setMovimientos]=useState([]);
+  useEffect(()=>{
+    if(!selId||!sesion.org_id) return; // movsProd ya filtra por el producto abierto
+    const q=query(collection(db,"movimientos"),where("org_id","==",sesion.org_id),where("productoId","==",selId),orderBy("fecha","desc"),limit(50));
+    return onSnapshot(q,snap=>setMovimientos(snap.docs.map(d=>({...d.data(),_id:d.id}))),e=>console.error("movimientos:",e));
+  },[selId,sesion.org_id]);
   const [catFilter,setCatFilter]   = useState("");
   const [busqueda,setBusqueda]     = useState("");
   const [soloAlertas,setSoloAlertas]=useState(false);
@@ -2289,10 +2320,30 @@ export default function App(){
   },[sesion?.org_id]);
 
   const isSA = sesion?.rol === "superadmin";
-  // limitN=300: sin esto, cada conductor descarga y decodifica TODO el
-  // histórico de planes de su org en cada apertura de la app — mismo
-  // problema (y mismo límite) que ya se arregló en Control.
-  const {data:planesOrg}=useCollection("planes","fechaSubida",sesion?.org_id, isSA, 300);
+  const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
+  // Gestores: los 300 planes más recientes de la organización (lo de siempre).
+  // Conductores: solo lo que pueden ver — los suyos y los compartidos (sin
+  // conductor, conductorUid: null) del mes anterior, el actual y el siguiente,
+  // y las tareas correctivas recientes. Antes descargaban los 300 más
+  // recientes de TODA la organización para quedarse con unos pocos (medido
+  // con npm run medir). Los planes antiguos sin el campo conductorUid se
+  // migran con scripts/migrar-planes-sin-conductor.mjs.
+  const {data:planesOrg}=useCollection("planes","fechaSubida",verTodosPlanes?sesion?.org_id:null, isSA, 300);
+  const mesesCercanos=(()=>{const d=new Date();return [-1,0,1].map(k=>{const x=new Date(d.getFullYear(),d.getMonth()+k,1);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`;});})();
+  const [compartidos,setCompartidos]=useState([]);
+  const [correctivos,setCorrectivos]=useState([]);
+  const clavesMeses=mesesCercanos.join(",");
+  useEffect(()=>{
+    if(verTodosPlanes||!sesion?.org_id) return;
+    const meses=clavesMeses.split(",");
+    const q=query(collection(db,"planes"),where("org_id","==",sesion.org_id),where("conductorUid","==",null),where("mes","in",meses));
+    return onSnapshot(q,snap=>setCompartidos(snap.docs.map(d=>({...d.data(),_id:d.id}))),err=>console.error("planes compartidos",err));
+  },[verTodosPlanes,sesion?.org_id,clavesMeses]);
+  useEffect(()=>{
+    if(verTodosPlanes||!sesion?.org_id) return;
+    const q=query(collection(db,"planes"),where("org_id","==",sesion.org_id),where("tipo","==","corr"),orderBy("fecha","desc"),limit(100));
+    return onSnapshot(q,snap=>setCorrectivos(snap.docs.map(d=>({...d.data(),_id:d.id}))),err=>console.error("correctivos",err));
+  },[verTodosPlanes,sesion?.org_id]);
 
   // Planes publicados a un trabajador concreto desde Rostering (conductorUid):
   // el conductor ve los suyos + los que no tienen conductor (lo de siempre);
@@ -2302,18 +2353,20 @@ export default function App(){
   const [misPlanes,setMisPlanes]=useState([]);
   useEffect(()=>{
     if(!sesion?.org_id||!sesion?.uid) return;
-    const q=query(collection(db,"planes"),where("org_id","==",sesion.org_id),where("conductorUid","==",sesion.uid));
+    const meses=clavesMeses.split(",");
+    const q=query(collection(db,"planes"),where("org_id","==",sesion.org_id),where("conductorUid","==",sesion.uid),where("mes","in",meses));
     return onSnapshot(q,snap=>setMisPlanes(snap.docs.map(d=>({...d.data(),_id:d.id}))),err=>console.error("misPlanes",err));
-  },[sesion?.org_id,sesion?.uid]);
-  const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
+  },[sesion?.org_id,sesion?.uid,clavesMeses]);
   const planes = (()=>{
     const byId=new Map();
-    for(const p of [...(sesion?.uid?misPlanes:[]),...planesOrg]) byId.set(p._id,p);
+    for(const p of [...(sesion?.uid?misPlanes:[]),...planesOrg,...(verTodosPlanes?[]:[...compartidos,...correctivos])]) byId.set(p._id,p);
     const all=[...byId.values()].sort((a,b)=>(b.fechaSubida||0)-(a.fechaSubida||0));
     return verTodosPlanes ? all : all.filter(p=>!p.conductorUid||p.conductorUid===sesion?.uid);
   })();
 
-  async function addPlan(plan){ await fbAdd("planes",{...plan,org_id:sesion.org_id}); }
+  // conductorUid: null explícito en los que no son de nadie, para que los
+  // conductores puedan pedir solo los compartidos (ver más arriba)
+  async function addPlan(plan){ await fbAdd("planes",{conductorUid:null,...plan,org_id:sesion.org_id}); }
   // Solo los campos que han cambiado, y los comentarios se AÑADEN (antes se
   // guardaba el plan entero y pisaba lo que hubiera cambiado otro, p. ej.
   // las paradas que un conductor marcaba a la vez).

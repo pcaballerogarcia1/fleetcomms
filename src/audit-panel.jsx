@@ -10,7 +10,10 @@ const C = {
   text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff",
 };
 const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const LIMIT = 300;
+// Se abren las 100 últimas y se piden más a mano (antes 300 en cada apertura:
+// ver e2e/informe-lecturas.md)
+const LIMIT = 100;
+const MAS = 200;
 const MOD_COLOR = {
   Scheduling: "#5c9bff", Rostering: "#a78bfa", Planning: "#34d399", Proyectos: "#fbbf24",
   Flota: "#fb923c", Plantilla: "#f472b6",
@@ -60,8 +63,9 @@ function AuditPanel({ sesion, activeProject, onClose }) {
   const [soloProyecto, setSoloProyecto] = useState(false);
   const [texto, setTexto] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const [cuantas, setCuantas] = useState(LIMIT);
 
-  useEffect(() => watchAudit(sesion, LIMIT, (list, err) => { if (err) setError(err); else setRows(list); }), [sesion]);
+  useEffect(() => watchAudit(sesion, cuantas, (list, err) => { if (err) setError(err); else setRows(list); }), [sesion, cuantas]);
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(id); }, []);
   useEffect(() => {
     const onKey = e => { if (e.key === "Escape") onClose(); };
@@ -144,6 +148,12 @@ function AuditPanel({ sesion, activeProject, onClose }) {
               </div>
             </div>
           ))}
+          {rows && rows.length >= cuantas && (
+            <button onClick={() => setCuantas(n => n + MAS)}
+              style={{ display: "block", margin: "10px auto", padding: "6px 14px", fontSize: 12, borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, cursor: "pointer", fontFamily: font }}>
+              Ver {MAS} más antiguos
+            </button>
+          )}
         </div>
         )}
       </div>

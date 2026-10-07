@@ -117,3 +117,33 @@ válido).
 
 Tests: `rules-tests/concurrencia.rules.test.js` simula a varias personas
 escribiendo a la vez contra el emulador con las reglas reales.
+
+## 9. Cuánto lee cada pantalla
+
+Firestore cobra (y el plan Spark limita a 50.000 al día) por documento leído.
+`npm run medir` recorre la oficina y la app de Rutas contra los emuladores
+con los datos de un cliente mediano (≈4.300 documentos) y escribe
+`e2e/informe-lecturas.md` con las lecturas de cada paso.
+
+| Paso | Antes | Ahora | Qué se cambió |
+|---|---:|---:|---|
+| Analytics | 1.363 | 319 | Fichajes e incidencias solo del mes elegido (antes, toda la historia); los turnos abiertos ahora, con su propia consulta |
+| Conductor · entrar | 369 | 54 | Cada conductor pide solo sus planes y los compartidos (`conductorUid == null`) de 3 meses, y los correctivos recientes; antes, los 300 más recientes de toda la organización. Del fichaje, el abierto y los 6 últimos |
+| Conductor · inventario | 481 | 81 | Los movimientos se piden solo del producto abierto |
+| Conductor · incidencias | 151 | 100 | Las 100 más recientes |
+| Historial de cambios | 300 | 100 | Las 100 últimas y un botón para ver más |
+| **Recorrido entero** | **≈3.000** | **≈1.000** | |
+
+Lo que queda: Control lee los 300 planes más recientes (límite ya puesto) y la
+lista de inventario completa (80 productos en la prueba).
+
+Consecuencias en los datos:
+
+- Todo plan sin conductor debe tener `conductorUid: null` **explícito**
+  (Firestore no encuentra con `== null` los documentos sin el campo). Lo ponen
+  ya la subida de KML, las tareas correctivas y la publicación desde
+  Scheduling; los antiguos se migran con
+  `scripts/migrar-planes-sin-conductor.mjs`.
+- Las consultas nuevas necesitan índices compuestos
+  (`firestore.indexes.json`). El emulador no los exige: hay que desplegarlos
+  antes que la app (ver `docs/DESPLIEGUE.md`).

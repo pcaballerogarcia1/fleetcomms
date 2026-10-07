@@ -3,8 +3,9 @@ import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager, memoryLocalCache,
   collection, onSnapshot, addDoc, updateDoc,
   deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc, getDoc, getDocFromServer,
+  connectFirestoreEmulator,
 } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Producción por defecto. Un entorno de pruebas (otro proyecto de
 // Firebase, p. ej. en los despliegues de vista previa de Vercel) se
@@ -42,6 +43,17 @@ export const auth = getAuth(app);
 const secondaryApp = initializeApp(firebaseConfig, "secondary");
 export const secondaryAuth = getAuth(secondaryApp);
 export const secondaryDb   = getFirestore(secondaryApp);
+
+// Emuladores de Firebase (pruebas de extremo a extremo y medidor de
+// lecturas, ver e2e/): solo si se compila con VITE_EMULADORES=1. Nunca en
+// producción: ahí la variable no existe.
+if (env.VITE_EMULADORES) {
+  const host = env.VITE_EMULADORES_HOST || "127.0.0.1";
+  connectFirestoreEmulator(db, host, 8080);
+  connectFirestoreEmulator(secondaryDb, host, 8080);
+  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
+  connectAuthEmulator(secondaryAuth, `http://${host}:9099`, { disableWarnings: true });
+}
 
 // ── COLECCIONES ───────────────────────────────────────────────────
 export const COL = {

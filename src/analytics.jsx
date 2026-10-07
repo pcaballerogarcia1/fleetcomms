@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { db } from "./firebase.js";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, limit, Timestamp } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
 import { listenPrices, effectivePrice, puntoKeyOf, fmtEur } from "./price-store.js";
 import {
@@ -123,19 +123,33 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
     }, () => {});
   }, [orgId, isSuperAdmin, mesFilter]);
 
+  // Solo el mes elegido (antes: toda la historia, que crecía cada día — medido
+  // con npm run medir: 1.000 fichajes leídos para enseñar uno de sus meses).
+  // Índices compuestos (org_id, fecha) en firestore.indexes.json.
+  const [abiertosAhora, setAbiertosAhora] = useState(0);
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
     const col = collection(db, "fichajes");
-    const q = orgId ? query(col, where("org_id", "==", orgId), limit(1000)) : query(col, limit(1000));
+    const delMes = [where("fecha", ">=", `${mesFilter}-01`), where("fecha", "<=", `${mesFilter}-31`)];
+    const q = orgId ? query(col, where("org_id", "==", orgId), ...delMes, limit(3000)) : query(col, ...delMes, limit(3000));
     return onSnapshot(q, snap => setFichajes(snap.docs.map(d => ({ _id: d.id, ...d.data() }))), () => {});
+  }, [orgId, isSuperAdmin, mesFilter]);
+  // Jornadas abiertas ahora mismo (de cualquier día)
+  useEffect(() => {
+    if (!orgId && !isSuperAdmin) return;
+    const col = collection(db, "fichajes");
+    const q = orgId ? query(col, where("org_id", "==", orgId), where("estado", "==", "abierto"), limit(500)) : query(col, where("estado", "==", "abierto"), limit(500));
+    return onSnapshot(q, snap => setAbiertosAhora(snap.size), () => {});
   }, [orgId, isSuperAdmin]);
 
   useEffect(() => {
     if (!orgId && !isSuperAdmin) return;
     const col = collection(db, "incidencias");
-    const q = orgId ? query(col, where("org_id", "==", orgId), limit(500)) : query(col, limit(500));
+    const [y, m] = mesFilter.split("-").map(Number);
+    const delMes = [where("fecha", ">=", Timestamp.fromDate(new Date(y, m - 1, 1))), where("fecha", "<", Timestamp.fromDate(new Date(y, m, 1)))];
+    const q = orgId ? query(col, where("org_id", "==", orgId), ...delMes, limit(1000)) : query(col, ...delMes, limit(1000));
     return onSnapshot(q, snap => setIncidencias(snap.docs.map(d => ({ _id: d.id, ...d.data() }))), () => {});
-  }, [orgId, isSuperAdmin]);
+  }, [orgId, isSuperAdmin, mesFilter]);
 
   const fichajesMes = useMemo(() => fichajes.filter(f => f.fecha?.startsWith(mesFilter)), [fichajes, mesFilter]);
   const incidenciasMes = useMemo(() =>
@@ -220,7 +234,6 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
 
   // ── PERSONAL ──
   const personal = useMemo(() => {
-    const abiertosAhora = fichajes.filter(f => f.estado === "abierto").length;
     let horasMs = 0, kmTotal = 0;
     const porConductor = {};
     fichajesMes.forEach(f => {
@@ -252,7 +265,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       mediaHoras: ranking.length ? (horasMs / 3600000 / ranking.length).toFixed(1) : "0",
       ranking, evolucionSemanal,
     };
-  }, [fichajes, fichajesMes]);
+  }, [abiertosAhora, fichajesMes]);
 
   // ── VARIOS (incidencias) ──
   const varios = useMemo(() => {
@@ -284,12 +297,12 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
     return { abiertas, revision, cerradas, total, pctResueltas, porPrioridad, porCategoria, evolucionSemanal };
   }, [incidenciasMes]);
 
-  const meses = useMemo(() => {
-    const set = new Set([curMes]);
-    planes.forEach(p => p.mes && set.add(p.mes));
-    fichajes.forEach(f => f.fecha && set.add(f.fecha.slice(0, 7)));
-    return [...set].sort((a, b) => b.localeCompare(a));
-  }, [planes, fichajes, curMes]);
+  // Los últimos 12 meses (sin leer nada: antes salían de toda la historia de fichajes)
+  const meses = useMemo(() => Array.from({ length: 12 }, (_, k) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [curMes]);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: C.bg, fontFamily: font, overflow: "hidden" }}>

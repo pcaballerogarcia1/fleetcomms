@@ -117,7 +117,8 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   const cadaH = px * 60 < 20 ? 4 : px * 60 < 40 ? 2 : 1; // etiquetas del eje sin montarse
   const nombre = id => paradasPorId.get(id)?.nombre || id;
   const claveDe = (x, r) => (modo === "vehicles" ? claveViaje(x) : r.piezaDe?.get(x));
-  const soltar = destino => { if (arr && onMover) onMover(arr.tipo, arr.clave, destino); setArr(null); setSobre(null); };
+  // la zona verde es "nuevo": autobús o turno nuevo (destino null)
+  const soltar = destino => { if (arr && onMover) onMover(arr.tipo, arr.clave, destino === "nuevo" ? null : destino); setArr(null); setSobre(null); };
   const zonaDe = id => ({
     onDragOver: e => { if (!arr || id === arr.origen) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (sobre !== id) setSobre(id); },
     onDrop: e => { e.preventDefault(); soltar(id); },

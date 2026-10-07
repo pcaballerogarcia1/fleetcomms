@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-operanzia \"vitest run -c vitest.rules.config.js\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-operanzia \"vitest run -c vitest.rules.config.js\"",
+    "e2e": "firebase emulators:exec --only auth,firestore --project demo-operanzia \"node e2e/compilar.mjs && playwright test -c e2e/playwright.config.js\"",
+    "medir": "firebase emulators:exec --only auth,firestore --project demo-operanzia \"node e2e/compilar.mjs --medir && playwright test -c e2e/medir.config.js\""
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vite-pwa/assets-generator": "^1.0.2",

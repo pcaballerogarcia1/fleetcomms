@@ -29,3 +29,6 @@ dist-ssr
 .Rhistory
 .gbrain-source
 .sources/
+dist-e2e/
+test-results/
+playwright-report/

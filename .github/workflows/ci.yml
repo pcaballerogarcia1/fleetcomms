@@ -1,5 +1,6 @@
 # Comprobaciones automáticas en cada push y pull request:
-# tests, compilación y tests de las reglas de Firestore (con el emulador).
+# tests, compilación, tests de las reglas de Firestore (con el emulador) y
+# pruebas de extremo a extremo en un navegador contra los emuladores.
 # Si algo falla, GitHub marca el commit en rojo y avisa por email.
 name: CI
 
@@ -36,3 +37,20 @@ jobs:
 
       - name: Tests de reglas de Firestore (emulador)
         run: npm run test:rules
+
+      # La app compilada contra los emuladores de Firebase (usuarios y base de
+      # datos de prueba, nunca producción) y probada en un navegador de verdad:
+      # entrar, recorrer los módulos, marcar paradas, stock, líneas…
+      - name: Navegador para las pruebas
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas de extremo a extremo (emuladores)
+        run: npm run e2e
+
+      - name: Guardar el rastro si fallan
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-rastro
+          path: test-results/
+          retention-days: 7
