@@ -1,30 +1,25 @@
 # Despliegue del endurecimiento (puntos 3, 4 y 5)
 
-Este cambio **no se puede desplegar solo con `git push`**: la app nueva hace
-consultas que necesitan (1) que los planes antiguos tengan el campo
-`conductorUid` y (2) unos índices compuestos nuevos. Si la app llega antes,
-los conductores dejan de ver las rutas compartidas y algunas pantallas no
-cargan. El orden es:
+La app nueva hace consultas que necesitan unos índices compuestos nuevos:
+hay que desplegarlos antes que la app (si no, algunas pantallas no cargan).
+El orden es:
 
-## 1. Migrar los planes antiguos (antes que nada)
+## 1. Planes antiguos: se arreglan solos
 
-Pone `conductorUid: null` en los planes que no tienen el campo. Primero sin
-`--aplicar` (solo cuenta), luego con `--aplicar`. Se puede repetir sin
-problema: la segunda vez dice «Nada que migrar».
+Los planes antiguos no tienen `conductorUid`. La app los arregla sola
+(`src/reparar-planes.js`): cuando entra alguien que gestiona rutas (admin,
+intermedio o superadmin), en la oficina o en Rutas, pone `conductorUid: null`
+a los planes de los 300 más recientes de su organización que no lo tienen.
+Una vez por organización y navegador; cuesta ≤300 lecturas esa primera vez.
 
-Con un administrador de cada organización (las reglas solo dejan ver la
-propia; una vez por organización):
+Hasta que entre un gestor de esa organización, sus conductores no ven las
+rutas compartidas antiguas (las nuevas sí). Si hace falta antes, o para
+planes más antiguos, sigue estando el script manual (solo cuenta sin
+`--aplicar`):
 
 ```bash
-MIGRAR_CLAVE='…' node scripts/migrar-planes-sin-conductor.mjs --proyecto fleetcomms-13d89 --email admin@empresa.com
-MIGRAR_CLAVE='…' node scripts/migrar-planes-sin-conductor.mjs --proyecto fleetcomms-13d89 --email admin@empresa.com --aplicar
+MIGRAR_CLAVE='…' node scripts/migrar-planes-sin-conductor.mjs --proyecto fleetcomms-13d89 --email admin@empresa.com [--aplicar]
 ```
-
-O todas de una vez con un token de Google de un propietario del proyecto
-(`FIRESTORE_TOKEN=$(gcloud auth print-access-token)`), sin `--email`.
-
-Lecturas: una por plan existente (cuenta en la cuota diaria; con unos pocos
-miles de planes no es problema).
 
 ## 2. Desplegar los índices y esperar a que se construyan
 

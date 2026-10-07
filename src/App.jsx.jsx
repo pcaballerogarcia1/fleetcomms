@@ -11,6 +11,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
+import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { setErrorUser } from "./error-report.js";
 import { parcheDe, cambiarEnLista } from "./concurrencia.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
@@ -2321,6 +2322,8 @@ export default function App(){
 
   const isSA = sesion?.rol === "superadmin";
   const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
+  // Planes antiguos sin conductorUid: los arregla quien gestiona rutas (ver reparar-planes.js)
+  useEffect(()=>{ repararPlanesSinConductor(sesion).catch(e=>console.warn("[planes] arreglo de planes antiguos:",e)); },[sesion]);
   // Gestores: los 300 planes más recientes de la organización (lo de siempre).
   // Conductores: solo lo que pueden ver — los suyos y los compartidos (sin
   // conductor, conductorUid: null) del mes anterior, el actual y el siguiente,

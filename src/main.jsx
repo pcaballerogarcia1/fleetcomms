@@ -34,6 +34,7 @@ import { ProjectMenu } from "./project-menu.jsx";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { initErrorReporting, setErrorUser, reportError } from "./error-report.js";
+import { repararPlanesSinConductor } from "./reparar-planes.js";
 
 // Errores de cualquier pantalla (oficina y Rutas) → errores/{id} para el superadmin
 initErrorReporting();
@@ -253,6 +254,8 @@ function WorkspaceRouter() {
 
   // Historial de cambios: quién registra (esta sesión) y en qué proyecto
   useEffect(() => { setAuditUser(sesion); setErrorUser(sesion); }, [sesion]);
+  // Planes antiguos sin conductorUid: los arregla quien gestiona rutas al entrar
+  useEffect(() => { repararPlanesSinConductor(sesion).catch(e => console.warn("[planes] arreglo de planes antiguos:", e)); }, [sesion]);
   useEffect(() => { setAuditProject(activeProject); }, [activeProject]);
 
   // Presencia: esta sesión aparece como conectada a los de su organización.

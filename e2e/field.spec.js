@@ -2,8 +2,8 @@
 // marcar paradas (también dos personas a la vez en el mismo plan) y
 // comentar una incidencia.
 import { test, expect } from "@playwright/test";
-import { sembrar, leer, listar } from "./semilla.mjs";
-import { vigilarErrores, entrarCampo as entrar } from "./ayudas.mjs";
+import { sembrar, leer, listar, escribir, ORG, mesActual } from "./semilla.mjs";
+import { vigilarErrores, entrarCampo as entrar, entrarOficina } from "./ayudas.mjs";
 
 async function abrirPlan(page, nombre) {
   await page.getByText("Mantenimiento Preventivo").click();
@@ -77,4 +77,22 @@ test("dos salidas de stock a la vez: el stock cuadra y quedan los dos movimiento
   expect(movs).toHaveLength(2);
   expect(movs[1][0]).toBe(movs[0][1]); // el segundo parte de donde dejó el primero
   await Promise.all([a.close(), b.close()]);
+});
+
+test("una ruta antigua sin conductorUid aparece al conductor en cuanto entra un administrador", async ({ browser }) => {
+  // como las de antes de este cambio: sin el campo conductorUid
+  await escribir("planes/plan-antiguo", { org_id: ORG, tipo: "prev", nombre: "Ruta antigua", mes: mesActual(), diaServicio: "Día 03",
+    ubicaciones: [{ id: 1, calle: "Calle 1", lat: 40.41, lng: -3.7, elementos: [], realizado: false }], fechaSubida: Date.now() - 5000, archivo: "antiguo" });
+  const conductor = await (await browser.newContext({ viewport: { width: 420, height: 860 } })).newPage();
+  await entrar(conductor, "cond1@demo.test");
+  await expect(conductor.getByText("2 planes", { exact: false })).toBeVisible(); // la antigua aún no sale
+
+  const oficina = await (await browser.newContext()).newPage();
+  const errores = vigilarErrores(oficina);
+  await entrarOficina(oficina);
+  await expect.poll(async () => { const p = await leer("planes/plan-antiguo"); return p && "conductorUid" in p ? p.conductorUid : "sin campo"; }).toBe(null);
+  expect((await leer("planes/plan-antiguo")).nombre).toBe("Ruta antigua"); // solo se toca ese campo
+
+  await expect(conductor.getByText("3 planes", { exact: false })).toBeVisible();
+  expect(errores).toEqual([]);
 });
