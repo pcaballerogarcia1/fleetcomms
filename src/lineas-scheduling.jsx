@@ -266,7 +266,7 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
 }
 
 // ── Restricciones (mismo formato que las del Scheduling de puntos) ──────
-function Restricciones({ p, onChange, red, onCambiarDia }) {
+function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
   const set = (k, v) => onChange(k === "vacioKm" ? { vacioKm: v, vacios: v !== 0 } : { [k]: v });
   const titulo = t => <div style={{ fontSize: 12, color: C.blueText, fontWeight: 700, marginBottom: 10, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>{t}</div>;
@@ -302,10 +302,14 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
       style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} />
   );
   return (
-    <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", flexShrink: 0, animation: "sched-fadein .15s ease both" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+    // Altura limitada con su propia barra: el panel no puede empujar fuera de
+    // la pantalla la barra de botones ni el Gantt (antes se quedaba atascado)
+    <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "0 20px 14px", flexShrink: 0, maxHeight: "min(58vh, 620px)", overflowY: "auto", animation: "sched-fadein .15s ease both" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", marginBottom: 4, position: "sticky", top: 0, zIndex: 2, background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Restricciones</span>
         {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />)}
+        <span style={{ flex: 1 }} />
+        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font, marginBottom: 9 }}>Cerrar ✕</button>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "4px 36px", marginBottom: 14 }}>
         <div>
@@ -1031,7 +1035,7 @@ export function SchedulingLineasPage({ projectId }) {
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>
           )}
-          {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} />}
+          {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
             opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
