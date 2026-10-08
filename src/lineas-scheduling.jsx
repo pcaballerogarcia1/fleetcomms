@@ -269,10 +269,11 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
 function Restricciones({ p, onChange, red, onCambiarDia }) {
   // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
   const set = (k, v) => onChange(k === "vacioKm" ? { vacioKm: v, vacios: v !== 0 } : { [k]: v });
-  const titulo = t => <div style={{ fontSize: 11, color: C.blueText, fontWeight: 700, marginBottom: 10 }}>{t}</div>;
+  const titulo = t => <div style={{ fontSize: 12, color: C.blueText, fontWeight: 700, marginBottom: 10, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>{t}</div>;
+  const sub = t => <div style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, margin: "12px 0 8px" }}>{t}</div>;
   const row = (label, children) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-      <label style={{ fontSize: 11, color: C.muted, width: 230, flexShrink: 0 }}>{label}</label>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
+      <label style={{ fontSize: 11, color: C.muted, width: 190, flexShrink: 0 }}>{label}</label>
       {children}
     </div>
   );
@@ -306,39 +307,51 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
         <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Restricciones</span>
         {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />)}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "4px 36px", marginBottom: 14 }}>
         <div>
-          {titulo("Paso 1 · Vehículos")}
-          {row("Regulación en cabecera por defecto", numInput("regulacion", "min (si la línea no tiene la suya)"))}
-          {row("Un autobús puede cambiar de línea en la misma cabecera", check("entreLineas"))}
-          {row("Vacíos entre cabeceras, como mucho", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
-          {row("Velocidad de los vacíos", numInput("velocidadVacio", "km/h"))}
-          {row("Factor de rodeo (carretera / línea recta)", decInput("factorRodeo", "× la distancia en línea recta", 0.05))}
-          {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min (la ida y la vuelta ya se calculan)"))}
+          {titulo("Vehículos")}
           {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
+          {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min"))}
+          {sub("Coste")}
           {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
           {row("Coste por km", decInput("costeKm", "€/km (con los vacíos)"))}
         </div>
         <div>
-          {titulo("Paso 2 · Trabajadores")}
+          {titulo("Conductores")}
+          {sub("Jornada")}
           {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
-          {row("Jornada de trabajo máxima (piezas + huecos cortos)", numInput("jornadaMax", "min"))}
-          {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
-          {row("Pieza mínima (no se releva antes)", numInput("piezaMin", "min"))}
-          {row("Piezas por turno, como mucho", numInput("maxPiezas", "piezas"))}
-          {row("Jornadas partidas por turno, como mucho", numInput("maxPartidos", "huecos largos (0 = sin partidos)"))}
-          {row("Hueco que ya no se paga (jornada partida)", numInput("huecoNoPagado", "min o más entre dos piezas"))}
-          {row("Tiempo de relevo en la misma cabecera", numInput("relevoMin", "min"))}
-          {row("Tiempo para ir a otra cabecera", numInput("desplazamiento", "min entre piezas en cabeceras distintas"))}
+          {row("Jornada de trabajo máxima", numInput("jornadaMax", "min (piezas + huecos cortos)"))}
+          {row("Jornadas partidas por turno", numInput("maxPartidos", "como mucho (0 = sin partidos)"))}
+          {row("Hueco que ya no se paga", numInput("huecoNoPagado", "min o más (jornada partida)"))}
+          {sub("Piezas y relevos")}
+          {row("Pieza máxima", numInput("piezaMax", "min de relevo a relevo"))}
+          {row("Pieza mínima", numInput("piezaMin", "min (no se releva antes)"))}
+          {row("Piezas por turno", numInput("maxPiezas", "como mucho"))}
+          {row("Relevo en la misma cabecera", numInput("relevoMin", "min"))}
+          {row("Ir a otra cabecera", numInput("desplazamiento", "min entre piezas"))}
+          {sub("Conducción (UE 561/2006)")}
           {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
-          {row("Pausa de conducción (UE 561, se puede partir 15 + 30)", numInput("pausaConduccionMin", "min"))}
+          {row("Pausa de conducción", numInput("pausaConduccionMin", "min (se puede partir 15 + 30)"))}
           {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
-          {row("No aplicar tiempos de conducción UE 561/2006", check("aplicar561", true))}
+          {row("No aplicar la UE 561/2006", check("aplicar561", true))}
+          {sub("Disponibles y coste")}
           {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
           {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
         </div>
+        <div>
+          {titulo("Línea")}
+          {row("Regulación en cabecera", numInput("regulacion", "min (si la línea no tiene la suya)"))}
+          {row("Cambiar de línea en la misma cabecera", check("entreLineas"))}
+          {sub("Vacíos entre cabeceras")}
+          {row("Distancia máxima", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
+          {row("Velocidad", numInput("velocidadVacio", "km/h"))}
+          {row("Factor de rodeo", decInput("factorRodeo", "× la línea recta", 0.05))}
+          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10, lineHeight: 1.5 }}>
+            Lo propio de cada línea (tiempos de recorrido por franja, su regulación y los tipos de vehículo que admite) se configura en Planning, en la ficha de la línea.
+          </div>
+        </div>
       </div>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px" }}>Estrategia de este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Estrategia del optimizador para este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         <div>
           {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
@@ -349,25 +362,6 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
           {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
         </div>
       </div>
-      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-        Los tiempos de recorrido por franja, la regulación propia de cada línea y los tipos de vehículo que admite se configuran en Planning, en la ficha de cada línea.
-      </div>
-    </div>
-  );
-}
-
-function Perfil({ perfil }) {
-  if (!perfil.length) return null;
-  const W = 900, H = 46, max = Math.max(...perfil.map(p => p.vehiculos), 1);
-  const x = i => (i / Math.max(1, perfil.length - 1)) * W, y = v => H - (v / max) * (H - 4);
-  const d = perfil.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.vehiculos).toFixed(1)}`).join("") + `L${W},${H}L0,${H}Z`;
-  const pico = perfil.reduce((a, p) => (p.vehiculos > a.vehiculos ? p : a), perfil[0]);
-  return (
-    <div style={{ padding: "6px 16px 2px", borderBottom: `1px solid ${C.border}`, background: C.card, flexShrink: 0, display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1, fontWeight: 700, whiteSpace: "nowrap" }}>AUTOBUSES EN SERVICIO<br /><span style={{ color: C.text, fontFamily: mono, fontSize: 11 }}>pico {pico.vehiculos} · {hhmm(pico.min)}</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 46, display: "block" }}>
-        <path d={d} fill="rgba(92,155,255,0.22)" stroke={C.blue} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      </svg>
     </div>
   );
 }
@@ -1062,7 +1056,6 @@ export function SchedulingLineasPage({ projectId }) {
           )}
 
           {res && <KpiBar k={kpisBarra(res, params)} base={actual.base} onConfigCostes={() => setShowC(true)} cambios={cambiosKpi(res, params)} />}
-          {res && <Perfil perfil={res.perfil} />}
           {res && modo === "workers" && !res.turnos ? (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center", maxWidth: 460 }}>
