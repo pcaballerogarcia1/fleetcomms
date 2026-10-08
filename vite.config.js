@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 // Entorno de pruebas: las vistas previas de Vercel (cualquier rama que no
 // sea main) usan el proyecto de Firebase de pruebas, nunca el real. Son los
 // datos públicos de la app web (como los de producción en firebase.js.js).
-// Si en Vercel se ponen variables VITE_FIREBASE_*, mandan esas.
+// Mandan siempre sobre las variables VITE_FIREBASE_* que haya en Vercel: si
+// allí están las de producción para todos los entornos, una vista previa
+// acabaría escribiendo en la base de datos real.
 const PRUEBAS = {
   VITE_FIREBASE_API_KEY: "AIzaSyDfsCXOt8HZGZjdgEKl7b8oh_1frAwyFnk",
   VITE_FIREBASE_AUTH_DOMAIN: "operanzia-pruebas.firebaseapp.com",
@@ -17,9 +19,12 @@ const PRUEBAS = {
   VITE_FIREBASE_MESSAGING_SENDER_ID: "583227156396",
   VITE_FIREBASE_APP_ID: "1:583227156396:web:5557bf6ac24244709cbc09",
 };
-if (process.env.VERCEL_ENV === "preview" || process.env.ENTORNO === "pruebas") {
+// En Vercel: VERCEL_ENV, y por si no llegara, la rama (todo lo que no sea main).
+const rama = process.env.VERCEL_GIT_COMMIT_REF;
+const esVistaPrevia = process.env.VERCEL_ENV === "preview" || (process.env.VERCEL && process.env.VERCEL_ENV !== "production" && rama && rama !== "main");
+if (esVistaPrevia || process.env.ENTORNO === "pruebas") {
   process.env.VITE_ENTORNO = "pruebas";
-  for (const [k, v] of Object.entries(PRUEBAS)) process.env[k] ||= v;
+  Object.assign(process.env, PRUEBAS);
 }
 
 export default defineConfig({
