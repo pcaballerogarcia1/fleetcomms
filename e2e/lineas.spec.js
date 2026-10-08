@@ -99,5 +99,9 @@ test("al importar el GTFS se eligen las líneas que se quedan", async ({ page })
   await expect(page.getByText(/Se importarán 1 línea y 1 calendario/)).toBeVisible();
   await page.getByRole("button", { name: "Importar", exact: true }).click();
   await expect(page.getByText(/1 líneas/).first()).toBeVisible({ timeout: 60_000 });
+  // la tarjeta del proyecto enseña la red importada (antes decía «Sin planning»)
+  await page.goto("/projects");
+  await expect(page.getByText(/^1 línea · \d+ paradas$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/1 calendario · red-mini\.zip/)).toBeVisible();
   expect(errores).toEqual([]);
 });

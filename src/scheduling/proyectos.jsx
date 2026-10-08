@@ -237,7 +237,20 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 {/* Planning section */}
                 <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 12px" }}>
                   <div style={{ fontSize: 9, color: C.dim, letterSpacing: 1.3, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planning</div>
-                  {p.planning ? (
+                  {p.tipo === "lineas" ? (
+                    p.redResumen ? (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                          {p.redResumen.lineas.toLocaleString("es-ES")} línea{p.redResumen.lineas === 1 ? "" : "s"} · {p.redResumen.paradas.toLocaleString("es-ES")} paradas
+                        </div>
+                        <div style={{ fontSize: 10.5, color: C.muted }}>
+                          {p.redResumen.calendarios ? `${p.redResumen.calendarios} calendario${p.redResumen.calendarios === 1 ? "" : "s"} · ` : ""}{p.redResumen.archivo || "GTFS"}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin red — importa el GTFS en Planning</div>
+                    )
+                  ) : p.planning ? (
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
                         {p.planning.tasksCount} paradas
@@ -296,7 +309,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       )}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin schedule — genera el VRP</div>
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{p.tipo === "lineas" ? "Genera vehículos y turnos en Scheduling" : "Sin schedule — genera el VRP"}</div>
                   )}
                 </div>
 

@@ -8,7 +8,7 @@
 //                  tiempos: { "0|06-09": min, "1|16-20": min } } }
 
 import { db } from "./firebase.js";
-import { doc, setDoc, onSnapshot, serverTimestamp, deleteField, query, collection, where } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, deleteField, query, collection, where } from "firebase/firestore";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces } from "./layer-store.js";
 import { cambiarDocumento } from "./concurrencia.js";
 
@@ -58,7 +58,23 @@ export async function guardarRed(projectId, orgId, red, { archivo, anterior } = 
     projectId, orgId, createdAt: serverTimestamp(),
   });
   if (anterior?.v && anterior.v !== cloud.v) deleteLayerPieces(id, anterior).catch(() => {});
+  await escribirResumenRed(projectId, red, archivo, cloud.v).catch(e => console.warn("resumen de la red:", e));
   return cloud;
+}
+
+// Resumen de la red en el propio proyecto (scheduling_projects.redResumen),
+// para que la lista de proyectos lo enseñe sin descargar la red.
+const resumenDe = (red, archivo, v) => ({
+  v, archivo: archivo || null, lineas: red.lineas.length, paradas: red.paradas.length, calendarios: (red.calendarios || []).length,
+});
+function escribirResumenRed(projectId, red, archivo, v) {
+  return updateDoc(doc(db, "scheduling_projects", projectId), { redResumen: resumenDe(red, archivo, v) });
+}
+/** Proyectos importados antes de existir el resumen: se rellena al abrir su Planning (una lectura). */
+export async function asegurarResumenRed(projectId, ficha, red) {
+  if (!ficha?.cloud?.v || !red) return;
+  const p = await getDoc(doc(db, "scheduling_projects", projectId));
+  if (p.exists() && p.data().redResumen?.v !== ficha.cloud.v) await escribirResumenRed(projectId, red, ficha.archivo, ficha.cloud.v);
 }
 
 export function watchCfg(projectId, cb) {

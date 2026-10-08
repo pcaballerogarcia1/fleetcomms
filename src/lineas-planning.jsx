@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed } from "./lineas-store.js";
 import { logAudit } from "./audit.js";
 
 const C = {
@@ -458,6 +458,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const fileRef = useRef(null);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
+  // la tarjeta del proyecto (lista de proyectos) enseña el resumen de la red
+  const vRed = estado.ficha?.cloud?.v;
+  useEffect(() => { if (vRed && estado.red) asegurarResumenRed(projectId, estado.ficha, estado.red).catch(() => {}); }, [projectId, vRed, estado.red]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => watchCfg(projectId, setCfg), [projectId]);
   const [cocheras, setCocheras] = useState([]);
   const [poniendoCochera, setPoniendoCochera] = useState(false);
