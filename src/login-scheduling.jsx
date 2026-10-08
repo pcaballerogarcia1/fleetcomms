@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { auth, getUserProfileSafe } from "./firebase.js";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 
 // Extracted out of scheduling.jsx so the login screen doesn't have to
 // download the Scheduling/Planning/Rostering bundle just to show a form —
@@ -47,7 +48,7 @@ export function LoginScheduling({ onLogin }) {
     if (!email || !password) { setErr("Introduce email y contraseña."); return; }
     setLoading(true); setErr("");
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, limpiarEmail(email), password);
       // getUserProfileSafe: recién autenticado, la caché local puede no
       // tener aún este documento y devolver "no existe" antes de
       // sincronizar — pero con timeout, para no colgarse en mala cobertura.
@@ -61,7 +62,7 @@ export function LoginScheduling({ onLogin }) {
       }
       onLogin(profile);
     } catch (e) {
-      setErr(e.code === "auth/invalid-credential" ? "Credenciales incorrectas." : (e.message || "Error de autenticación."));
+      setErr(mensajeAuth(e));
     }
     setLoading(false);
   }

@@ -12,6 +12,7 @@ import {
 } from "firebase/auth";
 import { roleLabel, puedeGestionarRutas as puedeGestionarRutasRol, rolesAsignablesPor } from "./roles.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
+import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { setErrorUser } from "./error-report.js";
 import { parcheDe, cambiarEnLista } from "./concurrencia.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
@@ -2233,12 +2234,6 @@ function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────
-const AUTH_ERRORS = {
-  "auth/invalid-credential":"Credenciales incorrectas",
-  "auth/user-disabled":"Cuenta desactivada",
-  "auth/too-many-requests":"Demasiados intentos, espera un momento",
-  "auth/invalid-email":"Email inválido",
-};
 
 function Login(){
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
@@ -2246,8 +2241,8 @@ function Login(){
   const go=async()=>{
     if(!email||!pw){setErr("Introduce email y contraseña");return;}
     setLoading(true);setErr("");
-    try{ await signInWithEmailAndPassword(auth,email.trim().toLowerCase(),pw); }
-    catch(e){ setErr(AUTH_ERRORS[e.code]||"Error al iniciar sesión"); setLoading(false); }
+    try{ await signInWithEmailAndPassword(auth,limpiarEmail(email),pw); }
+    catch(e){ setErr(mensajeAuth(e)); setLoading(false); }
   };
   return(
     <div style={{fontFamily:font,background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"hidden"}}>

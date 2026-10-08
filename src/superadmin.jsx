@@ -5,6 +5,7 @@ import {
   serverTimestamp, query, where, getDoc, writeBatch, runTransaction,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
+import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -76,7 +77,7 @@ function LoginSA({ onLogin }) {
     if (!email || !pw) { setErr("Introduce email y contraseña"); return; }
     setLoading(true); setErr("");
     try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pw);
+      const cred = await signInWithEmailAndPassword(auth, limpiarEmail(email), pw);
       const snap = await getUserProfileSafe(cred.user.uid);
       if (!snap.exists() || snap.data().rol !== "superadmin") {
         await signOut(auth);
@@ -85,11 +86,7 @@ function LoginSA({ onLogin }) {
         onLogin({ uid: cred.user.uid, ...snap.data() });
       }
     } catch (e) {
-      const msgs = {
-        "auth/invalid-credential": "Credenciales incorrectas",
-        "auth/too-many-requests":  "Demasiados intentos, espera un momento",
-      };
-      setErr(msgs[e.code] ?? "Error al iniciar sesión");
+      setErr(mensajeAuth(e));
     }
     setLoading(false);
   }
