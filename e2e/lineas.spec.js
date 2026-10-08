@@ -48,6 +48,10 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   // 2) importar la red
   const [elegir] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("Importar red (GTFS .zip)").click()]);
   await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  // ventana para elegir qué se importa: todo marcado de entrada
+  await expect(page.getByText(/Qué quieres importar/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Se importarán 2 líneas y 1 calendario/)).toBeVisible();
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
   await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
 
   // 3) cochera pinchando en el mapa
@@ -69,5 +73,31 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   await expect.poll(async () => ((await leer(`planning_settings/${pid}`))?.lineasSched?.porCalendario?.laborable?.manuales || []).length).toBe(1);
   await page.reload();
   await expect(page.getByText(/1 cambio a mano en este calendario/)).toBeVisible({ timeout: 60_000 });
+  expect(errores).toEqual([]);
+});
+
+test("al importar el GTFS se eligen las líneas que se quedan", async ({ page }) => {
+  const errores = vigilarErrores(page);
+  await entrarOficina(page);
+  await page.getByText("Nuevo proyecto").first().click();
+  await page.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await page.fill('input[placeholder="Nombre del proyecto *"]', "Solo L1");
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect.poll(async () => (await listar("scheduling_projects")).filter(p => p.tipo === "lineas").length).toBe(1);
+  await page.goto("/planning");
+  const [elegir] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("Importar red (GTFS .zip)").click()]);
+  await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  await expect(page.getByText(/Qué quieres importar/)).toBeVisible({ timeout: 60_000 });
+  // sin calendarios no se puede importar
+  await page.getByRole("button", { name: "Ninguno", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Importar", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Todos", exact: true }).click();
+  // solo la L1: se busca y se quitan las demás
+  await page.getByRole("button", { name: "Ninguna", exact: true }).click();
+  await page.getByPlaceholder(/Buscar línea/).fill("A - B");
+  await page.getByRole("button", { name: "Marcar las encontradas" }).click();
+  await expect(page.getByText(/Se importarán 1 línea y 1 calendario/)).toBeVisible();
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await expect(page.getByText(/1 líneas/).first()).toBeVisible({ timeout: 60_000 });
   expect(errores).toEqual([]);
 });

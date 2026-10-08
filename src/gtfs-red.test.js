@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
-import { parseGtfsRed, franjaDe, kmTrazado, nombreCalendario } from "./gtfs-red.js";
+import { parseGtfsRed, franjaDe, kmTrazado, nombreCalendario, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { salidasDe, generarServicio, nombreDia } from "./lineas-sched.js";
 import { tiempoEfectivo } from "./lineas-store.js";
 import { vi } from "vitest";
@@ -70,6 +70,24 @@ describe("red de líneas desde GTFS", () => {
     expect(generarServicio(r, {}, { dia: "cal:2" }).kpis.viajes).toBe(1);
     expect(nombreDia("cal:2", r)).toBe("Solo el sábado 10 oct");
     expect(nombreDia("cal:9", r)).toMatch(/ya no está/);
+  });
+
+  it("importar solo las líneas y los calendarios elegidos", async () => {
+    const r = await parseGtfsRed(red());
+    expect(viajesLinea(r.lineas.find(l => l.id === "L1"), r.calendarios)).toBe(4);
+    expect(viajesLinea(r.lineas.find(l => l.id === "L1"), [r.calendarios[1]])).toBe(1);
+    const f = filtrarRed(r, { lineas: ["L1"], calendarios: ["cal:2"] });
+    expect(f.lineas.map(l => l.id)).toEqual(["L1"]);
+    expect(f.calendarios.map(c => [c.id, c.viajes])).toEqual([["cal:2", 1]]); // mismo id; viajes recontados
+    expect(filtrarRed(r, { lineas: ["C2"], calendarios: ["cal:1"] }).paradas.map(p => p.id).sort()).toEqual(["P2", "P3"]); // solo las de la C2
+    const ida = f.lineas[0].sentidos[0];
+    expect(salidasDe(ida, "cal:2", f).lista).toEqual([540]);
+    expect(salidasDe(ida, "cal:1", f).lista).toEqual([]); // calendario no importado
+    expect(generarServicio(f, {}, { dia: "cal:2" }).kpis.viajes).toBe(1);
+    // todo elegido: igual que sin filtrar
+    const todo = filtrarRed(r, { lineas: r.lineas.map(l => l.id), calendarios: r.calendarios.map(c => c.id) });
+    expect(todo.calendarios.map(c => c.viajes)).toEqual(r.calendarios.map(c => c.viajes));
+    expect(todo.paradas.length).toBe(r.paradas.length);
   });
 
   it("nombre de los calendarios", () => {

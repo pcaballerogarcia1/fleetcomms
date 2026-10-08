@@ -335,3 +335,40 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     viajesPartidos: partidos.size,
   };
 }
+
+/** Viajes de un sentido en un conjunto de servicios (los de los calendarios elegidos) */
+const viajesEn = (s, servicios) => (s.porServicio || []).reduce((n, [k, l]) => n + (servicios.has(k) ? l.length : 0), 0);
+
+/** Viajes de una línea en los calendarios elegidos (para la ventana de importar) */
+export function viajesLinea(linea, calendarios) {
+  const servicios = new Set(calendarios.flatMap(c => c.servicios));
+  return linea.sentidos.reduce((n, s) => n + viajesEn(s, servicios), 0);
+}
+
+/**
+ * Lo que se guarda al importar: solo las líneas y los calendarios elegidos.
+ * Los calendarios conservan su id (cal:N); cada sentido se queda con los
+ * servicios de esos calendarios; las paradas, solo las de esas líneas; y los
+ * viajes de cada calendario se recuentan con las líneas que quedan.
+ */
+export function filtrarRed(red, { lineas, calendarios }) {
+  const ls = new Set(lineas), cs = new Set(calendarios);
+  const cals = (red.calendarios || []).filter(c => cs.has(c.id));
+  const servicios = new Set(cals.flatMap(c => c.servicios));
+  const hayCalendarios = (red.calendarios || []).length > 0;
+  const lineasF = red.lineas.filter(l => ls.has(l.id)).map(l => ({
+    ...l,
+    sentidos: l.sentidos.map(s => (hayCalendarios && s.porServicio ? { ...s, porServicio: s.porServicio.filter(([k]) => servicios.has(k)) } : s)),
+  }));
+  const usadas = new Set(lineasF.flatMap(l => l.sentidos.flatMap(s => s.paradas)));
+  const sentidos = lineasF.flatMap(l => l.sentidos);
+  return {
+    ...red,
+    lineas: lineasF,
+    paradas: red.paradas.filter(p => usadas.has(p.id)),
+    calendarios: cals.map(c => {
+      const propios = new Set(c.servicios);
+      return { ...c, viajes: sentidos.reduce((n, s) => n + viajesEn(s, propios), 0) };
+    }),
+  };
+}

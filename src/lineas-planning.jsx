@@ -6,7 +6,7 @@
 // "Rutas por puntos" (residuos, reparto…), que siguen con su Planning.
 import { useState, useEffect, useRef, useMemo } from "react";
 import { leerGtfs } from "./gtfs-import.js";
-import { FRANJAS, TIPOS_DIA } from "./gtfs-red.js";
+import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras } from "./lineas-store.js";
 import { logAudit } from "./audit.js";
 
@@ -362,6 +362,91 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
 }
 
 // ── Página ────────────────────────────────────────────────────────────
+// ── Al importar: elegir qué líneas y qué calendarios del GTFS se quedan ──
+function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
+  const [lineas, setLineas] = useState(() => new Set(red.lineas.map(l => l.id)));
+  const [cals, setCals] = useState(() => new Set((red.calendarios || []).map(c => c.id)));
+  const [q, setQ] = useState("");
+  const hayCals = (red.calendarios || []).length > 0;
+  const calsElegidos = useMemo(() => (red.calendarios || []).filter(c => cals.has(c.id)), [red, cals]);
+  const viajes = useMemo(() => new Map(red.lineas.map(l => [l.id, hayCals ? viajesLinea(l, calsElegidos) : l.sentidos.reduce((n, s) => n + (s.viajes?.laborable || 0), 0)])), [red, calsElegidos, hayCals]);
+  const visibles = useMemo(() => {
+    const t = norm(q).trim();
+    return red.lineas.filter(l => !t || norm(`${l.nombre} ${l.largo} ${l.agencia} ${l.sentidos.map(s => s.cabecera).join(" ")}`).includes(t));
+  }, [red, q]);
+  const alternar = (setSet, id) => setSet(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const marcarVisibles = si => setLineas(prev => { const n = new Set(prev); for (const l of visibles) { if (si) n.add(l.id); else n.delete(l.id); } return n; });
+  const totalViajes = red.lineas.reduce((n, l) => n + (lineas.has(l.id) ? viajes.get(l.id) : 0), 0);
+  const puede = lineas.size > 0 && (!hayCals || cals.size > 0);
+  const casilla = (marcada, onClick) => <input type="checkbox" checked={marcada} onChange={onClick} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer", flexShrink: 0 }} />;
+  const boton = (txt, onClick, fuerte = false, deshabilitado = false) => (
+    <button onClick={onClick} disabled={deshabilitado} style={{ padding: fuerte ? "9px 18px" : "5px 10px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border}`, background: fuerte ? (deshabilitado ? C.surface2 : "#16306a") : "transparent", color: fuerte ? "#cfe0ff" : C.muted, fontSize: fuerte ? 12.5 : 11, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font }}>{txt}</button>
+  );
+  const columna = { display: "flex", flexDirection: "column", minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 10, background: C.card };
+  const cabeza = { display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "min(1100px, 100%)", height: "min(760px, 100%)", background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 12, display: "flex", flexDirection: "column", fontFamily: font, boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
+        <div style={{ padding: "16px 20px 10px" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Qué quieres importar de «{archivo}»</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>Marca las líneas y los calendarios que quieres en este proyecto. Lo que no marques no se guarda (se puede volver a importar cuando quieras).</div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: hayCals ? "3fr 2fr" : "1fr", gap: 14, padding: "4px 20px 12px" }}>
+          <div style={columna}>
+            <div style={cabeza}>
+              <b style={{ fontSize: 12, color: C.text }}>Líneas</b>
+              <span style={{ fontSize: 11, color: C.dim }}>{lineas.size} de {red.lineas.length}</span>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{ flex: 1, minWidth: 160, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+              {boton(q ? "Marcar las encontradas" : "Todas", () => marcarVisibles(true))}
+              {boton(q ? "Quitar las encontradas" : "Ninguna", () => marcarVisibles(false))}
+            </div>
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {visibles.map(l => (
+                <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: lineas.has(l.id) ? 1 : 0.55 }}>
+                  {casilla(lineas.has(l.id), () => alternar(setLineas, l.id))}
+                  <Insignia linea={l} />
+                  <span style={{ flex: 1, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.largo || l.sentidos.map(s => s.cabecera).filter(Boolean).join(" – ") || "—"}</span>
+                  <span style={{ fontSize: 11, color: C.dim, fontFamily: mono, whiteSpace: "nowrap" }}>{viajes.get(l.id).toLocaleString("es-ES")} viajes</span>
+                </label>
+              ))}
+              {!visibles.length && <div style={{ padding: 16, fontSize: 12, color: C.dim }}>Ninguna línea con «{q}».</div>}
+            </div>
+          </div>
+          {hayCals && (
+            <div style={columna}>
+              <div style={cabeza}>
+                <b style={{ fontSize: 12, color: C.text }}>Calendarios</b>
+                <span style={{ fontSize: 11, color: C.dim }}>{cals.size} de {red.calendarios.length}</span>
+                <span style={{ flex: 1 }} />
+                {boton("Todos", () => setCals(new Set(red.calendarios.map(c => c.id))))}
+                {boton("Ninguno", () => setCals(new Set()))}
+              </div>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {red.calendarios.map(c => (
+                  <label key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: cals.has(c.id) ? 1 : 0.55 }}>
+                    {casilla(cals.has(c.id), () => alternar(setCals, c.id))}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 12, color: C.text }}>{c.nombre}</span>
+                      <span style={{ display: "block", fontSize: 10.5, color: C.dim, marginTop: 2 }}>{c.fechas.length} día{c.fechas.length === 1 ? "" : "s"} · {c.viajes.toLocaleString("es-ES")} viajes{c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px", borderTop: `1px solid ${C.border}` }}>
+          <span style={{ flex: 1, fontSize: 12, color: puede ? C.muted : C.amber }}>
+            {puede ? `Se importarán ${lineas.size} línea${lineas.size === 1 ? "" : "s"}${hayCals ? ` y ${cals.size} calendario${cals.size === 1 ? "" : "s"}` : ""} · ${totalViajes.toLocaleString("es-ES")} viajes` : `Marca al menos una línea${hayCals ? " y un calendario" : ""}.`}
+          </span>
+          {boton("Cancelar", onCancelar)}
+          {boton("Importar", () => onImportar(filtrarRed(red, { lineas: [...lineas], calendarios: [...cals] })), true, !puede)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlanningLineasPage({ projectId, orgId }) {
   const [estado, setEstado] = useState({ ficha: null, red: null, cargando: true });
   const [cfg, setCfg] = useState({});
@@ -369,6 +454,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const [sel, setSel] = useState(null);
   const [importando, setImportando] = useState(null); // texto del avance
   const [error, setError] = useState(null);
+  const [eligiendo, setEligiendo] = useState(null); // { archivo, red } leído del GTFS, a falta de elegir qué se queda
   const fileRef = useRef(null);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
@@ -404,10 +490,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
     try {
       const r = await leerGtfs(file, (f, t) => setImportando(`${t.replace(/….*$/, "")} ${Math.round(f * 100)} %`), "red");
       if (!r.lineas.length) throw new Error("el GTFS no tiene líneas con viajes");
-      setImportando("Guardando en la nube…");
-      await guardarRed(projectId, orgId, r, { archivo: file.name, anterior: estado.ficha?.cloud });
-      logAudit({ modulo: "Planning", accion: "Importó la red de líneas (GTFS)", detalle: `${file.name} · ${r.lineas.length} líneas · ${r.paradas.length} paradas` });
-      setSel(null);
+      setEligiendo({ archivo: file.name, red: r }); // se guarda al confirmar en la ventana
     } catch (e) {
       console.error("GTFS red:", e);
       setError(`${file.name}: ${e.message || e}`);
@@ -415,9 +498,25 @@ export function PlanningLineasPage({ projectId, orgId }) {
       setImportando(null);
     }
   }
+  async function guardarElegida(r) {
+    const { archivo, red: completa } = eligiendo;
+    setEligiendo(null); setError(null); setImportando("Guardando en la nube…");
+    try {
+      await guardarRed(projectId, orgId, r, { archivo, anterior: estado.ficha?.cloud });
+      const parcial = r.lineas.length < completa.lineas.length || (r.calendarios || []).length < (completa.calendarios || []).length;
+      logAudit({ modulo: "Planning", accion: "Importó la red de líneas (GTFS)", detalle: `${archivo} · ${r.lineas.length}${parcial ? ` de ${completa.lineas.length}` : ""} líneas · ${(r.calendarios || []).length} calendarios · ${r.paradas.length} paradas` });
+      setSel(null);
+    } catch (e) {
+      console.error("GTFS red:", e);
+      setError(`${archivo}: ${e.message || e}`);
+    } finally {
+      setImportando(null);
+    }
+  }
 
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
+      {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}
       <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.card, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "14px 14px 10px", borderBottom: `1px solid ${C.border}` }}>
