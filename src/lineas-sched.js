@@ -21,7 +21,9 @@
 // 2) Turnos de conductor (crew scheduling): cada bloque se corta en piezas
 //    (relevo en cabecera) y cada conductor va encadenando piezas de
 //    cualquier autobús, con el tiempo de relevo o de desplazamiento entre
-//    ellas, hasta llenar su jornada: tantas piezas como quepan. Se cumplen
+//    ellas, hasta llenar su jornada: tantas piezas como quepan. Solo se
+//    corta entre viajes con viajeros (los vacíos van con su viaje: ninguna
+//    pieza es solo un vacío) y no antes de la pieza mínima. Se cumplen
 //    como obligación (no como aviso) la amplitud y la jornada máximas, la
 //    conducción continua y diaria (UE 561/2006), el descanso de 15 min
 //    (Estatuto, art. 34.4), las piezas y las jornadas partidas máximas. Los
@@ -41,6 +43,7 @@ export const PARAMS_DEFECTO = {
   regulacion: 5,        // min, si la línea no tiene la suya
   jornadaMax: 480,      // min de trabajo por turno (piezas + huecos cortos entre ellas)
   piezaMax: 240,        // min de una pieza (de relevo a relevo)
+  piezaMin: 60,         // min: una pieza más corta no se corta por estrategia (relevos con sentido operativo)
   amplitudMax: 540,     // min de la primera salida a la última llegada del turno (pausa incluida)
   entreLineas: true,    // un autobús puede seguir con otra línea en la misma cabecera
   margenVacio: 30,      // min entre dos bloques del mismo autobús, sin cocheras (ir y volver incluido)
@@ -50,7 +53,7 @@ export const PARAMS_DEFECTO = {
   velocidadVacio: 25,   // km/h de los vacíos
   conduccionContinuaMax: 270, pausaConduccionMin: 45, conduccionDiariaMax: 540,
   jornadaSinPausaMax: 360, pausaJornadaMin: 15,
-  maxPiezas: 8,         // piezas por turno como mucho
+  maxPiezas: 4,         // piezas por turno como mucho (más relevos no tienen sentido operativo)
   maxPartidos: 1,       // huecos largos (jornada partida) por turno
   huecoNoPagado: 60,    // min: un hueco entre piezas desde este largo no se paga (jornada partida)
   relevoMin: 5,         // min para relevar en la misma cabecera
@@ -328,14 +331,32 @@ function cortarPiezas(vehiculos, p, find) {
       const n = Math.ceil((veh.fin - veh.inicio) / p.piezaMax);
       lim = Math.min(p.piezaMax, Math.ceil((veh.fin - veh.inicio) / n) + 20);
     } else if (typeof p.corte === "number") lim = Math.min(p.piezaMax, p.corte);
+    const minima = Math.min(p.piezaMin ?? 0, lim);
+    // Se corta solo entre viajes con viajeros: cada viaje va con los vacíos que
+    // lleva delante (salida de cochera, paso a otra cabecera) y la vuelta a
+    // cochera va con el último. Así ninguna pieza es solo un vacío.
+    const tramos = [];
+    let sueltos = [];
+    for (const v of veh.viajes) { sueltos.push(v); if (!v.vacio) { tramos.push(sueltos); sueltos = []; } }
+    if (sueltos.length) { if (tramos.length) tramos.at(-1).push(...sueltos); else tramos.push(sueltos); }
     let pz = null, previa = null;
-    for (const v of veh.viajes) {
-      const dur = v.arr - v.dep;
-      if (pz && (pz.conduccion + dur > p.conduccionContinuaMax || v.arr - pz.inicio > lim)) { piezas.push(pz); previa = pz; pz = null; }
-      if (!pz) pz = { vehiculo: veh.id, inicio: v.dep, fin: v.arr, conduccion: 0, viajes: [], previa, o: find ? find(v.o) : v.o };
-      pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += dur; pz.d = find ? find(v.d) : v.d;
+    for (const tramo of tramos) {
+      const dur = tramo.reduce((s, v) => s + v.arr - v.dep, 0), fin = tramo.at(-1).arr;
+      if (pz) {
+        // obligatorio: conducción continua o pieza máxima; por estrategia, solo si la pieza ya tiene el mínimo
+        const obligado = pz.conduccion + dur > p.conduccionContinuaMax || fin - pz.inicio > p.piezaMax;
+        if (obligado || (fin - pz.inicio > lim && pz.fin - pz.inicio >= minima)) { piezas.push(pz); previa = pz; pz = null; }
+      }
+      if (!pz) pz = { vehiculo: veh.id, inicio: tramo[0].dep, fin, conduccion: 0, viajes: [], previa, o: find ? find(tramo[0].o) : tramo[0].o };
+      for (const v of tramo) { pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += v.arr - v.dep; pz.d = find ? find(v.d) : v.d; }
     }
-    if (pz) piezas.push(pz);
+    if (pz) {
+      // el final del autobús, si es más corto que el mínimo, se queda con la pieza anterior si cabe
+      const ant = pz.previa;
+      if (ant && pz.fin - pz.inicio < minima && pz.fin - ant.inicio <= p.piezaMax && ant.conduccion + pz.conduccion <= p.conduccionContinuaMax) {
+        ant.viajes.push(...pz.viajes); ant.fin = pz.fin; ant.conduccion += pz.conduccion; ant.d = pz.d;
+      } else piezas.push(pz);
+    }
   }
   return piezas;
 }

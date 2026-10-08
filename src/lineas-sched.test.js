@@ -220,6 +220,42 @@ describe("scheduling de líneas: cocheras y vacíos", () => {
   });
 });
 
+describe("scheduling de líneas: piezas con sentido operativo", () => {
+  // Cochera a ~15 km de la cabecera X (salida de ~35 min en vacío) y una línea
+  // larga X → Y de 90 min, ida y vuelta todo el día: como la captura del
+  // cliente, donde salían «turnos» de solo un vacío, sin ningún viaje.
+  const paradas = [{ id: "X", nombre: "X", lat: 40.40, lng: -3.70 }, { id: "Y", nombre: "Y", lat: 40.40, lng: -3.60 }, { id: "Yb", nombre: "Yb", lat: 40.40, lng: -3.60 }, { id: "Xb", nombre: "Xb", lat: 40.40, lng: -3.70 }];
+  const ida = Array.from({ length: 16 }, (_, k) => h(6) + k * 60);
+  const red = { paradas, lineas: [{ id: "L", nombre: "L", color: "#0ff", sentidos: [
+    { ...sentido(0, ["X", "Y"], ida, 90), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 90, viajes: 1 })) },
+    { ...sentido(1, ["Yb", "Xb"], ida.map(m => m + 100), 90), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 90, viajes: 1 })) },
+  ] }] };
+  const cocheras = [{ id: "lejos", nombre: "Lejos", lat: 40.30, lng: -3.70 }];
+  const reales = pz => pz.viajes.filter(v => !v.vacio).length;
+
+  it("ninguna pieza es solo un vacío: la salida de cochera va con el primer viaje y la vuelta con el último", () => {
+    for (const corte of ["max", "equilibrado", 180, 150, 120, 90, 60]) {
+      const r = generarServicio(red, {}, { dia: "laborable", corte }, { cocheras });
+      const piezas = r.turnos.flatMap(t => t.piezas);
+      expect(piezas.length).toBeGreaterThan(0);
+      for (const pz of piezas) expect(reales(pz), `corte ${corte}: pieza de ${pz.inicio} sin viajes`).toBeGreaterThan(0);
+      expect(r.turnos.every(t => t.piezas.some(pz => reales(pz) > 0))).toBe(true);
+      // y nada se queda sin conductor
+      expect(piezas.flatMap(pz => pz.viajes).length).toBe(r.vehiculos.reduce((s, v) => s + v.viajes.length, 0));
+    }
+  });
+
+  it("no hay piezas más cortas que la pieza mínima (salvo que el autobús entero trabaje menos)", () => {
+    for (const corte of ["max", 120, 90, 60]) {
+      const r = generarServicio(red, {}, { dia: "laborable", corte, piezaMin: 90 }, { cocheras });
+      for (const pz of r.turnos.flatMap(t => t.piezas)) {
+        const bloque = r.vehiculos.find(v => v.id === pz.vehiculo);
+        expect(pz.fin - pz.inicio >= 90 || bloque.fin - bloque.inicio < 90, `corte ${corte}: pieza de ${pz.fin - pz.inicio} min`).toBe(true);
+      }
+    }
+  });
+});
+
 describe("scheduling de líneas: cambios a mano", () => {
   const paradas = [
     { id: "X", nombre: "X", lat: 40.40, lng: -3.70 }, { id: "Y", nombre: "Y", lat: 40.43, lng: -3.70 },

@@ -324,6 +324,7 @@ function Restricciones({ p, onChange, red, onCambiarDia }) {
           {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
           {row("Jornada de trabajo máxima (piezas + huecos cortos)", numInput("jornadaMax", "min"))}
           {row("Pieza máxima (de relevo a relevo)", numInput("piezaMax", "min"))}
+          {row("Pieza mínima (no se releva antes)", numInput("piezaMin", "min"))}
           {row("Piezas por turno, como mucho", numInput("maxPiezas", "piezas"))}
           {row("Jornadas partidas por turno, como mucho", numInput("maxPartidos", "huecos largos (0 = sin partidos)"))}
           {row("Hueco que ya no se paga (jornada partida)", numInput("huecoNoPagado", "min o más entre dos piezas"))}
