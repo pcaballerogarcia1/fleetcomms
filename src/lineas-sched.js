@@ -40,6 +40,7 @@
 //    restricciones; se queda la mejor para el objetivo de cada paso.
 
 import { franjaDe, TIPOS_DIA } from "./gtfs-red.js";
+import { particionTurnos } from "./lineas-particion.js";
 
 // Tipos de turno (duty types): cada turno tiene que encajar en uno de los
 // activos. Horas de inicio (desde–hasta, en minutos del día; si desde > hasta
@@ -80,8 +81,10 @@ export const PARAMS_DEFECTO = {
   conductoresMax: null, // conductores disponibles ese día
   // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
   eleccion: "ultimo",   // "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
-  corte: 120,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min
-  emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas
+  corte: 150,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min (150: el mejor con la partición en redes grandes)
+  emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas (solo "voraz")
+  metodo: "particion",  // "particion": muchos turnos posibles y se elige la mejor combinación (como Optibus/GoalSystem) · "voraz": pieza a pieza
+  objetivoTurnos: "conductores", // a qué da prioridad la partición: "conductores" o "horas" (pagadas)
   vacios: true,         // vacíos entre cabeceras
   vacioKm: null,        // radio de los vacíos entre cabeceras (null = vacioMaxKm; nunca más)
 };
@@ -162,10 +165,10 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
 }
 
 /** Paso 2: turnos de conductor sobre los bloques del paso 1 (no los cambia) */
-export function generarTurnos(resVehiculos, opciones = {}) {
+export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {}) {
   const r = resVehiculos;
   const p = { ...r.params, ...opciones };
-  const { turnos, piezas } = programarTurnos(r.vehiculos, p, r.find);
+  const { turnos, piezas } = programarTurnos(r.vehiculos, p, r.find, grupos);
   const porVehiculo = new Map(r.vehiculos.map(v => [v.id, (v.relevos = [])]));
   for (const pz of [...piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
   return { ...r, turnos, params: p, kpis: kpisServicio(r.viajes, r.vehiculos, turnos, r.autobuses) };
@@ -442,8 +445,56 @@ function anadir(t, pz, p) {
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
 }
+// Coste de un turno para la partición: un conductor pesa mucho (o poco si el
+// objetivo son las horas), más las horas pagadas; un turno que no encaja en
+// ningún tipo, muchísimo (solo se usa si no hay otra forma de cubrir la pieza).
+function costeTurno(e, piezas, p) {
+  const porConductor = p.objetivoTurnos === "horas" ? 60 : 600;
+  let c = porConductor + e.trabajo + piezas.length * 5;
+  if (e.sinValidar) c += 5000;
+  else if (p._tipos && !tipoDeTurno(e, p)) c += 900;
+  return c;
+}
+function estadoSuelto(pz) {
+  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0 };
+}
+function turnosPorParticion(piezas, p) {
+  const grupos = particionTurnos(piezas, {
+    valida: l => validar(l, p), coste: (e, l) => costeTurno(e, l, p),
+    extiende: (e, pz) => { const x = anadir(e, pz, p); return x && { ...x, piezas: [...e.piezas, pz] }; },
+    desplazamiento: p.desplazamiento, amplitudMax: p.amplitudMax, huecoNoPagado: p.huecoNoPagado, jornadaMax: p.jornadaMax,
+    maxPiezas: Math.min(4, p.maxPiezas),
+  });
+  return grupos.map(g => { const l = g.map(i => piezas[i]); return validar(l, p) || estadoSuelto(l[0]); });
+}
+
+// La partición calculada en otro sitio (el worker) llega como grupos de
+// claves de pieza; aquí se montan los turnos con las piezas de este cálculo.
+function turnosDeGrupos(piezas, grupos, p) {
+  const porClave = new Map(piezas.map(pz => [clavePieza(pz), pz]));
+  const puestas = new Set();
+  const turnos = [];
+  for (const g of grupos) {
+    const l = g.map(k => porClave.get(k)).filter(pz => pz && !puestas.has(pz));
+    if (!l.length) continue;
+    l.forEach(pz => puestas.add(pz));
+    turnos.push(validar(l, p) || estadoSuelto(l[0]));
+    if (!validar(l, p)) for (const pz of l.slice(1)) turnos.push(estadoSuelto(pz)); // no debería pasar
+  }
+  for (const pz of piezas) if (!puestas.has(pz)) turnos.push(validar([pz], p) || estadoSuelto(pz));
+  return turnos;
+}
+/** Solo la partición (lo pesado), para hacerla en el worker: grupos de claves de pieza */
+export function gruposTurnos(resVehiculos, opciones = {}) {
+  const r = resVehiculos;
+  const p = efectivos({ ...r.params, ...opciones });
+  const piezas = cortarPiezas(r.vehiculos, p, r.find);
+  piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
+  return turnosPorParticion(piezas, p).map(t => t.piezas.map(clavePieza));
+}
+
 // Rehace un turno desde cero con sus piezas en orden (null si no vale)
-function validar(piezas, p) {
+export function validar(piezas, p) {
   const orden = [...piezas].sort((a, b) => a.inicio - b.inicio);
   let t = null;
   for (let i = 0; i < orden.length; i++) {
@@ -454,17 +505,17 @@ function validar(piezas, p) {
   return t;
 }
 
-function programarTurnos(vehiculos, pOriginal, find) {
+function programarTurnos(vehiculos, pOriginal, find, grupos = null) {
   const p = efectivos(pOriginal);
   const piezas = cortarPiezas(vehiculos, p, find);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
-  // Cada pieza va al conductor que mejor la aprovecha: el que sigue en ese
-  // autobús, si no el que menos espera ("primera") o el que lleva más horas
-  // ("llena"); si no cabe en ninguno, entra un conductor nuevo.
-  const turnos = [];
+  const turnos = p.metodo === "voraz" ? [] : grupos ? turnosDeGrupos(piezas, grupos, p) : turnosPorParticion(piezas, p);
+  // Voraz: cada pieza va al conductor que mejor la aprovecha: el que sigue en
+  // ese autobús, si no el que menos espera ("primera") o el que lleva más
+  // horas ("llena"); si no cabe en ninguno, entra un conductor nuevo.
   let activos = [];
   const deLaPieza = new Map(); // pieza → turno (para seguir en el mismo autobús)
-  for (let i = 0; i < piezas.length; i++) {
+  for (let i = 0; i < (p.metodo === "voraz" ? piezas.length : 0); i++) {
     const pz = piezas[i];
     if (i % 200 === 0) activos = activos.filter(t => t.inicio + p.amplitudMax > pz.inicio);
     let mejor = null, nuevo = null, nota = -Infinity;
@@ -504,6 +555,8 @@ function programarTurnos(vehiculos, pOriginal, find) {
         if (t.piezas.some(x => x.inicio < pz.fin && pz.inicio < x.fin)) continue;
         intentos++;
         const x = validar([...t.piezas, pz], p);
+        // con tipos de turno, el turno que recibe la pieza tiene que seguir encajando en uno
+        if (x && p._tipos && !tipoDeTurno(x, p)) continue;
         if (x && (!estado || x.trabajo > estado.trabajo)) { destino = t; estado = x; }
       }
       if (!destino) { ok = false; break; }
@@ -523,7 +576,7 @@ function programarTurnos(vehiculos, pOriginal, find) {
 
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
 export const CAMPOS_VEHICULOS = ["eleccion", "entreLineas", "vacios", "vacioKm"];
-export const CAMPOS_TURNOS = ["corte", "emparejar"];
+export const CAMPOS_TURNOS = ["corte", "emparejar", "metodo"];
 export const CAMPOS_ESTRATEGIA = [...CAMPOS_VEHICULOS, ...CAMPOS_TURNOS];
 
 /** Indicadores de un escenario, pequeños para guardarlos por calendario */
@@ -564,7 +617,7 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
     v.vacios != null && (v.vacios === false || v.vacioKm === 0 ? "sin vacíos entre cabeceras" : v.vacioKm != null ? `vacíos de hasta ${String(v.vacioKm).replace(".", ",")} km` : "vacíos hasta el máximo"),
     v.entreLineas === false ? "sin cambiar de línea" : null,
     v.corte != null && corte,
-    v.emparejar != null && (v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas"),
+    v.metodo === "particion" ? "turnos por partición (la mejor combinación)" : v.emparejar != null && (v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas"),
   ].filter(Boolean).join(" · ");
 }
 
@@ -614,11 +667,13 @@ export function optimizarVehiculos(red, cfg = {}, opciones = {}, { objetivo = "a
 export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "conductores", onProgreso, cocheras = [], resVehiculos = null } = {}) {
   const base = resVehiculos || generarVehiculos(red, cfg, opciones, { cocheras });
   const p = { ...base.params, ...opciones };
-  const cortes = ["max", 180, 150, 120, 90].filter(c => typeof c !== "number" || c < p.piezaMax);
-  const variantes = cortes.flatMap(corte => ["primera", "llena"].map(emparejar => ({ corte, emparejar })));
+  // 3h30–3h45: dos piezas + la pausa de 45 min caben en 8 h (dos de 4 h no)
+  const cortes = ["max", 225, 210, 180, 150, 120].filter(c => typeof c !== "number" || c < p.piezaMax);
+  // por cada corte: la partición (como Optibus/GoalSystem) y las dos voraces de antes; se queda la mejor
+  const variantes = cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]);
   const probadas = [];
   for (const dt of variantes) {
-    const { turnos } = programarTurnos(base.vehiculos, { ...p, ...dt }, base.find);
+    const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" ? "horas" : "conductores", ...dt }, base.find);
     const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
     const r = {
       estrategia: dt, turnos: turnos.length, horasPagadas,

@@ -88,8 +88,8 @@ describe("scheduling de líneas: turnos de conductor", () => {
   });
 
   it("con piezas más cortas y más piezas por turno hacen falta menos o los mismos conductores; con 1 pieza, uno por pieza", () => {
-    const largo = generarServicio(red, {}, { dia: "laborable", corte: "max", maxPiezas: 2 });
-    const corto = generarServicio(red, {}, { dia: "laborable", corte: 120, maxPiezas: 8 });
+    const largo = generarServicio(red, {}, { dia: "laborable", corte: "max", maxPiezas: 2, metodo: "voraz" });
+    const corto = generarServicio(red, {}, { dia: "laborable", corte: 120, maxPiezas: 8, metodo: "voraz" });
     expect(corto.kpis.turnos).toBeLessThanOrEqual(largo.kpis.turnos);
     const una = generarServicio(red, {}, { dia: "laborable", maxPiezas: 1 });
     expect(una.turnos.every(t => t.piezas.length === 1)).toBe(true);
@@ -149,7 +149,7 @@ describe("scheduling de líneas: optimizar", () => {
     expect(probadas.length).toBeGreaterThan(1);
     expect(probadas.every(p => !p.cumple)).toBe(true);
     const ambos = optimizarServicio(red, {}, { dia: "laborable" });
-    expect(Object.keys(ambos.estrategia)).toEqual(expect.arrayContaining(["eleccion", "corte", "emparejar"]));
+    expect(Object.keys(ambos.estrategia)).toEqual(expect.arrayContaining(["eleccion", "corte", "metodo"]));
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, { costeHora: 20, costeKm: 1, costeVehiculoDia: 50 })).toBe(400);
     expect(costeDia({ horasPagadas: 10, km: 100, autobuses: 2 }, {})).toBe(null);
   });

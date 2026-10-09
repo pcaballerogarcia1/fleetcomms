@@ -419,8 +419,9 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {row("Vacíos entre cabeceras", sel("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]]))}
         </div>
         <div>
-          {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
-          {row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
+          {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[225, 210, 180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
+          {row("Cómo se forman los turnos", sel("metodo", [["particion", "La mejor combinación (como Optibus / GoalSystem)"], ["voraz", "Pieza a pieza (rápido)"]]))}
+          {p.metodo === "voraz" && row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
         </div>
       </div>
     </div>
@@ -684,7 +685,7 @@ function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOpti
 // claveV resume con qué se hicieron los vehículos y clave, todo (también los
 // turnos): si ya no coinciden, está desactualizado. resumen.turnos es null
 // si solo se ha hecho el paso 1.
-const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "vacios", "vacioKm"]; // entreLineas además es restricción
+const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm"]; // entreLineas además es restricción
 const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
 // lo que cambia los vehículos (el resto solo cambia los turnos)
 const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
@@ -767,10 +768,20 @@ export function SchedulingLineasPage({ projectId }) {
   // sobre los vehículos que hay) o "ambos". meta.objetivoV/T: si viene de Optimizar.
   // Cambios a mano: meta.manuales (lista a aplicar), meta.conservar (los
   // guardados); si no, generar un paso quita los cambios a mano de ese paso.
+  // La partición de turnos (lo pesado de «Generar turnos») en un worker, para
+  // no congelar la pantalla con redes grandes; devuelve grupos de claves de pieza.
+  function gruposEnWorker(p, opsV) {
+    return new Promise((resolve, reject) => {
+      const w = new Worker(new URL("./lineas-opt.worker.js", import.meta.url), { type: "module" });
+      w.onmessage = e => { w.terminate(); if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.ok); };
+      w.onerror = e => { w.terminate(); reject(new Error(e.message || "error en el cálculo")); };
+      w.postMessage({ tipo: "grupos", red, cfg, cocheras, params: p, opsV });
+    });
+  }
   function calcular(p = params, que = "ambos", meta = {}) {
     if (!red) return;
     setCalculando(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const claveV = claveVehiculos(p, cfgTxt);
         const previos = cache[p.dia]?.manuales ?? porCalendario[p.dia]?.manuales ?? [];
@@ -781,11 +792,12 @@ export function SchedulingLineasPage({ projectId }) {
         const conT = x => { if (!opsT.length) return x; const a = aplicarCambios(x, opsT); fallidos.push(...a.fallidos); return a.res; };
         let r;
         if (que === "vehiculos") r = conV(generarVehiculos(red, cfg, p, { cocheras }));
-        else if (que === "turnos") {
+        else {
           const c = cache[p.dia];
-          const veh = c?.res && c.claveV === claveV ? c.res : conV(generarVehiculos(red, cfg, p, { cocheras }));
-          r = conT(generarTurnos(veh, p));
-        } else r = conT(generarTurnos(conV(generarVehiculos(red, cfg, p, { cocheras }))));
+          const veh = que === "turnos" && c?.res && c.claveV === claveV ? c.res : conV(generarVehiculos(red, cfg, p, { cocheras }));
+          const grupos = (p.metodo ?? PARAMS_DEFECTO.metodo) === "particion" ? await gruposEnWorker(p, opsV) : null;
+          r = conT(generarTurnos(veh, p, { grupos }));
+        }
         const aplicados = lista.filter(o => !fallidos.some(f => f.clave === o.clave && f.tipo === o.tipo && f.destino === o.destino));
         if (meta.aviso && !fallidos.length) setNota({ texto: meta.aviso });
         if (fallidos.length) setNota({ texto: `${fallidos.length} cambio${fallidos.length > 1 ? "s" : ""} a mano ya no encaja${fallidos.length > 1 ? "n" : ""} y se ha${fallidos.length > 1 ? "n" : ""} quitado: ${fallidos[0].error}`, error: true });
@@ -816,6 +828,9 @@ export function SchedulingLineasPage({ projectId }) {
           modulo: "Scheduling", accion: que === "vehiculos" ? "Generó los vehículos de líneas" : que === "turnos" ? "Generó los turnos de líneas" : "Generó el escenario de líneas",
           detalle: `${r.diaNombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${Math.round(r.kpis.kmVacio || 0)} km en vacío${r.turnos ? ` · ${r.kpis.turnos} turnos` : ""}`,
         });
+      } catch (e) {
+        console.error("Scheduling de líneas:", e);
+        setNota({ texto: `No se pudo calcular: ${e.message || e}`, error: true });
       } finally {
         setCalculando(false);
       }
