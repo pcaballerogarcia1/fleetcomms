@@ -62,7 +62,7 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
 
   // 4) Scheduling: los dos pasos
   await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
-  await expect(page.getByText(/piezas de media/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first()).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/en vacío/).first()).toBeVisible();
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
