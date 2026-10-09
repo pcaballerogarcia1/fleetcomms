@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
+import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -72,7 +72,7 @@ describe("scheduling de líneas: turnos de conductor", () => {
   const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 25), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 25, viajes: 1 })) }] }] };
 
   it("turnos de varias piezas de distintos autobuses que cumplen todas las restricciones", () => {
-    const r = generarServicio(red, {}, { dia: "laborable" });
+    const r = generarServicio(red, {}, { dia: "laborable", tiposTurno: [] }); // sin tipos: límites generales
     expect(r.turnos.length).toBeGreaterThan(1);
     expect(Math.max(...r.turnos.map(t => t.piezas.length))).toBeGreaterThanOrEqual(2);
     for (const t of r.turnos) {
@@ -96,7 +96,7 @@ describe("scheduling de líneas: turnos de conductor", () => {
   });
 
   it("sin jornadas partidas no hay huecos largos", () => {
-    const r = generarServicio(red, {}, { dia: "laborable", maxPartidos: 0 });
+    const r = generarServicio(red, {}, { dia: "laborable", maxPartidos: 0, tiposTurno: [] });
     for (const t of r.turnos) t.piezas.slice(1).forEach((pz, i) => expect(pz.inicio - t.piezas[i].fin).toBeLessThan(60));
   });
 
@@ -131,9 +131,9 @@ describe("scheduling de líneas: optimizar", () => {
   });
 
   it("todas las estrategias de turnos respetan las restricciones", () => {
-    const { probadas } = optimizarTurnos(red, {}, { dia: "laborable", piezaMax: 200 });
+    const { probadas } = optimizarTurnos(red, {}, { dia: "laborable", piezaMax: 200, tiposTurno: [] });
     for (const pr of probadas) {
-      const r = generarServicio(red, {}, { dia: "laborable", piezaMax: 200, ...pr.estrategia });
+      const r = generarServicio(red, {}, { dia: "laborable", piezaMax: 200, tiposTurno: [], ...pr.estrategia });
       for (const t of r.turnos) {
         for (const pz of t.piezas) expect(pz.fin - pz.inicio).toBeLessThanOrEqual(200);
         expect(t.trabajo).toBeLessThanOrEqual(480);
@@ -157,7 +157,7 @@ describe("scheduling de líneas: optimizar", () => {
 
 describe("scheduling de líneas: resumen por calendario", () => {
   it("resume los indicadores en pocos campos", () => {
-    const r = generarServicio(RED, {}, { dia: "laborable" });
+    const r = generarServicio(RED, {}, { dia: "laborable", tiposTurno: [] });
     const x = resumenServicio(r);
     expect(x).toMatchObject({ viajes: r.kpis.viajes, autobuses: r.kpis.autobuses, turnos: r.kpis.turnos, avisos: 0 });
     expect(Object.keys(x).length).toBeLessThan(15);
@@ -256,6 +256,53 @@ describe("scheduling de líneas: piezas con sentido operativo", () => {
   });
 });
 
+describe("scheduling de líneas: tipos de turno", () => {
+  // Línea circular cada 15 min de 5:00 a 24:00, 25 min de recorrido
+  const salidas = Array.from({ length: 77 }, (_, k) => h(5) + k * 15);
+  const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 25), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 25, viajes: 1 })) }] }] };
+  const tipos = TIPOS_TURNO_DEFECTO;
+
+  it("cada turno es del primer tipo en el que encaja, y cumple sus límites", () => {
+    const r = generarServicio(red, {}, { dia: "laborable" });
+    for (const t of r.turnos) {
+      const tipo = tipos.find(x => x.id === t.tipo);
+      if (!tipo) { expect(t.avisos.some(a => /No encaja/.test(a))).toBe(true); continue; }
+      expect(t.trabajo).toBeGreaterThanOrEqual(tipo.trabajoMin);
+      expect(t.trabajo).toBeLessThanOrEqual(tipo.trabajoMax);
+      expect(t.duracion).toBeLessThanOrEqual(tipo.amplitudMax);
+      if (!tipo.partido) expect(t.partidos).toBe(0);
+      expect(t.tipoNombre).toBe(tipo.nombre);
+    }
+    expect(Object.values(r.kpis.turnosPorTipo).reduce((a, b) => a + b, 0)).toBe(r.turnos.length);
+  });
+
+  it("con tipos de turno salen menos turnos cortos que sin ellos (el partido junta las puntas)", () => {
+    const cortos = r => r.turnos.filter(t => t.trabajo < 240).length;
+    const con = generarServicio(red, {}, { dia: "laborable" });
+    const sin = generarServicio(red, {}, { dia: "laborable", tiposTurno: [] });
+    expect(cortos(con)).toBeLessThanOrEqual(cortos(sin));
+    expect(con.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes)).length).toBe(con.kpis.viajes); // todo cubierto
+  });
+
+  it("si se desactiva un tipo no sale ninguno de ese tipo; sin partido no hay partidos", () => {
+    const sinPartido = tipos.map(x => (x.id === "partido" ? { ...x, activo: false } : x));
+    const r = generarServicio(red, {}, { dia: "laborable", tiposTurno: sinPartido });
+    expect(r.turnos.every(t => t.tipo !== "partido" && t.partidos === 0)).toBe(true);
+    const sinRefuerzo = tipos.map(x => (x.id === "refuerzo" ? { ...x, activo: false } : x));
+    expect(generarServicio(red, {}, { dia: "laborable", tiposTurno: sinRefuerzo }).turnos.every(t => t.tipo !== "refuerzo")).toBe(true);
+  });
+
+  it("franjas de inicio que cruzan la medianoche y trabajo mínimo", () => {
+    const noche = tipos.find(x => x.id === "noche"); // 17:00 – 04:00
+    expect(encajaTipo({ inicio: h(22), fin: h(29), trabajo: 400, partidos: 0 }, noche, true)).toBe(true);
+    expect(encajaTipo({ inicio: h(26), fin: h(30), trabajo: 400, partidos: 0 }, noche, true)).toBe(true); // 02:00
+    expect(encajaTipo({ inicio: h(12), fin: h(19), trabajo: 400, partidos: 0 }, noche)).toBe(false);
+    expect(encajaTipo({ inicio: h(22), fin: h(25), trabajo: 180, partidos: 0 }, noche, true)).toBe(false); // no llega al mínimo
+    expect(tipoDeTurno({ inicio: h(7), fin: h(10), trabajo: 180, partidos: 0 }, { tiposTurno: tipos })?.id).toBe("refuerzo");
+    expect(tipoDeTurno({ inicio: h(7), fin: h(15), trabajo: 470, partidos: 0 }, { tiposTurno: tipos })?.id).toBe("manana");
+  });
+});
+
 describe("scheduling de líneas: cambios a mano", () => {
   const paradas = [
     { id: "X", nombre: "X", lat: 40.40, lng: -3.70 }, { id: "Y", nombre: "Y", lat: 40.43, lng: -3.70 },
@@ -314,7 +361,7 @@ describe("scheduling de líneas: cambios a mano", () => {
     expect(m.error).toBeUndefined();
     const nuevo = m.turnos.find(t => t.id === ultimo.id);
     expect(nuevo.piezas.map(clavePieza)).toContain(clavePieza(pz));
-    expect(nuevo.avisos.some(a => /Amplitud/.test(a))).toBe(true);
+    expect(nuevo.avisos.some(a => /No encaja en ningún tipo de turno/.test(a))).toBe(true); // con tipos de turno
     expect(m.turnos.flatMap(t => t.piezas).length).toBe(r.turnos.flatMap(t => t.piezas).length);
     // la misma pieza al turno con el que se solapa: no
     const solapado = r.turnos.find(t => t !== t1 && t.piezas.some(x => x.inicio < pz.fin && pz.inicio < x.fin));

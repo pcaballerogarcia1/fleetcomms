@@ -29,7 +29,10 @@
 //    (Estatuto, art. 34.4), las piezas y las jornadas partidas máximas. Los
 //    huecos cortos entre piezas son trabajo pagado; los largos, jornada
 //    partida. Al final se intenta deshacer los turnos más cortos repartiendo
-//    sus piezas entre los demás.
+//    sus piezas entre los demás. Con tipos de turno (mañana, tarde, partido,
+//    refuerzo… con sus horas de inicio, trabajo mínimo y máximo y amplitud),
+//    cada turno tiene que encajar en uno; el que no llega a ninguno se
+//    intenta repartir y, si no se puede, queda con aviso.
 // 3) Optimizar, en dos pasos como en Optibus o GoalSystem: primero los
 //    vehículos (qué autobús coge cada viaje, hasta dónde se hacen vacíos entre
 //    cabeceras) y después los turnos sobre esos bloques ya fijados (largo de
@@ -37,6 +40,18 @@
 //    restricciones; se queda la mejor para el objetivo de cada paso.
 
 import { franjaDe, TIPOS_DIA } from "./gtfs-red.js";
+
+// Tipos de turno (duty types): cada turno tiene que encajar en uno de los
+// activos. Horas de inicio (desde–hasta, en minutos del día; si desde > hasta
+// cruza la medianoche), trabajo mínimo y máximo, amplitud máxima y si puede
+// ser partido. Se prueban en este orden: el turno es del primero que encaja.
+export const TIPOS_TURNO_DEFECTO = [
+  { id: "manana", nombre: "Mañana", activo: true, desde: 240, hasta: 600, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false },
+  { id: "tarde", nombre: "Tarde", activo: true, desde: 600, hasta: 1020, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false },
+  { id: "noche", nombre: "Noche", activo: true, desde: 1020, hasta: 240, trabajoMin: 300, trabajoMax: 480, amplitudMax: 540, partido: false },
+  { id: "partido", nombre: "Partido", activo: true, desde: 240, hasta: 720, trabajoMin: 360, trabajoMax: 480, amplitudMax: 720, partido: true },
+  { id: "refuerzo", nombre: "Refuerzo", activo: true, desde: 0, hasta: 1439, trabajoMin: 180, trabajoMax: 360, amplitudMax: 420, partido: false },
+];
 
 export const PARAMS_DEFECTO = {
   dia: "laborable",
@@ -55,6 +70,7 @@ export const PARAMS_DEFECTO = {
   jornadaSinPausaMax: 360, pausaJornadaMin: 15,
   maxPiezas: 4,         // piezas por turno como mucho (más relevos no tienen sentido operativo)
   maxPartidos: 1,       // huecos largos (jornada partida) por turno
+  tiposTurno: TIPOS_TURNO_DEFECTO, // si hay alguno activo, sus límites mandan sobre amplitudMax, jornadaMax y maxPartidos
   huecoNoPagado: 60,    // min: un hueco entre piezas desde este largo no se paga (jornada partida)
   relevoMin: 5,         // min para relevar en la misma cabecera
   desplazamiento: 20,   // min para ir a otra cabecera a coger otra pieza
@@ -361,6 +377,36 @@ function cortarPiezas(vehiculos, p, find) {
   return piezas;
 }
 
+// ── Tipos de turno ──
+const enFranja = (min, desde, hasta) => { const m = ((min % 1440) + 1440) % 1440; return desde <= hasta ? m >= desde && m <= hasta : m >= desde || m <= hasta; };
+/** ¿Cabe el turno (inicio, fin, trabajo, partidos) en el tipo? final: además llega al trabajo mínimo */
+export function encajaTipo(t, tipo, final = false) {
+  if (!enFranja(t.inicio, tipo.desde, tipo.hasta)) return false;
+  if (t.fin - t.inicio > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
+  if (t.partidos > (tipo.partido ? 1 : 0)) return false;
+  return !final || t.trabajo >= tipo.trabajoMin;
+}
+const tiposActivos = p => (p.tiposTurno || []).filter(x => x.activo !== false);
+/** El tipo de un turno ya cerrado (el primero que encaja), o null */
+export const tipoDeTurno = (t, p) => tiposActivos(p).find(x => encajaTipo(t, x, true)) || null;
+// Con tipos de turno, los límites generales pasan a ser los más amplios de los
+// tipos (para no descartar nada que algún tipo admita) y cada estado se
+// comprueba contra los tipos.
+const efectivosCache = new WeakMap();
+function efectivos(p) {
+  if (p._tipos) return p;
+  if (efectivosCache.has(p)) return efectivosCache.get(p);
+  const tipos = tiposActivos(p);
+  const e = tipos.length ? {
+    ...p, _tipos: tipos,
+    amplitudMax: Math.max(...tipos.map(x => x.amplitudMax)),
+    jornadaMax: Math.max(...tipos.map(x => x.trabajoMax)),
+    maxPartidos: tipos.some(x => x.partido) ? 1 : 0,
+  } : p;
+  efectivosCache.set(p, e);
+  return e;
+}
+
 // Estado de un turno al añadirle una pieza (null si no cabe)
 function anadir(t, pz, p) {
   let hueco = 0, partido = false;
@@ -392,7 +438,9 @@ function anadir(t, pz, p) {
     finPrev = v.arr;
   }
   if (pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // Estatuto: 15 min si pasa de 6 h
-  return { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0) };
+  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0) };
+  if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
+  return estado;
 }
 // Rehace un turno desde cero con sus piezas en orden (null si no vale)
 function validar(piezas, p) {
@@ -406,7 +454,8 @@ function validar(piezas, p) {
   return t;
 }
 
-function programarTurnos(vehiculos, p, find) {
+function programarTurnos(vehiculos, pOriginal, find) {
+  const p = efectivos(pOriginal);
   const piezas = cortarPiezas(vehiculos, p, find);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
   // Cada pieza va al conductor que mejor la aprovecha: el que sigue en ese
@@ -438,7 +487,8 @@ function programarTurnos(vehiculos, p, find) {
   // Repaso: deshacer los turnos cortos metiendo sus piezas en otros
   const porInicio = () => [...turnos].sort((a, b) => a.inicio - b.inicio);
   let lista = porInicio();
-  const cortos = [...turnos].filter(t => t.trabajo < p.jornadaMax * 0.6).sort((a, b) => a.trabajo - b.trabajo);
+  // cortos: los que no llegan a ningún tipo de turno, y los de poco trabajo
+  const cortos = [...turnos].filter(t => t.trabajo < p.jornadaMax * 0.6 || (p._tipos && !tipoDeTurno(t, p))).sort((a, b) => a.trabajo - b.trabajo);
   const quitados = new Set();
   let intentos = 0;
   for (const c of cortos) {
@@ -448,7 +498,8 @@ function programarTurnos(vehiculos, p, find) {
     for (const pz of c.piezas) {
       let destino = null, estado = null;
       for (const t of lista) {
-        if (t.inicio > pz.fin) break;
+        // en las dos direcciones: también turnos que empiezan después (así salen los partidos de mañana + tarde)
+        if (t.inicio - pz.inicio > p.amplitudMax) break;
         if (t === c || quitados.has(t) || t.fin + p.amplitudMax < pz.inicio || Math.max(t.fin, pz.fin) - Math.min(t.inicio, pz.inicio) > p.amplitudMax) continue;
         if (t.piezas.some(x => x.inicio < pz.fin && pz.inicio < x.fin)) continue;
         intentos++;
@@ -596,7 +647,8 @@ export function optimizarServicio(red, cfg = {}, opciones = {}, { objetivoVehicu
 const hm = m => `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`;
 const reloj = m => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; };
 
-function cerrarTurno(t, p) {
+function cerrarTurno(t, pOriginal) {
+  const p = efectivos(pOriginal);
   const viajes = t.piezas.flatMap(pz => pz.viajes);
   t.inicio = t.piezas[0].inicio;
   t.fin = t.piezas.at(-1).fin;
@@ -622,10 +674,16 @@ function cerrarTurno(t, p) {
   if (p.aplicar561 && t.conduccion > p.conduccionDiariaMax) t.avisos.push(`Conducción de ${hm(t.conduccion)}: supera ${hm(p.conduccionDiariaMax)} (UE 561/2006)`);
   if (t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (Estatuto, art. 34.4)`);
   // lo que el cálculo automático ya cumple siempre, pero un cambio a mano puede romper
-  if (t.duracion > p.amplitudMax) t.avisos.push(`Amplitud de ${hm(t.duracion)}: supera ${hm(p.amplitudMax)}`);
-  if (t.trabajo > p.jornadaMax) t.avisos.push(`Jornada de trabajo de ${hm(t.trabajo)}: supera ${hm(p.jornadaMax)}`);
+  if (p._tipos) {
+    const tipo = tipoDeTurno(t, p);
+    t.tipo = tipo?.id || null; t.tipoNombre = tipo?.nombre || null;
+    if (!tipo) t.avisos.push(`No encaja en ningún tipo de turno: ${hm(t.trabajo)} de trabajo, de ${reloj(t.inicio)} a ${reloj(t.fin)}${t.partidos ? ", partido" : ""}`);
+  } else {
+    if (t.duracion > p.amplitudMax) t.avisos.push(`Amplitud de ${hm(t.duracion)}: supera ${hm(p.amplitudMax)}`);
+    if (t.trabajo > p.jornadaMax) t.avisos.push(`Jornada de trabajo de ${hm(t.trabajo)}: supera ${hm(p.jornadaMax)}`);
+    if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
+  }
   if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
-  if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
   t.piezas.slice(1).forEach((pz, i) => {
     const a = t.piezas[i], hueco = pz.inicio - a.fin;
     if (hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(a.inicio)} y las ${reloj(pz.inicio)} se solapan`); return; }
@@ -679,6 +737,7 @@ export function kpisServicio(viajes, vehiculos, turnosODeNull, autobuses = []) {
     piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
     turnosPartidos: turnos.filter(t => t.partidos > 0).length,
     turnosConAviso: sinTurnos ? null : turnos.filter(t => t.avisos.length).length,
+    turnosPorTipo: turnos.reduce((o, t) => { const k = t.tipoNombre || (t.tipo === null ? "Sin tipo" : null); if (k) o[k] = (o[k] || 0) + 1; return o; }, {}),
     horasPagadas: sinTurnos ? null : pagado / 60,
     eficienciaPersonal: pagado ? conduccion / pagado : null, // conducción / tiempo de trabajo
     porTipo,

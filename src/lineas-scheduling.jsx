@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales } from "./lineas-store.js";
-import { generarVehiculos, generarTurnos, moverViaje, moverPieza, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
+import { generarVehiculos, generarTurnos, moverViaje, moverPieza, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -51,7 +51,7 @@ function filasDe(res, modo) {
     const viajes = t.piezas.flatMap(pz => pz.viajes);
     const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
-    return fila(`T${t.id}`, `${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos ? " · partido" : ""}`, viajes, {
+    return fila(`T${t.id}`, `${t.tipoNombre ? `${t.tipoNombre} · ` : t.tipo === null ? "Sin tipo · " : ""}${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos && t.tipo !== "partido" ? " · partido" : ""}`, viajes, {
       id: t.id, tramosPausa, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
       piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
@@ -265,6 +265,56 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   );
 }
 
+// ── Tipos de turno (duty types) ─────────────────────────────────────────
+const aHHMM = m => `${String(Math.floor((m ?? 0) / 60)).padStart(2, "0")}:${String((m ?? 0) % 60).padStart(2, "0")}`;
+const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Number); return (a || 0) * 60 + (b || 0); };
+function TiposTurno({ tipos, onChange }) {
+  const lista = tipos || [];
+  const cambiar = (i, cambio) => onChange(lista.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
+  const hora = (i, k) => (
+    <input type="time" value={aHHMM(lista[i][k])} onChange={e => cambiar(i, { [k]: deHHMM(e.target.value) })}
+      style={{ width: 84, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: "dark" }} />
+  );
+  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
+  const td = { padding: "4px 6px", borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", minWidth: 760 }}>
+          <thead>
+            <tr>
+              <th style={th}>Usar</th><th style={th}>Nombre</th><th style={th}>Empieza entre</th>
+              <th style={th}>Trabajo mínimo</th><th style={th}>Trabajo máximo</th><th style={th}>Amplitud máxima</th><th style={th}>Partido</th><th style={th} />
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((x, i) => (
+              <tr key={x.id || i} style={{ opacity: x.activo === false ? 0.5 : 1 }}>
+                <td style={td}><input type="checkbox" checked={x.activo !== false} onChange={e => cambiar(i, { activo: e.target.checked })} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} /></td>
+                <td style={td}><input value={x.nombre} onChange={e => cambiar(i, { nombre: e.target.value })} style={{ width: 110, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" }} /></td>
+                <td style={td}>{hora(i, "desde")} <span style={{ color: C.dim, fontSize: 11 }}>y</span> {hora(i, "hasta")}</td>
+                <td style={td}>{hora(i, "trabajoMin")}</td>
+                <td style={td}>{hora(i, "trabajoMax")}</td>
+                <td style={td}>{hora(i, "amplitudMax")}</td>
+                <td style={td}><input type="checkbox" checked={!!x.partido} onChange={e => cambiar(i, { partido: e.target.checked })} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} /></td>
+                <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+        <button onClick={() => onChange([...lista, { id: `t${lista.length + 1}-${lista.length}`, nombre: `Tipo ${lista.length + 1}`, activo: true, desde: 360, hasta: 600, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false }])}
+          style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font }}>+ Añadir tipo</button>
+        <button onClick={() => onChange(TIPOS_TURNO_DEFECTO)} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Volver a los de por defecto</button>
+        <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
+          Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja. Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Restricciones (mismo formato que las del Scheduling de puntos) ──────
 function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
@@ -297,6 +347,7 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
     </div>
   );
+  const conTipos = (p.tiposTurno || []).some(x => x.activo !== false);
   const check = (k, invertido = false) => (
     <input type="checkbox" checked={invertido ? !p[k] : !!p[k]} onChange={e => set(k, invertido ? !e.target.checked : e.target.checked)}
       style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} />
@@ -323,9 +374,13 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         <div>
           {titulo("Conductores")}
           {sub("Jornada")}
-          {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
-          {row("Jornada de trabajo máxima", numInput("jornadaMax", "min (piezas + huecos cortos)"))}
-          {row("Jornadas partidas por turno", numInput("maxPartidos", "como mucho (0 = sin partidos)"))}
+          {conTipos ? (
+            <div style={{ fontSize: 11, color: C.muted, margin: "0 0 9px", lineHeight: 1.5 }}>Amplitud, trabajo y partidos: los marca cada <b style={{ color: C.text }}>tipo de turno</b> (abajo).</div>
+          ) : <>
+            {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
+            {row("Jornada de trabajo máxima", numInput("jornadaMax", "min (piezas + huecos cortos)"))}
+            {row("Jornadas partidas por turno", numInput("maxPartidos", "como mucho (0 = sin partidos)"))}
+          </>}
           {row("Hueco que ya no se paga", numInput("huecoNoPagado", "min o más (jornada partida)"))}
           {sub("Piezas y relevos")}
           {row("Pieza máxima", numInput("piezaMax", "min de relevo a relevo"))}
@@ -355,6 +410,8 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           </div>
         </div>
       </div>
+      <div style={{ fontSize: 12, color: C.blueText, fontWeight: 700, margin: "6px 0 10px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Tipos de turno <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>· de conductor (mañana, tarde, partido, refuerzo…)</span></div>
+      <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} />
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Estrategia del optimizador para este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         <div>
@@ -1242,7 +1299,7 @@ function cambiosKpi(res, p = res.params) {
   const k = res.kpis;
   return {
     "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
-    "Turnos": { sub: res.turnos ? `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos` : "falta el paso 2 (turnos)", subColor: res.turnos ? undefined : C.amber, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
+    "Turnos": { sub: res.turnos ? (Object.keys(k.turnosPorTipo || {}).length ? Object.entries(k.turnosPorTipo).sort((a, b) => b[1] - a[1]).map(([n, c]) => `${num(c)} ${n.toLowerCase()}`).join(" · ") : `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`) : "falta el paso 2 (turnos)", subColor: res.turnos ? undefined : C.amber, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
     "Eficiencia vehículo": { sub: `km con viajeros / km totales · ${num(k.km - (k.kmVacio || 0))} / ${num(k.km)}`, ayuda: "Parte de los km que se hacen con viajeros: el resto son vacíos (salir y volver a cochera, ir a otra cabecera)." },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
     "Km": { sub: `${num(k.kmVacio || 0)} en vacío · ${num(k.vacios || 0)} vacíos`, ayuda: "Kilómetros del día: los de los viajes y los vacíos (salida y vuelta a cochera, y entre cabeceras)." },
