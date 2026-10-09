@@ -44,13 +44,15 @@ import { particionTurnos } from "./lineas-particion.js";
 
 // Tipos de turno (duty types): cada turno tiene que encajar en uno de los
 // activos. Horas de inicio (desde–hasta, en minutos del día; si desde > hasta
-// cruza la medianoche), trabajo mínimo y máximo, amplitud máxima y si puede
-// ser partido. Se prueban en este orden: el turno es del primero que encaja.
+// cruza la medianoche), trabajo mínimo y máximo, amplitud máxima, si puede
+// ser partido y su split máximo (hueco sin pagar, null = sin límite), y el
+// máximo de turnos de ese tipo al día (null = sin límite). Se prueban en
+// este orden: el turno es del primero que encaja y aún tiene sitio.
 export const TIPOS_TURNO_DEFECTO = [
   { id: "manana", nombre: "Mañana", activo: true, desde: 240, hasta: 600, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false },
   { id: "tarde", nombre: "Tarde", activo: true, desde: 600, hasta: 1020, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false },
   { id: "noche", nombre: "Noche", activo: true, desde: 1020, hasta: 240, trabajoMin: 300, trabajoMax: 480, amplitudMax: 540, partido: false },
-  { id: "partido", nombre: "Partido", activo: true, desde: 240, hasta: 720, trabajoMin: 360, trabajoMax: 480, amplitudMax: 720, partido: true },
+  { id: "partido", nombre: "Partido", activo: true, desde: 240, hasta: 720, trabajoMin: 360, trabajoMax: 480, amplitudMax: 720, partido: true, splitMax: null, maximo: null },
   { id: "refuerzo", nombre: "Refuerzo", activo: true, desde: 0, hasta: 1439, trabajoMin: 180, trabajoMax: 360, amplitudMax: 420, partido: false },
 ];
 
@@ -387,6 +389,7 @@ export function encajaTipo(t, tipo, final = false) {
   if (!enFranja(t.inicio, tipo.desde, tipo.hasta)) return false;
   if (t.fin - t.inicio > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
   if (t.partidos > (tipo.partido ? 1 : 0)) return false;
+  if (t.partidos && tipo.splitMax > 0 && (t.split || 0) > tipo.splitMax) return false; // hueco del partido demasiado largo
   return !final || t.trabajo >= tipo.trabajoMin;
 }
 const tiposActivos = p => (p.tiposTurno || []).filter(x => x.activo !== false);
@@ -441,10 +444,34 @@ function anadir(t, pz, p) {
     finPrev = v.arr;
   }
   if (pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // Estatuto: 15 min si pasa de 6 h
-  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0) };
+  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco : 0) };
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
 }
+/**
+ * Pone el tipo a cada turno respetando el máximo de cada tipo: primero los
+ * turnos que encajan en menos tipos (los que menos alternativas tienen), cada
+ * uno en el primer tipo de la lista en el que encaja y aún queda sitio. El que
+ * no encaja en ninguno, o solo en tipos ya llenos, queda sin tipo y con aviso.
+ */
+export function asignarTipos(turnos, pOriginal) {
+  const p = efectivos(pOriginal);
+  if (!p._tipos) return turnos;
+  const usados = new Map();
+  const encajan = new Map(turnos.map(t => [t, p._tipos.filter(x => encajaTipo(t, x, true))]));
+  const orden = [...turnos].sort((a, b) => encajan.get(a).length - encajan.get(b).length || a.inicio - b.inicio);
+  for (const t of orden) {
+    t.avisos = (t.avisos || []).filter(a => !/^No encaja en ningún tipo|^Ya hay el máximo de turnos/.test(a));
+    const posibles = encajan.get(t);
+    const tipo = posibles.find(x => !(x.maximo > 0) || (usados.get(x.id) || 0) < x.maximo);
+    t.tipo = tipo?.id || null; t.tipoNombre = tipo?.nombre || null;
+    if (tipo) usados.set(tipo.id, (usados.get(tipo.id) || 0) + 1);
+    else if (posibles.length) t.avisos.push(`Ya hay el máximo de turnos de tipo ${posibles.map(x => `${x.nombre} (${x.maximo})`).join(" / ")}`);
+    else t.avisos.push(`No encaja en ningún tipo de turno: ${hm(t.trabajo)} de trabajo, de ${reloj(t.inicio)} a ${reloj(t.fin)}${t.partidos ? `, partido con ${hm(t.split || 0)} de hueco` : ""}`);
+  }
+  return turnos;
+}
+
 // Coste de un turno para la partición: un conductor pesa mucho (o poco si el
 // objetivo son las horas), más las horas pagadas; un turno que no encaja en
 // ningún tipo, muchísimo (solo se usa si no hay otra forma de cubrir la pieza).
@@ -459,8 +486,14 @@ function estadoSuelto(pz) {
   return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0 };
 }
 function turnosPorParticion(piezas, p) {
+  const topes = p._tipos ? p._tipos.map(x => (x.maximo > 0 ? x.maximo : Infinity)) : [];
+  const conTope = topes.some(Number.isFinite);
+  const partidos = (p._tipos || []).filter(x => x.partido);
+  const splitMax = partidos.length && partidos.every(x => x.splitMax > 0) ? Math.max(...partidos.map(x => x.splitMax)) : Infinity;
   const grupos = particionTurnos(piezas, {
     valida: l => validar(l, p), coste: (e, l) => costeTurno(e, l, p),
+    ...(conTope ? { topes, tipoDe: e => p._tipos.findIndex(x => encajaTipo(e, x, true)) } : {}),
+    huecoMax: splitMax,
     extiende: (e, pz) => { const x = anadir(e, pz, p); return x && { ...x, piezas: [...e.piezas, pz] }; },
     desplazamiento: p.desplazamiento, amplitudMax: p.amplitudMax, huecoNoPagado: p.huecoNoPagado, jornadaMax: p.jornadaMax,
     maxPiezas: Math.min(4, p.maxPiezas),
@@ -567,7 +600,7 @@ function programarTurnos(vehiculos, pOriginal, find, grupos = null) {
     else for (const [t, antes] of cambios.reverse()) Object.assign(t, antes);
     if (ok) lista = lista.filter(t => t !== c);
   }
-  const finales = turnos.filter(t => !quitados.has(t)).map(t => cerrarTurno({ piezas: [...t.piezas].sort((a, b) => a.inicio - b.inicio) }, p));
+  const finales = asignarTipos(turnos.filter(t => !quitados.has(t)).map(t => cerrarTurno({ piezas: [...t.piezas].sort((a, b) => a.inicio - b.inicio) }, p)), p);
   finales.sort((x, y) => x.inicio - y.inicio);
   finales.forEach((t, i) => { t.id = i + 1; for (const pz of t.piezas) pz.turno = t.id; });
   for (const pz of piezas) { delete pz.previa; }
@@ -710,6 +743,7 @@ function cerrarTurno(t, pOriginal) {
   t.duracion = t.fin - t.inicio; // amplitud
   t.trabajo = t.duracion - t.piezas.slice(1).reduce((s, pz, i) => { const h = pz.inicio - t.piezas[i].fin; return s + (h >= p.huecoNoPagado ? h : 0); }, 0);
   t.partidos = t.piezas.slice(1).filter((pz, i) => pz.inicio - t.piezas[i].fin >= p.huecoNoPagado).length;
+  t.split = Math.max(0, ...t.piezas.slice(1).map((pz, i) => pz.inicio - t.piezas[i].fin).filter(h => h >= p.huecoNoPagado));
   t.conduccion = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
   t.vehiculos = [...new Set(t.piezas.map(pz => pz.vehiculo))];
   // Conducción continua: se acumula hasta una pausa de pausaConduccionMin
@@ -730,9 +764,9 @@ function cerrarTurno(t, pOriginal) {
   if (t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (Estatuto, art. 34.4)`);
   // lo que el cálculo automático ya cumple siempre, pero un cambio a mano puede romper
   if (p._tipos) {
+    // el tipo: asignarTipos (con los máximos de cada tipo, que dependen de todos los turnos)
     const tipo = tipoDeTurno(t, p);
     t.tipo = tipo?.id || null; t.tipoNombre = tipo?.nombre || null;
-    if (!tipo) t.avisos.push(`No encaja en ningún tipo de turno: ${hm(t.trabajo)} de trabajo, de ${reloj(t.inicio)} a ${reloj(t.fin)}${t.partidos ? ", partido" : ""}`);
   } else {
     if (t.duracion > p.amplitudMax) t.avisos.push(`Amplitud de ${hm(t.duracion)}: supera ${hm(p.amplitudMax)}`);
     if (t.trabajo > p.jornadaMax) t.avisos.push(`Jornada de trabajo de ${hm(t.trabajo)}: supera ${hm(p.jornadaMax)}`);
@@ -935,9 +969,10 @@ export function moverPieza(res, clave, turnoDestino) {
   for (const t of res.turnos) {
     if (t === origen) { const resto = t.piezas.filter(x => x !== pz); if (resto.length) turnos.push(cerrarTurno({ id: t.id, piezas: resto }, p)); }
     else if (t === destino) turnos.push(cerrarTurno({ id: t.id, piezas: orden([...t.piezas, movida]) }, p));
-    else turnos.push(t);
+    else turnos.push({ ...t }); // copia: asignarTipos no toca el escenario anterior
   }
   if (!destino) turnos.push(cerrarTurno({ id, piezas: [movida] }, p));
+  asignarTipos(turnos, p); // los máximos por tipo dependen de todos los turnos
   for (const t of turnos) t.manual = t.manual || t.id === id || t.id === origen.id;
   // relevos del autobús de la pieza
   const piezasBus = orden(turnos.flatMap(t => t.piezas.filter(x => x.vehiculo === pz.vehiculo)));

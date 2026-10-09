@@ -292,6 +292,31 @@ describe("scheduling de líneas: tipos de turno", () => {
     expect(generarServicio(red, {}, { dia: "laborable", tiposTurno: sinRefuerzo }).turnos.every(t => t.tipo !== "refuerzo")).toBe(true);
   });
 
+  it("split máximo del partido: ningún partido con un hueco más largo", () => {
+    const conSplit = tipos.map(x => (x.id === "partido" ? { ...x, splitMax: 100 } : x));
+    for (const metodo of ["particion", "voraz"]) {
+      const r = generarServicio(red, {}, { dia: "laborable", tiposTurno: conSplit, metodo });
+      for (const t of r.turnos.filter(x => x.tipo === "partido")) expect(t.split).toBeLessThanOrEqual(100);
+    }
+    expect(encajaTipo({ inicio: h(6), fin: h(17), trabajo: 420, partidos: 1, split: 180 }, { ...tipos.find(x => x.id === "partido"), splitMax: 120 }, true)).toBe(false);
+    expect(encajaTipo({ inicio: h(6), fin: h(17), trabajo: 420, partidos: 1, split: 100 }, { ...tipos.find(x => x.id === "partido"), splitMax: 120 }, true)).toBe(true);
+  });
+
+  it("máximo de turnos por tipo: nunca más de los que se permiten", () => {
+    const base = generarServicio(red, {}, { dia: "laborable" });
+    const n = base.turnos.filter(t => t.tipo === "partido").length;
+    expect(n).toBeGreaterThan(1);
+    const tope = Math.max(1, Math.floor(n / 2));
+    const conTope = tipos.map(x => (x.id === "partido" ? { ...x, maximo: tope } : x));
+    for (const metodo of ["particion", "voraz"]) {
+      const r = generarServicio(red, {}, { dia: "laborable", tiposTurno: conTope, metodo });
+      expect(r.turnos.filter(t => t.tipo === "partido").length).toBeLessThanOrEqual(tope);
+      // los que no caben en su tipo quedan con aviso (o en otro tipo en el que encajen)
+      for (const t of r.turnos.filter(x => x.tipo === null)) expect(t.avisos.some(a => /máximo de turnos|No encaja/.test(a))).toBe(true);
+      expect(r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes)).length).toBe(r.kpis.viajes); // todo cubierto
+    }
+  });
+
   it("franjas de inicio que cruzan la medianoche y trabajo mínimo", () => {
     const noche = tipos.find(x => x.id === "noche"); // 17:00 – 04:00
     expect(encajaTipo({ inicio: h(22), fin: h(29), trabajo: 400, partidos: 0 }, noche, true)).toBe(true);

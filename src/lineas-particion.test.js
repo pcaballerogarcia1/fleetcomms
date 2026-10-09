@@ -68,4 +68,16 @@ describe("turnos por partición de conjuntos", () => {
     const firma = r => r.turnos.map(t => t.piezas.map(clavePieza).join(",")).sort();
     expect(firma(aparte)).toEqual(firma(directo));
   });
+
+  it("con un máximo por tipo, la partición no se pasa (y aun así lo cubre todo)", () => {
+    // 6 piezas que se pueden juntar de dos en dos (tipo 0) o ir solas (tipo 1); como mucho 1 del tipo 0
+    const piezas = [0, 1, 2].flatMap(k => [{ inicio: h(6 + k), fin: h(9 + k), o: "X", d: "X" }, { inicio: h(10 + k), fin: h(13 + k), o: "X", d: "X" }]);
+    const valida = l => (l.length <= 2 ? { trabajo: l.reduce((s, x) => s + x.fin - x.inicio, 0), n: l.length } : null);
+    const opciones = { valida, coste: (e, l) => 600 + e.trabajo + l.length, desplazamiento: 20, amplitudMax: 540, huecoNoPagado: 60 };
+    const libre = particionTurnos(piezas, opciones);
+    expect(libre).toHaveLength(3); // sin tope: tres turnos de dos piezas
+    const conTope = particionTurnos(piezas, { ...opciones, tipoDe: e => (e.n === 2 ? 0 : 1), topes: [1, Infinity] });
+    expect(conTope.filter(g => g.length === 2).length).toBeLessThanOrEqual(1);
+    expect(conTope.flat().sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
 });

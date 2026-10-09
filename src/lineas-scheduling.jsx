@@ -271,9 +271,12 @@ const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Number); 
 function TiposTurno({ tipos, onChange }) {
   const lista = tipos || [];
   const cambiar = (i, cambio) => onChange(lista.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
-  const hora = (i, k) => (
-    <input type="time" value={aHHMM(lista[i][k])} onChange={e => cambiar(i, { [k]: deHHMM(e.target.value) })}
-      style={{ width: 84, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: "dark" }} />
+  const estiloCampo = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: "dark" };
+  // vacio = true: se puede dejar en blanco (null = sin límite)
+  const hora = (i, k, vacio = false, deshabilitado = false) => (
+    <input type="time" disabled={deshabilitado} value={vacio && !(lista[i][k] > 0) ? "" : aHHMM(lista[i][k])}
+      onChange={e => cambiar(i, { [k]: vacio && !e.target.value ? null : deHHMM(e.target.value) })}
+      style={{ ...estiloCampo, width: 84, opacity: deshabilitado ? 0.35 : 1 }} />
   );
   const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
   const td = { padding: "4px 6px", borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
@@ -284,7 +287,9 @@ function TiposTurno({ tipos, onChange }) {
           <thead>
             <tr>
               <th style={th}>Usar</th><th style={th}>Nombre</th><th style={th}>Empieza entre</th>
-              <th style={th}>Trabajo mínimo</th><th style={th}>Trabajo máximo</th><th style={th}>Amplitud máxima</th><th style={th}>Partido</th><th style={th} />
+              <th style={th}>Trabajo mínimo</th><th style={th}>Trabajo máximo</th><th style={th}>Amplitud máxima</th><th style={th}>Partido</th>
+              <th style={th} title="El hueco sin pagar del partido no puede ser más largo (en blanco: sin límite)">Split máximo</th>
+              <th style={th} title="Como mucho tantos turnos de este tipo al día (en blanco: sin límite)">Máximo al día</th><th style={th} />
             </tr>
           </thead>
           <tbody>
@@ -297,6 +302,12 @@ function TiposTurno({ tipos, onChange }) {
                 <td style={td}>{hora(i, "trabajoMax")}</td>
                 <td style={td}>{hora(i, "amplitudMax")}</td>
                 <td style={td}><input type="checkbox" checked={!!x.partido} onChange={e => cambiar(i, { partido: e.target.checked })} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} /></td>
+                <td style={td}>{hora(i, "splitMax", true, !x.partido)}</td>
+                <td style={td}>
+                  <input type="number" min="1" placeholder="sin límite" value={x.maximo > 0 ? x.maximo : ""}
+                    onChange={e => cambiar(i, { maximo: e.target.value === "" ? null : Math.max(1, parseInt(e.target.value) || 1) })}
+                    style={{ ...estiloCampo, width: 84 }} />
+                </td>
                 <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
               </tr>
             ))}
@@ -308,7 +319,7 @@ function TiposTurno({ tipos, onChange }) {
           style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font }}>+ Añadir tipo</button>
         <button onClick={() => onChange(TIPOS_TURNO_DEFECTO)} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Volver a los de por defecto</button>
         <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
-          Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja. Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
+          Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja y aún tiene sitio («Máximo al día»). Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). «Split máximo»: el hueco sin pagar más largo que se permite en el partido. Split máximo y máximo al día en blanco: sin límite. Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
         </span>
       </div>
     </div>
