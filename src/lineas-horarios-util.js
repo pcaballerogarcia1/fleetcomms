@@ -10,3 +10,21 @@ export const leerHora = t => {
   const h = Number(m[1]), mi = Number(m[2]);
   return h <= 29 && mi < 60 ? h * 60 + mi : null;
 };
+
+/**
+ * Junta las variantes de una misma línea (en muchos GTFS cada recorrido
+ * distinto — M01_A, M01_B… — viene como una línea aparte con el mismo nombre).
+ * Agrupa por operador + nombre corto, respetando el orden de la lista.
+ * → [{ clave, nombre, lineas: [variantes] }]
+ */
+export function agruparVariantes(lineas) {
+  const grupos = new Map();
+  for (const l of lineas || []) {
+    const clave = `${l.agencia || ""}|${String(l.nombre ?? "").trim() || l.id}`;
+    if (!grupos.has(clave)) grupos.set(clave, { clave, nombre: l.nombre, lineas: [] });
+    grupos.get(clave).lineas.push(l);
+  }
+  return [...grupos.values()];
+}
+// Texto corto de una variante: su nombre largo o sus cabeceras
+export const textoVariante = l => l.largo || (l.sentidos || []).map(s => s.cabecera).filter(Boolean).join(" ↔ ") || l.tipo || "—";

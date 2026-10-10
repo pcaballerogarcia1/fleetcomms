@@ -5,6 +5,7 @@
 // tipos de vehículo que admite. Nada de esto aparece en los proyectos de
 // "Rutas por puntos" (residuos, reparto…), que siguen con su Planning.
 import { useState, useEffect, useRef, useMemo } from "react";
+import { agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
@@ -416,6 +417,7 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
   const [lineas, setLineas] = useState(() => new Set(red.lineas.map(l => l.id)));
   const [cals, setCals] = useState(() => new Set((red.calendarios || []).map(c => c.id)));
   const [q, setQ] = useState("");
+  const [abiertos, setAbiertos] = useState(() => new Set()); // grupos de variantes desplegados
   const hayCals = (red.calendarios || []).length > 0;
   const calsElegidos = useMemo(() => (red.calendarios || []).filter(c => cals.has(c.id)), [red, cals]);
   const viajes = useMemo(() => new Map(red.lineas.map(l => [l.id, hayCals ? viajesLinea(l, calsElegidos) : l.sentidos.reduce((n, s) => n + (s.viajes?.laborable || 0), 0)])), [red, calsElegidos, hayCals]);
@@ -425,6 +427,10 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
   }, [red, q]);
   const alternar = (setSet, id) => setSet(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const marcarVisibles = si => setLineas(prev => { const n = new Set(prev); for (const l of visibles) { if (si) n.add(l.id); else n.delete(l.id); } return n; });
+  const grupos = useMemo(() => agruparVariantes(visibles), [visibles]);
+  const nGrupos = useMemo(() => agruparVariantes(red.lineas).length, [red]);
+  const ponerVarias = (ids, si) => setLineas(prev => { const n = new Set(prev); for (const id of ids) { if (si) n.add(id); else n.delete(id); } return n; });
+  const sinViajes = red.lineas.filter(l => lineas.has(l.id) && !viajes.get(l.id));
   const totalViajes = red.lineas.reduce((n, l) => n + (lineas.has(l.id) ? viajes.get(l.id) : 0), 0);
   const puede = lineas.size > 0 && (!hayCals || cals.size > 0);
   const casilla = (marcada, onClick) => <input type="checkbox" checked={marcada} onChange={onClick} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer", flexShrink: 0 }} />;
@@ -444,20 +450,42 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
           <div style={columna}>
             <div style={cabeza}>
               <b style={{ fontSize: 12, color: C.text }}>Líneas</b>
-              <span style={{ fontSize: 11, color: C.dim }}>{lineas.size} de {red.lineas.length}</span>
+              <span style={{ fontSize: 11, color: C.dim }}>{lineas.size} de {red.lineas.length}{nGrupos < red.lineas.length ? ` variantes · ${nGrupos} líneas` : ""}</span>
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{ flex: 1, minWidth: 160, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
               {boton(q ? "Marcar las encontradas" : "Todas", () => marcarVisibles(true))}
               {boton(q ? "Quitar las encontradas" : "Ninguna", () => marcarVisibles(false))}
+              {hayCals && sinViajes.length > 0 && boton(`Quitar las ${sinViajes.length} sin viajes`, () => ponerVarias(sinViajes.map(l => l.id), false))}
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
-              {visibles.map(l => (
-                <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: lineas.has(l.id) ? 1 : 0.55 }}>
-                  {casilla(lineas.has(l.id), () => alternar(setLineas, l.id))}
-                  <Insignia linea={l} />
-                  <span style={{ flex: 1, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.largo || l.sentidos.map(s => s.cabecera).filter(Boolean).join(" – ") || "—"}</span>
-                  <span style={{ fontSize: 11, color: C.dim, fontFamily: mono, whiteSpace: "nowrap" }}>{viajes.get(l.id).toLocaleString("es-ES")} viajes</span>
-                </label>
-              ))}
+              {grupos.map(g => {
+                const fila = (l, variante) => (
+                  <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: variante ? "5px 12px 5px 44px" : "7px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: lineas.has(l.id) ? 1 : 0.55, background: variante ? C.bg : "none" }}>
+                    {casilla(lineas.has(l.id), () => alternar(setLineas, l.id))}
+                    {!variante && <Insignia linea={l} />}
+                    <span style={{ flex: 1, fontSize: variante ? 11.5 : 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{variante ? textoVariante(l) : l.largo || l.sentidos.map(s => s.cabecera).filter(Boolean).join(" – ") || "—"}</span>
+                    <span style={{ fontSize: 11, color: viajes.get(l.id) ? C.dim : C.amber, fontFamily: mono, whiteSpace: "nowrap" }}>{viajes.get(l.id).toLocaleString("es-ES")} viajes</span>
+                  </label>
+                );
+                if (g.lineas.length === 1) return fila(g.lineas[0], false);
+                const ids = g.lineas.map(l => l.id);
+                const marcadas = ids.filter(id => lineas.has(id)).length;
+                const abierto = abiertos.has(g.clave);
+                return (
+                  <div key={g.clave}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", borderBottom: `1px solid ${C.border}`, opacity: marcadas ? 1 : 0.55 }}>
+                      <input type="checkbox" checked={marcadas === ids.length} ref={el => { if (el) el.indeterminate = marcadas > 0 && marcadas < ids.length; }} onChange={() => ponerVarias(ids, marcadas < ids.length)}
+                        style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer", flexShrink: 0 }} title="Marcar o quitar todas las variantes" />
+                      <Insignia linea={g.lineas[0]} />
+                      <button onClick={() => alternar(setAbiertos, g.clave)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: font, textAlign: "left" }}>
+                        <span style={{ fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.lineas[0].largo || g.lineas[0].sentidos.map(s => s.cabecera).filter(Boolean).join(" – ")}</span>
+                        <span style={{ fontSize: 10.5, color: C.blueText || C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>{abierto ? "▾" : "▸"} {marcadas < ids.length ? `${marcadas} de ` : ""}{ids.length} variantes</span>
+                      </button>
+                      <span style={{ fontSize: 11, color: C.dim, fontFamily: mono, whiteSpace: "nowrap" }}>{ids.reduce((n, id) => n + (lineas.has(id) ? viajes.get(id) : 0), 0).toLocaleString("es-ES")} viajes</span>
+                    </div>
+                    {abierto && g.lineas.map(l => fila(l, true))}
+                  </div>
+                );
+              })}
               {!visibles.length && <div style={{ padding: 16, fontSize: 12, color: C.dim }}>Ninguna línea con «{q}».</div>}
             </div>
           </div>
@@ -535,6 +563,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
     const t = norm(q).trim();
     return (red?.lineas || []).filter(l => !t || norm(`${l.nombre} ${l.largo} ${l.agencia} ${l.tipo} ${l.sentidos.map(s => s.cabecera).join(" ")}`).includes(t));
   }, [red, q]);
+  const grupos = useMemo(() => agruparVariantes(lista), [lista]);
+  const [abiertos, setAbiertos] = useState(() => new Set());
+  const alternarGrupo = clave => setAbiertos(prev => { const n = new Set(prev); if (n.has(clave)) n.delete(clave); else n.add(clave); return n; });
   const linea = sel ? red?.lineas.find(l => l.id === sel) || null : null;
   const configuradas = Object.values(cfg).filter(c => c?.tipos?.length || c?.regulacion != null || Object.keys(c?.tiempos || {}).length).length;
 
@@ -633,7 +664,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
               width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
               borderRadius: 7, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none",
             }} />
-            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{lista.length.toLocaleString("es-ES")} líneas</div>
+            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{grupos.length.toLocaleString("es-ES")} líneas{grupos.length < lista.length ? ` · ${lista.length.toLocaleString("es-ES")} variantes (pincha una línea para verlas)` : ""}</div>
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 10px" }}>
@@ -643,19 +674,20 @@ export function PlanningLineasPage({ projectId, orgId }) {
               Este proyecto es de <b style={{ color: C.text }}>Líneas regulares</b>. Importa el GTFS de la red (el .zip que publica el operador o el consorcio) para ver las líneas con su ida y vuelta, los viajes por tipo de día y los tiempos de recorrido.
             </div>
           )}
-          {lista.slice(0, 400).map(l => {
+          {grupos.slice(0, 400).map(g => {
+            const fila = (l, variante) => {
             const activa = l.id === sel;
             const lab = l.sentidos.reduce((s, x) => s + (x.viajes.laborable || 0), 0);
             const c = cfg[l.id];
             return (
               <button key={l.id} onClick={() => setSel(activa ? null : l.id)} style={{
-                display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px", borderRadius: 7, marginBottom: 2,
+                display: "flex", alignItems: "center", gap: 9, width: variante ? "calc(100% - 22px)" : "100%", marginLeft: variante ? 22 : 0, textAlign: "left", padding: variante ? "5px 8px" : "7px 8px", borderRadius: 7, marginBottom: 2,
                 background: activa ? `${l.color}22` : "none", border: `1px solid ${activa ? l.color : "transparent"}`, cursor: "pointer", fontFamily: font,
               }}>
-                <Insignia linea={l} />
+                {!variante && <Insignia linea={l} />}
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {l.sentidos.map(s => s.cabecera).filter(Boolean).join(" ↔ ") || l.largo || l.tipo}
+                    {variante ? textoVariante(l) : l.sentidos.map(s => s.cabecera).filter(Boolean).join(" ↔ ") || l.largo || l.tipo}
                   </div>
                   <div style={{ fontSize: 10, color: C.dim }}>
                     {l.sentidos.length === 2 ? "Ida y vuelta" : "Un sentido"} · {lab.toLocaleString("es-ES")} viajes laborable{c?.tipos?.length ? ` · ${c.tipos.length} tipo(s) de vehículo` : ""}
@@ -663,8 +695,30 @@ export function PlanningLineasPage({ projectId, orgId }) {
                 </span>
               </button>
             );
+          };
+            if (g.lineas.length === 1) return fila(g.lineas[0], false);
+            const abierto = abiertos.has(g.clave) || !!q.trim();
+            const lab = g.lineas.reduce((n, l) => n + l.sentidos.reduce((s, x) => s + (x.viajes.laborable || 0), 0), 0);
+            const dentro = g.lineas.some(l => l.id === sel);
+            return (
+              <div key={g.clave}>
+                <button onClick={() => alternarGrupo(g.clave)} style={{
+                  display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px", borderRadius: 7, marginBottom: 2,
+                  background: dentro && !abierto ? `${g.lineas[0].color}22` : "none", border: "1px solid transparent", cursor: "pointer", fontFamily: font,
+                }}>
+                  <Insignia linea={g.lineas[0]} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {g.lineas[0].sentidos.map(s => s.cabecera).filter(Boolean).join(" ↔ ") || g.lineas[0].largo || g.lineas[0].tipo}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.dim }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes · {lab.toLocaleString("es-ES")} viajes laborable</div>
+                  </span>
+                </button>
+                {abierto && g.lineas.map(l => fila(l, true))}
+              </div>
+            );
           })}
-          {lista.length > 400 && <div style={{ fontSize: 11, color: C.dim, padding: 8 }}>…y {lista.length - 400} más: escribe para buscar</div>}
+          {grupos.length > 400 && <div style={{ fontSize: 11, color: C.dim, padding: 8 }}>…y {grupos.length - 400} más: escribe para buscar</div>}
         </div>
       </div>
 

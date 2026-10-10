@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas } from "./lineas-sched.js";
-import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora } from "./lineas-horarios-util.js";
+import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
@@ -125,6 +125,8 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
   const [error, setError] = useState(null);
   const lista = red.lineas.filter(l => !q.trim() || norm(`${l.nombre} ${l.sentidos.map(x => x.cabecera).join(" ")}`).includes(norm(q.trim())));
   const linea = lista.find(l => l.id === sel) || lista[0]; // al buscar, la primera que coincide
+  const grupos = agruparVariantes(lista);
+  const [abiertos, setAbiertos] = useState(() => new Set());
   const editadaEn = l => Object.keys(cfg[l.id]?.salidas || {}).length > 0;
   const guardar = (s, nuevaLista) => { setError(null); onGuardar?.(linea.id, linea.nombre, claveSalidas(s.dir, dia), nuevaLista); };
   return (
@@ -134,13 +136,29 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea…" style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 8px" }}>
-          {lista.slice(0, 400).map(l => (
-            <button key={l.id} onClick={() => { setSel(l.id); setEditando(null); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
-              <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>
-              <span style={{ flex: 1, fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.sentidos.map(x => x.cabecera).join(" ↔ ")}</span>
-              {editadaEn(l) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
-            </button>
-          ))}
+          {grupos.slice(0, 400).map(g => {
+            const fila = (l, variante) => (
+              <button key={l.id} onClick={() => { setSel(l.id); setEditando(null); }} style={{ display: "flex", alignItems: "center", gap: 8, width: variante ? "calc(100% - 20px)" : "100%", marginLeft: variante ? 20 : 0, textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
+                {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+                <span style={{ flex: 1, fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(x => x.cabecera).join(" ↔ ")}</span>
+                {editadaEn(l) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+              </button>
+            );
+            if (g.lineas.length === 1) return fila(g.lineas[0], false);
+            const abierto = abiertos.has(g.clave) || !!q.trim() || g.lineas.some(l => l.id === linea?.id);
+            const l0 = g.lineas[0];
+            return (
+              <div key={g.clave}>
+                <button onClick={() => setAbiertos(prev => { const n = new Set(prev); if (n.has(g.clave)) n.delete(g.clave); else n.add(g.clave); return n; })}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
+                  <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
+                  <span style={{ flex: 1, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes</span>
+                  {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+                </button>
+                {abierto && g.lineas.map(l => fila(l, true))}
+              </div>
+            );
+          })}
         </div>
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: "14px 20px" }}>

@@ -11,7 +11,7 @@ import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, m
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { SelectorCalendario, Horarios } from "./lineas-horarios.jsx";
-import { COLORES_CAL, fechaLarga } from "./lineas-horarios-util.js";
+import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { logAudit } from "./audit.js";
 
 // Mismos colores y tipografías que scheduling.jsx
@@ -1309,6 +1309,8 @@ function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
   const set = new Set(elegidas || lineas.map(l => l.id));
   const vis = lineas.filter(l => !q.trim() || norm(`${l.nombre} ${l.sentidos.map(s => s.cabecera).join(" ")} ${l.tipo}`).includes(norm(q.trim())));
   const poner = ids => onCambiar(ids.length === lineas.length ? null : ids);
+  const grupos = agruparVariantes(vis);
+  const [abiertos, setAbiertos] = useState(() => new Set());
   return (
     <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, width: 360, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.45)", padding: 10 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -1321,13 +1323,31 @@ function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
         ))}
       </div>
       <div style={{ maxHeight: 300, overflowY: "auto" }}>
-        {vis.slice(0, 300).map(l => (
-          <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px", cursor: "pointer" }}>
-            <input type="checkbox" checked={set.has(l.id)} onChange={() => poner(set.has(l.id) ? [...set].filter(x => x !== l.id) : [...set, l.id])} />
-            <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>
-            <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.sentidos.map(s => s.cabecera).join(" ↔ ")}</span>
-          </label>
-        ))}
+        {grupos.slice(0, 300).map(g => {
+          const fila = (l, variante) => (
+            <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: variante ? "3px 4px 3px 26px" : "4px 4px", cursor: "pointer" }}>
+              <input type="checkbox" checked={set.has(l.id)} onChange={() => poner(set.has(l.id) ? [...set].filter(x => x !== l.id) : [...set, l.id])} />
+              {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+              <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(s => s.cabecera).join(" ↔ ")}</span>
+            </label>
+          );
+          if (g.lineas.length === 1) return fila(g.lineas[0], false);
+          const ids = g.lineas.map(l => l.id);
+          const n = ids.filter(id => set.has(id)).length;
+          const abierto = abiertos.has(g.clave) || !!q.trim();
+          return (
+            <div key={g.clave}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px" }}>
+                <input type="checkbox" checked={n === ids.length} ref={el => { if (el) el.indeterminate = n > 0 && n < ids.length; }}
+                  onChange={() => poner(n < ids.length ? [...new Set([...set, ...ids])] : [...set].filter(id => !ids.includes(id)))} />
+                <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: g.lineas[0].color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{g.nombre}</span>
+                <button onClick={() => setAbiertos(prev => { const x = new Set(prev); if (x.has(g.clave)) x.delete(g.clave); else x.add(g.clave); return x; })}
+                  style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: font }}>{abierto ? "▾" : "▸"} {n < ids.length ? `${n} de ` : ""}{ids.length} variantes</button>
+              </div>
+              {abierto && g.lineas.map(l => fila(l, true))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
