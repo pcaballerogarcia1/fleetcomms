@@ -616,6 +616,7 @@ export function encajaTipo(t, tipo, final = false) {
   if (t.fin - t.inicio > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
   if (t.partidos > (tipo.partido ? 1 : 0)) return false;
   if (t.partidos && tipo.splitMax > 0 && (t.split || 0) > tipo.splitMax) return false; // hueco del partido demasiado largo
+  if (final && tipo.partido && !t.partidos) return false; // un partido tiene que tener su hueco (sin él, es otro tipo)
   return !final || t.trabajo >= tipo.trabajoMin;
 }
 const tiposActivos = p => (p.tiposTurno || []).filter(x => x.activo !== false);
@@ -1311,6 +1312,28 @@ export function moverViajesTurno(res, claves, turnoDestino) {
     ? { ...v, relevos: orden(turnos.flatMap(t => t.piezas.filter(x => x.vehiculo === v.id))).map(x => ({ inicio: x.inicio, fin: x.fin, turno: x.turno })) }
     : v));
   return { ...res, vehiculos, turnos, kpis: kpisServicio(res.viajes, vehiculos, turnos, res.autobuses) };
+}
+
+/**
+ * Restricciones que no tienen sentido o que dejan el resultado sin turnos
+ * buenos (p. ej. un campo borrado que quedó a 0). Para avisar en pantalla.
+ * Devuelve [{ texto, grave }].
+ */
+export function revisarRestricciones(p) {
+  const r = [];
+  const tipos = (p.tiposTurno || []).filter(x => x.activo !== false);
+  const jornada = tipos.length ? Math.max(...tipos.map(x => x.trabajoMax || 0)) : p.jornadaMax;
+  if (!(p.maxPiezas >= 2)) r.push({ grave: true, texto: `Piezas por turno: ${p.maxPiezas ?? 0}. Ningún turno puede juntar dos piezas: no habrá partidos y saldrán muchos turnos cortos.` });
+  if (p.huecoNoPagado != null && p.huecoNoPagado < 30) r.push({ grave: true, texto: `Hueco que ya no se paga: ${p.huecoNoPagado} min. Cualquier hueco de ${p.huecoNoPagado} min o más entre dos piezas cuenta como partido (sin pagar).` });
+  if (p.piezaMin > 0 && p.piezaMax > 0 && p.piezaMin > p.piezaMax) r.push({ grave: true, texto: `La pieza mínima (${p.piezaMin} min) es mayor que la máxima (${p.piezaMax} min).` });
+  if (p.piezaMax >= jornada) r.push({ grave: false, texto: `Pieza máxima de ${p.piezaMax} min: una sola pieza puede ocupar el turno entero (${jornada} min), así que casi no habrá relevos ni partidos.` });
+  if (p.aplicar561 !== false && (p.conduccionContinuaMax > 270 || p.pausaConduccionMin < 45)) r.push({ grave: false, texto: `Conducción continua de ${p.conduccionContinuaMax} min con pausa de ${p.pausaConduccionMin} min: no es lo de la UE 561/2006 (270 y 45). Si es a propósito, marca «No aplicar la UE 561/2006».` });
+  if (p.regulacion === 0) r.push({ grave: false, texto: "Regulación en cabecera de 0 min: los autobuses salen en cuanto llegan." });
+  for (const t of tipos) {
+    if (t.trabajoMin > t.trabajoMax) r.push({ grave: true, texto: `Tipo «${t.nombre}»: el trabajo mínimo es mayor que el máximo.` });
+    if (t.partido && !(p.maxPiezas >= 2)) r.push({ grave: true, texto: `Tipo «${t.nombre}» es partido, pero con ${p.maxPiezas ?? 0} pieza(s) por turno no puede haber partidos.` });
+  }
+  return r;
 }
 
 /** Cambios a mano: los de vehículos (paso 1) y los de turnos (paso 2) */

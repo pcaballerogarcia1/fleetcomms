@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales } from "./lineas-store.js";
-import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, moverViajesTurno, esCambioVehiculos, esCambioTurnos, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
+import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, moverViajesTurno, esCambioVehiculos, esCambioTurnos, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -314,6 +314,28 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   );
 }
 
+// ── Campo de número de las restricciones ────────────────────────────────
+// No guarda mientras se escribe (antes, al borrar el número para poner otro,
+// se guardaba 0 al instante y ahí se quedaba): se guarda al salir del campo o
+// con Enter. Vacío = el valor por defecto (o sin límite si vacioEsNulo).
+const MINIMOS = { maxPiezas: 1, piezaMax: 30, amplitudMax: 60, jornadaMax: 60, huecoNoPagado: 1, conduccionContinuaMax: 30, conduccionDiariaMax: 60, velocidadVacio: 1 };
+function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, step, onCambiar }) {
+  const [texto, setTexto] = useState(null); // null = no se está editando
+  const guardar = () => {
+    const t = String(texto ?? "").trim().replace(",", ".");
+    setTexto(null);
+    if (t === "") { onCambiar(vacioEsNulo ? null : defecto ?? null); return; }
+    const n = decimal ? parseFloat(t) : parseInt(t, 10);
+    if (Number.isFinite(n)) onCambiar(Math.max(min, n));
+  };
+  return (
+    <input type="number" min={min} step={step} value={texto ?? (valor ?? "")} placeholder={vacioEsNulo ? "sin límite" : defecto != null ? String(defecto) : ""}
+      onFocus={() => setTexto(valor == null ? "" : String(valor))} onChange={e => setTexto(e.target.value)} onBlur={guardar}
+      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTexto(null); e.currentTarget.blur(); } }}
+      style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
+  );
+}
+
 // ── Tipos de turno (duty types) ─────────────────────────────────────────
 const aHHMM = m => `${String(Math.floor((m ?? 0) / 60)).padStart(2, "0")}:${String((m ?? 0) % 60).padStart(2, "0")}`;
 const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Number); return (a || 0) * 60 + (b || 0); };
@@ -389,8 +411,7 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   );
   const numInput = (k, suffix) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <input type="number" min="0" value={p[k] ?? ""} onChange={e => set(k, Math.max(0, parseInt(e.target.value) || 0))}
-        style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
+      <CampoNumero valor={p[k]} defecto={PARAMS_DEFECTO[k]} min={MINIMOS[k] ?? 0} onCambiar={v => set(k, v)} />
       {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
     </div>
   );
@@ -402,11 +423,11 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   );
   const decInput = (k, suffix, step = 0.01) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <input type="number" min="0" step={step} value={p[k] ?? ""} onChange={e => set(k, e.target.value === "" ? null : Math.max(0, parseFloat(String(e.target.value).replace(",", ".")) || 0))}
-        style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
+      <CampoNumero valor={p[k]} defecto={PARAMS_DEFECTO[k]} min={MINIMOS[k] ?? 0} step={step} decimal vacioEsNulo={PARAMS_DEFECTO[k] == null} onCambiar={v => set(k, v)} />
       {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
     </div>
   );
+  const revision = revisarRestricciones(p);
   const conTipos = (p.tiposTurno || []).some(x => x.activo !== false);
   const check = (k, invertido = false) => (
     <input type="checkbox" checked={invertido ? !p[k] : !!p[k]} onChange={e => set(k, invertido ? !e.target.checked : e.target.checked)}
@@ -422,6 +443,12 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         <span style={{ flex: 1 }} />
         {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font, marginBottom: 9 }}>Cerrar ✕</button>}
       </div>
+      {revision.length > 0 && (
+        <div style={{ margin: "8px 0 12px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
+          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "4px 36px", marginBottom: 14 }}>
         <div>
           {titulo("Vehículos")}

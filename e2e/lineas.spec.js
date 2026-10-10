@@ -85,6 +85,18 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   await expect.poll(async () => (((await leer(`planning_settings/${pid}`))?.lineasSched?.porCalendario?.laborable?.manuales) || []).filter(o => o.tipo === "viajesTurno").length).toBe(1);
   await page.getByTitle(/Anclar arriba/).first().click();
   await expect(page.getByText(/anclado\(s\) arriba/)).toBeVisible();
+
+  // 7) Restricciones: borrar un número para escribir otro ya no deja un 0 guardado
+  await page.getByRole("button", { name: /Restricciones/ }).first().click();
+  const piezas = page.locator("div").filter({ has: page.locator("label", { hasText: /^Piezas por turno$/ }) }).last().locator("input");
+  await piezas.fill("");
+  await piezas.fill("1");
+  await piezas.press("Enter");
+  await expect(page.getByText(/Piezas por turno: 1\. Ningún turno puede juntar/)).toBeVisible();
+  await piezas.fill("");
+  await piezas.press("Enter");
+  await expect(piezas).toHaveValue("4"); // vacío = el valor por defecto, no 0
+  await expect(page.getByText(/Revisa estas restricciones/)).toBeHidden();
   expect(errores).toEqual([]);
 });
 

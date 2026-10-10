@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
+import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, revisarRestricciones, PARAMS_DEFECTO, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -521,6 +521,24 @@ describe("scheduling de líneas: autobuses óptimos (mínimo por emparejamiento)
     expect(probadas.some(x => x.estrategia.eleccion === "optimo")).toBe(true);
     const mejorVoraz = Math.min(...probadas.filter(x => x.estrategia.eleccion !== "optimo").map(x => x.autobuses));
     expect(probadas[0].autobuses).toBeLessThanOrEqual(mejorVoraz);
+  });
+});
+
+describe("scheduling de líneas: restricciones sin sentido", () => {
+  it("avisa de los ceros que dejan cada turno en una pieza (lo que pasó en un proyecto real)", () => {
+    const malas = { ...PARAMS_DEFECTO, maxPiezas: 0, huecoNoPagado: 0, pausaConduccionMin: 0, conduccionContinuaMax: 540, regulacion: 0, piezaMin: 0, piezaMax: 540 };
+    const r = revisarRestricciones(malas);
+    expect(r.some(x => x.grave && /Piezas por turno: 0/.test(x.texto))).toBe(true);
+    expect(r.some(x => x.grave && /Hueco que ya no se paga: 0/.test(x.texto))).toBe(true);
+    expect(r.some(x => /UE 561/.test(x.texto))).toBe(true);
+    expect(r.some(x => /Regulación en cabecera de 0/.test(x.texto))).toBe(true);
+    expect(revisarRestricciones(PARAMS_DEFECTO)).toEqual([]); // las de por defecto, sin avisos
+  });
+
+  it("un turno sin hueco no es de tipo Partido aunque quepa en sus horas", () => {
+    const partido = TIPOS_TURNO_DEFECTO.find(x => x.id === "partido");
+    expect(encajaTipo({ inicio: h(6), fin: h(13), trabajo: 420, partidos: 0 }, partido, true)).toBe(false);
+    expect(encajaTipo({ inicio: h(6), fin: h(16), trabajo: 420, partidos: 1, split: 120 }, partido, true)).toBe(true);
   });
 });
 
