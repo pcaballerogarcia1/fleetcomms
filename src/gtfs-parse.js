@@ -18,12 +18,28 @@ const u16 = (b, o) => b[o] | (b[o + 1] << 8);
 const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 const bytesOf = async blob => new Uint8Array(await blob.arrayBuffer());
 
+// Por qué un archivo no se puede abrir como .zip, en palabras que ayuden a
+// arreglarlo (lo más común: la página de vista previa de Google Drive o de un
+// portal guardada con el nombre del .zip, o un .rar renombrado)
+export async function porQueNoEsZip(blob) {
+  const ini = await bytesOf(blob.slice(0, 512));
+  const texto = new TextDecoder("latin1").decode(ini).toLowerCase();
+  if (/<!doctype html|<html|<head|<body/.test(texto)) {
+    const drive = /drive|docs\.google|googleusercontent/.test(new TextDecoder("latin1").decode(await bytesOf(blob.slice(0, 200_000))).toLowerCase());
+    return `No es un .zip: es una página web${drive ? " (la vista previa de Google Drive)" : ""} guardada con ese nombre. Descarga el archivo de verdad${drive ? " con el botón «Descargar» de Drive (o clic derecho → Descargar)" : ""} y vuelve a importarlo.`;
+  }
+  if (ini[0] === 0x52 && ini[1] === 0x61 && ini[2] === 0x72 && ini[3] === 0x21) return "Es un archivo .rar renombrado a .zip: descomprímelo y vuelve a comprimir los .txt del GTFS en un .zip.";
+  if (ini[0] === 0x37 && ini[1] === 0x7a) return "Es un archivo .7z renombrado a .zip: descomprímelo y vuelve a comprimir los .txt del GTFS en un .zip.";
+  if (!blob.size) return "El archivo está vacío.";
+  return "No es un archivo .zip válido (puede que esté dañado o a medio descargar): descárgalo otra vez.";
+}
+
 export async function zipEntries(blob) {
   const tail = Math.min(blob.size, 65_557);
   const end = await bytesOf(blob.slice(blob.size - tail));
   let e = -1;
   for (let i = end.length - 22; i >= 0; i--) if (u32(end, i) === 0x06054b50) { e = i; break; }
-  if (e < 0) throw new Error("No es un archivo .zip válido");
+  if (e < 0) throw new Error(await porQueNoEsZip(blob));
   const count = u16(end, e + 10), cdSize = u32(end, e + 12), cdOff = u32(end, e + 16);
   const cd = await bytesOf(blob.slice(cdOff, cdOff + cdSize));
   const out = new Map();

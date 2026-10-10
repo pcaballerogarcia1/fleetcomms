@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
-import { parseGtfs, csvLine, simplificar, tipoRuta, zipEntries, minToHHMM } from "./gtfs-parse.js";
+import { parseGtfs, csvLine, simplificar, tipoRuta, zipEntries, minToHHMM, porQueNoEsZip } from "./gtfs-parse.js";
 
 // GTFS mínimo, con stop_times ANTES que trips en el zip y dentro de una carpeta
 function gtfsZip({ sinStops = false, comprimir = true } = {}) {
@@ -72,5 +72,16 @@ describe("utilidades", () => {
     expect(simplificar(recta)).toHaveLength(2);
     const codo = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]];
     expect(simplificar(codo)).toEqual([[0, 0], [0, 2], [2, 2]]);
+  });
+});
+
+describe("archivo que no es un .zip", () => {
+  it("explica qué es y cómo arreglarlo", async () => {
+    const drive = new Blob(['<!DOCTYPE html><html dir="ltr"><head><script>window._DRIVE_VIEWER_ctiming={}</script>… drive.google.com …']);
+    expect(await porQueNoEsZip(drive)).toMatch(/página web \(la vista previa de Google Drive\).*Descargar/);
+    expect(await porQueNoEsZip(new Blob(["<html><body>portal</body></html>"]))).toMatch(/página web guardada/);
+    expect(await porQueNoEsZip(new Blob([new Uint8Array([0x52, 0x61, 0x72, 0x21, 0, 0])]))).toMatch(/\.rar/);
+    expect(await porQueNoEsZip(new Blob([]))).toMatch(/vacío/);
+    await expect(zipEntries(drive)).rejects.toThrow(/página web/);
   });
 });
