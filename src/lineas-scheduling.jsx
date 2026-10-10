@@ -427,6 +427,7 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {titulo("Vehículos")}
           {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
           {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min"))}
+          {row("Amplitud máxima del autobús", decInput("amplitudBusMax", "min de la salida a la vuelta a cochera (vacío = sin límite)", 1))}
           {sub("Coste")}
           {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
           {row("Coste por km", decInput("costeKm", "€/km (con los vacíos)"))}
@@ -748,7 +749,7 @@ function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOpti
 const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm"]; // entreLineas además es restricción
 const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
 // lo que cambia los vehículos (el resto solo cambia los turnos)
-const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
+const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "amplitudBusMax", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
 const sinCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => !campos.includes(k)));
 const soloCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => campos.includes(k)));
 function hashTexto(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }

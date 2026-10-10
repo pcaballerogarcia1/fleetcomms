@@ -66,6 +66,7 @@ export const PARAMS_DEFECTO = {
   entreLineas: true,    // un autobús puede seguir con otra línea en la misma cabecera
   margenVacio: 30,      // min entre dos bloques del mismo autobús, sin cocheras (ir y volver incluido)
   margenCochera: 10,    // min parado en cochera entre dos bloques del mismo autobús (con cocheras)
+  amplitudBusMax: null, // min de un autobús desde que sale de cochera hasta que vuelve (null = sin límite)
   vacioMaxKm: 20,       // km como mucho de un vacío entre cabeceras (0 = no se hacen)
   factorRodeo: 1.35,    // km por carretera / km en línea recta
   velocidadVacio: 25,   // km/h de los vacíos
@@ -262,7 +263,13 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     }
     return vecinos.get(r);
   };
-  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo);
+  // Amplitud máxima del autobús: desde que sale de cochera (o del primer
+  // viaje, sin cocheras) hasta que vuelve tras el último viaje
+  const ampMax = p.amplitudBusMax > 0 ? p.amplitudBusMax : Infinity;
+  const minCochera = (a, b) => { const k = geo?.hayCocheras ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
+  const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
+  const cabe = (veh, v) => ampMax === Infinity || v.arr + (veh.cocheraEst ? minCochera(v.d, veh.cocheraEst) : 0) - veh.salida0 <= ampMax;
+  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo) && cabe(veh, v);
   for (const v of viajes) {
     const c = cfg[v.linea];
     const donde = find(v.o);
@@ -293,7 +300,11 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
         if (elegido.km >= PEGADAS_KM) veh.viajes.push(vacio(veh.viajes.at(-1).d, v.o, veh.libre, elegido.minutos, elegido.km, "cabecera", v.nombre));
       }
     }
-    if (!veh) { veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea }; vehiculos.push(veh); }
+    if (!veh) {
+      const cochera = ampMax < Infinity ? cocheraDe(v) : null;
+      veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea, cocheraEst: cochera, salida0: v.dep - (cochera ? minCochera(cochera, v.o) : 0) };
+      vehiculos.push(veh);
+    }
     veh.viajes.push(v);
     veh.linea = v.linea;
     veh.libre = v.arr + (c?.regulacion ?? p.regulacion);
@@ -315,7 +326,9 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     veh.fin = veh.viajes.at(-1).arr;
     veh.lineas = [...new Set(reales.map(x => x.nombre))];
     veh.kmVacio = Math.round(veh.viajes.reduce((s, x) => s + (x.vacio ? x.km : 0), 0) * 10) / 10;
-    delete veh.libre; delete veh.linea;
+    // un solo viaje (con la salida y la vuelta) ya más largo que el máximo: no se puede partir, se avisa
+    if (ampMax < Infinity && veh.fin - veh.inicio > ampMax) veh.avisos = [`Amplitud del autobús de ${hm(veh.fin - veh.inicio)}: supera ${hm(ampMax)}`];
+    delete veh.libre; delete veh.linea; delete veh.cocheraEst; delete veh.salida0;
   }
   return vehiculos;
 }
@@ -330,15 +343,16 @@ function repartirAutobuses(vehiculos, p) {
       if (bus.libre + (veh.cochera ? p.margenCochera : p.margenVacio) > veh.inicio) continue;
       if (veh.cochera && bus.cochera !== veh.cochera) continue;
       if (bus.tipo != null && veh.tipo != null && bus.tipo !== veh.tipo) continue;
+      if (p.amplitudBusMax > 0 && veh.fin - bus.inicio > p.amplitudBusMax) continue; // amplitud máxima del autobús
       if (!mejor || bus.libre > mejor.libre) mejor = bus;
     }
-    if (!mejor) { mejor = { id: autobuses.length + 1, tipo: veh.tipo, bloques: [], libre: 0, cochera: veh.cochera || null }; autobuses.push(mejor); }
+    if (!mejor) { mejor = { id: autobuses.length + 1, tipo: veh.tipo, bloques: [], libre: 0, inicio: veh.inicio, cochera: veh.cochera || null }; autobuses.push(mejor); }
     mejor.bloques.push(veh.id);
     mejor.libre = veh.fin;
     if (mejor.tipo == null) mejor.tipo = veh.tipo;
     veh.autobus = mejor.id;
   }
-  autobuses.forEach(b => { delete b.libre; });
+  autobuses.forEach(b => { delete b.libre; delete b.inicio; });
   return autobuses;
 }
 
@@ -882,6 +896,7 @@ function montarBloque(veh, reales, r) {
   veh.fin = viajes.at(-1).arr;
   veh.lineas = [...new Set(ord.map(x => x.nombre))];
   veh.kmVacio = Math.round(viajes.reduce((t, x) => t + (x.vacio ? x.km : 0), 0) * 10) / 10;
+  if (p.amplitudBusMax > 0 && veh.fin - veh.inicio > p.amplitudBusMax) avisos.push(`Amplitud del autobús de ${hm(veh.fin - veh.inicio)}: supera ${hm(p.amplitudBusMax)}`);
   veh.avisos = avisos;
   veh.manual = true;
   return veh;
@@ -942,6 +957,13 @@ export function moverViaje(res, clave, busDestino) {
       }
     });
     if (b.cochera == null) b.cochera = bloque(b.bloques[0])?.cochera ?? null;
+    // varios bloques en el mismo autobús: de la primera salida a la última vuelta
+    const ampMax = res.params.amplitudBusMax;
+    if (ampMax > 0 && lista.length > 1 && lista.at(-1).fin - lista[0].inicio > ampMax) {
+      const ultimo = lista.at(-1);
+      const aviso = `El autobús ${b.id} está fuera ${hm(ultimo.fin - lista[0].inicio)}: supera la amplitud máxima de ${hm(ampMax)}`;
+      vehiculos = vehiculos.map(v => (v.id === ultimo.id && !(v.avisos || []).includes(aviso) ? { ...v, avisos: [...(v.avisos || []), aviso] } : v));
+    }
   }
   // los turnos eran de los vehículos de antes: hay que rehacerlos (paso 2)
   vehiculos = vehiculos.map(v => (v.relevos?.length ? { ...v, relevos: [] } : v));

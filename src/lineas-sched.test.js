@@ -455,3 +455,32 @@ describe("scheduling de líneas: mover varios a la vez", () => {
   });
 });
 
+describe("scheduling de líneas: amplitud máxima del autobús", () => {
+  // Línea circular cada 20 min de 6 a 23 h: sin límite, un mismo autobús puede estar todo el día
+  const salidas = Array.from({ length: 52 }, (_, k) => h(6) + k * 20);
+  const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 40), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 40, viajes: 1 })) }] }] };
+  const span = (r, b) => { const l = b.bloques.map(id => r.vehiculos.find(v => v.id === id)); return Math.max(...l.map(x => x.fin)) - Math.min(...l.map(x => x.inicio)); };
+
+  it("ningún bloque ni autobús pasa del máximo, y hacen falta más bloques", () => {
+    const libre = generarVehiculos(red, {}, { dia: "laborable" });
+    expect(Math.max(...libre.vehiculos.map(v => v.fin - v.inicio))).toBeGreaterThan(600);
+    const r = generarVehiculos(red, {}, { dia: "laborable", amplitudBusMax: 480 });
+    for (const v of r.vehiculos) expect(v.fin - v.inicio).toBeLessThanOrEqual(480);
+    for (const b of r.autobuses) expect(span(r, b)).toBeLessThanOrEqual(480);
+    expect(r.vehiculos.length).toBeGreaterThan(libre.vehiculos.length);
+    expect(r.kpis.viajes).toBe(libre.kpis.viajes); // todo cubierto igual
+  });
+
+  it("con un cambio a mano que lo pasa, sale el aviso", () => {
+    const r = generarVehiculos(red, {}, { dia: "laborable", amplitudBusMax: 480 });
+    const b0 = r.autobuses[0];
+    const mio = r.vehiculos.find(v => v.id === b0.bloques[0]);
+    // una expedición de por la noche al primer autobús (que sale por la mañana)
+    const tarde = r.vehiculos.flatMap(v => v.viajes.filter(x => !x.vacio)).filter(x => x.dep > mio.fin + 60).at(-1);
+    const m = moverViaje(r, claveViaje(tarde), b0.id);
+    expect(m.error).toBeUndefined();
+    const avisos = m.vehiculos.filter(v => m.autobuses.find(b => b.id === b0.id).bloques.includes(v.id)).flatMap(v => v.avisos || []);
+    expect(avisos.some(a => /amplitud/i.test(a))).toBe(true);
+  });
+});
+
