@@ -5,11 +5,13 @@
 // autobuses: los viajes de cada línea en su color, los relevos de conductor
 // (T12) y la pestaña de horarios de salida. El cálculo está en lineas-sched.js.
 import { useState, useEffect, useMemo, useRef } from "react";
-import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales } from "./lineas-store.js";
-import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, moverViajesTurno, esCambioVehiculos, esCambioTurnos, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
+import { TIPOS_DIA } from "./gtfs-red.js";
+import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales, watchCambioPlanning } from "./lineas-store.js";
+import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, moverViajesTurno, esCambioVehiculos, esCambioTurnos, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
+import { SelectorCalendario, Horarios } from "./lineas-horarios.jsx";
+import { COLORES_CAL, fechaLarga } from "./lineas-horarios-util.js";
 import { logAudit } from "./audit.js";
 
 // Mismos colores y tipografías que scheduling.jsx
@@ -537,176 +539,9 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
 }
 
 // ── Selector de calendario: tipos de día y calendarios del GTFS ─────────
-const COLORES_CAL = ["#5c9bff", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#22d3ee", "#f87171", "#a3e635", "#e879f9", "#2dd4bf", "#facc15"];
-const MESES_L = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const fechaLarga = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 
-function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
-  const [abierto, setAbierto] = useState(false);
-  const [q, setQ] = useState("");
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!abierto) return;
-    const fuera = e => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
-    document.addEventListener("mousedown", fuera);
-    return () => document.removeEventListener("mousedown", fuera);
-  }, [abierto]);
-  const cals = useMemo(() => red.calendarios || [], [red]);
-  const colorDe = useMemo(() => new Map(cals.map((c, i) => [c.id, COLORES_CAL[i % COLORES_CAL.length]])), [cals]);
-  const calDeFecha = useMemo(() => { const m = new Map(); for (const c of cals) for (const f of c.fechas) m.set(f, c); return m; }, [cals]);
-  // meses que cubre el GTFS
-  const meses = useMemo(() => {
-    const fs = [...calDeFecha.keys()].sort();
-    if (!fs.length) return [];
-    const out = [];
-    for (let y = +fs[0].slice(0, 4), m = +fs[0].slice(5, 7) - 1; `${y}-${String(m + 1).padStart(2, "0")}` <= fs.at(-1).slice(0, 7); m === 11 ? (y++, m = 0) : m++) out.push([y, m]);
-    return out.slice(0, 15);
-  }, [calDeFecha]);
-  const elegir = id => { onCambiar(id); setAbierto(false); };
-  const vis = cals.filter(c => !q.trim() || norm(`${c.nombre} ${(c.codigos || []).join(" ")}`).includes(norm(q.trim())));
-  const fila = (id, titulo, detalle, color) => (
-    <button key={id} onClick={() => elegir(id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 6, border: "none", cursor: "pointer", background: valor === id ? C.blueDim : "none", fontFamily: font }}>
-      <span style={{ width: 9, height: 9, borderRadius: 3, background: color || "transparent", border: color ? "none" : `1px solid ${C.dim}`, flexShrink: 0 }} />
-      <span style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, color: valor === id ? C.blueText : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titulo}</div>
-        <div style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{detalle}</div>
-      </span>
-    </button>
-  );
-  const titulo = { fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, padding: "8px 8px 4px", textTransform: "uppercase" };
-  return (
-    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
-      <button onClick={() => setAbierto(a => !a)} title="Calendario del escenario" style={{ display: "flex", alignItems: "center", gap: 6, maxWidth: ancho, padding: "5px 10px", borderRadius: 6, background: C.surface2, border: `1px solid ${abierto ? C.blue : C.border2}`, color: C.text, fontSize: 11.5, cursor: "pointer", fontFamily: font }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={esCalendario(valor) ? colorDe.get(valor) || C.blue : C.blue} strokeWidth="2.2"><rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" /></svg>
-        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nombreDia(valor, red)}</span>
-        <span style={{ color: C.dim, fontSize: 9 }}>▾</span>
-      </button>
-      {abierto && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, width: meses.length ? 720 : 320, maxWidth: "calc(100vw - 32px)", background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.5)", display: "flex", maxHeight: 460 }}>
-          <div style={{ width: 320, flexShrink: 0, borderRight: meses.length ? `1px solid ${C.border}` : "none", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ overflowY: "auto", padding: 6, flex: 1 }}>
-              <div style={titulo}>Tipo de día · día de referencia</div>
-              {TIPOS_DIA.map(t => fila(t.id, t.nombre, red.dias?.[t.id] ? `como el ${fechaLarga(red.dias[t.id])} (el de más servicio)` : "sin servicio", null))}
-              <div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>
-                <span>Calendarios del GTFS{cals.length ? ` (${cals.length})` : ""}</span>
-              </div>
-              {cals.length > 8 && (
-                <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar calendario o código…" style={{ width: "calc(100% - 16px)", margin: "0 8px 4px", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
-              )}
-              {vis.map(c => fila(c.id, c.nombre, `${c.fechas.length} día${c.fechas.length > 1 ? "s" : ""} · ${num(c.viajes)} viajes${c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}`, colorDe.get(c.id)))}
-              {!cals.length && <div style={{ fontSize: 11, color: C.dim, padding: "4px 8px 8px", lineHeight: 1.5 }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planning («Sustituir red») para elegir cualquiera.</div>}
-            </div>
-          </div>
-          {meses.length > 0 && (
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px 16px", alignContent: "start" }}>
-              <div style={{ gridColumn: "1 / -1", fontSize: 10.5, color: C.dim }}>Pincha un día para usar su calendario. Cada color es un calendario distinto.</div>
-              {meses.map(([y, m]) => {
-                const primero = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7; // lunes = 0
-                const nDias = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-                return (
-                  <div key={`${y}-${m}`}>
-                    <div style={{ fontSize: 11, color: C.text, fontWeight: 600, marginBottom: 4 }}>{MESES_L[m]} {y}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
-                      {["L", "M", "X", "J", "V", "S", "D"].map(d => <div key={d} style={{ fontSize: 8.5, color: C.dim, textAlign: "center" }}>{d}</div>)}
-                      {Array.from({ length: primero }, (_, i) => <div key={`v${i}`} />)}
-                      {Array.from({ length: nDias }, (_, i) => {
-                        const f = `${y}-${String(m + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
-                        const c = calDeFecha.get(f);
-                        const sel = c && c.id === valor;
-                        return (
-                          <button key={f} disabled={!c} onClick={() => elegir(c.id)} title={c ? `${fechaLarga(f)} · ${c.nombre}` : `${fechaLarga(f)} · sin servicio en el GTFS`}
-                            style={{ height: 20, borderRadius: 4, border: sel ? "1.5px solid #fff" : "1px solid transparent", padding: 0, fontSize: 9.5, fontFamily: mono, cursor: c ? "pointer" : "default",
-                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? "#0b1220" : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
-// ── Horarios de salida ──────────────────────────────────────────────────
-function Horarios({ red, cfg, diaInicial }) {
-  const [dia, setDia] = useState(diaInicial || "laborable");
-  const [q, setQ] = useState("");
-  const [sel, setSel] = useState(red.lineas[0]?.id || null);
-  const lista = red.lineas.filter(l => !q.trim() || norm(`${l.nombre} ${l.sentidos.map(s => s.cabecera).join(" ")}`).includes(norm(q.trim())));
-  const linea = lista.find(l => l.id === sel) || lista[0]; // al buscar, la primera que coincide
-  return (
-    <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-      <div style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", background: C.card }}>
-        <div style={{ padding: 10 }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea…" style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 8px" }}>
-          {lista.slice(0, 400).map(l => (
-            <button key={l.id} onClick={() => setSel(l.id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
-              <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>
-              <span style={{ fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.sentidos.map(s => s.cabecera).join(" ↔ ")}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ flex: 1, overflow: "auto", padding: "14px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <SelectorCalendario red={red} valor={dia} onCambiar={setDia} ancho={420} />
-          {!esCalendario(dia) && red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
-        </div>
-        {linea && (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${linea.sentidos.length}, minmax(320px, 1fr))`, gap: 16 }}>
-            {linea.sentidos.map(s => {
-              const { lista: salidas, aproximado } = salidasDe(s, dia, red);
-              const porHora = new Map();
-              for (const m of salidas) { const h = Math.floor(m / 60); if (!porHora.has(h)) porHora.set(h, []); porHora.get(h).push(m % 60); }
-              return (
-                <div key={s.dir} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ minWidth: 34, padding: "2px 6px", borderRadius: 5, background: linea.color, color: "#0b1220", fontSize: 12, fontWeight: 800, textAlign: "center" }}>{linea.nombre}</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.dir === 0 ? C.green : C.amber }}>{s.dir === 0 ? "IDA" : "VUELTA"}</span>
-                    <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>→ {s.cabecera}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, fontFamily: mono }}>{salidas.length} salidas</span>
-                  </div>
-                  {aproximado && salidas.length > 0 && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber }}>Horas aproximadas: vuelve a importar el GTFS en Planning para tener las exactas.</div>}
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr>
-                      <th style={{ fontSize: 9, color: C.dim, textAlign: "left", padding: "6px 14px", letterSpacing: 1 }}>HORA</th>
-                      <th style={{ fontSize: 9, color: C.dim, textAlign: "left", padding: "6px 8px", letterSpacing: 1 }}>MINUTOS DE SALIDA</th>
-                      <th style={{ fontSize: 9, color: C.dim, textAlign: "right", padding: "6px 14px", letterSpacing: 1 }}>RECORRIDO</th>
-                    </tr></thead>
-                    <tbody>
-                      {[...porHora.entries()].map(([h, mins]) => (
-                        <tr key={h} style={{ borderTop: `1px solid ${C.border}` }}>
-                          <td style={{ padding: "5px 14px", fontFamily: mono, fontSize: 12, color: C.text, fontWeight: 700, verticalAlign: "top" }}>{String(h % 24).padStart(2, "0")}{h >= 24 ? <span style={{ color: C.dim, fontWeight: 400, fontSize: 10 }}> +1</span> : null}</td>
-                          <td style={{ padding: "5px 8px", fontFamily: mono, fontSize: 12, color: C.muted, lineHeight: 1.7 }}>{mins.map(m => String(m).padStart(2, "0")).join("  ")}</td>
-                          <td style={{ padding: "5px 14px", fontFamily: mono, fontSize: 11, color: C.dim, textAlign: "right", whiteSpace: "nowrap", verticalAlign: "top" }}>{duracionViaje(s, h * 60, cfg[linea.id])} min</td>
-                        </tr>
-                      ))}
-                      {!salidas.length && <tr><td colSpan={3} style={{ padding: 14, fontSize: 12, color: C.dim }}>Sin servicio este tipo de día</td></tr>}
-                    </tbody>
-                  </table>
-                  <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, fontSize: 10.5, color: C.dim }}>
-                    Frecuencia media: {FRANJAS.map(f => {
-                      const n = salidas.filter(m => franjaDe(m) === f.id).length;
-                      return n ? `${f.id.replace("-", "–")} cada ${Math.round((f.hasta - f.desde) / n)} min` : null;
-                    }).filter(Boolean).join(" · ") || "—"}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-// ── Optimizar: prueba estrategias dentro de las restricciones ───────────
 function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado }) {
   const veh = fase === "vehiculos";
   const objetivos = veh ? OBJETIVOS_VEHICULOS : OBJETIVOS_TURNOS;
@@ -836,10 +671,19 @@ export function SchedulingLineasPage({ projectId }) {
   useEffect(() => () => workerRef.current?.terminate(), []);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
-  useEffect(() => watchCfg(projectId, setCfg), [projectId]);
+  // listos: hasta que llegan la configuración de las líneas y las cocheras no se
+  // calcula (antes se calculaba con lo de antes y el escenario no reflejaba los
+  // cambios del Planning)
+  const [cfgListo, setCfgListo] = useState(false);
+  const [cocherasListas, setCocherasListas] = useState(false);
+  useEffect(() => watchCfg(projectId, c => { setCfg(c); setCfgListo(true); }), [projectId]);
+  // El último cambio del Planning (horarios, tiempos, cocheras…): si es posterior
+  // a lo último que se vio de un calendario, se avisa arriba
+  const [cambioPlanning, setCambioPlanning] = useState(null);
+  useEffect(() => watchCambioPlanning(projectId, setCambioPlanning), [projectId]);
   useEffect(() => watchSchedParams(projectId, setGuardados), [projectId]);
   const [cocheras, setCocheras] = useState([]);
-  useEffect(() => watchCocheras(projectId, setCocheras), [projectId]);
+  useEffect(() => watchCocheras(projectId, l => { setCocheras(l); setCocherasListas(true); }), [projectId]);
 
   const red = estado.red;
   // la clave de cada escenario también cambia si se mueven las cocheras
@@ -859,6 +703,7 @@ export function SchedulingLineasPage({ projectId }) {
   const params = paramsPara(dia, cambios);
   const actual = cache[dia];
   const res = actual?.res || null;
+  const avisoPlanning = cambioPlanning && porCalendario[dia] && cambioPlanning.atMs > (porCalendario[dia].planningVisto || 0) ? cambioPlanning : null;
   const optDe = (d, f) => optPorDia[`${d}|${f}`] || { estado: "nada", progreso: [0, 0] };
   const opt = optDe(dia, fase);
   const paradasPorId = useMemo(() => new Map([...(red?.paradas || []).map(p => [p.id, p]), ...cocheras.map(c => [ID_COCHERA(c.id), { nombre: `Cochera ${c.nombre || ""}`.trim() }])]), [red, cocheras]);
@@ -928,7 +773,7 @@ export function SchedulingLineasPage({ projectId }) {
         const cambiados = Object.fromEntries(Object.entries(top).filter(([k, v]) => k === "dia" || JSON.stringify(guardadoTop[k] ?? PARAMS_DEFECTO[k] ?? null) !== JSON.stringify(v ?? null)));
         guardarSchedParams(projectId, cambiados).catch(() => {});
         guardarCalendario(p.dia, {
-          estrategia: est, resumen, claveV, clave, manuales: aplicados,
+          estrategia: est, resumen, claveV, clave, manuales: aplicados, ...(previo ? {} : { planningVisto: Date.now() }),
           objetivoV: meta.objetivoV ?? (previo && mismos(CAMPOS_VEHICULOS, previo.estrategia, est) ? previo.objetivoV ?? null : null),
           objetivoT: r.turnos ? meta.objetivoT ?? (previo?.clave && mismos(CAMPOS_ESTRATEGIA, previo.estrategia, est) ? previo.objetivoT ?? null : null) : null,
         });
@@ -1029,8 +874,10 @@ export function SchedulingLineasPage({ projectId }) {
   const objetivoVehValido = p => (objetivoV === "coste" && !hayPreciosVeh(p) ? "autobuses" : objetivoV);
 
   // Optimizar un paso del calendario que se está viendo (en un worker)
+  const marcarPlanningVisto = d => { if (avisoPlanning) guardarCalendario(d, { planningVisto: Date.now() }); };
   function optimizar() {
     if (!red || opt.estado === "corriendo" || lote || !perderManuales(fase)) return;
+    marcarPlanningVisto(params.dia);
     const p = params, d = p.dia, f = fase;
     const obj = f === "vehiculos" ? objetivoVehValido(p) : objetivoT;
     const setO = x => setOptPorDia(m => ({ ...m, [`${d}|${f}`]: typeof x === "function" ? x(m[`${d}|${f}`] || {}) : x }));
@@ -1112,9 +959,17 @@ export function SchedulingLineasPage({ projectId }) {
   }, [manualesServidor, dia]);
 
   useEffect(() => {
-    if (red && guardados !== undefined && !autoRef.current) { autoRef.current = true; calcular(params, "ambos", { conservar: true }); }
+    if (red && guardados !== undefined && cfgListo && cocherasListas && !autoRef.current) { autoRef.current = true; calcular(params, "ambos", { conservar: true }); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [red, guardados]);
+  }, [red, guardados, cfgListo, cocherasListas]);
+  // El Planning cambia con el Scheduling abierto (horarios, tiempos, cocheras…):
+  // el calendario que se ve se recalcula con los cambios
+  useEffect(() => {
+    if (!autoRef.current || calculando || lote || !cache[dia] || enMemoriaValido(dia, params)) return;
+    const t = setTimeout(() => calcular(params, "ambos", { conservar: true }), 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgTxt]);
 
   async function exportar(tipo) {
     if (!res || (tipo === "turnos" && !res.turnos)) return;
@@ -1154,7 +1009,7 @@ export function SchedulingLineasPage({ projectId }) {
   );
 
   const nLineas = params.lineas ? params.lineas.length : red.lineas.length;
-  const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + viajesDia(x, params.dia, red), 0), 0);
+  const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + viajesDia(x, params.dia, red, cfg[l.id]), 0), 0);
   const btnSec = { padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
   const btnExcel = { padding: "5px 10px", background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.3)", color: "#34d399", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
   const icoDescarga = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
@@ -1212,12 +1067,18 @@ export function SchedulingLineasPage({ projectId }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></svg>
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
-            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) calcular(params, fase); }} disabled={calculando} style={{
+            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} style={{
               padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0b1220" : "#fff",
               fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0, whiteSpace: "nowrap",
             }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
+          {avisoPlanning && (
+            <div style={{ padding: "7px 16px", fontSize: 12, color: "#0b1220", background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <span>⚠ <b>Se ha modificado el Planning</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
+              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: "#0b1220", border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
+            </div>
+          )}
           {manualesActuales.length > 0 && (
             <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(92,155,255,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
               <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>

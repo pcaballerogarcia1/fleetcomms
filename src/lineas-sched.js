@@ -102,7 +102,11 @@ const hhmmAMin = s => {
  * día de referencia) o un calendario del GTFS ("cal:3", necesita la red).
  * Si la red es antigua (sin horas), repartidas entre la primera y la última.
  */
-export function salidasDe(sentido, dia, red) {
+export const claveSalidas = (dir, dia) => `${dir}|${dia}`;
+export function salidasDe(sentido, dia, red, cfgLinea) {
+  // horas cambiadas a mano en Planning para ese sentido y día: mandan sobre el GTFS
+  const editadas = cfgLinea?.salidas?.[claveSalidas(sentido.dir, dia)];
+  if (Array.isArray(editadas)) return { lista: [...editadas].sort((a, b) => a - b), aproximado: false, editado: true };
   if (esCalendario(dia)) {
     const cal = red?.calendarios?.find(c => c.id === dia);
     if (!cal || !sentido.porServicio) return { lista: [], aproximado: !sentido.porServicio };
@@ -187,7 +191,7 @@ function viajesDelDia(red, cfg, p) {
     const c = cfg[l.id];
     for (const s of l.sentidos) {
       if (!s.paradas.length) continue;
-      const { lista, aproximado: ap } = salidasDe(s, p.dia, red);
+      const { lista, aproximado: ap } = salidasDe(s, p.dia, red, c);
       if (ap && lista.length) aproximado = true;
       for (const dep of lista) {
         const dur = duracionViaje(s, dep, c);
@@ -1066,7 +1070,7 @@ export const esCalendario = dia => typeof dia === "string" && dia.startsWith("ca
 /** Nombre de un tipo de día o de un calendario de la red */
 export const nombreDia = (id, red) => (esCalendario(id) ? red?.calendarios?.find(c => c.id === id)?.nombre || "Calendario que ya no está en la red" : TIPOS_DIA.find(t => t.id === id)?.nombre || id);
 /** Viajes de un sentido ese día */
-export const viajesDia = (sentido, dia, red) => (esCalendario(dia) ? salidasDe(sentido, dia, red).lista.length : sentido.viajes?.[dia] || 0);
+export const viajesDia = (sentido, dia, red, cfgLinea) => (cfgLinea?.salidas?.[claveSalidas(sentido.dir, dia)] || esCalendario(dia) ? salidasDe(sentido, dia, red, cfgLinea).lista.length : sentido.viajes?.[dia] || 0);
 
 // ── Cambios a mano ─────────────────────────────────────────────────────
 // Mover una expedición de un autobús a otro (paso 1) o una pieza de un turno

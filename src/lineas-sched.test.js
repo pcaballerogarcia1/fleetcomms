@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, revisarRestricciones, PARAMS_DEFECTO, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
+import { claveSalidas, TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, revisarRestricciones, PARAMS_DEFECTO, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -559,6 +559,19 @@ describe("scheduling de líneas: pausas configurables", () => {
       const huecos = t.piezas.flatMap(pz => pz.viajes).filter(v => !v.vacio).slice(1).map((v, i, l) => v.dep - [t.piezas.flatMap(pz => pz.viajes).filter(x => !x.vacio)[0], ...l][i].arr);
       expect(Math.max(0, ...huecos), `T${t.id}`).toBeGreaterThanOrEqual(30);
     }
+  });
+});
+
+describe("scheduling de líneas: horarios cambiados en Planning", () => {
+  it("las horas editadas de un sentido y día mandan sobre las del GTFS (y solo en ese día)", () => {
+    const ida = RED.lineas[0].sentidos[0]; // A ida: 7, 8, 9 h
+    const cfg = { A: { salidas: { [claveSalidas(0, "laborable")]: [h(7), h(8, 30), h(10)] } } };
+    expect(salidasDe(ida, "laborable", RED, cfg.A)).toMatchObject({ lista: [h(7), h(8, 30), h(10)], editado: true });
+    expect(salidasDe(ida, "laborable", RED).lista).toEqual([h(7), h(8), h(9)]);
+    const r = generarVehiculos(RED, cfg, { dia: "laborable", lineas: ["A"] });
+    const deps = r.viajes.filter(v => v.linea === "A" && v.dir === 0).map(v => v.dep);
+    expect(deps).toEqual([h(7), h(8, 30), h(10)]);
+    expect(generarVehiculos(RED, cfg, { dia: "sabado", lineas: ["A"] }).viajes.length).toBe(0); // otro día: las del GTFS (sábado sin servicio)
   });
 });
 

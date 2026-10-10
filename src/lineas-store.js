@@ -82,13 +82,24 @@ export function watchCfg(projectId, cb) {
 }
 
 /** Cambia la configuración de una línea (null en un campo = quitarlo). */
-export function guardarCfgLinea(projectId, lineaId, cambios) {
+// Qué se cambió de la línea, para el aviso del Scheduling («ha cambiado el Planning»)
+const QUE_CAMBIA = { tiempos: "tiempos de recorrido", regulacion: "regulación", tipos: "tipos de vehículo", preferente: "tipo de vehículo preferente", cochera: "cochera", salidas: "horarios de salida" };
+export function guardarCfgLinea(projectId, lineaId, cambios, { nombreLinea, detalle } = {}) {
   const v = {};
   for (const [k, x] of Object.entries(cambios)) {
-    if (k === "tiempos") v.tiempos = Object.fromEntries(Object.entries(x).map(([f, m]) => [f, m == null ? deleteField() : m]));
+    if (k === "tiempos" || k === "salidas") v[k] = Object.fromEntries(Object.entries(x).map(([f, m]) => [f, m == null ? deleteField() : m]));
     else v[k] = x === null ? deleteField() : x;
   }
-  return setDoc(doc(db, "planning_settings", projectId), { lineasCfg: { [lineaId]: v }, updatedAt: serverTimestamp() }, { merge: true });
+  const que = detalle || `${[...new Set(Object.keys(cambios).map(k => QUE_CAMBIA[k] || k))].join(", ")} de la línea ${nombreLinea || lineaId}`;
+  return setDoc(doc(db, "planning_settings", projectId), { lineasCfg: { [lineaId]: v }, cambioPlanning: { atMs: Date.now(), detalle: que }, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** El último cambio del Planning de líneas: { atMs, detalle } (o null) */
+export function watchCambioPlanning(projectId, cb) {
+  return onSnapshot(doc(db, "planning_settings", projectId), s => cb(s.exists() ? s.data().cambioPlanning || null : null), () => cb(null));
+}
+export function anotarCambioPlanning(projectId, detalle) {
+  return setDoc(doc(db, "planning_settings", projectId), { cambioPlanning: { atMs: Date.now(), detalle } }, { merge: true });
 }
 
 /** Tiempo de recorrido que vale: el corregido a mano o el calculado del GTFS */

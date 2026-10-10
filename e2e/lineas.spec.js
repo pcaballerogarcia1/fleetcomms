@@ -130,3 +130,43 @@ test("al importar el GTFS se eligen las líneas que se quedan", async ({ page })
   await expect(page.getByText(/1 calendario · red-mini\.zip/)).toBeVisible();
   expect(errores).toEqual([]);
 });
+
+test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del cambio", async ({ page }) => {
+  const errores = vigilarErrores(page);
+  await entrarOficina(page);
+  await page.getByText("Nuevo proyecto").first().click();
+  await page.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await page.fill('input[placeholder="Nombre del proyecto *"]', "Horarios");
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect.poll(async () => (await listar("scheduling_projects")).filter(p => p.tipo === "lineas").length).toBe(1);
+  const pid = (await listar("scheduling_projects")).find(p => p.tipo === "lineas")._id;
+  await page.goto("/planning");
+  const [elegir] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("Importar red (GTFS .zip)").click()]);
+  await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
+  // primero se calcula el Scheduling (para que haya un escenario anterior al cambio)
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await expect(page.getByText(/194 viajes/).first()).toBeVisible({ timeout: 60_000 });
+  // Planning → Horarios de salida: la de las 06:00 de la ida de la L1 pasa a las 05:45, y se quita otra
+  await page.getByRole("button", { name: "Planning", exact: true }).first().click();
+  await page.getByRole("button", { name: "Horarios de salida" }).click();
+  await page.getByTitle(/^06:00 · pincha/).first().click();
+  const caja = page.locator("td input").first(); // la caja de la hora que se está cambiando
+  await caja.fill("05:45");
+  await caja.press("Enter");
+  await expect(page.getByText(/Cambiado a mano en Planning/).first()).toBeVisible();
+  await page.getByTitle(/^06:20 · pincha/).first().click();
+  await page.getByRole("button", { name: "Quitar", exact: true }).click();
+  await expect.poll(async () => Object.keys((await leer(`planning_settings/${pid}`))?.lineasCfg?.L1?.salidas || {}).length).toBe(1);
+  // el Scheduling avisa y usa las horas nuevas (un viaje menos)
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await expect(page.getByText(/Se ha modificado el Planning/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/193 viajes/).first()).toBeVisible({ timeout: 60_000 });
+  // y el escenario está recalculado de verdad (el indicador de viajes, no solo el rótulo de arriba)
+  await expect(page.getByText("193", { exact: true }).first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Entendido" }).click();
+  await expect(page.getByText(/Se ha modificado el Planning/)).toBeHidden();
+  expect(errores).toEqual([]);
+});
+

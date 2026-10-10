@@ -7,7 +7,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
+import { Horarios } from "./lineas-horarios.jsx";
+import { nombreDia } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
 const C = {
@@ -454,7 +456,8 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const [sel, setSel] = useState(null);
   const [importando, setImportando] = useState(null); // texto del avance
   const [error, setError] = useState(null);
-  const [eligiendo, setEligiendo] = useState(null); // { archivo, red } leído del GTFS, a falta de elegir qué se queda
+  const [eligiendo, setEligiendo] = useState(null);
+  const [vista, setVista] = useState("red"); // red · horarios // { archivo, red } leído del GTFS, a falta de elegir qué se queda
   const fileRef = useRef(null);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
@@ -468,7 +471,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
   // cada cambio se aplica sobre la lista del servidor (no se pisa a otros)
   const cambiarListaCocheras = cambio => {
     setCocheras(l => cambio(l));
-    cambiarCocheras(projectId, orgId, cambio).catch(e => alert("No se pudo guardar la cochera: " + (e.message || e)));
+    cambiarCocheras(projectId, orgId, cambio)
+      .then(() => anotarCambioPlanning(projectId, "cocheras"))
+      .catch(e => alert("No se pudo guardar la cochera: " + (e.message || e)));
   };
   const anadirCochera = ({ lat, lng }) => {
     setPoniendoCochera(false);
@@ -517,8 +522,28 @@ export function PlanningLineasPage({ projectId, orgId }) {
     }
   }
 
+  const guardarSalidas = (lineaId, nombreLinea, clave, lista) => {
+    const [dir, ...d] = clave.split("|");
+    const dia = d.join("|");
+    const que = `horarios de salida de la línea ${nombreLinea} (${dir === "0" ? "ida" : "vuelta"}, ${nombreDia(dia, red)})`;
+    guardarCfgLinea(projectId, lineaId, { salidas: { [clave]: lista } }, { detalle: que })
+      .then(() => logAudit({ modulo: "Planning", accion: lista ? "Cambió los horarios de salida" : "Volvió a los horarios del GTFS", detalle: que }))
+      .catch(e => alert("No se pudo guardar: " + (e.message || e)));
+  };
+  const pestana = (id, txt) => (
+    <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 20, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 12.5, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>
+  );
   return (
-    <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
+      {red && (
+        <div style={{ display: "flex", alignItems: "center", padding: "0 18px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
+          {pestana("red", "Red y mapa")}
+          {pestana("horarios", "Horarios de salida")}
+          {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Los cambios de horas los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
+        </div>
+      )}
+      {red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} /> : (
+    <div style={{ display: "flex", flex: 1, width: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}
       <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.card, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -600,8 +625,10 @@ export function PlanningLineasPage({ projectId, orgId }) {
 
       {linea && (
         <FichaLinea key={linea.id} linea={linea} cfg={cfg[linea.id]} paradasPorId={paradasPorId} dias={red.dias} cocheras={cocheras}
-          onCfg={cambios => guardarCfgLinea(projectId, linea.id, cambios).catch(e => alert("No se pudo guardar: " + (e.message || e)))}
+          onCfg={cambios => guardarCfgLinea(projectId, linea.id, cambios, { nombreLinea: linea.nombre }).catch(e => alert("No se pudo guardar: " + (e.message || e)))}
           onCerrar={() => setSel(null)} />
+      )}
+    </div>
       )}
     </div>
   );
