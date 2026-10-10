@@ -32,3 +32,5 @@ dist-ssr
 dist-e2e/
 test-results/
 playwright-report/
+e2e/carga/control.png
+e2e/carga/resultado.json
