@@ -484,3 +484,43 @@ describe("scheduling de líneas: amplitud máxima del autobús", () => {
   });
 });
 
+describe("scheduling de líneas: autobuses óptimos (mínimo por emparejamiento)", () => {
+  // 12 líneas con cabeceras cercanas entre sí, frecuencias y duraciones distintas, con puntas
+  const paradas = [], lineas = [];
+  for (let i = 0; i < 12; i++) {
+    paradas.push({ id: `O${i}`, lat: 40.40 + (i % 4) * 0.004, lng: -3.70 }, { id: `D${i}`, lat: 40.45, lng: -3.70 + i * 0.01 });
+    const dur = 25 + (i * 7) % 30, sal = [];
+    for (let t = h(6) + i * 3; t <= h(22); t += (t >= h(7) && t < h(9)) || (t >= h(17) && t < h(19)) ? 12 : 30) sal.push(t);
+    lineas.push({ id: `L${i}`, nombre: `L${i}`, color: "#0af", sentidos: [
+      { ...sentido(0, [`O${i}`, `D${i}`], sal, dur), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: dur, viajes: 1 })) },
+      { ...sentido(1, [`D${i}`, `O${i}`], sal.map(x => x + dur + 8), dur), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: dur, viajes: 1 })) },
+    ] });
+  }
+  const red = { paradas, lineas };
+  const porBus = r => r.autobuses.map(b => r.vehiculos.filter(v => b.bloques.includes(v.id)).flatMap(v => v.viajes.filter(x => !x.vacio)).sort((a, c) => a.dep - c.dep));
+
+  it("no usa más autobuses que el método voraz, cubre cada viaje una vez y ningún autobús hace dos a la vez", () => {
+    for (const vacioMaxKm of [0, 5]) {
+      const voraz = generarVehiculos(red, {}, { dia: "laborable", eleccion: "ultimo", vacioMaxKm });
+      const opt = generarVehiculos(red, {}, { dia: "laborable", eleccion: "optimo", vacioMaxKm });
+      expect(opt.autobuses.length).toBeLessThanOrEqual(voraz.autobuses.length);
+      const todos = porBus(opt).flat();
+      expect(todos.length).toBe(opt.viajes.length);
+      expect(new Set(todos).size).toBe(todos.length);
+      for (const l of porBus(opt)) l.slice(1).forEach((v, k) => expect(v.dep).toBeGreaterThanOrEqual(l[k].arr));
+    }
+  });
+
+  it("respeta la amplitud máxima del autobús", () => {
+    const r = generarVehiculos(red, {}, { dia: "laborable", eleccion: "optimo", amplitudBusMax: 420 });
+    for (const l of porBus(r)) expect(l.at(-1).arr - l[0].dep).toBeLessThanOrEqual(420);
+  });
+
+  it("Optimizar lo prueba y, buscando el mínimo de autobuses, no sale peor que antes", () => {
+    const { probadas } = optimizarVehiculos(red, {}, { dia: "laborable" });
+    expect(probadas.some(x => x.estrategia.eleccion === "optimo")).toBe(true);
+    const mejorVoraz = Math.min(...probadas.filter(x => x.estrategia.eleccion !== "optimo").map(x => x.autobuses));
+    expect(probadas[0].autobuses).toBeLessThanOrEqual(mejorVoraz);
+  });
+});
+

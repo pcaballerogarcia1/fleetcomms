@@ -83,7 +83,7 @@ export const PARAMS_DEFECTO = {
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
   conductoresMax: null, // conductores disponibles ese día
   // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
-  eleccion: "ultimo",   // "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
+  eleccion: "optimo",   // "optimo": el mínimo de autobuses (emparejamiento) · "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
   corte: 150,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min (150: el mejor con la partición en redes grandes)
   emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas (solo "voraz")
   metodo: "particion",  // "particion": muchos turnos posibles y se elige la mejor combinación (como Optibus/GoalSystem) · "voraz": pieza a pieza
@@ -158,8 +158,7 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
   const p = { ...PARAMS_DEFECTO, ...opciones };
   const { viajes, find, aproximado } = viajesDelDia(red, cfg, p);
   const geo = geografia(red, cfg, cocheras, p);
-  const vehiculos = programarVehiculos(viajes, cfg, find, p, geo);
-  const autobuses = repartirAutobuses(vehiculos, p);
+  const { vehiculos, autobuses } = vehiculosYAutobuses(viajes, cfg, find, p, geo);
   for (const v of vehiculos) v.relevos = [];
   return {
     viajes, vehiculos, autobuses, turnos: null, find, ctx: { geo, cfg }, kpis: kpisServicio(viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos),
@@ -331,6 +330,219 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     delete veh.libre; delete veh.linea; delete veh.cocheraEst; delete veh.salida0;
   }
   return vehiculos;
+}
+
+// 1-bis) Vehículos con el mínimo de autobuses (como Optibus / GoalSystem).
+// Cada viaje se puede enlazar con uno posterior que haga el mismo autobús:
+// en la misma cabecera (tras la regulación), con un vacío a una cabecera
+// cercana, o pasando por cochera (huecos largos; sin cocheras, con el
+// margen del vacío). El mínimo de autobuses es el número de viajes menos el
+// emparejamiento máximo de esos enlaces (cobertura mínima por caminos,
+// Hopcroft–Karp). Los enlaces se prueban de más barato a más caro (misma
+// cabecera y poca espera primero), así que entre las soluciones con el
+// mínimo de autobuses salen pocos vacíos.
+function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
+  const n = viajes.length;
+  const vmax = p.vacios === false || !geo ? 0 : Math.min(p.vacioMaxKm || 0, p.vacioKm ?? Infinity);
+  const reg = v => cfg[v.linea]?.regulacion ?? p.regulacion;
+  const tipoDe = v => tipoDeLinea(cfg[v.linea]);
+  const compatibles = (a, b) => { const ta = tipoDe(a), tb = tipoDe(b); return admite(cfg[b.linea], ta) && admite(cfg[a.linea], tb) && (ta == null || tb == null || ta === tb); };
+  const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
+  const minK = (a, b) => { const k = geo ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
+  const deps = viajes.map(v => v.dep); // ya vienen por hora de salida
+  const desde = (lista, t, dep) => { let lo = 0, hi = lista.length; while (lo < hi) { const mm = (lo + hi) >> 1; if (dep(lista[mm]) < t) lo = mm + 1; else hi = mm; } return lo; };
+  const porLugar = new Map();
+  viajes.forEach((v, i) => { const r = find(v.o); if (!porLugar.has(r)) porLugar.set(r, []); porLugar.get(r).push(i); });
+  const raices = [...porLugar.keys()];
+  const vecinos = new Map();
+  const vecinosDe = r => {
+    if (!vecinos.has(r)) {
+      const l = [];
+      if (vmax > 0) for (const x of raices) { if (x === r) continue; const k = geo.km(r, x); if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k)]); }
+      vecinos.set(r, l.sort((a, b) => a[1] - b[1]).slice(0, 12));
+    }
+    return vecinos.get(r);
+  };
+  const K = 10;
+  const adyA = new Array(n), adyB = new Array(n), adyC = new Array(n); // misma cabecera · vacío · cochera
+  for (let i = 0; i < n; i++) {
+    const a = viajes[i], t0 = a.arr + reg(a), puesto = new Set();
+    let l = adyA[i] = [];
+    const poner = j => { if (!puesto.has(j)) { puesto.add(j); l.push(j); } };
+    const mismaLinea = b => p.entreLineas || b.linea === a.linea;
+    // 1) en la misma cabecera, la siguiente que sale
+    const aqui = porLugar.get(find(a.d)) || [];
+    // (en cabeceras con mucho tráfico, las siguientes K salen en minutos: se mira una ventana de 2 h)
+    for (let k = desde(aqui, t0, j => deps[j]), c = 0; k < aqui.length && c < 40 && (c < K || deps[aqui[k]] <= t0 + 120); k++) { const j = aqui[k]; if (compatibles(a, viajes[j]) && mismaLinea(viajes[j])) { poner(j); c++; } }
+    // 2) con un vacío a una cabecera cercana
+    l = adyB[i] = [];
+    let cv = 0;
+    for (const [r2, , mins] of vecinosDe(find(a.d))) {
+      const alli = porLugar.get(r2) || [];
+      for (let k = desde(alli, t0 + mins, j => deps[j]), c = 0; k < alli.length && c < 2; k++) { const j = alli[k]; if (compatibles(a, viajes[j]) && mismaLinea(viajes[j])) { poner(j); c++; cv++; } }
+      if (cv >= K) break;
+    }
+    // 3) pasando por cochera (o un descanso largo, sin cocheras): cualquier viaje que dé tiempo
+    l = adyC[i] = [];
+    const ci = cocheraDe(a);
+    const tmin = ci ? a.arr + minK(a.d, ci) + p.margenCochera : a.arr + p.margenVacio;
+    for (let k = desde(deps, tmin, x => x), c = 0, mirados = 0; k < n && c < K && mirados < 400; k++, mirados++) {
+      const b = viajes[k];
+      if (!compatibles(a, b)) continue;
+      if (ci && (cocheraDe(b) !== ci || b.dep - minK(ci, b.o) < tmin)) continue;
+      poner(k); c++;
+    }
+  }
+  // Los enlaces de la solución voraz también son candidatos: así el
+  // emparejamiento trabaja sobre algo que la contiene y nunca da más autobuses
+  {
+    const idx = new Map(viajes.map((v, i) => [v, i]));
+    const voraz = programarVehiculos(viajes, cfg, find, { ...p, eleccion: "ultimo" }, geo);
+    const buses = repartirAutobuses(voraz, p);
+    const porId = new Map(voraz.map(v => [v.id, v]));
+    for (const b of buses) {
+      const l = b.bloques.map(id => porId.get(id)).sort((x, y) => x.inicio - y.inicio).flatMap(v => v.viajes.filter(x => !x.vacio)).map(x => idx.get(x));
+      l.slice(1).forEach((j, k) => {
+        const i = l[k], a = viajes[i], b2 = viajes[j];
+        const lista = find(a.d) === find(b2.o) && b2.dep >= a.arr + reg(a) ? adyA : vmax > 0 && geo.km(a.d, b2.o) != null && geo.km(a.d, b2.o) <= vmax ? adyB : adyC;
+        if (!adyA[i].includes(j) && !adyB[i].includes(j) && !adyC[i].includes(j)) lista[i].push(j);
+      });
+    }
+  }
+  // Hopcroft–Karp sin recursión (con decenas de miles de viajes la pila no da)
+  const mL = new Int32Array(n).fill(-1), mR = new Int32Array(n).fill(-1), dist = new Int32Array(n), it = new Int32Array(n);
+  const INF = 1 << 30;
+  const bfs = () => {
+    const cola = [];
+    for (let i = 0; i < n; i++) { if (mL[i] < 0) { dist[i] = 0; cola.push(i); } else dist[i] = INF; }
+    let libre = false;
+    for (let h = 0; h < cola.length; h++) {
+      const u = cola[h];
+      for (const v of ady[u]) { const w = mR[v]; if (w < 0) libre = true; else if (dist[w] === INF) { dist[w] = dist[u] + 1; cola.push(w); } }
+    }
+    return libre;
+  };
+  const aumentar = raiz => {
+    const pila = [raiz], via = [];
+    while (pila.length) {
+      const u = pila[pila.length - 1];
+      let bajo = false;
+      while (it[u] < ady[u].length) {
+        const v = ady[u][it[u]++], w = mR[v];
+        if (w < 0) {
+          via.push(v);
+          for (let k = pila.length - 1; k >= 0; k--) { mL[pila[k]] = via[k]; mR[via[k]] = pila[k]; }
+          return true;
+        }
+        if (dist[w] === dist[u] + 1) { via.push(v); pila.push(w); bajo = true; break; }
+      }
+      if (!bajo) { dist[u] = INF; pila.pop(); via.pop(); }
+    }
+    return false;
+  };
+  // Por fases: primero solo los enlaces baratos; los vacíos y las idas a cochera
+  // entran después, solo si hacen falta para quitar autobuses (el resultado es
+  // el mismo mínimo de autobuses, con menos km en vacío)
+  let ady = adyA;
+  for (const fase of [[adyA], [adyA, adyC], [adyA, adyC, adyB]]) {
+    ady = fase.length === 1 ? adyA : Array.from({ length: n }, (_, i) => fase.flatMap(x => x[i]));
+    while (bfs()) { it.fill(0); for (let i = 0; i < n; i++) if (mL[i] < 0) aumentar(i); }
+  }
+  // Repaso de intercambios: con el mismo número de autobuses, cambiar quién
+  // hace el viaje siguiente si así se ahorran km en vacío (a→b y c→d pasan a
+  // a→d y c→b). El emparejamiento da el mínimo de autobuses, pero no mira
+  // los km; sin esto, en redes grandes metía muchos vacíos innecesarios.
+  const costeEnlace = (a, b) => {
+    if (b.dep < a.arr + reg(a) || !compatibles(a, b)) return Infinity;
+    const misma = p.entreLineas || b.linea === a.linea;
+    if (misma && find(a.d) === find(b.o)) return 0;
+    if (misma && vmax > 0) { const k = geo.km(a.d, b.o); if (k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k))) return k; }
+    const ci = cocheraDe(a);
+    if (ci) {
+      if (cocheraDe(b) !== ci) return Infinity;
+      const kv = geo.km(a.d, ci) ?? 0, ks = geo.km(ci, b.o) ?? 0;
+      return b.dep - minK(ci, b.o) >= a.arr + minK(a.d, ci) + p.margenCochera ? kv + ks : Infinity;
+    }
+    return b.dep >= a.arr + p.margenVacio ? 0.5 : Infinity; // descanso largo sin cocheras: casi gratis
+  };
+  for (let pasada = 0; pasada < 12; pasada++) {
+    let mejoras = 0;
+    for (let a = 0; a < n; a++) {
+      const b = mL[a];
+      if (b < 0) continue;
+      const cab = costeEnlace(viajes[a], viajes[b]);
+      if (cab === 0) continue;
+      // candidatos d: los de la misma cabecera donde acaba a y los de cabeceras más cerca que b
+      for (const d of adyA[a].concat(adyB[a])) {
+        if (d === b) continue;
+        const c = mR[d];
+        const cad = costeEnlace(viajes[a], viajes[d]);
+        if (cad === Infinity) continue;
+        if (c < 0) {
+          // d empieza un autobús: a se queda d y b pasa a empezar autobús (mismo número)
+          if (cad < cab) { mL[a] = d; mR[d] = a; mR[b] = -1; mejoras++; break; }
+          continue;
+        }
+        const ccd = costeEnlace(viajes[c], viajes[d]), ccb = costeEnlace(viajes[c], viajes[b]);
+        if (ccb === Infinity || cad + ccb >= cab + ccd - 1e-9) continue;
+        mL[a] = d; mR[d] = a; mL[c] = b; mR[b] = c; mejoras++;
+        break;
+      }
+    }
+    if (!mejoras) break;
+  }
+
+  // Caminos = autobuses; se parten en bloques donde el enlace pasa por cochera
+  const enLinea = (a, b) => {
+    if (b.dep < a.arr + reg(a)) return false;
+    if (!p.entreLineas && b.linea !== a.linea) return false; // cambiar de línea sin pasar por cochera no se permite
+    if (find(a.d) === find(b.o)) return true;
+    const k = vmax > 0 ? geo.km(a.d, b.o) : null;
+    return k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k));
+  };
+  const ampMax = p.amplitudBusMax > 0 ? p.amplitudBusMax : Infinity;
+  const caminos = [];
+  for (let i = 0; i < n; i++) {
+    if (mR[i] >= 0) continue;
+    let actual = [];
+    for (let j = i; j >= 0; j = mL[j]) {
+      const v = viajes[j];
+      // amplitud máxima del autobús: si el siguiente viaje la pasa, empieza otro autobús
+      if (actual.length && ampMax < Infinity) {
+        const ci = cocheraDe(viajes[actual[0]]);
+        const ini = viajes[actual[0]].dep - (ci ? minK(ci, viajes[actual[0]].o) : 0);
+        if (v.arr + (ci ? minK(v.d, ci) : 0) - ini > ampMax) { caminos.push(actual); actual = []; }
+      }
+      actual.push(j);
+    }
+    caminos.push(actual);
+  }
+  caminos.sort((x, y) => viajes[x[0]].dep - viajes[y[0]].dep);
+  const ctx = { ctx: { geo, cfg }, params: p, find };
+  const vehiculos = [], autobuses = [];
+  for (const c of caminos) {
+    const bus = { id: autobuses.length + 1, tipo: tipoDe(viajes[c[0]]), bloques: [], cochera: null };
+    let bloque = [];
+    const cerrar = () => {
+      if (!bloque.length) return;
+      const veh = montarBloque({ id: vehiculos.length + 1, tipo: bus.tipo, autobus: bus.id, relevos: [] }, bloque.map(j => viajes[j]), ctx);
+      veh.manual = false;
+      if (!veh.avisos.length) delete veh.avisos;
+      vehiculos.push(veh); bus.bloques.push(veh.id);
+      if (bus.cochera == null) bus.cochera = veh.cochera || null;
+      bloque = [];
+    };
+    c.forEach((j, k) => { if (k && !enLinea(viajes[c[k - 1]], viajes[j])) cerrar(); bloque.push(j); });
+    cerrar();
+    autobuses.push(bus);
+  }
+  return { vehiculos, autobuses };
+}
+// Los dos pasos del paso 1 según la estrategia: el óptimo o el voraz de siempre
+function vehiculosYAutobuses(viajes, cfg, find, p, geo) {
+  if (p.eleccion === "optimo") return programarVehiculosOptimo(viajes, cfg, find, p, geo);
+  const vehiculos = programarVehiculos(viajes, cfg, find, p, geo);
+  return { vehiculos, autobuses: repartirAutobuses(vehiculos, p) };
 }
 
 // Autobuses físicos: bloques sin solaparse (con el margen del vacío)
@@ -660,7 +872,7 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
   const corte = v.corte === "equilibrado" ? "piezas equilibradas"
     : typeof v.corte === "number" && v.corte < piezaMax ? `piezas de hasta ${Math.floor(v.corte / 60)}h${String(v.corte % 60).padStart(2, "0")}` : "piezas largas";
   return [
-    v.eleccion != null && (v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera"),
+    v.eleccion != null && (v.eleccion === "optimo" ? "mínimo de autobuses (óptimo)" : v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera"),
     v.vacios != null && (v.vacios === false || v.vacioKm === 0 ? "sin vacíos entre cabeceras" : v.vacioKm != null ? `vacíos de hasta ${String(v.vacioKm).replace(".", ",")} km` : "vacíos hasta el máximo"),
     v.entreLineas === false ? "sin cambiar de línea" : null,
     v.corte != null && corte,
@@ -682,14 +894,14 @@ export function optimizarVehiculos(red, cfg = {}, opciones = {}, { objetivo = "a
   const kmReales = viajes.reduce((s, v) => s + v.km, 0);
   const radios = geo && p.vacioMaxKm > 0 ? [...new Set([0, 3, 8, p.vacioMaxKm].filter(k => k <= p.vacioMaxKm))] : [0];
   const variantes = [];
-  for (const vacioKm of radios) for (const eleccion of ["ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) {
+  for (const vacioKm of radios) for (const eleccion of ["optimo", "ultimo", "primero"]) for (const entreLineas of p.entreLineas ? [true, false] : [false]) {
     variantes.push({ eleccion, entreLineas, vacios: vacioKm > 0, vacioKm });
   }
   const probadas = [];
   for (const dv of variantes) {
     const q = { ...p, ...dv };
-    const vehiculos = programarVehiculos(viajes, cfg, find, q, geo);
-    const autobuses = repartirAutobuses(vehiculos, q).length;
+    const { vehiculos, autobuses: buses } = vehiculosYAutobuses(viajes, cfg, find, q, geo);
+    const autobuses = buses.length;
     const kmVacio = vehiculos.reduce((s, v) => s + (v.kmVacio || 0), 0);
     const r = {
       estrategia: dv, autobuses, bloques: vehiculos.length, kmVacio, km: kmReales + kmVacio,

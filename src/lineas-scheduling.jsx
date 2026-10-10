@@ -476,7 +476,7 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Estrategia del optimizador para este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
         <div>
-          {row("Qué autobús coge cada viaje", sel("eleccion", [["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
+          {row("Qué autobús coge cada viaje", sel("eleccion", [["optimo", "El mínimo de autobuses (óptimo, como Optibus)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
           {row("Vacíos entre cabeceras", sel("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]]))}
         </div>
         <div>
