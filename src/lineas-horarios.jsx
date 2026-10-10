@@ -113,13 +113,15 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
 /**
  * Horarios de salida. editable: se pueden mover, quitar y añadir salidas;
  * onGuardar(lineaId, nombreLinea, claveSalidas, lista | null) — null = volver a las del GTFS.
+ * onGuardarTiempo(lineaId, nombreLinea, "dir|franja", minutos | null) — tiempo de recorrido de esa franja (null = el calculado).
  */
-export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar }) {
+export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, onGuardarTiempo }) {
   const [dia, setDia] = useState(diaInicial || "laborable");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(red.lineas[0]?.id || null);
   const [editando, setEditando] = useState(null); // { clave, m, texto }
   const [nueva, setNueva] = useState({}); // clave → texto de la salida a añadir
+  const [tiempoEd, setTiempoEd] = useState(null); // { clave: "dir|franja", texto }
   const [error, setError] = useState(null);
   const lista = red.lineas.filter(l => !q.trim() || norm(`${l.nombre} ${l.sentidos.map(x => x.cabecera).join(" ")}`).includes(norm(q.trim())));
   const linea = lista.find(l => l.id === sel) || lista[0]; // al buscar, la primera que coincide
@@ -213,7 +215,30 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar }) 
                               </button>
                             )))}
                           </td>
-                          <td style={{ padding: "5px 14px", fontFamily: mono, fontSize: 11, color: C.dim, textAlign: "right", whiteSpace: "nowrap", verticalAlign: "top" }}>{duracionViaje(s, h * 60, cfg[linea.id])} min</td>
+                          <td style={{ padding: "4px 14px", fontFamily: mono, fontSize: 11, color: C.dim, textAlign: "right", whiteSpace: "nowrap", verticalAlign: "top" }}>
+                            {(() => {
+                              const franja = franjaDe(h * 60), kt = `${s.dir}|${franja}`;
+                              const corregido = cfg[linea.id]?.tiempos?.[kt] != null;
+                              const min = duracionViaje(s, h * 60, cfg[linea.id]);
+                              if (!editable) return <span style={{ color: corregido ? C.amber : C.dim }}>{min} min</span>;
+                              if (tiempoEd?.clave === kt && tiempoEd.h === h) {
+                                const guardarT = () => { const t = tiempoEd.texto.trim(); const n = t === "" ? null : parseInt(t, 10); if (t !== "" && !(n > 0)) { setError("Escribe los minutos de recorrido (por ejemplo 32)."); return; } onGuardarTiempo?.(linea.id, linea.nombre, kt, n); setTiempoEd(null); };
+                                return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                    <input autoFocus value={tiempoEd.texto} onChange={e => setTiempoEd({ ...tiempoEd, texto: e.target.value.replace(/[^\d]/g, "").slice(0, 3) })}
+                                      onKeyDown={e => { if (e.key === "Enter") guardarT(); if (e.key === "Escape") setTiempoEd(null); }}
+                                      style={{ width: 40, background: C.bg, border: `1px solid ${C.blue}`, color: C.text, borderRadius: 4, padding: "1px 4px", fontSize: 11.5, fontFamily: mono, textAlign: "right", outline: "none" }} />
+                                    <span>min</span>
+                                    <button title={`Guardar: vale para toda la franja ${franja.replace("-", "–")} h de este sentido, todos los días (vacío = el calculado del GTFS)`} onClick={guardarT} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 4, padding: "1px 6px", fontSize: 11, cursor: "pointer" }}>✓</button>
+                                  </span>
+                                );
+                              }
+                              return (
+                                <button onClick={() => setTiempoEd({ clave: kt, h, texto: String(min) })} title={`Pincha para cambiar el tiempo de recorrido de la franja ${franja.replace("-", "–")} h (${corregido ? "corregido a mano" : "calculado del GTFS"})`}
+                                  style={{ background: "none", border: `1px solid ${corregido ? C.amber + "88" : "transparent"}`, color: corregido ? C.amber : C.muted, borderRadius: 4, padding: "0 4px", fontSize: 11, fontFamily: mono, cursor: "pointer" }}>{min} min</button>
+                              );
+                            })()}
+                          </td>
                         </tr>
                       ))}
                       {!salidas.length && <tr><td colSpan={3} style={{ padding: 14, fontSize: 12, color: C.dim }}>Sin servicio este {esCalendario(dia) ? "calendario" : "tipo de día"}</td></tr>}

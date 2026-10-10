@@ -530,6 +530,13 @@ export function PlanningLineasPage({ projectId, orgId }) {
       .then(() => logAudit({ modulo: "Planning", accion: lista ? "Cambió los horarios de salida" : "Volvió a los horarios del GTFS", detalle: que }))
       .catch(e => alert("No se pudo guardar: " + (e.message || e)));
   };
+  const guardarTiempo = (lineaId, nombreLinea, clave, min) => {
+    const [dir, franja] = clave.split("|");
+    const que = `tiempo de recorrido de la línea ${nombreLinea} (${dir === "0" ? "ida" : "vuelta"}, ${franja.replace("-", "–")} h)`;
+    guardarCfgLinea(projectId, lineaId, { tiempos: { [clave]: min } }, { detalle: que })
+      .then(() => logAudit({ modulo: "Planning", accion: min == null ? "Volvió al tiempo de recorrido calculado" : "Cambió un tiempo de recorrido", detalle: `${que}${min != null ? `: ${min} min` : ""}` }))
+      .catch(e => alert("No se pudo guardar: " + (e.message || e)));
+  };
   const pestana = (id, txt) => (
     <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 20, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 12.5, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>
   );
@@ -539,10 +546,10 @@ export function PlanningLineasPage({ projectId, orgId }) {
         <div style={{ display: "flex", alignItems: "center", padding: "0 18px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
           {pestana("red", "Red y mapa")}
           {pestana("horarios", "Horarios de salida")}
-          {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Los cambios de horas los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
+          {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Pincha una hora de salida o un tiempo de recorrido para cambiarlo. Los cambios los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
         </div>
       )}
-      {red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} /> : (
+      {red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
     <div style={{ display: "flex", flex: 1, width: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}

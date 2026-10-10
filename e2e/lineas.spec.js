@@ -159,6 +159,12 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   await page.getByTitle(/^06:20 · pincha/).first().click();
   await page.getByRole("button", { name: "Quitar", exact: true }).click();
   await expect.poll(async () => Object.keys((await leer(`planning_settings/${pid}`))?.lineasCfg?.L1?.salidas || {}).length).toBe(1);
+  // el tiempo de recorrido, pinchando en la columna RECORRIDO
+  await page.getByTitle(/Pincha para cambiar el tiempo de recorrido de la franja 06–09/).first().click();
+  const minutos = page.locator("td input").first();
+  await minutos.fill("31");
+  await minutos.press("Enter");
+  await expect.poll(async () => (await leer(`planning_settings/${pid}`))?.lineasCfg?.L1?.tiempos?.["0|06-09"]).toBe(31);
   // el Scheduling avisa y usa las horas nuevas (un viaje menos)
   await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
   await expect(page.getByText(/Se ha modificado el Planning/)).toBeVisible({ timeout: 60_000 });
