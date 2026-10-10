@@ -50,9 +50,11 @@ function filasDe(res, modo) {
   return res.turnos.map(t => {
     const viajes = t.piezas.flatMap(pz => pz.viajes);
     const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
+    // el split del partido: los huecos que ya no se pagan
+    const splits = tramosPausa.filter(x => x.fin - x.inicio >= (res.params?.huecoNoPagado ?? 60));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
     return fila(`T${t.id}`, `${t.tipoNombre ? `${t.tipoNombre} · ` : t.tipo === null ? "Sin tipo · " : ""}${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos && t.tipo !== "partido" ? " · partido" : ""}`, viajes, {
-      id: t.id, tramosPausa, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
+      id: t.id, tramosPausa, splits, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
       piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
     });
@@ -65,7 +67,7 @@ function fila(nombre, tipo, viajes, extra) {
   return {
     nombre, tipo, viajes, inicio, fin, amplitud: fin - inicio, conduccion, pausas,
     km: viajes.reduce((s, v) => s + v.km, 0), kmVacio: viajes.reduce((s, v) => s + (v.vacio ? v.km : 0), 0), nViajes: viajes.filter(v => !v.vacio).length,
-    lineas: [...new Set(viajes.filter(v => !v.vacio).map(v => v.nombre))], avisos: [], relevos: [], vacios: [], tramosPausa: [], ...extra,
+    lineas: [...new Set(viajes.filter(v => !v.vacio).map(v => v.nombre))], avisos: [], relevos: [], vacios: [], tramosPausa: [], splits: [], ...extra,
   };
 }
 
@@ -172,6 +174,18 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                 <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
                   background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)", border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3 }} />
               ))}
+              {r.splits.map((x, i) => {
+                // split del partido: línea naranja de punta a punta del hueco sin pagar, con su duración
+                const w = X(x.fin) - X(x.inicio);
+                return (
+                  <div key={`s${i}`} title={`Split (sin pagar) ${hhmm(x.inicio)}–${hhmm(x.fin)} · ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: w, top: 0, bottom: 0, zIndex: 2, pointerEvents: "auto" }}>
+                    <div style={{ position: "absolute", left: 0, right: 0, top: "50%", borderTop: `2px dashed ${C.orange}` }} />
+                    <div style={{ position: "absolute", left: 0, top: 6, bottom: 6, borderLeft: `2px solid ${C.orange}` }} />
+                    <div style={{ position: "absolute", right: 0, top: 6, bottom: 6, borderRight: `2px solid ${C.orange}` }} />
+                    {w > 46 && <span style={{ position: "absolute", left: "50%", top: 3, transform: "translateX(-50%)", fontSize: 9, fontWeight: 700, color: C.orange, background: C.bg, padding: "0 4px", borderRadius: 3, whiteSpace: "nowrap", fontFamily: mono }}>split {hm(x.fin - x.inicio)}</span>}
+                  </div>
+                );
+              })}
               {r.viajes.map((x, i) => {
                 const w = Math.max(2, (x.arr - x.dep) * px - 1);
                 return (
@@ -319,7 +333,7 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
 // se guardaba 0 al instante y ahí se quedaba): se guarda al salir del campo o
 // con Enter. Vacío = el valor por defecto (o sin límite si vacioEsNulo).
 const MINIMOS = { maxPiezas: 1, piezaMax: 30, amplitudMax: 60, jornadaMax: 60, huecoNoPagado: 1, conduccionContinuaMax: 30, conduccionDiariaMax: 60, velocidadVacio: 1 };
-function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, step, onCambiar }) {
+function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, textoVacio = "—", step, onCambiar }) {
   const [texto, setTexto] = useState(null); // null = no se está editando
   const guardar = () => {
     const t = String(texto ?? "").trim().replace(",", ".");
@@ -329,7 +343,7 @@ function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = f
     if (Number.isFinite(n)) onCambiar(Math.max(min, n));
   };
   return (
-    <input type="number" min={min} step={step} value={texto ?? (valor ?? "")} placeholder={vacioEsNulo ? "sin límite" : defecto != null ? String(defecto) : ""}
+    <input type="number" min={min} step={step} value={texto ?? (valor ?? "")} placeholder={vacioEsNulo ? textoVacio : defecto != null ? String(defecto) : ""}
       onFocus={() => setTexto(valor == null ? "" : String(valor))} onChange={e => setTexto(e.target.value)} onBlur={guardar}
       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTexto(null); e.currentTarget.blur(); } }}
       style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
@@ -476,11 +490,17 @@ function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {row("Piezas por turno", numInput("maxPiezas", "como mucho"))}
           {row("Relevo en la misma cabecera", numInput("relevoMin", "min"))}
           {row("Ir a otra cabecera", numInput("desplazamiento", "min entre piezas"))}
+          {sub("Descanso en la jornada continuada")}
+          {row("Exigir descanso si la jornada pasa de", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <CampoNumero valor={p.jornadaSinPausaMax > 0 ? p.jornadaSinPausaMax : null} defecto={PARAMS_DEFECTO.jornadaSinPausaMax} vacioEsNulo textoVacio="no" onCambiar={v => set("jornadaSinPausaMax", v ?? 0)} />
+            <span style={{ fontSize: 11, color: C.dim }}>min (vacío = sin descanso; Estatuto: 360)</span></div>)}
+          {row("Descanso de", numInput("pausaJornadaMin", "min seguidos entre viajes"))}
           {sub("Conducción (UE 561/2006)")}
           {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
           {row("Pausa de conducción", numInput("pausaConduccionMin", "min (se puede partir 15 + 30)"))}
           {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
           {row("No aplicar la UE 561/2006", check("aplicar561", true))}
+          <div style={{ fontSize: 10.5, color: C.dim, margin: "-4px 0 8px", lineHeight: 1.5 }}>La UE 561/2006 no se aplica a líneas regulares de viajeros de hasta 50 km (la mayoría de las urbanas). Marcada: sin pausa de conducción ni corte de pieza a las 4 h 30.</div>
           {sub("Disponibles y coste")}
           {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
           {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}

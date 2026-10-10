@@ -71,7 +71,7 @@ export const PARAMS_DEFECTO = {
   factorRodeo: 1.35,    // km por carretera / km en línea recta
   velocidadVacio: 25,   // km/h de los vacíos
   conduccionContinuaMax: 270, pausaConduccionMin: 45, conduccionDiariaMax: 540,
-  jornadaSinPausaMax: 360, pausaJornadaMin: 15,
+  jornadaSinPausaMax: 360, pausaJornadaMin: 15, // descanso si la jornada continuada pasa de (null = no se exige) · de cuántos min
   maxPiezas: 4,         // piezas por turno como mucho (más relevos no tienen sentido operativo)
   maxPartidos: 1,       // huecos largos (jornada partida) por turno
   tiposTurno: TIPOS_TURNO_DEFECTO, // si hay alguno activo, sus límites mandan sobre amplitudMax, jornadaMax y maxPartidos
@@ -591,7 +591,7 @@ function cortarPiezas(vehiculos, p, find) {
       const dur = tramo.reduce((s, v) => s + v.arr - v.dep, 0), fin = tramo.at(-1).arr;
       if (pz) {
         // obligatorio: conducción continua o pieza máxima; por estrategia, solo si la pieza ya tiene el mínimo
-        const obligado = pz.conduccion + dur > p.conduccionContinuaMax || fin - pz.inicio > p.piezaMax;
+        const obligado = (p.aplicar561 && pz.conduccion + dur > p.conduccionContinuaMax) || fin - pz.inicio > p.piezaMax;
         if (obligado || (fin - pz.inicio > lim && pz.fin - pz.inicio >= minima)) { piezas.push(pz); previa = pz; pz = null; }
       }
       if (!pz) pz = { vehiculo: veh.id, inicio: tramo[0].dep, fin, conduccion: 0, viajes: [], previa, o: find ? find(tramo[0].o) : tramo[0].o };
@@ -600,7 +600,7 @@ function cortarPiezas(vehiculos, p, find) {
     if (pz) {
       // el final del autobús, si es más corto que el mínimo, se queda con la pieza anterior si cabe
       const ant = pz.previa;
-      if (ant && pz.fin - pz.inicio < minima && pz.fin - ant.inicio <= p.piezaMax && ant.conduccion + pz.conduccion <= p.conduccionContinuaMax) {
+      if (ant && pz.fin - pz.inicio < minima && pz.fin - ant.inicio <= p.piezaMax && (!p.aplicar561 || ant.conduccion + pz.conduccion <= p.conduccionContinuaMax)) {
         ant.viajes.push(...pz.viajes); ant.fin = pz.fin; ant.conduccion += pz.conduccion; ant.d = pz.d;
       } else piezas.push(pz);
     }
@@ -663,14 +663,15 @@ function anadir(t, pz, p) {
   for (const v of pz.viajes) {
     if (finPrev != null) {
       const h = v.dep - finPrev;
-      if (h >= 15) { pausaAcum += h; hay15 = true; }
+      if (h >= 15) pausaAcum += h; // la pausa de conducción se puede partir 15 + 30
+      if (h >= (p.pausaJornadaMin || 15)) hay15 = true; // descanso de jornada (Estatuto / convenio)
       if (pausaAcum >= p.pausaConduccionMin) { seguido = 0; pausaAcum = 0; }
     }
     seguido += v.arr - v.dep;
     if (p.aplicar561 && seguido > p.conduccionContinuaMax) return null;
     finPrev = v.arr;
   }
-  if (pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // Estatuto: 15 min si pasa de 6 h
+  if (p.jornadaSinPausaMax > 0 && pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // descanso si la jornada pasa de X (sin valor: no se exige)
   const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco : 0) };
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
@@ -979,7 +980,8 @@ function cerrarTurno(t, pOriginal) {
   viajes.forEach((v, i) => {
     if (i > 0) {
       const hueco = v.dep - viajes[i - 1].arr;
-      if (hueco >= 15) { pausaAcum += hueco; hayPausa15 = true; }
+      if (hueco >= 15) pausaAcum += hueco;
+      if (hueco >= (p.pausaJornadaMin || 15)) hayPausa15 = true;
       if (pausaAcum >= p.pausaConduccionMin) { seguido = 0; pausaAcum = 0; }
     }
     seguido += v.arr - v.dep;
@@ -988,7 +990,7 @@ function cerrarTurno(t, pOriginal) {
   t.avisos = [];
   if (p.aplicar561 && peor > p.conduccionContinuaMax) t.avisos.push(`${hm(peor)} de conducción sin la pausa de ${p.pausaConduccionMin} min (máx. ${hm(p.conduccionContinuaMax)}, UE 561/2006)`);
   if (p.aplicar561 && t.conduccion > p.conduccionDiariaMax) t.avisos.push(`Conducción de ${hm(t.conduccion)}: supera ${hm(p.conduccionDiariaMax)} (UE 561/2006)`);
-  if (t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (Estatuto, art. 34.4)`);
+  if (p.jornadaSinPausaMax > 0 && t.duracion > p.jornadaSinPausaMax && !hayPausa15) t.avisos.push(`Jornada de ${hm(t.duracion)} sin descanso de ${p.pausaJornadaMin} min (lo exige a partir de ${hm(p.jornadaSinPausaMax)})`);
   // lo que el cálculo automático ya cumple siempre, pero un cambio a mano puede romper
   if (p._tipos) {
     // el tipo: asignarTipos (con los máximos de cada tipo, que dependen de todos los turnos)

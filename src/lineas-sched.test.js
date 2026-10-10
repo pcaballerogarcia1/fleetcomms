@@ -542,3 +542,23 @@ describe("scheduling de líneas: restricciones sin sentido", () => {
   });
 });
 
+describe("scheduling de líneas: pausas configurables", () => {
+  // Línea circular cada 15 min de 5 a 23 h, viajes de 40 min con 2 min de regulación: casi sin huecos
+  const salidas = Array.from({ length: 73 }, (_, k) => h(5) + k * 15);
+  const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 40), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 40, viajes: 1 })) }] }] };
+
+  it("sin UE 561 y sin descanso exigido: turnos seguidos sin pausa y piezas de más de 4 h 30", () => {
+    const r = generarServicio(red, {}, { dia: "laborable", regulacion: 2, aplicar561: false, jornadaSinPausaMax: 0, piezaMax: 480, corte: "max", tiposTurno: [] });
+    expect(r.turnos.some(t => t.piezas.some(pz => pz.conduccion > 270))).toBe(true);
+    expect(r.turnos.flatMap(t => t.avisos).filter(a => /descanso|UE 561/.test(a))).toEqual([]);
+  });
+
+  it("con descanso exigido, ningún turno pasa de ese tiempo sin un hueco de esos minutos", () => {
+    const r = generarServicio(red, {}, { dia: "laborable", regulacion: 2, aplicar561: false, jornadaSinPausaMax: 360, pausaJornadaMin: 30, piezaMax: 480, tiposTurno: [] });
+    for (const t of r.turnos.filter(x => x.duracion > 360)) {
+      const huecos = t.piezas.flatMap(pz => pz.viajes).filter(v => !v.vacio).slice(1).map((v, i, l) => v.dep - [t.piezas.flatMap(pz => pz.viajes).filter(x => !x.vacio)[0], ...l][i].arr);
+      expect(Math.max(0, ...huecos), `T${t.id}`).toBeGreaterThanOrEqual(30);
+    }
+  });
+});
+

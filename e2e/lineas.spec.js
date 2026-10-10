@@ -66,6 +66,7 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   await expect(page.getByText(/en vacío/).first()).toBeVisible();
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
+  await expect(page.getByText(/^split \d+h\d\d$/).first()).toBeVisible(); // los partidos marcan su split
 
   // 5) mover una pieza a un turno nuevo: se guarda como cambio a mano y sobrevive a recargar
   await arrastrar(page, 0, "nuevo");
