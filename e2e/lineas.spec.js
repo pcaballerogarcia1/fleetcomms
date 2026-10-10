@@ -165,6 +165,12 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   await minutos.fill("31");
   await minutos.press("Enter");
   await expect.poll(async () => (await leer(`planning_settings/${pid}`))?.lineasCfg?.L1?.tiempos?.["0|06-09"]).toBe(31);
+  // puntos de relevo: sin relevo en la parada B
+  await page.getByRole("button", { name: "Puntos de relevo" }).click();
+  await expect(page.getByText(/Se puede relevar en 4 de 4 cabeceras/)).toBeVisible();
+  await page.locator("label").filter({ hasText: "Parada B" }).locator("input").uncheck();
+  await expect(page.getByText(/Se puede relevar en 3 de 4 cabeceras/)).toBeVisible();
+  await expect.poll(async () => (await leer(`planning_settings/${pid}`))?.lineasCfg?._relevos?.no || []).toContain("B");
   // el Scheduling avisa y usa las horas nuevas (un viaje menos)
   await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
   await expect(page.getByText(/Se ha modificado el Planning/)).toBeVisible({ timeout: 60_000 });

@@ -134,6 +134,26 @@ export function duracionViaje(sentido, salida, cfgLinea) {
 }
 
 /** Une cabeceras: llegada de la ida = salida de la vuelta (y al revés) de cada línea */
+/**
+ * Las cabeceras de la red (las paradas donde empiezan y acaban los sentidos,
+ * juntando las de la ida y la vuelta de cada línea), para elegir los puntos
+ * de relevo en Planning. [{ id, paradas: [ids], nombre, lineas: [nombres] }]
+ */
+export function cabecerasDeRed(red) {
+  const lineas = red?.lineas || [];
+  const find = cabeceras(lineas);
+  const nombre = new Map((red?.paradas || []).map(x => [x.id, x.nombre]));
+  const grupos = new Map();
+  for (const l of lineas) for (const s of l.sentidos) for (const id of [s.paradas[0], s.paradas.at(-1)]) {
+    if (id == null) continue;
+    const r = find(id);
+    if (!grupos.has(r)) grupos.set(r, { id: r, paradas: new Set(), lineas: new Set() });
+    grupos.get(r).paradas.add(id); grupos.get(r).lineas.add(l.nombre);
+  }
+  return [...grupos.values()].map(g => ({ id: g.id, paradas: [...g.paradas], nombre: nombre.get(g.id) || [...g.paradas].map(x => nombre.get(x)).find(Boolean) || g.id, lineas: [...g.lineas].sort((a, b) => a.localeCompare(b, "es", { numeric: true })) }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
 function cabeceras(lineas) {
   const padre = new Map();
   const find = x => { while (padre.has(x) && padre.get(x) !== x) x = padre.get(x); return x; };
@@ -159,7 +179,7 @@ export function generarServicio(red, cfg = {}, opciones = {}, extra = {}) {
 
 /** Paso 1: vehículos (bloques, autobuses y vacíos), sin turnos (turnos: null) */
 export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] } = {}) {
-  const p = { ...PARAMS_DEFECTO, ...opciones };
+  const p = { ...PARAMS_DEFECTO, ...opciones, noRelevo: cfg?._relevos?.no || [] };
   const { viajes, find, aproximado } = viajesDelDia(red, cfg, p);
   const geo = geografia(red, cfg, cocheras, p);
   const { vehiculos, autobuses } = vehiculosYAutobuses(viajes, cfg, find, p, geo);
@@ -573,8 +593,18 @@ function repartirAutobuses(vehiculos, p) {
 }
 
 // 2) Turnos de conductor
+// Puntos de relevo (Planning): cabeceras donde NO se puede cambiar de
+// conductor (cfg._relevos.no, ids de parada). Sin ninguna, se puede en todas.
+const relevoPermitido = (p, find) => {
+  const no = new Set((p.noRelevo || []).map(x => (find ? find(x) : x)));
+  return loc => !no.size || !no.has(find ? find(loc) : loc);
+};
+// La cabecera donde acaba un trozo de autobús (la llegada de su último viaje con viajeros)
+const dondeAcaba = viajes => { for (let i = viajes.length - 1; i >= 0; i--) if (!viajes[i].vacio) return viajes[i].d; return viajes.at(-1)?.d; };
+
 function cortarPiezas(vehiculos, p, find) {
   const piezas = [];
+  const puedeRelevar = relevoPermitido(p, find);
   for (const veh of vehiculos) {
     let lim = p.piezaMax;
     if (p.corte === "equilibrado") {
@@ -590,23 +620,39 @@ function cortarPiezas(vehiculos, p, find) {
     let sueltos = [];
     for (const v of veh.viajes) { sueltos.push(v); if (!v.vacio) { tramos.push(sueltos); sueltos = []; } }
     if (sueltos.length) { if (tramos.length) tramos.at(-1).push(...sueltos); else tramos.push(sueltos); }
-    let pz = null, previa = null;
+    const conduccion = ts => ts.reduce((s, t) => s + t.reduce((a, v) => a + v.arr - v.dep, 0), 0);
+    const largo = ts => ts.at(-1).at(-1).arr - ts[0][0].dep;
+    const grupos = [];
+    let actual = [], corteAtras = -1; // último sitio de la pieza en curso donde sí se puede relevar
     for (const tramo of tramos) {
-      const dur = tramo.reduce((s, v) => s + v.arr - v.dep, 0), fin = tramo.at(-1).arr;
-      if (pz) {
+      if (actual.length) {
+        const con = [...actual, tramo];
         // obligatorio: conducción continua o pieza máxima; por estrategia, solo si la pieza ya tiene el mínimo
-        const obligado = (p.aplicar561 && pz.conduccion + dur > p.conduccionContinuaMax) || fin - pz.inicio > p.piezaMax;
-        if (obligado || (fin - pz.inicio > lim && pz.fin - pz.inicio >= minima)) { piezas.push(pz); previa = pz; pz = null; }
+        const obligado = (p.aplicar561 && conduccion(con) > p.conduccionContinuaMax) || largo(con) > p.piezaMax;
+        const quiere = largo(con) > lim && largo(actual) >= minima;
+        const aqui = puedeRelevar(dondeAcaba(actual.flat()));
+        if ((obligado || quiere) && aqui) { grupos.push(actual); actual = []; corteAtras = -1; }
+        else if (obligado && corteAtras > 0) {
+          // aquí no se puede relevar: se corta en el último punto de relevo de la pieza
+          grupos.push(actual.slice(0, corteAtras)); actual = actual.slice(corteAtras); corteAtras = -1;
+        } else if (aqui) corteAtras = actual.length;
       }
-      if (!pz) pz = { vehiculo: veh.id, inicio: tramo[0].dep, fin, conduccion: 0, viajes: [], previa, o: find ? find(tramo[0].o) : tramo[0].o };
-      for (const v of tramo) { pz.viajes.push(v); pz.fin = v.arr; pz.conduccion += v.arr - v.dep; pz.d = find ? find(v.d) : v.d; }
+      actual.push(tramo);
     }
-    if (pz) {
+    if (actual.length) {
       // el final del autobús, si es más corto que el mínimo, se queda con la pieza anterior si cabe
-      const ant = pz.previa;
-      if (ant && pz.fin - pz.inicio < minima && pz.fin - ant.inicio <= p.piezaMax && (!p.aplicar561 || ant.conduccion + pz.conduccion <= p.conduccionContinuaMax)) {
-        ant.viajes.push(...pz.viajes); ant.fin = pz.fin; ant.conduccion += pz.conduccion; ant.d = pz.d;
-      } else piezas.push(pz);
+      const ant = grupos.at(-1);
+      if (ant && largo(actual) < minima && largo([...ant, ...actual]) <= p.piezaMax && (!p.aplicar561 || conduccion([...ant, ...actual]) <= p.conduccionContinuaMax)) ant.push(...actual);
+      else grupos.push(actual);
+    }
+    let previa = null;
+    for (const g of grupos) {
+      const viajes = g.flat();
+      const pz = {
+        vehiculo: veh.id, inicio: viajes[0].dep, fin: viajes.at(-1).arr, conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes, previa,
+        o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
+      };
+      piezas.push(pz); previa = pz;
     }
   }
   return piezas;
@@ -1263,6 +1309,7 @@ export function moverViajesTurno(res, claves, turnoDestino) {
   const elegidos = new Set(claves);
   const p = res.params, find = res.find || (x => x);
   const esElegido = tramo => tramo.some(v => !v.vacio && elegidos.has(claveViaje(v)));
+  const puedeRelevar = relevoPermitido(p, find);
   const afectadas = new Map(); // pieza → turno
   for (const t of res.turnos) for (const pz of t.piezas) if (pz.viajes.some(v => !v.vacio && elegidos.has(claveViaje(v)))) afectadas.set(pz, t);
   if (!afectadas.size) return { error: "No se encuentran esos viajes" };
@@ -1289,7 +1336,10 @@ export function moverViajesTurno(res, claves, turnoDestino) {
     };
     for (const tramo of tramosDe(pz.viajes)) {
       const e = esElegido(tramo);
-      if (marca !== null && e !== marca) cerrar();
+      if (marca !== null && e !== marca) {
+        if (!puedeRelevar(dondeAcaba(grupo))) return { error: "Para eso habría que relevar en una cabecera donde no se puede (Planning → Puntos de relevo)" };
+        cerrar();
+      }
       marca = e; grupo.push(...tramo);
     }
     cerrar();

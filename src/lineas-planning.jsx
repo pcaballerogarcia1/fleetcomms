@@ -9,7 +9,7 @@ import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
 import { Horarios } from "./lineas-horarios.jsx";
-import { nombreDia } from "./lineas-sched.js";
+import { nombreDia, cabecerasDeRed } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
 const C = {
@@ -364,6 +364,53 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
 }
 
 // ── Página ────────────────────────────────────────────────────────────
+// ── Puntos de relevo: cabeceras donde el Scheduling puede cambiar de conductor ──
+function PuntosRelevo({ red, cfg, onGuardar }) {
+  const cabs = useMemo(() => cabecerasDeRed(red), [red]);
+  const [q, setQ] = useState("");
+  const no = new Set(cfg._relevos?.no || []);
+  const permitido = c => !c.paradas.some(x => no.has(x));
+  const vis = cabs.filter(c => !q.trim() || norm(`${c.nombre} ${c.lineas.join(" ")}`).includes(norm(q.trim())));
+  const poner = (lista, si) => {
+    const n = new Set(no);
+    for (const c of lista) for (const x of c.paradas) { if (si) n.delete(x); else n.add(x); }
+    onGuardar([...n]);
+  };
+  const conRelevo = cabs.filter(permitido).length;
+  const btn = { background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font };
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
+      <div style={{ maxWidth: 900 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Puntos de relevo</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.55 }}>
+          Marca las cabeceras donde se puede cambiar de conductor. El Scheduling solo corta las piezas (relevos) en las marcadas; si una pieza tiene que cortarse a la fuerza (pieza máxima o conducción) donde no se puede, se corta en el último punto de relevo anterior. Al principio y al final del autobús (cochera) siempre hay relevo.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 10px", flexWrap: "wrap" }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cabecera o línea…" style={{ width: 280, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+          <button onClick={() => poner(vis, true)} style={btn}>{q ? "Permitir en las encontradas" : "Permitir en todas"}</button>
+          <button onClick={() => poner(vis, false)} style={btn}>{q ? "Quitar en las encontradas" : "Quitar en todas"}</button>
+          <span style={{ fontSize: 12, color: conRelevo === cabs.length ? C.muted : C.amber, marginLeft: "auto" }}>
+            Se puede relevar en {conRelevo} de {cabs.length} cabeceras
+          </span>
+        </div>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card }}>
+          {vis.map(c => (
+            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: permitido(c) ? 1 : 0.6 }}>
+              <input type="checkbox" checked={permitido(c)} onChange={e => poner([c], e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: "pointer" }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 12.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
+                <span style={{ display: "block", fontSize: 10.5, color: C.dim, marginTop: 2 }}>Líneas {c.lineas.join(", ")}</span>
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: permitido(c) ? C.green : C.red, whiteSpace: "nowrap" }}>{permitido(c) ? "Se puede relevar" : "Sin relevo"}</span>
+            </label>
+          ))}
+          {!vis.length && <div style={{ padding: 16, fontSize: 12, color: C.dim }}>Ninguna cabecera con «{q}».</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Al importar: elegir qué líneas y qué calendarios del GTFS se quedan ──
 function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
   const [lineas, setLineas] = useState(() => new Set(red.lineas.map(l => l.id)));
@@ -457,7 +504,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const [importando, setImportando] = useState(null); // texto del avance
   const [error, setError] = useState(null);
   const [eligiendo, setEligiendo] = useState(null);
-  const [vista, setVista] = useState("red"); // red · horarios // { archivo, red } leído del GTFS, a falta de elegir qué se queda
+  const [vista, setVista] = useState("red"); // red · horarios · relevos // { archivo, red } leído del GTFS, a falta de elegir qué se queda
   const fileRef = useRef(null);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
@@ -537,6 +584,12 @@ export function PlanningLineasPage({ projectId, orgId }) {
       .then(() => logAudit({ modulo: "Planning", accion: min == null ? "Volvió al tiempo de recorrido calculado" : "Cambió un tiempo de recorrido", detalle: `${que}${min != null ? `: ${min} min` : ""}` }))
       .catch(e => alert("No se pudo guardar: " + (e.message || e)));
   };
+  const guardarRelevos = no => {
+    const n = cabecerasDeRed(red).filter(c => c.paradas.some(x => no.includes(x))).length;
+    guardarCfgLinea(projectId, "_relevos", { no }, { detalle: n ? `puntos de relevo (${n} cabecera${n > 1 ? "s" : ""} sin relevo)` : "puntos de relevo (en todas las cabeceras)" })
+      .then(() => logAudit({ modulo: "Planning", accion: "Cambió los puntos de relevo", detalle: `${n} cabeceras sin relevo` }))
+      .catch(e => alert("No se pudo guardar: " + (e.message || e)));
+  };
   const pestana = (id, txt) => (
     <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 20, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 12.5, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>
   );
@@ -546,10 +599,11 @@ export function PlanningLineasPage({ projectId, orgId }) {
         <div style={{ display: "flex", alignItems: "center", padding: "0 18px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
           {pestana("red", "Red y mapa")}
           {pestana("horarios", "Horarios de salida")}
+          {pestana("relevos", "Puntos de relevo")}
           {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Pincha una hora de salida o un tiempo de recorrido para cambiarlo. Los cambios los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
         </div>
       )}
-      {red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
+      {red && vista === "relevos" ? <PuntosRelevo red={red} cfg={cfg} onGuardar={guardarRelevos} /> : red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
     <div style={{ display: "flex", flex: 1, width: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { claveSalidas, TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, revisarRestricciones, PARAMS_DEFECTO, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
+import { cabecerasDeRed, claveSalidas, TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, revisarRestricciones, PARAMS_DEFECTO, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -572,6 +572,50 @@ describe("scheduling de líneas: horarios cambiados en Planning", () => {
     const deps = r.viajes.filter(v => v.linea === "A" && v.dir === 0).map(v => v.dep);
     expect(deps).toEqual([h(7), h(8, 30), h(10)]);
     expect(generarVehiculos(RED, cfg, { dia: "sabado", lineas: ["A"] }).viajes.length).toBe(0); // otro día: las del GTFS (sábado sin servicio)
+  });
+});
+
+describe("scheduling de líneas: puntos de relevo", () => {
+  // Una línea X ⇄ Y de 40 min, cada 15 min de 6 a 22 h: los relevos pueden ser en X o en Y
+  const salidas = Array.from({ length: 65 }, (_, k) => h(6) + k * 15);
+  const tiempos = ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 40, viajes: 1 }));
+  const red = { paradas: [{ id: "X", nombre: "Plaza X" }, { id: "Y", nombre: "Estación Y" }, { id: "Yb", nombre: "Estación Y (vuelta)" }, { id: "Xb", nombre: "Plaza X (vuelta)" }], lineas: [{ id: "L", nombre: "L", color: "#0af", sentidos: [
+    { ...sentido(0, ["X", "M", "Y"], salidas, 40), tiempos },
+    { ...sentido(1, ["Yb", "Mb", "Xb"], salidas.map(x => x + 45), 40), tiempos },
+  ] }] };
+  const relevosEn = r => r.turnos.flatMap(t => t.piezas).filter(pz => {
+    const v = r.vehiculos.find(b => b.id === pz.vehiculo);
+    return pz.fin < v.fin; // no es el final del autobús: ahí hay relevo
+  }).map(pz => pz.d);
+
+  it("las cabeceras de la red, juntando ida y vuelta", () => {
+    const c = cabecerasDeRed(red);
+    expect(c).toHaveLength(2);
+    expect(c.map(x => x.paradas.sort())).toEqual(expect.arrayContaining([["X", "Xb"], ["Y", "Yb"]]));
+  });
+
+  it("si en la cabecera donde se relevaba ya no se puede, todos los relevos pasan a la otra", () => {
+    const libre = generarServicio(red, {}, { dia: "laborable", corte: 120, tiposTurno: [] });
+    const usada = relevosEn(libre)[0];
+    const grupo = cabecerasDeRed(red).find(c => c.paradas.includes(usada) || c.id === usada);
+    const cfg = { _relevos: { no: grupo.paradas } };
+    for (const corte of [90, 120, "max"]) {
+      const r = generarServicio(red, cfg, { dia: "laborable", corte, tiposTurno: [] });
+      const en = relevosEn(r);
+      expect(en.length, `corte ${corte}`).toBeGreaterThan(0);
+      expect(en.some(d => grupo.paradas.includes(d)), `corte ${corte}`).toBe(false);
+      for (const pz of r.turnos.flatMap(t => t.piezas)) expect(pz.fin - pz.inicio).toBeLessThanOrEqual(r.params.piezaMax);
+    }
+  });
+
+  it("a mano tampoco se puede crear un relevo en una cabecera sin relevo", () => {
+    const cfg = { _relevos: { no: ["Y", "Yb"] } };
+    const r = generarServicio(red, cfg, { dia: "laborable", corte: "max", tiposTurno: [] });
+    const pz = r.turnos.flatMap(t => t.piezas).find(x => x.viajes.filter(v => !v.vacio).length >= 3);
+    const reales = pz.viajes.filter(v => !v.vacio);
+    const ida = reales.find((v, i) => v.d === "Y" && i < reales.length - 1); // acaba en Y y sigue otro: llevársela parte en Y
+    expect(ida).toBeTruthy();
+    expect(moverViajesTurno(r, [claveViaje(ida)], null).error).toMatch(/no se puede/);
   });
 });
 
