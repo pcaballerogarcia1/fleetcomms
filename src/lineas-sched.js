@@ -1382,6 +1382,8 @@ export function revisarRestricciones(p) {
   if (!(p.maxPiezas >= 2)) r.push({ grave: true, texto: `Piezas por turno: ${p.maxPiezas ?? 0}. Ningún turno puede juntar dos piezas: no habrá partidos y saldrán muchos turnos cortos.` });
   if (p.huecoNoPagado != null && p.huecoNoPagado < 30) r.push({ grave: true, texto: `Hueco que ya no se paga: ${p.huecoNoPagado} min. Cualquier hueco de ${p.huecoNoPagado} min o más entre dos piezas cuenta como partido (sin pagar).` });
   if (p.piezaMin > 0 && p.piezaMax > 0 && p.piezaMin > p.piezaMax) r.push({ grave: true, texto: `La pieza mínima (${p.piezaMin} min) es mayor que la máxima (${p.piezaMax} min).` });
+  if (p.piezaMax > 0 && p.piezaMax < 90) r.push({ grave: true, texto: `Pieza máxima de ${p.piezaMax} min: habrá relevo de conductor cada ${p.piezaMax} min como mucho y los turnos se llenan de piezas sueltas. ¿Querías ${p.piezaMax * 10}?` });
+  if (p.maxPiezas > 6) r.push({ grave: false, texto: `${p.maxPiezas} piezas por turno: un conductor podría cambiar de autobús ${p.maxPiezas - 1} veces en su jornada. Lo habitual es 2–4.` });
   if (p.piezaMax >= jornada) r.push({ grave: false, texto: `Pieza máxima de ${p.piezaMax} min: una sola pieza puede ocupar el turno entero (${jornada} min), así que casi no habrá relevos ni partidos.` });
   if (p.aplicar561 !== false && (p.conduccionContinuaMax > 270 || p.pausaConduccionMin < 45)) r.push({ grave: false, texto: `Conducción continua de ${p.conduccionContinuaMax} min con pausa de ${p.pausaConduccionMin} min: no es lo de la UE 561/2006 (270 y 45). Si es a propósito, marca «No aplicar la UE 561/2006».` });
   if (p.regulacion === 0) r.push({ grave: false, texto: "Regulación en cabecera de 0 min: los autobuses salen en cuanto llegan." });

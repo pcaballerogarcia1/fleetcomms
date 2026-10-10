@@ -533,6 +533,10 @@ describe("scheduling de líneas: restricciones sin sentido", () => {
     expect(r.some(x => /UE 561/.test(x.texto))).toBe(true);
     expect(r.some(x => /Regulación en cabecera de 0/.test(x.texto))).toBe(true);
     expect(revisarRestricciones(PARAMS_DEFECTO)).toEqual([]); // las de por defecto, sin avisos
+    // erratas de un proyecto real (Cascais): pieza máxima 30 en vez de 300 y 40 piezas en vez de 4
+    const erratas = revisarRestricciones({ ...PARAMS_DEFECTO, piezaMax: 30, maxPiezas: 40 });
+    expect(erratas.some(x => x.grave && /Pieza máxima de 30 min.*¿Querías 300\?/.test(x.texto))).toBe(true);
+    expect(erratas.some(x => /40 piezas por turno/.test(x.texto))).toBe(true);
   });
 
   it("un turno sin hueco no es de tipo Partido aunque quepa en sus horas", () => {
