@@ -2,7 +2,7 @@
 // GTFS pequeña, poner una cochera, generar vehículos y turnos, y mover una
 // pieza a mano (que se guarda).
 import { test, expect } from "@playwright/test";
-import { sembrar, listar, leer } from "./semilla.mjs";
+import { sembrar, listar, leer, CLAVE } from "./semilla.mjs";
 import { vigilarErrores, entrarOficina, gtfsMini } from "./ayudas.mjs";
 
 test.beforeEach(async () => { await sembrar(); });
@@ -182,3 +182,73 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   expect(errores).toEqual([]);
 });
 
+
+test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su turno en el móvil", async ({ page, browser }) => {
+  const errores = vigilarErrores(page);
+  await entrarOficina(page);
+  await page.getByText("Nuevo proyecto").first().click();
+  await page.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await page.fill('input[placeholder="Nombre del proyecto *"]', "Bus e2e");
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect.poll(async () => (await listar("scheduling_projects")).filter(p => p.tipo === "lineas").length).toBe(1);
+  const pid = (await listar("scheduling_projects")).find(p => p.tipo === "lineas")._id;
+  await page.goto("/planning");
+  const [elegir] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("Importar red (GTFS .zip)").click()]);
+  await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  await page.getByRole("button", { name: "Importar", exact: true }).click({ timeout: 60_000 });
+  await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
+
+  // Control antes de publicar: explica qué hacer
+  await page.getByRole("button", { name: "Control", exact: true }).first().click();
+  await expect(page.getByText("Aún no hay ningún día publicado")).toBeVisible({ timeout: 30_000 });
+
+  // Scheduling → paso 2 → Publicar a Control para hoy
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: /Trabajadores/ }).first().click();
+  await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Publicar a Control" }).click();
+  const hoy = page.getByRole("button", { name: "Hoy", exact: true });
+  if (await hoy.count()) await hoy.click();
+  await page.getByRole("button", { name: "Publicar", exact: true }).click();
+  await expect(page.getByText(/✓ Publicado el/)).toBeVisible({ timeout: 30_000 });
+  const servicios = (await listar("servicio_lineas")).filter(s => s.projectId === pid);
+  expect(servicios).toHaveLength(1);
+  const sid = servicios[0]._id;
+  const turnos = await listar(`servicio_lineas/${sid}/turnos`);
+  expect(turnos.length).toBe(servicios[0].resumen.turnos);
+  await page.getByRole("button", { name: "Ver en Control" }).click();
+  await expect(page.getByText("Turnos en marcha")).toBeVisible();
+  await expect(page.getByText(new RegExp(`^0/${turnos.length}$`))).toBeVisible();
+
+  // El conductor, en el móvil: «Mi turno», coge el T1 y lo empieza
+  const movil = await browser.newContext({ viewport: { width: 400, height: 820 }, isMobile: true, permissions: ["geolocation"], geolocation: { latitude: 40.40, longitude: -3.70 } });
+  const m = await movil.newPage();
+  const erroresMovil = vigilarErrores(m);
+  m.on("dialog", d => d.accept());
+  await m.goto("/rutas");
+  await m.fill('input[type="email"]', "cond1@demo.test");
+  await m.fill('input[type="password"]', CLAVE);
+  await m.keyboard.press("Enter");
+  await expect(m.getByText("¿Qué turno haces hoy?")).toBeVisible({ timeout: 30_000 });
+  await m.getByRole("button", { name: "Coger" }).first().click();
+  await expect(m.getByRole("button", { name: "Empezar turno" })).toBeVisible();
+  await m.getByRole("button", { name: "Empezar turno" }).click();
+  await expect(m.getByRole("button", { name: "Terminar turno" })).toBeVisible();
+  await expect.poll(async () => (await leer(`servicio_lineas/${sid}/turnos/T1`))?.inicioReal ?? null).not.toBe(null);
+  expect(await leer(`servicio_lineas/${sid}/turnos/T1`)).toMatchObject({ conductorNombre: "Carlos Conductor", conductorUid: expect.any(String) });
+  // manda su posición (el navegador de pruebas da una fija)
+  await expect.poll(async () => (await listar("ubicaciones_lineas")).filter(u => u.turnoId === "T1" && u.activo).length, { timeout: 30_000 }).toBe(1);
+
+  // y la oficina lo ve en marcha
+  await expect(page.getByText(new RegExp(`^1/${turnos.length}$`))).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^T1 Carlos Conductor/ }).click();
+  await expect(page.getByText(/Empezó \d\d:\d\d/)).toBeVisible();
+  await page.getByRole("button", { name: "Informe del día" }).click();
+  await expect(page.getByRole("button", { name: "Descargar Excel" })).toBeVisible();
+
+  await m.getByRole("button", { name: "Terminar turno" }).click();
+  await expect(m.getByText(/Turno terminado/)).toBeVisible();
+  await movil.close();
+  expect(errores).toEqual([]);
+  expect(erroresMovil).toEqual([]);
+});

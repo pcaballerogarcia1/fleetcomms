@@ -15,6 +15,9 @@ import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { setErrorUser } from "./error-report.js";
 import { parcheDe, cambiarEnLista } from "./concurrencia.js";
+import { MiTurno } from "./turno-conductor.jsx";
+import { watchServiciosFechas } from "./lineas-servicio-store.js";
+import { fechaLocal, sumarDias, servicioVigente } from "./lineas-servicio.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
   {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
@@ -2315,6 +2318,21 @@ export default function App(){
     });
   },[sesion?.org_id]);
 
+  // Autobuses (proyectos de líneas): el servicio publicado de hoy (y el de
+  // ayer, que puede seguir de madrugada). Si hay, aparece «Mi turno»; a los
+  // conductores se les abre ahí directamente la primera vez.
+  const [servicios,setServicios]=useState([]);
+  const abiertoTurno=useRef(false);
+  useEffect(()=>{
+    if(!sesion?.org_id) return;
+    const hoy=fechaLocal();
+    return watchServiciosFechas(sesion.org_id,[hoy,sumarDias(hoy,-1)],l=>{
+      setServicios(l);
+      if(!abiertoTurno.current && servicioVigente(l).length && !puedeGestionarRutasRol(sesion.rol)){ abiertoTurno.current=true; setTab(t=>t==="rutas"?"turno":t); }
+    });
+  },[sesion?.org_id,sesion?.rol]);
+  const hayBus=servicioVigente(servicios).length>0;
+
   const isSA = sesion?.rol === "superadmin";
   const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
   // Planes antiguos sin conductorUid: los arregla quien gestiona rutas (ver reparar-planes.js)
@@ -2391,6 +2409,7 @@ export default function App(){
   // alcance (roles.js). Field/Admin/Superadmin siguen viendo esas dos tal
   // cual las veían antes de este cambio.
   const TABS=[
+    ...(hayBus?[{key:"turno",icon:"🚌",label:"Mi turno"}]:[]),
     {key:"rutas",      icon:"🗺️", label:"Rutas"},
     ...(esIntermedio ? [] : [
       {key:"incidencias",icon:"📋", label:"Incidencias"},
@@ -2398,7 +2417,7 @@ export default function App(){
     ]),
     ...(esAdmin?[{key:"admin",icon:"⚙️",label:"Admin"}]:[]),
   ];
-  const TAB_TITLES={rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
+  const TAB_TITLES={turno:"Mi turno",rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
@@ -2421,6 +2440,7 @@ export default function App(){
         </div>
       </div>
 
+      {tab==="turno"&&<MiTurno sesion={sesion} servicios={servicios}/>}
       {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
       {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}

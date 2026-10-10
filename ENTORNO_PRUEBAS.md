@@ -59,3 +59,15 @@ Requiere el plan Blaze (pago por uso).
 Coste orientativo: se paga el almacenamiento de las copias al precio normal de Firestore, céntimos al mes con el volumen actual.
 
 Para restaurar una copia, desde la misma pantalla: **Restaurar** crea una base de datos nueva a partir de la copia. Nunca se sobrescribe la actual.
+
+## 5. Simular autobuses en Control (proyectos de líneas)
+
+Para enseñar Control de autobuses sin conductores reales:
+
+1. En Scheduling (paso 2, Trabajadores) pulsa **Publicar a Control** y elige hoy.
+2. Lanza el simulador con el identificador del proyecto (se ve en la dirección o en la base de datos):
+   `node scripts/simular-autobuses.mjs <projectId> 25 120`
+   (25 conductores ficticios durante 120 minutos; solo funciona contra pruebas).
+3. Abre Control: cada autobús se mueve por su línea con su retraso, y el informe del día se va rellenando.
+
+Con 25 conductores son unas 3.000 escrituras por hora, dentro de la cuota gratuita del proyecto de pruebas. Para pararlo antes: Ctrl+C (marca los autobuses como inactivos).

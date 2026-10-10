@@ -121,5 +121,46 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "viajes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "trazados",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "coords",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "real",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "buses",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "turnos",
+      "fieldPath": "lineas",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "servicio_lineas",
+      "fieldPath": "lista",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "servicio_lineas",
+      "fieldPath": "resumen",
+      "indexes": []
+    }
+  ]
 }

@@ -18,6 +18,7 @@ const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ def
 // Proyectos de "Líneas regulares" (autobuses): su propio Planning y Scheduling
 const PlanningLineasLazy   = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.PlanningLineasPage })));
 const SchedulingLineasLazy = lazy(() => import("./lineas-scheduling.jsx").then(m => ({ default: m.SchedulingLineasPage })));
+const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m => ({ default: m.ControlLineasPage })));
 // LoginScheduling vive en su propio archivo diminuto (sin tirar de
 // Scheduling/Planning/Rostering) — se importa normal porque hace falta
 // de inmediato en /login.
@@ -397,7 +398,7 @@ function WorkspaceRouter() {
             pointerEvents: path === "/scheduling" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              {esLineas ? <SchedulingLineasLazy key={activeProject._id} projectId={activeProject._id} /> : <SchedulingModuleWrapperLazy
+              {esLineas ? <SchedulingLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} proyecto={activeProject.nombre} sesion={sesion} /> : <SchedulingModuleWrapperLazy
                 vehicles={vehicles} workers={workers}
                 loadingV={loadingV} loadingW={loadingW}
                 activeProject={activeProject} onProjectUpdate={updateProject}
@@ -435,7 +436,9 @@ function WorkspaceRouter() {
             pointerEvents: path === "/control" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <ControlPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />
+              {esLineas
+                ? <ControlLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} />
+                : <ControlPageLazy sesion={sesion} orgId={effectiveOrgId} embedded />}
             </Suspense>
           </div>
         )}

@@ -13,6 +13,7 @@ import { KpiBar } from "./scheduling.jsx";
 import { SelectorCalendario, Horarios } from "./lineas-horarios.jsx";
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { logAudit } from "./audit.js";
+import { PublicarServicio } from "./lineas-publicar.jsx";
 
 // Mismos colores y tipografías que scheduling.jsx
 const C = {
@@ -645,8 +646,9 @@ const baseDeResumen = (r, p) => (r ? {
 const MAX_EN_MEMORIA = 5; // escenarios completos guardados en memoria (los de Roma ocupan)
 const nombreObjetivo = id => OBJETIVOS.find(o => o.id === id)?.nombre.toLowerCase();
 
-export function SchedulingLineasPage({ projectId }) {
+export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const [subTab, setSubTab] = useState("escenario");
+  const [publicando, setPublicando] = useState(false);
   const [estado, setEstado] = useState({ red: null, cargando: true });
   const [cfg, setCfg] = useState({});
   const [guardados, setGuardados] = useState(undefined);
@@ -1060,6 +1062,11 @@ export function SchedulingLineasPage({ projectId }) {
               {modo === "vehicles"
                 ? <button onClick={() => exportar("vehiculos")} title="Descargar los autobuses, con los vacíos, en Excel" style={btnExcel}>{icoDescarga} Vehículos</button>
                 : <button onClick={() => exportar("turnos")} disabled={!res.turnos} title="Descargar los turnos de conductor en Excel" style={{ ...btnExcel, opacity: res.turnos ? 1 : 0.4 }}>{icoDescarga} Trabajadores</button>}
+              <button onClick={() => setPublicando(true)} disabled={!res.turnos || !orgId} title={res.turnos ? "Publicar los turnos de este calendario para un día: los conductores los ven en el móvil y Control los sigue en vivo" : "Primero hay que hacer los turnos (paso 2)"}
+                style={{ ...btnSec, color: C.blueText || C.blue, border: `1px solid ${C.blue}66`, fontWeight: 600, opacity: res.turnos && orgId ? 1 : 0.4, cursor: res.turnos && orgId ? "pointer" : "not-allowed" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
+                Publicar a Control
+              </button>
             </>}
             <div style={{ flex: 1 }} />
             <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" style={{ width: 130, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
@@ -1086,6 +1093,8 @@ export function SchedulingLineasPage({ projectId }) {
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>
           )}
+          {publicando && res?.turnos && <PublicarServicio red={red} res={res} dia={dia} cocheras={cocheras} projectId={projectId} orgId={orgId} proyecto={proyecto} sesion={sesion}
+            avisoManual={calculando || opt.estado === "corriendo" ? "Hay un cálculo en marcha: espera a que termine para publicar lo último." : null} onCerrar={() => setPublicando(false)} />}
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
             opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}

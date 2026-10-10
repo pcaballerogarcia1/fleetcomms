@@ -288,6 +288,36 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // ── LÍNEAS REGULARES: servicio publicado del día y posiciones ──────
+    // La oficina (admin/intermedio) publica los turnos del día desde el
+    // Scheduling; el conductor puede coger un turno libre (o soltar el suyo)
+    // y anotar lo que va haciendo, pero no tocar los viajes ni el turno de otro.
+    match /servicio_lineas/{sid} {
+      allow read: if sameOrg(resource.data.org_id);
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update: if sameOrg(resource.data.org_id) && request.resource.data.org_id == resource.data.org_id && puedeWorkspace();
+      allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      match /turnos/{tid} {
+        allow read: if sameOrg(resource.data.org_id);
+        allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+        allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+        allow update: if sameOrg(resource.data.org_id) && request.resource.data.org_id == resource.data.org_id && (
+          puedeWorkspace() || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['conductorUid', 'conductorNombre', 'real', 'inicioReal', 'finReal', 'actualizado'])
+            && (resource.data.conductorUid == null || resource.data.conductorUid == request.auth.uid)
+            && (request.resource.data.conductorUid == null || request.resource.data.conductorUid == request.auth.uid)
+            // lo real solo lo anota quien tiene el turno (coger uno libre no toca nada más)
+            && (resource.data.conductorUid == request.auth.uid || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['conductorUid', 'conductorNombre', 'actualizado']))
+          )
+        );
+      }
+    }
+    // Última posición de cada conductor de autobús (aparte de la de rutas por puntos)
+    match /ubicaciones_lineas/{uid} {
+      allow read: if sameOrg(resource.data.org_id);
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // ── FICHAJES (entrada/salida + kms de la jornada) ───────────────
     // Lectura: el propio conductor (su historial), o alguien con acceso al
     // workspace (control horario/laboral, panel de Control). Escritura:

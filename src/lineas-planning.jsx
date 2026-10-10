@@ -5,6 +5,7 @@
 // tipos de vehículo que admite. Nada de esto aparece en los proyectos de
 // "Rutas por puntos" (residuos, reparto…), que siguen con su Planning.
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useLeaflet } from "./use-leaflet.js";
 import { agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
@@ -23,28 +24,6 @@ const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ
 const fmtFecha = d => (d ? new Date(d + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }) : "—");
 
 // ── Mapa (Leaflet, el mismo que usa el resto de la app) ───────────────
-function useLeaflet() {
-  const [L, setL] = useState(() => window.L || null);
-  useEffect(() => {
-    if (window.L) return;
-    if (!document.getElementById("leaflet-css")) {
-      const css = document.createElement("link");
-      css.id = "leaflet-css"; css.rel = "stylesheet";
-      css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
-      document.head.appendChild(css);
-    }
-    let js = document.getElementById("leaflet-js");
-    if (!js) {
-      js = document.createElement("script");
-      js.id = "leaflet-js"; js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-      document.head.appendChild(js);
-    }
-    const ok = () => setL(window.L);
-    js.addEventListener("load", ok);
-    return () => js.removeEventListener("load", ok);
-  }, []);
-  return L;
-}
 
 // km en línea recta (para enseñar a qué distancia queda cada cochera)
 function kmEntre(a, b) {
