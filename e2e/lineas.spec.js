@@ -73,6 +73,18 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   await expect.poll(async () => ((await leer(`planning_settings/${pid}`))?.lineasSched?.porCalendario?.laborable?.manuales || []).length).toBe(1);
   await page.reload();
   await expect(page.getByText(/1 cambio a mano en este calendario/)).toBeVisible({ timeout: 60_000 });
+
+  // 6) varios viajes a la vez (Ctrl+clic) a un turno nuevo, y anclar una fila arriba
+  await page.getByRole("button", { name: /Trabajadores/ }).first().click();
+  const bloques = page.locator('.sched-block[draggable="true"]');
+  await bloques.nth(0).click({ modifiers: ["Control"] });
+  await bloques.nth(1).click({ modifiers: ["Control"] });
+  await expect(page.getByText(/2 viaje\(s\) elegidos/)).toBeVisible();
+  await page.getByRole("button", { name: "A un turno nuevo" }).click();
+  await expect(page.getByText(/^2 viajes movidos a un turno nuevo/)).toBeVisible();
+  await expect.poll(async () => (((await leer(`planning_settings/${pid}`))?.lineasSched?.porCalendario?.laborable?.manuales) || []).filter(o => o.tipo === "viajesTurno").length).toBe(1);
+  await page.getByTitle(/Anclar arriba/).first().click();
+  await expect(page.getByText(/anclado\(s\) arriba/)).toBeVisible();
   expect(errores).toEqual([]);
 });
 

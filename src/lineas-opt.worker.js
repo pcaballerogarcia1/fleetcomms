@@ -6,7 +6,7 @@
 //  · { tipo: "lote", red, cfg, cocheras, params, dias: [{ dia, estrategia }], optimizar, objetivoVehiculos, objetivoTurnos }
 //    → calcula (u optimiza, los dos pasos) varios calendarios y manda el
 //      resumen de cada uno según termina
-import { optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO } from "./lineas-sched.js";
+import { optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO, esCambioVehiculos, esCambioTurnos } from "./lineas-sched.js";
 
 self.onmessage = e => {
   const { tipo, red, cfg, params, objetivo, cocheras = [] } = e.data;
@@ -33,8 +33,8 @@ self.onmessage = e => {
         }
         // los cambios a mano del calendario (si no se optimiza), en su paso
         const ops = optimizar ? [] : manuales;
-        const v = aplicarCambios(generarVehiculos(red, cfg, q, { cocheras }), ops.filter(o => o.tipo === "viaje"));
-        const t = aplicarCambios(generarTurnos(v.res), ops.filter(o => o.tipo === "pieza"));
+        const v = aplicarCambios(generarVehiculos(red, cfg, q, { cocheras }), ops.filter(esCambioVehiculos));
+        const t = aplicarCambios(generarTurnos(v.res), ops.filter(esCambioTurnos));
         const fallidos = [...v.fallidos, ...t.fallidos];
         const est = Object.fromEntries(CAMPOS_ESTRATEGIA.map(k => [k, q[k] ?? PARAMS_DEFECTO[k]]));
         const aplicados = ops.filter(o => !fallidos.some(f => f.clave === o.clave && f.tipo === o.tipo && f.destino === o.destino));

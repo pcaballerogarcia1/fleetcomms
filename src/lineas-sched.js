@@ -981,11 +981,116 @@ export function moverPieza(res, clave, turnoDestino) {
 }
 
 /** Vuelve a aplicar cambios guardados ([{ tipo: "viaje" | "pieza", clave, destino }]); los que ya no encajan se saltan */
+/**
+ * Varias expediciones a la vez al mismo autobús (o a uno nuevo, el mismo para
+ * todas). Todo o nada: si alguna no cabe, no se mueve ninguna.
+ */
+export function moverViajes(res, claves, busDestino) {
+  let r = res, destino = busDestino;
+  const orden = [...claves].sort((a, b) => Number(a.split("|")[2]) - Number(b.split("|")[2]));
+  for (const clave of orden) {
+    const antes = new Set(r.autobuses.map(b => b.id));
+    const x = moverViaje(r, clave, destino);
+    if (x.error) {
+      if (/Ya está en ese autobús/.test(x.error)) continue;
+      return { error: x.error };
+    }
+    // la primera crea el autobús nuevo: las demás van a ese mismo
+    if (destino == null) destino = x.autobuses.find(b => !antes.has(b.id))?.id ?? x.vehiculos.find(v => v.viajes.some(y => !y.vacio && claveViaje(y) === clave))?.autobus;
+    r = x;
+  }
+  return r;
+}
+
+// Una pieza en tramos: cada viaje con los vacíos que lleva delante; los del
+// final (vuelta a cochera) con el último. Igual que al cortar piezas.
+function tramosDe(viajes) {
+  const tramos = [];
+  let sueltos = [];
+  for (const v of viajes) { sueltos.push(v); if (!v.vacio) { tramos.push(sueltos); sueltos = []; } }
+  if (sueltos.length) { if (tramos.length) tramos.at(-1).push(...sueltos); else tramos.push(sueltos); }
+  return tramos;
+}
+
+/**
+ * Varios viajes (de uno o varios turnos) a otro turno, o a uno nuevo. Las
+ * piezas de origen se parten donde empiezan y acaban los viajes elegidos
+ * (relevos nuevos); cada vacío va con su viaje.
+ */
+export function moverViajesTurno(res, claves, turnoDestino) {
+  if (!res.turnos) return { error: "Aún no hay turnos" };
+  const elegidos = new Set(claves);
+  const p = res.params, find = res.find || (x => x);
+  const esElegido = tramo => tramo.some(v => !v.vacio && elegidos.has(claveViaje(v)));
+  const afectadas = new Map(); // pieza → turno
+  for (const t of res.turnos) for (const pz of t.piezas) if (pz.viajes.some(v => !v.vacio && elegidos.has(claveViaje(v)))) afectadas.set(pz, t);
+  if (!afectadas.size) return { error: "No se encuentran esos viajes" };
+  let destino = null;
+  if (turnoDestino != null) {
+    destino = res.turnos.find(t => t.id === turnoDestino);
+    if (!destino) return { error: `No existe el turno T${turnoDestino}` };
+    if ([...afectadas.values()].every(t => t === destino)) return { error: "Ya están en ese turno" };
+  }
+  const id = destino ? destino.id : Math.max(0, ...res.turnos.map(t => t.id)) + 1;
+  const pieza = (vehiculo, viajes, turno) => ({
+    vehiculo, turno, viajes, inicio: viajes[0].dep, fin: viajes.at(-1).arr,
+    conduccion: viajes.reduce((s, v) => s + (v.arr - v.dep), 0), o: find(viajes[0].o), d: find(viajes.at(-1).d),
+  });
+  const quedan = new Map(), movidas = [];
+  for (const [pz, t] of afectadas) {
+    if (t === destino) continue; // los que ya están en el destino se quedan como están
+    let grupo = [], marca = null;
+    const cerrar = () => {
+      if (!grupo.length) return;
+      if (marca) movidas.push(pieza(pz.vehiculo, grupo, id));
+      else { if (!quedan.has(t)) quedan.set(t, []); quedan.get(t).push(pieza(pz.vehiculo, grupo, t.id)); }
+      grupo = [];
+    };
+    for (const tramo of tramosDe(pz.viajes)) {
+      const e = esElegido(tramo);
+      if (marca !== null && e !== marca) cerrar();
+      marca = e; grupo.push(...tramo);
+    }
+    cerrar();
+  }
+  if (!movidas.length) return { error: "Ya están en ese turno" };
+  if (destino) {
+    for (const m of movidas) {
+      const choca = destino.piezas.find(x => x.inicio < m.fin && m.inicio < x.fin);
+      if (choca) return { error: `Se solapa con la pieza de las ${reloj(choca.inicio)}–${reloj(choca.fin)} del turno T${turnoDestino}` };
+    }
+  }
+  const orden = l => l.sort((a, b) => a.inicio - b.inicio);
+  const turnos = [];
+  for (const t of res.turnos) {
+    const origen = [...afectadas.values()].includes(t) && t !== destino;
+    if (!origen && t !== destino) { turnos.push({ ...t }); continue; }
+    const piezas = [...t.piezas.filter(x => !afectadas.has(x) || t === destino), ...(quedan.get(t) || []), ...(t === destino ? movidas : [])];
+    if (piezas.length) turnos.push({ ...cerrarTurno({ id: t.id, piezas: orden(piezas) }, p), manual: true });
+  }
+  if (!destino) turnos.push({ ...cerrarTurno({ id, piezas: orden([...movidas]) }, p), manual: true });
+  for (const t of turnos) for (const x of t.piezas) x.turno = t.id;
+  asignarTipos(turnos, p);
+  // relevos de los autobuses tocados
+  const buses = new Set(movidas.map(x => x.vehiculo));
+  const vehiculos = res.vehiculos.map(v => (buses.has(v.id)
+    ? { ...v, relevos: orden(turnos.flatMap(t => t.piezas.filter(x => x.vehiculo === v.id))).map(x => ({ inicio: x.inicio, fin: x.fin, turno: x.turno })) }
+    : v));
+  return { ...res, vehiculos, turnos, kpis: kpisServicio(res.viajes, vehiculos, turnos, res.autobuses) };
+}
+
+/** Cambios a mano: los de vehículos (paso 1) y los de turnos (paso 2) */
+export const esCambioVehiculos = c => c.tipo === "viaje" || c.tipo === "viajes";
+export const esCambioTurnos = c => c.tipo === "pieza" || c.tipo === "viajesTurno";
+
 export function aplicarCambios(res, cambios = []) {
   let r = res;
   const fallidos = [];
   for (const c of cambios) {
-    const x = c.tipo === "viaje" ? moverViaje(r, c.clave, c.destino) : moverPieza(r, c.clave, c.destino);
+    const x = c.tipo === "viaje" ? moverViaje(r, c.clave, c.destino)
+      : c.tipo === "viajes" ? moverViajes(r, c.claves, c.destino)
+        : c.tipo === "viajesTurno" ? moverViajesTurno(r, c.claves, c.destino)
+          : moverPieza(r, c.clave, c.destino);
     if (x.error) fallidos.push({ ...c, error: x.error }); else r = x;
   }
   return { res: r, fallidos };

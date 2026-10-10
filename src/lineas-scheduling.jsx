@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales } from "./lineas-store.js";
-import { generarVehiculos, generarTurnos, moverViaje, moverPieza, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
+import { generarVehiculos, generarTurnos, moverViaje, moverPieza, moverViajes, moverViajesTurno, esCambioVehiculos, esCambioTurnos, aplicarCambios, claveViaje, clavePieza, ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, salidasDe, duracionViaje, costeDia, OBJETIVOS, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, esCalendario, nombreDia, viajesDia, resumenServicio, nombreEstrategia, CAMPOS_ESTRATEGIA, CAMPOS_VEHICULOS } from "./lineas-sched.js";
 import { minToHHMM } from "./gtfs-parse.js";
 import { KpiBar } from "./scheduling.jsx";
 import { logAudit } from "./audit.js";
@@ -98,7 +98,17 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   const [orden, setOrden] = useState(null); // { k, dir }
   const [n, setN] = useState(PAGINA);
   const [tip, setTip] = useState(null);
-  const [arr, setArr] = useState(null); // lo que se arrastra: { tipo, clave, origen }
+  const [arr, setArr] = useState(null); // lo que se arrastra: { tipo, clave | claves, origen }
+  // Ctrl/⌘ + clic: varias expediciones (vehículos) o viajes de turnos (trabajadores) para moverlas juntas
+  const [sel, setSel] = useState(() => new Set());
+  // filas fijas arriba para trabajar entre ellas (se anclan con 📌)
+  const [anclados, setAnclados] = useState([]);
+  const alternarAncla = id => setAnclados(l => (l.includes(id) ? l.filter(x => x !== id) : [...l, id]));
+  useEffect(() => {
+    const tecla = e => { if (e.key === "Escape") setSel(s => (s.size ? new Set() : s)); };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
   const [sobre, setSobre] = useState(null); // fila donde se soltaría (id, o "nuevo")
   const todas = useMemo(() => filasDe(res, modo), [res, modo]);
   const filas = useMemo(() => {
@@ -107,6 +117,8 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
     if (orden) l = [...l].sort((a, b) => (a[orden.k] > b[orden.k] ? 1 : a[orden.k] < b[orden.k] ? -1 : 0) * orden.dir);
     return l;
   }, [todas, filtro, orden]);
+  const filasAncladas = anclados.map(id => todas.find(r => r.id === id)).filter(Boolean);
+  const normales = anclados.length ? filas.filter(r => !anclados.includes(r.id)) : filas;
   if (!todas.length) return null;
   const ini = Math.floor(Math.min(...todas.map(r => r.inicio)) / 60) * 60;
   const fin = Math.ceil(Math.max(...todas.map(r => r.fin)) / 60) * 60;
@@ -118,13 +130,88 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   const nombre = id => paradasPorId.get(id)?.nombre || id;
   const claveDe = (x, r) => (modo === "vehicles" ? claveViaje(x) : r.piezaDe?.get(x));
   // la zona verde es "nuevo": autobús o turno nuevo (destino null)
-  const soltar = destino => { if (arr && onMover) onMover(arr.tipo, arr.clave, destino === "nuevo" ? null : destino); setArr(null); setSobre(null); };
+  const soltar = destino => {
+    if (arr && onMover && onMover(arr.tipo, arr.claves || arr.clave, destino === "nuevo" ? null : destino) && arr.claves) setSel(new Set());
+    setArr(null); setSobre(null);
+  };
+  const tipoVarios = modo === "vehicles" ? "viajes" : "viajesTurno";
   const zonaDe = id => ({
     onDragOver: e => { if (!arr || id === arr.origen) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (sobre !== id) setSobre(id); },
     onDrop: e => { e.preventDefault(); soltar(id); },
   });
   const tot = filas.reduce((a, r) => ({ km: a.km + r.km, kv: a.kv + r.kmVacio, v: a.v + r.nViajes, c: a.c + r.conduccion }), { km: 0, kv: 0, v: 0, c: 0 });
 
+  const chincheta = r => (
+    <button onClick={e => { e.stopPropagation(); alternarAncla(r.id); }} title={anclados.includes(r.id) ? "Desanclar" : "Anclar arriba (para trabajar con esta fila a mano)"}
+      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 4, fontSize: 10, opacity: anclados.includes(r.id) ? 1 : 0.28, filter: anclados.includes(r.id) ? "none" : "grayscale(1)" }}>📌</button>
+  );
+  const pintarFila = (r, ri) => (
+          <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(92,155,255,0.18)" : ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
+            <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 4, background: ri % 2 ? "#141d30" : C.bg, display: "flex", alignItems: "center", padding: "0 4px", borderRight: `1px solid ${C.border}` }}>
+              {vista === "tabla" ? COLS.map(col => (
+                <div key={col.k} title={col.k === "avisos" && r.avisos.length ? r.avisos.map(a => `• ${a}`).join("\n") : col.k === "nombre" && r.detalle ? r.detalle : undefined}
+                  style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: col.k === "nombre" || col.k === "tipo" ? font : mono,
+                    fontSize: col.k === "nombre" ? 11.5 : 10.5, fontWeight: col.k === "nombre" ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    color: col.k === "avisos" ? C.red : col.k === "amplitud" ? C.green : col.k === "km" ? C.orange : col.k === "kmVacio" ? "#94a3b8" : col.k === "nombre" ? C.text : C.muted }}>
+                  {col.k === "avisos" ? (r.avisos.length ? "!" : "") : col.k === "nombre" ? <>{chincheta(r)}{celda(r, col.k)}</> : celda(r, col.k)}
+                </div>
+              )) : (
+                <div style={{ paddingLeft: 6, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, color: C.text, fontWeight: 700 }}>{chincheta(r)}{r.nombre} <span style={{ color: C.dim, fontWeight: 400 }}>{r.detalle || r.tipo}</span></div>
+                  <div style={{ fontSize: 9.5, color: C.dim, fontFamily: mono }}>{hhmm(r.inicio)}–{hhmm(r.fin)} · {hm(r.amplitud)} · {r.nViajes} viajes</div>
+                </div>
+              )}
+            </div>
+            <div style={{ position: "relative", width: ancho, flexShrink: 0 }}>
+              {horas.map(h => <div key={h} style={{ position: "absolute", left: X(h), top: 0, bottom: 0, width: 1, background: "rgba(88,130,225,0.07)" }} />)}
+              {r.vacios.map((x, i) => (
+                <div key={`v${i}`} title={`Sin servicio (en cochera) ${hhmm(x.inicio)}–${hhmm(x.fin)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.36, height: ROW_H * 0.28,
+                  background: "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c55 6px, #fb923c55 12px)", borderRadius: 3, opacity: 0.6 }} />
+              ))}
+              {r.tramosPausa.map((x, i) => (
+                <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
+                  background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)", border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3 }} />
+              ))}
+              {r.viajes.map((x, i) => {
+                const w = Math.max(2, (x.arr - x.dep) * px - 1);
+                return (
+                  <div key={i} className="sched-block"
+                    draggable={!!onMover && !x.vacio}
+                    onClick={e => {
+                      if (x.vacio || !onMover) return;
+                      if (e.ctrlKey || e.metaKey) { const k = claveViaje(x); setSel(s0 => { const s1 = new Set(s0); if (s1.has(k)) s1.delete(k); else s1.add(k); return s1; }); }
+                      else if (sel.size) setSel(new Set());
+                    }}
+                    onDragStart={e => {
+                      e.dataTransfer.effectAllowed = "move"; setTip(null);
+                      const k = claveViaje(x);
+                      if (sel.has(k)) { e.dataTransfer.setData("text/plain", [...sel].join(",")); setArr({ tipo: tipoVarios, claves: [...sel], origen: null }); return; }
+                      if (sel.size) setSel(new Set());
+                      e.dataTransfer.setData("text/plain", claveDe(x, r) || ""); setArr({ tipo: modo === "vehicles" ? "viaje" : "pieza", clave: claveDe(x, r), origen: r.id });
+                    }}
+                    onDragEnd={() => { setArr(null); setSobre(null); }}
+                    onMouseEnter={e => !arr && setTip({ x, r, cx: e.clientX, cy: e.clientY })}
+                    onMouseMove={e => setTip(t => (t ? { ...t, cx: e.clientX, cy: e.clientY } : t))}
+                    onMouseLeave={() => setTip(null)}
+                    style={{ ...(!x.vacio && sel.has(claveViaje(x)) ? { outline: "2px solid #fff", boxShadow: `0 0 0 4px ${C.blue}aa`, zIndex: 2 } : {}), ...(arr && !x.vacio && (arr.claves ? arr.claves.includes(claveViaje(x)) : claveDe(x, r) === arr.clave) ? { opacity: 0.4, outline: "2px solid #fff" } : {}), cursor: onMover && !x.vacio ? "grab" : "default", ...(x.vacio ? {
+                      position: "absolute", left: X(x.dep), width: w, top: 9, height: ROW_H - 18, borderRadius: 3,
+                      background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
+                      color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
+                    } : {
+                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
+                      background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
+                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
+                    }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
+                );
+              })}
+              {r.relevos.map((x, i) => (
+                <div key={`r${i}`} title={`Relevo · turno T${x.turno}`} style={{ position: "absolute", left: X(x.inicio) - 1, top: 2, bottom: 2, width: 2, background: "#fff", zIndex: 3 }}>
+                  {modo === "vehicles" && <span style={{ position: "absolute", left: 2, top: -1, fontSize: 8.5, color: C.text, fontFamily: mono, whiteSpace: "nowrap", background: "rgba(11,18,32,0.85)", borderRadius: 2, padding: "0 2px", lineHeight: "11px" }}>T{x.turno}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+  );
   const barraBtn = (on) => ({ padding: "3px 8px", borderRadius: 4, border: "none", cursor: "pointer", fontFamily: font, fontSize: 10.5, background: on ? C.blue : "none", color: on ? "#fff" : C.muted, fontWeight: on ? 600 : 400 });
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -145,6 +232,13 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
           </button>
         ))}
         {modo === "workers" && res.kpis.turnosConAviso > 0 && <span style={{ fontSize: 11, color: C.red, fontFamily: mono }}>! {res.kpis.turnosConAviso} con avisos</span>}
+        {sel.size > 0 && (
+          <span style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", fontSize: 11.5, color: C.text, background: C.blueDim, border: `1px solid ${C.blue}`, borderRadius: 6, padding: "3px 6px 3px 10px" }}>
+            {sel.size} {modo === "vehicles" ? "expedicion(es)" : "viaje(s)"} elegidos · arrástralos a otro {modo === "vehicles" ? "autobús" : "turno"}
+            <button onClick={() => { if (onMover && onMover(tipoVarios, [...sel], null)) setSel(new Set()); }} style={{ background: C.green, border: "none", color: "#06281a", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: font }}>A {modo === "vehicles" ? "uno nuevo" : "un turno nuevo"}</button>
+            <button onClick={() => setSel(new Set())} title="Quitar la selección (Esc)" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
+          </span>
+        )}
       </div>
 
       <div style={{ flex: 1, overflow: "auto", minHeight: 0, position: "relative" }} onMouseLeave={() => setTip(null)}>
@@ -169,62 +263,17 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
             Suelta aquí para {modo === "vehicles" ? "un autobús nuevo" : "un turno nuevo"} · o sobre {modo === "vehicles" ? "otro autobús" : "otro turno"}
           </div>
         )}
-        {filas.slice(0, n).map((r, ri) => (
-          <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(92,155,255,0.18)" : ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
-            <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 4, background: ri % 2 ? "#141d30" : C.bg, display: "flex", alignItems: "center", padding: "0 4px", borderRight: `1px solid ${C.border}` }}>
-              {vista === "tabla" ? COLS.map(col => (
-                <div key={col.k} title={col.k === "avisos" && r.avisos.length ? r.avisos.map(a => `• ${a}`).join("\n") : col.k === "nombre" && r.detalle ? r.detalle : undefined}
-                  style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: col.k === "nombre" || col.k === "tipo" ? font : mono,
-                    fontSize: col.k === "nombre" ? 11.5 : 10.5, fontWeight: col.k === "nombre" ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    color: col.k === "avisos" ? C.red : col.k === "amplitud" ? C.green : col.k === "km" ? C.orange : col.k === "kmVacio" ? "#94a3b8" : col.k === "nombre" ? C.text : C.muted }}>
-                  {col.k === "avisos" ? (r.avisos.length ? "!" : "") : celda(r, col.k)}
-                </div>
-              )) : (
-                <div style={{ paddingLeft: 6, minWidth: 0 }}>
-                  <div style={{ fontSize: 11.5, color: C.text, fontWeight: 700 }}>{r.nombre} <span style={{ color: C.dim, fontWeight: 400 }}>{r.detalle || r.tipo}</span></div>
-                  <div style={{ fontSize: 9.5, color: C.dim, fontFamily: mono }}>{hhmm(r.inicio)}–{hhmm(r.fin)} · {hm(r.amplitud)} · {r.nViajes} viajes</div>
-                </div>
-              )}
+        {filasAncladas.length > 0 && (
+          // Ancladas: fijas arriba mientras se recorre el resto (para pasar piezas entre ellas)
+          <div style={{ position: "sticky", top: arr ? 60 : 30, zIndex: 5, background: C.bg, borderBottom: `2px solid ${C.blue}`, boxShadow: "0 6px 14px rgba(0,0,0,0.45)", width: leftW + ancho }}>
+            <div style={{ position: "sticky", left: 0, display: "flex", alignItems: "center", gap: 10, height: 22, padding: "0 10px", fontSize: 10, color: C.blueText, fontWeight: 700, letterSpacing: 0.5, width: "max-content" }}>
+              📌 {filasAncladas.length} {modo === "vehicles" ? "autobús(es)" : "turno(s)"} anclado(s) arriba
+              <button onClick={() => setAnclados([])} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 7px", fontSize: 10, cursor: "pointer", fontFamily: font }}>Desanclar todos</button>
             </div>
-            <div style={{ position: "relative", width: ancho, flexShrink: 0 }}>
-              {horas.map(h => <div key={h} style={{ position: "absolute", left: X(h), top: 0, bottom: 0, width: 1, background: "rgba(88,130,225,0.07)" }} />)}
-              {r.vacios.map((x, i) => (
-                <div key={`v${i}`} title={`Sin servicio (en cochera) ${hhmm(x.inicio)}–${hhmm(x.fin)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.36, height: ROW_H * 0.28,
-                  background: "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c55 6px, #fb923c55 12px)", borderRadius: 3, opacity: 0.6 }} />
-              ))}
-              {r.tramosPausa.map((x, i) => (
-                <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
-                  background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)", border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3 }} />
-              ))}
-              {r.viajes.map((x, i) => {
-                const w = Math.max(2, (x.arr - x.dep) * px - 1);
-                return (
-                  <div key={i} className="sched-block"
-                    draggable={!!onMover && !x.vacio}
-                    onDragStart={e => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", claveDe(x, r) || ""); setTip(null); setArr({ tipo: modo === "vehicles" ? "viaje" : "pieza", clave: claveDe(x, r), origen: r.id }); }}
-                    onDragEnd={() => { setArr(null); setSobre(null); }}
-                    onMouseEnter={e => !arr && setTip({ x, r, cx: e.clientX, cy: e.clientY })}
-                    onMouseMove={e => setTip(t => (t ? { ...t, cx: e.clientX, cy: e.clientY } : t))}
-                    onMouseLeave={() => setTip(null)}
-                    style={{ ...(arr && !x.vacio && claveDe(x, r) === arr.clave ? { opacity: 0.4, outline: "2px solid #fff" } : {}), cursor: onMover && !x.vacio ? "grab" : "default", ...(x.vacio ? {
-                      position: "absolute", left: X(x.dep), width: w, top: 9, height: ROW_H - 18, borderRadius: 3,
-                      background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
-                      color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
-                    } : {
-                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
-                      background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
-                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
-                    }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
-                );
-              })}
-              {r.relevos.map((x, i) => (
-                <div key={`r${i}`} title={`Relevo · turno T${x.turno}`} style={{ position: "absolute", left: X(x.inicio) - 1, top: 2, bottom: 2, width: 2, background: "#fff", zIndex: 3 }}>
-                  {modo === "vehicles" && <span style={{ position: "absolute", left: 2, top: -1, fontSize: 8.5, color: C.text, fontFamily: mono, whiteSpace: "nowrap", background: "rgba(11,18,32,0.85)", borderRadius: 2, padding: "0 2px", lineHeight: "11px" }}>T{x.turno}</span>}
-                </div>
-              ))}
-            </div>
+            {filasAncladas.map((r, ri) => pintarFila(r, ri))}
           </div>
-        ))}
+        )}
+        {normales.slice(0, n).map((r, ri) => pintarFila(r, ri))}
 
         {/* Totales (como la fila de la vista Tabla del de puntos) */}
         {vista === "tabla" && filas.length > 0 && (
@@ -258,7 +307,7 @@ function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.dep)} {nombre(tip.x.o)}</div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.arr)} {nombre(tip.x.d)}</div>
           <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>{tip.x.arr - tip.x.dep} min · {tip.x.km.toLocaleString("es-ES")} km · {tip.r.nombre}{tip.r.detalle ? ` (${tip.r.detalle})` : ""}</div>
-          {onMover && !tip.x.vacio && <div style={{ fontSize: 10, color: C.blueText, marginTop: 4 }}>Arrastra para {modo === "vehicles" ? "llevar la expedición a otro autobús" : "llevar la pieza entera a otro turno"}</div>}
+          {onMover && !tip.x.vacio && <div style={{ fontSize: 10, color: C.blueText, marginTop: 4 }}>Arrastra para {modo === "vehicles" ? "llevar la expedición a otro autobús" : "llevar la pieza entera a otro turno"} · Ctrl+clic para elegir varios {modo === "vehicles" ? "y moverlos juntos" : "viajes sueltos y moverlos juntos"}</div>}
         </div>
       )}
     </div>
@@ -796,8 +845,8 @@ export function SchedulingLineasPage({ projectId }) {
       try {
         const claveV = claveVehiculos(p, cfgTxt);
         const previos = cache[p.dia]?.manuales ?? porCalendario[p.dia]?.manuales ?? [];
-        const lista = meta.manuales ?? (meta.conservar ? previos : que === "turnos" ? previos.filter(o => o.tipo === "viaje") : []);
-        const opsV = lista.filter(o => o.tipo === "viaje"), opsT = lista.filter(o => o.tipo === "pieza");
+        const lista = meta.manuales ?? (meta.conservar ? previos : que === "turnos" ? previos.filter(esCambioVehiculos) : []);
+        const opsV = lista.filter(esCambioVehiculos), opsT = lista.filter(esCambioTurnos);
         const fallidos = [];
         const conV = x => { if (!opsV.length) return x; const a = aplicarCambios(x, opsV); fallidos.push(...a.fallidos); return a.res; };
         const conT = x => { if (!opsT.length) return x; const a = aplicarCambios(x, opsT); fallidos.push(...a.fallidos); return a.res; };
@@ -863,15 +912,21 @@ export function SchedulingLineasPage({ projectId }) {
   }
 
   // Mover a mano una expedición (paso 1) o una pieza (paso 2)
+  // tipo: "viaje" | "pieza" (uno) · "viajes" | "viajesTurno" (varios: clave es la lista)
   function mover(tipo, clave, destino) {
     const c = cache[dia];
-    if (!c?.res) return;
-    const r = tipo === "viaje" ? moverViaje(c.res, clave, destino) : moverPieza(c.res, clave, destino);
-    if (r.error) { setNota({ texto: `No se puede: ${r.error}`, error: true }); return; }
+    if (!c?.res) return false;
+    const claves = Array.isArray(clave) ? clave : null;
+    const deVeh = tipo === "viaje" || tipo === "viajes";
+    const r = tipo === "viaje" ? moverViaje(c.res, clave, destino)
+      : tipo === "viajes" ? moverViajes(c.res, claves, destino)
+        : tipo === "viajesTurno" ? moverViajesTurno(c.res, claves, destino)
+          : moverPieza(c.res, clave, destino);
+    if (r.error) { setNota({ texto: `No se puede: ${r.error}`, error: true }); return false; }
     const previos = c.manuales || [];
-    const op = { tipo, clave, destino };
-    // mover una expedición rehace los vehículos: los cambios de turnos ya no valen
-    const anadir = l => (tipo === "viaje" ? [...l.filter(o => o.tipo === "viaje"), op] : [...l, op]);
+    const op = claves ? { tipo, clave: claves[0], claves, destino } : { tipo, clave, destino };
+    // mover expediciones rehace los vehículos: los cambios de turnos ya no valen
+    const anadir = l => (deVeh ? [...l.filter(esCambioVehiculos), op] : [...l, op]);
     const manuales = anadir(previos);
     const clv = r.turnos ? c.clave : null;
     setCache(m => ({ ...m, [dia]: { ...c, res: r, base: baseDeResumen(resumenServicio(c.res), params), clave: clv, manuales, t: Date.now() } }));
@@ -889,12 +944,16 @@ export function SchedulingLineasPage({ projectId }) {
       })
       .catch(e => setNota({ texto: `No se pudo guardar el cambio: ${e.message || e}`, error: true }))
       .finally(() => { escribiendoRef.current--; });
-    const avisos = (tipo === "viaje"
-      ? r.vehiculos.find(v => v.viajes.some(x => !x.vacio && claveViaje(x) === clave))?.avisos
-      : r.turnos.find(t => t.piezas.some(x => clavePieza(x) === clave))?.avisos) || [];
-    const donde = destino == null ? (tipo === "viaje" ? "a un autobús nuevo" : "a un turno nuevo") : tipo === "viaje" ? `al autobús ${destino}` : `al turno T${destino}`;
-    setNota({ texto: `${tipo === "viaje" ? "Expedición movida" : "Pieza movida"} ${donde}${avisos.length ? ` · ojo: ${avisos[0]}` : ""}${tipo === "viaje" && c.res.turnos ? " · los turnos hay que rehacerlos (paso 2)" : ""}`, error: avisos.length > 0 });
-    logAudit({ modulo: "Scheduling", accion: tipo === "viaje" ? "Movió a mano una expedición" : "Movió a mano una pieza", detalle: `${nombreDia(dia, red)} · ${clave} → ${donde}` });
+    const primero = claves ? claves[0] : clave;
+    const avisos = (deVeh
+      ? r.vehiculos.find(v => v.viajes.some(x => !x.vacio && claveViaje(x) === primero))?.avisos
+      : tipo === "viajesTurno" ? r.turnos.find(t => t.piezas.some(pz => pz.viajes.some(x => !x.vacio && claveViaje(x) === primero)))?.avisos
+        : r.turnos.find(t => t.piezas.some(x => clavePieza(x) === clave))?.avisos) || [];
+    const donde = destino == null ? (deVeh ? "a un autobús nuevo" : "a un turno nuevo") : deVeh ? `al autobús ${destino}` : `al turno T${destino}`;
+    const que = tipo === "viaje" ? "Expedición movida" : tipo === "viajes" ? `${claves.length} expediciones movidas` : tipo === "viajesTurno" ? `${claves.length} viaje${claves.length > 1 ? "s" : ""} movido${claves.length > 1 ? "s" : ""}` : "Pieza movida";
+    setNota({ texto: `${que} ${donde}${avisos.length ? ` · ojo: ${avisos[0]}` : ""}${deVeh && c.res.turnos ? " · los turnos hay que rehacerlos (paso 2)" : ""}`, error: avisos.length > 0 });
+    logAudit({ modulo: "Scheduling", accion: deVeh ? (claves ? "Movió a mano varias expediciones" : "Movió a mano una expedición") : claves ? "Movió a mano varios viajes de turno" : "Movió a mano una pieza", detalle: `${nombreDia(dia, red)} · ${claves ? `${claves.length}: ${claves.slice(0, 3).join(", ")}${claves.length > 3 ? "…" : ""}` : clave} → ${donde}` });
+    return true;
   }
   const manualesActuales = actual?.manuales || [];
   const deshacer = () => {
@@ -908,7 +967,7 @@ export function SchedulingLineasPage({ projectId }) {
   const quitarManuales = () => { if (window.confirm(`¿Quitar los ${manualesActuales.length} cambios a mano de este calendario?`)) calcular(params, "ambos", { manuales: [] }); };
   // generar u optimizar un paso quita los cambios a mano de ese paso
   const perderManuales = f => {
-    const n = f === "vehiculos" ? manualesActuales.length : manualesActuales.filter(o => o.tipo === "pieza").length;
+    const n = f === "vehiculos" ? manualesActuales.length : manualesActuales.filter(esCambioTurnos).length;
     return !n || window.confirm(`Se perderán ${n} cambio${n > 1 ? "s" : ""} a mano de ${f === "vehiculos" ? "vehículos y turnos" : "turnos"}. ¿Seguir?`);
   };
 
@@ -1113,7 +1172,7 @@ export function SchedulingLineasPage({ projectId }) {
 
           {manualesActuales.length > 0 && (
             <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(92,155,255,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
-              <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(o => o.tipo === "viaje").length} de vehículos, {manualesActuales.filter(o => o.tipo === "pieza").length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
+              <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
               <button onClick={deshacer} disabled={calculando} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 5, padding: "2px 9px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Deshacer el último</button>
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>

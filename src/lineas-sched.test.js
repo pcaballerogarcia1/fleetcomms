@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
+import { TIPOS_TURNO_DEFECTO, tipoDeTurno, encajaTipo, generarServicio, salidasDe, duracionViaje, perfilVehiculos, optimizarServicio, optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, costeDia, resumenServicio, moverViaje, moverPieza, moverViajes, moverViajesTurno, claveViaje, clavePieza, aplicarCambios } from "./lineas-sched.js";
 
 // Línea A (ida A1→A9, vuelta A9b→A1b: cabeceras con paradas distintas) y línea B que sale de A1
 const h = (hh, mm = 0) => hh * 60 + mm;
@@ -399,3 +399,59 @@ describe("scheduling de líneas: cambios a mano", () => {
     expect(otra.res.kpis.turnos).toBe(m.kpis.turnos);
   });
 });
+
+describe("scheduling de líneas: mover varios a la vez", () => {
+  // Una línea circular cada 30 min de 6 a 22 h: varios autobuses y turnos de varias piezas
+  const salidas = Array.from({ length: 33 }, (_, k) => h(6) + k * 30);
+  const red = { lineas: [{ id: "C", nombre: "C", color: "#ff0", sentidos: [{ ...sentido(0, ["Z", "W", "Z"], salidas, 50), tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 50, viajes: 1 })) }] }] };
+  const reales = r => r.vehiculos.flatMap(v => v.viajes.filter(x => !x.vacio));
+  const enTurnos = r => r.turnos.flatMap(t => t.piezas.flatMap(pz => pz.viajes.filter(x => !x.vacio)));
+
+  it("varias expediciones a un autobús nuevo: todas al mismo; si una no cabe, ninguna", () => {
+    const r = generarVehiculos(red, {}, { dia: "laborable" });
+    const bus1 = r.autobuses[0];
+    const suyas = r.vehiculos.filter(v => bus1.bloques.includes(v.id)).flatMap(v => v.viajes.filter(x => !x.vacio)).slice(0, 3).map(claveViaje);
+    const m = moverViajes(r, suyas, null);
+    expect(m.error).toBeUndefined();
+    const nuevos = new Set(suyas.map(c => m.vehiculos.find(v => v.viajes.some(x => !x.vacio && claveViaje(x) === c)).autobus));
+    expect(nuevos.size).toBe(1); // las tres en el mismo autobús nuevo
+    expect([...nuevos][0]).not.toBe(bus1.id);
+    expect(reales(m).length).toBe(reales(r).length);
+    // dos que se solapan no pueden ir al mismo autobús: no se mueve ninguna
+    const otroBus = r.autobuses[1];
+    const solapada = r.vehiculos.filter(v => otroBus.bloques.includes(v.id)).flatMap(v => v.viajes.filter(x => !x.vacio)).find(x => reales(r).some(y => y !== x && y.dep < x.arr && x.dep < y.arr && r.vehiculos.find(v => v.viajes.includes(y)).autobus === bus1.id));
+    if (solapada) expect(moverViajes(r, [claveViaje(solapada), suyas[0]], bus1.id).error).toBeTruthy();
+  });
+
+  it("varios viajes de un turno a otro: se parten las piezas y nada se pierde ni se repite", () => {
+    const r = generarServicio(red, {}, { dia: "laborable" });
+    const origen = r.turnos.find(t => t.piezas.some(pz => pz.viajes.filter(x => !x.vacio).length >= 3));
+    const pz = origen.piezas.find(x => x.viajes.filter(y => !y.vacio).length >= 3);
+    const elegidos = pz.viajes.filter(x => !x.vacio).slice(1, 2); // el del medio de la pieza: la parte en tres
+    const m = moverViajesTurno(r, elegidos.map(claveViaje), null);
+    expect(m.error).toBeUndefined();
+    const nuevo = m.turnos.find(t => t.piezas.some(x => x.viajes.includes(elegidos[0])));
+    expect(nuevo.id).not.toBe(origen.id);
+    expect(nuevo.piezas.flatMap(x => x.viajes.filter(y => !y.vacio))).toEqual(elegidos);
+    const antes = m.turnos.find(t => t.id === origen.id);
+    expect(antes.piezas.length).toBe(origen.piezas.length + 1); // la pieza se parte: antes y después de lo movido
+    const todos = enTurnos(m);
+    expect(todos.length).toBe(enTurnos(r).length);
+    expect(new Set(todos).size).toBe(todos.length);
+    // y a un turno que existe: si se solapa, no
+    const choca = m.turnos.find(t => t.id !== nuevo.id && t.piezas.some(x => x.inicio < elegidos[0].arr && elegidos[0].dep < x.fin));
+    if (choca) expect(moverViajesTurno(m, elegidos.map(claveViaje), choca.id).error).toMatch(/solapa/);
+  });
+
+  it("se guardan como cambios a mano y se vuelven a aplicar igual", () => {
+    const r = generarServicio(red, {}, { dia: "laborable" });
+    const pz = r.turnos.flatMap(t => t.piezas).find(x => x.viajes.filter(y => !y.vacio).length >= 3);
+    const claves = pz.viajes.filter(x => !x.vacio).slice(0, 2).map(claveViaje);
+    const directo = moverViajesTurno(r, claves, null);
+    const { res, fallidos } = aplicarCambios(r, [{ tipo: "viajesTurno", clave: claves[0], claves, destino: null }]);
+    expect(fallidos).toEqual([]);
+    const firma = x => x.turnos.map(t => t.piezas.map(clavePieza).join(",")).sort();
+    expect(firma(res)).toEqual(firma(directo));
+  });
+});
+
