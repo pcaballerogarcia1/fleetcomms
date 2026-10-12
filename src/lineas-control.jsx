@@ -33,7 +33,7 @@ function estadoTurno(t, u, ahora, ahoraMs) {
     return { id: "marcha", txt: textoRetraso(u.retraso), color: COLOR_PUNTUALIDAD[e] };
   }
   if (ahora > t.fin) return { id: "sin", txt: "No se hizo", color: C.red };
-  if (ahora > t.inicio + 5) return { id: "sin", txt: t.conductorUid ? "Sin empezar" : "Sin conductor", color: C.red };
+  if (ahora > t.inicio + 5) return { id: "sin", txt: t.conductorUid || t.conductorNombre ? "Sin empezar" : "Sin trabajador", color: C.red };
   return { id: "pendiente", txt: `Empieza ${hhmm(t.inicio)}`, color: C.dim };
 }
 
@@ -113,7 +113,7 @@ function DetalleTurno({ t, u, ahora, onCerrar }) {
       <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{t.id}{t.tipo ? <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}> · {t.tipo}</span> : null}</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{t.conductorNombre || "Sin conductor"} · {hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {t.buses.join(" + ")}</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{t.conductorNombre || "Sin trabajador"}{t.trabajadorId ? " (Rostering)" : ""}{t.trabajadorId && !t.conductorUid ? " · sin usuario de la app" : ""} · {hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {t.buses.join(" + ")}</div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>{t.inicioReal != null ? `Empezó ${hhmm(t.inicioReal)}` : "No ha empezado"}{t.finReal != null ? ` · terminó ${hhmm(t.finReal)}` : ""}{u?.updatedAt ? ` · última posición ${new Date(u.updatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>
         </div>
         <button onClick={onCerrar} style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer" }}>×</button>
@@ -319,7 +319,7 @@ export function ControlLineasPage({ projectId, orgId }) {
                       <button key={t.id} onClick={() => setFoco(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "7px 14px", background: "none", border: "none", borderBottom: `1px solid ${C.border}`, cursor: "pointer", fontFamily: font }}>
                         <span style={{ width: 42, fontSize: 12, fontWeight: 700, color: C.text }}>{t.id}</span>
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: "block", fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.conductorNombre || <span style={{ color: C.dim }}>sin conductor</span>}</span>
+                          <span style={{ display: "block", fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.conductorNombre || <span style={{ color: C.dim }}>sin trabajador</span>}{t.trabajadorId && !t.conductorUid && <span title="Asignado en Rostering, pero ese trabajador no tiene usuario de la app vinculado: no le aparece en «Mi turno»" style={{ color: C.amber }}> · sin app</span>}</span>
                           <span style={{ display: "block", fontSize: 10.5, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {u?.bus ?? t.buses.join("+")} · {u?.linea ? `ahora línea ${u.linea}` : `líneas ${t.lineas.slice(0, 4).join(", ")}`}</span>
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, color: e.color, whiteSpace: "nowrap" }}>{e.txt}</span>

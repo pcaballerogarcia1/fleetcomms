@@ -26,7 +26,7 @@ function filasDe(turnos, modo) {
   const viaje = (t, v) => ({ v, turno: t, s: t.real?.salidas?.[v.k] ?? null, l: t.real?.llegadas?.[v.k] ?? null, saltado: (t.real?.saltados || []).includes(v.k) });
   if (modo === "turnos") {
     return [...turnos].sort((a, b) => a.inicio - b.inicio || a.num - b.num).map(t => ({
-      id: t.id, nombre: t.id, sub: t.conductorNombre || "sin conductor", turnos: [t], viajes: t.viajes.map(v => viaje(t, v)), inicio: t.inicio,
+      id: t.id, nombre: t.id, sub: t.conductorNombre || "sin trabajador", turnos: [t], viajes: t.viajes.map(v => viaje(t, v)), inicio: t.inicio,
     }));
   }
   const porBus = new Map();

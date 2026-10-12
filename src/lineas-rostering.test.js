@@ -56,3 +56,21 @@ describe("turnos a cubrir del mes", () => {
     expect(calDia[4]).toBeUndefined();
   });
 });
+
+describe("del cuadrante a los turnos publicados", () => {
+  it("cada turno del día con su trabajador (y su usuario si está vinculado)", async () => {
+    const { asignacionDelDia } = await import("./lineas-rostering.js");
+    const asign = {
+      w1: { 12: { id: "12|cal:1|T3", s: 360, e: 800 }, 13: { id: "13|cal:1|T4" } },
+      w2: { 12: { id: "12|cal:1|T7" } },
+      w3: { 12: { id: "12|cal:9|T1" } }, // otro calendario: no es de lo publicado
+      w4: { 12: { p: "M" } }, // puesto a mano, sin turno
+    };
+    const trabajadores = [{ _id: "w1", nombre: "Ana", apellidos: "Ruiz", uid: "u1" }, { _id: "w2", nombre: "Luis" }];
+    expect(asignacionDelDia(asign, trabajadores, 12, "cal:1")).toEqual({
+      T3: { trabajadorId: "w1", nombre: "Ana Ruiz", uid: "u1" },
+      T7: { trabajadorId: "w2", nombre: "Luis", uid: null },
+    });
+    expect(asignacionDelDia(asign, trabajadores, 12, "cal:9")).toEqual({ T1: { trabajadorId: "w3", nombre: "Trabajador", uid: null } });
+  });
+});

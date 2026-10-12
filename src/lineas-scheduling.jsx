@@ -1113,7 +1113,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             </div>
           )}
           {aRostering && red && <EnviarRostering red={red} projectId={projectId} orgId={orgId} estadoDe={estadoParaRoster} turnosDe={turnosParaRoster} onCerrar={() => setARostering(false)} />}
-          {publicando && res?.turnos && <PublicarServicio red={red} res={res} dia={dia} cocheras={cocheras} projectId={projectId} orgId={orgId} proyecto={proyecto} sesion={sesion}
+          {publicando && res?.turnos && <PublicarServicio red={red} res={res} dia={dia} cocheras={cocheras} projectId={projectId} orgId={orgId} proyecto={proyecto} sesion={sesion} onCambiarDia={cambiarDia}
             avisoManual={calculando || opt.estado === "corriendo" ? "Hay un cálculo en marcha: espera a que termine para publicar lo último." : null} onCerrar={() => setPublicando(false)} />}
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}

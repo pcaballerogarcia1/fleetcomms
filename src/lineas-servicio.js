@@ -307,7 +307,7 @@ export function avisosControl(turnos, ubic, ahora, ahoraMs = Date.now(), { umbra
     if (t.finReal) continue;
     const u = ubic.get(t.id);
     if (!t.inicioReal && ahora > t.inicio + 5 && ahora < t.fin) {
-      avisos.push({ tipo: "sin_empezar", grave: true, turno: t.id, texto: t.conductorUid ? `${t.id} (${t.conductorNombre || "conductor"}) debía empezar a las ${hhmm(t.inicio)} y no ha empezado` : `${t.id} debía empezar a las ${hhmm(t.inicio)} y nadie lo ha cogido` });
+      avisos.push({ tipo: "sin_empezar", grave: true, turno: t.id, texto: t.conductorUid || t.conductorNombre ? `${t.id} (${t.conductorNombre || "conductor"}) debía empezar a las ${hhmm(t.inicio)} y no ha empezado` : `${t.id} debía empezar a las ${hhmm(t.inicio)} y no tiene trabajador` });
       continue;
     }
     if (!t.inicioReal) continue;

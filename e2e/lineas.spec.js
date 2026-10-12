@@ -2,7 +2,7 @@
 // GTFS pequeña, poner una cochera, generar vehículos y turnos, y mover una
 // pieza a mano (que se guarda).
 import { test, expect } from "@playwright/test";
-import { sembrar, listar, leer, CLAVE } from "./semilla.mjs";
+import { sembrar, listar, leer, escribir, CLAVE } from "./semilla.mjs";
 import { vigilarErrores, entrarOficina, gtfsMini } from "./ayudas.mjs";
 
 test.beforeEach(async () => { await sembrar(); });
@@ -320,5 +320,73 @@ test("crear la red a mano (sin GTFS): paradas en el mapa, ida y vuelta, y el Sch
   await page.getByRole("button", { name: "Diseñar red" }).click();
   await expect(page.getByText("Diseñar la red")).toBeVisible();
   await expect(page.locator('input[value="Centro – Hospital"]')).toBeVisible();
+  expect(errores).toEqual([]);
+});
+
+test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin cogerlo", async ({ page, browser }) => {
+  // un día laborable (el GTFS de prueba circula de lunes a viernes) a las 9:00
+  const dia = new Date(); dia.setHours(9, 0, 0, 0);
+  while (dia.getDay() === 0 || dia.getDay() === 6) dia.setDate(dia.getDate() + 1);
+  await page.clock.setFixedTime(dia);
+  const errores = vigilarErrores(page);
+  // el Trabajador 1 de la plantilla es Carlos (su usuario de la app)
+  const cond1 = (await listar("usuarios")).find(u => u.email === "cond1@demo.test")._id;
+  await escribir("scheduling_workers/w1", { org_id: "demo", nombre: "Trabajador 1", apellidos: "Demo", activo: true, uid: cond1 });
+
+  await entrarOficina(page);
+  await page.getByText("Nuevo proyecto").first().click();
+  await page.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await page.fill('input[placeholder="Nombre del proyecto *"]', "Bus con plantilla e2e");
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect.poll(async () => (await listar("scheduling_projects")).filter(p => p.tipo === "lineas").length).toBe(1);
+  const pid = (await listar("scheduling_projects")).find(p => p.tipo === "lineas")._id;
+  await page.goto("/planning");
+  const [elegir] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("Importar red (GTFS .zip)").click()]);
+  await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  await page.getByRole("button", { name: "Importar", exact: true }).click({ timeout: 60_000 });
+  await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
+
+  // 1) el mes al Rostering y Optimizar
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: /Trabajadores/ }).first().click();
+  await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Enviar a Rostering" }).first().click();
+  await page.getByRole("button", { name: "Enviar a Rostering" }).last().click();
+  await expect(page.getByText(/✓ Enviados \d+ turnos/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Ir a Rostering" }).click();
+  await expect(page.getByText(/turnos\/día/).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Optimizar", exact: true }).click();
+  await expect(page.getByText("Resultado de la optimización")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Cerrar" }).last().click();
+
+  // 2) publicar el día: avisa de que circula el calendario del GTFS, se cambia a él y se publica
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Publicar a Control" }).click();
+  const cambiar = page.getByRole("button", { name: /^Cambiar a «/ });
+  if (await cambiar.count()) {
+    await cambiar.click();
+    await page.getByRole("button", { name: /Trabajadores/ }).first().click();
+    await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible({ timeout: 60_000 });
+    await page.getByRole("button", { name: "Publicar a Control" }).click();
+  }
+  await expect(page.getByRole("button", { name: /^Cambiar a «/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Publicar", exact: true }).click();
+  await expect(page.getByText(/ya tienen su trabajador \(del Rostering\)/)).toBeVisible({ timeout: 30_000 });
+  const sid = (await listar("servicio_lineas")).find(s => s.projectId === pid)._id;
+  const deCarlos = (await listar(`servicio_lineas/${sid}/turnos`)).filter(t => t.conductorUid === cond1);
+  expect(deCarlos.length).toBeGreaterThan(0);
+
+  // 3) Carlos abre la app: su turno ya está ahí, sin elegirlo
+  const movil = await browser.newContext({ viewport: { width: 400, height: 820 }, isMobile: true });
+  const m = await movil.newPage();
+  await m.clock.setFixedTime(dia);
+  await m.goto("/rutas");
+  await m.fill('input[type="email"]', "cond1@demo.test");
+  await m.fill('input[type="password"]', CLAVE);
+  await m.keyboard.press("Enter");
+  await expect(m.getByRole("button", { name: "Empezar turno" })).toBeVisible({ timeout: 30_000 });
+  await expect(m.getByText(deCarlos.sort((a, b) => a.inicio - b.inicio)[0].id, { exact: true })).toBeVisible();
+  await expect(m.getByText("¿Qué turno haces hoy?")).toHaveCount(0);
+  await movil.close();
   expect(errores).toEqual([]);
 });

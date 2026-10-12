@@ -96,6 +96,34 @@ describe("servicio de líneas con las reglas reales", () => {
     await expect(updateDoc(doc(h.db, `servicio_lineas/${sid}/turnos/T1`), { viajes: [] })).rejects.toThrow();
   });
 
+  it("el Rostering pone a cada turno su trabajador y al conductor le aparece sin cogerlo; lo empezado no se toca", async () => {
+    const sid = await publicar();
+    await sinReglas(async db => {
+      await setDoc(doc(db, "scheduling_workers/w1"), { org_id: "orgA", nombre: "Carlos", apellidos: "Conductor", uid: "cond1" });
+      await setDoc(doc(db, "scheduling_workers/w2"), { org_id: "orgA", nombre: "Sin", apellidos: "App" });
+    });
+    como("adminA");
+    const s = await import("../src/lineas-servicio-store.js");
+    const trabajadores = await s.leerTrabajadores("orgA");
+    const asign = { w1: { 12: { id: "12|laborable|T1" } }, w2: { 12: { id: "12|laborable|T2" } } };
+    const r = await s.aplicarRosterAlServicio({ _id: sid, fecha: "2026-10-12", dia: "laborable" }, "orgA", asign, trabajadores);
+    expect(r).toMatchObject({ asignados: 2, sinUsuario: 1, cambiados: 2, empezados: 0 });
+    expect(await leer(`servicio_lineas/${sid}/turnos/T1`)).toMatchObject({ trabajadorId: "w1", conductorUid: "cond1", conductorNombre: "Carlos Conductor" });
+    expect(await leer(`servicio_lineas/${sid}/turnos/T2`)).toMatchObject({ trabajadorId: "w2", conductorUid: null, conductorNombre: "Sin App" });
+    // el conductor lo ve como suyo sin haberlo cogido, y lo empieza
+    como("cond1");
+    const mios = await new Promise(res => { const off = s.watchMisTurnos(sid, "orgA", "cond1", l => { off(); res(l); }); });
+    expect(mios.map(t => t._id)).toEqual(["T1"]);
+    await s.empezarTurno(sid, "T1", 470);
+    // si el Rostering cambia, lo empezado se queda como está
+    como("adminA");
+    const r2 = await s.aplicarRosterAlServicio({ _id: sid, fecha: "2026-10-12", dia: "laborable" }, "orgA", { w2: { 12: { id: "12|laborable|T1" } } }, trabajadores);
+    expect(r2).toMatchObject({ empezados: 1 });
+    expect((await leer(`servicio_lineas/${sid}/turnos/T1`)).trabajadorId).toBe("w1");
+    // y el T2, que ya no tiene a nadie en el Rostering, queda libre
+    expect(await leer(`servicio_lineas/${sid}/turnos/T2`)).toMatchObject({ trabajadorId: null, conductorNombre: null });
+  });
+
   it("posiciones: cada uno la suya; la oficina de otra empresa no las ve", async () => {
     const sid = await publicar();
     como("cond1");

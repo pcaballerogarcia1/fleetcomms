@@ -4,7 +4,9 @@
 // oficina lo sigue en Control.
 import { useState, useEffect, useMemo } from "react";
 import { servicioDesdeEscenario, diaValeParaFecha, proximaFecha, fechaLocal, hhmm, servicioId } from "./lineas-servicio.js";
-import { publicarServicio, hayAlgoHecho, watchServiciosProyecto, borrarServicio } from "./lineas-servicio-store.js";
+import { publicarServicio, hayAlgoHecho, watchServiciosProyecto, borrarServicio, leerTrabajadores, aplicarRosterAlServicio } from "./lineas-servicio-store.js";
+import { loadRosterMonth } from "./roster-store.js";
+import { diaDeFecha, nombreDiaRoster } from "./lineas-rostering.js";
 import { nombreDia } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
@@ -16,13 +18,15 @@ const font = '"Inter","Segoe UI",system-ui,sans-serif';
 const fechaTxt = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 const irAControl = () => { window.history.pushState({}, "", "/control"); window.dispatchEvent(new PopStateEvent("popstate")); };
 
-export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, proyecto, sesion, avisoManual, onCerrar }) {
+export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, proyecto, sesion, avisoManual, onCambiarDia, onCerrar }) {
   const [fecha, setFecha] = useState(() => proximaFecha(dia, red, fechaLocal()) || fechaLocal());
   const [estado, setEstado] = useState(null); // { trabajando } | { ok } | { error }
   const [publicados, setPublicados] = useState([]);
   useEffect(() => watchServiciosProyecto(projectId, orgId, setPublicados), [projectId, orgId]);
   const servicio = useMemo(() => servicioDesdeEscenario(res, red, { cocheras }), [res, red, cocheras]);
   const vale = diaValeParaFecha(dia, red, fecha);
+  // el calendario que circula ese día es el que usa el Rostering: si se publica otro, sus turnos no casan
+  const diaDelRoster = diaDeFecha(red, fecha);
   const yaHay = publicados.find(p => p.fecha === fecha);
   const hoy = fechaLocal();
 
@@ -32,8 +36,15 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
       const sid = servicioId(projectId, fecha);
       if (yaHay && (await hayAlgoHecho(sid, orgId)) && !window.confirm(`El ${fechaTxt(fecha)} ya está publicado y hay conductores con turno cogido o empezado. Si lo vuelves a publicar, eso se pierde. ¿Seguir?`)) { setEstado(null); return; }
       await publicarServicio({ projectId, orgId, fecha, dia, nombreDia: nombreDia(dia, red), proyecto, servicio, por: sesion?.uid || null });
-      logAudit({ modulo: "Scheduling", accion: "Publicó el servicio de líneas a Control", detalle: `${fechaTxt(fecha)} · ${nombreDia(dia, red)} · ${servicio.resumen.turnos} turnos` });
-      setEstado({ ok: true });
+      // cada turno, con el trabajador que le ha puesto el Rostering ese día
+      let roster = null;
+      try {
+        const [y, m] = fecha.split("-").map(Number);
+        const { asignaciones } = await loadRosterMonth(orgId, y, m);
+        roster = await aplicarRosterAlServicio({ _id: sid, fecha, dia }, orgId, asignaciones, await leerTrabajadores(orgId));
+      } catch (e) { console.error("Rostering → servicio:", e); roster = { error: e.message || String(e) }; }
+      logAudit({ modulo: "Scheduling", accion: "Publicó el servicio de líneas a Control", detalle: `${fechaTxt(fecha)} · ${nombreDia(dia, red)} · ${servicio.resumen.turnos} turnos${roster?.asignados ? ` · ${roster.asignados} con trabajador del Rostering` : ""}` });
+      setEstado({ ok: true, roster });
     } catch (e) {
       setEstado({ error: e.message || String(e) });
     }
@@ -59,7 +70,15 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
         {estado?.ok ? (
           <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(52,211,153,.08)", border: `1px solid ${C.green}55` }}>
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Publicado el {fechaTxt(fecha)}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Los conductores ya lo ven en el móvil, en «Mi turno».</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+              {estado.roster?.error ? <span style={{ color: C.amber }}>No se pudo leer el Rostering ({estado.roster.error}): los conductores cogerán su turno en el móvil.</span>
+                : estado.roster?.asignados ? <>
+                    <b style={{ color: C.text }}>{estado.roster.asignados} de {r.turnos} turnos</b> ya tienen su trabajador (del Rostering) y les aparece directamente en «Mi turno».
+                    {estado.roster.sinUsuario > 0 && <span style={{ color: C.amber }}> {estado.roster.sinUsuario} de esos trabajadores no tienen usuario de la app vinculado (se vincula en Rostering, columna «Rutas»).</span>}
+                    {estado.roster.asignados < r.turnos && " El resto los puede coger cualquier conductor en el móvil."}
+                  </>
+                : "El Rostering no tiene trabajadores para ese día (envía el mes desde «Enviar a Rostering» y optimiza): los conductores cogerán su turno en el móvil, en «Mi turno»."}
+            </div>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button onClick={() => { onCerrar(); irAControl(); }} style={btn(true)}>Ver en Control</button>
               <button onClick={onCerrar} style={btn(false)}>Cerrar</button>
@@ -76,6 +95,12 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
               {fechaTxt(fecha)}{vale ? "" : ` · ojo: «${nombreDia(dia, red)}» no circula ese día según el GTFS (se puede publicar igual, por ejemplo para una prueba)`}
               {yaHay ? " · ya publicado: se sustituye" : ""}
             </div>
+            {diaDelRoster && diaDelRoster !== dia && (
+              <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 8, background: "rgba(251,191,36,.08)", border: `1px solid ${C.amber}55`, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                Ese día circula <b>«{nombreDiaRoster(red, diaDelRoster)}»</b>, que es lo que usa el Rostering. Si publicas «{nombreDia(dia, red)}», sus turnos no casan con los del Rostering y no llegarán con su trabajador.
+                {onCambiarDia && <div style={{ marginTop: 7 }}><button onClick={() => { onCambiarDia(diaDelRoster); onCerrar(); }} style={btn(false)}>Cambiar a «{nombreDiaRoster(red, diaDelRoster)}» para publicarlo</button></div>}
+              </div>
+            )}
             {estado?.error && <div style={{ fontSize: 12, color: C.red, marginTop: 10 }}>No se pudo publicar: {estado.error}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
               <button onClick={onCerrar} style={btn(false)}>Cancelar</button>

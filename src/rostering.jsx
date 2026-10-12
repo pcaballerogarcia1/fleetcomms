@@ -6,6 +6,8 @@ import {
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import { publishWorker, escenarioParaPublicar, planesPublicados, planEmpezado } from "./publicar-rutas.js";
+import { watchServiciosProyecto, aplicarRosterAlServicio } from "./lineas-servicio-store.js";
+import { fechaLocal } from "./lineas-servicio.js";
 import { logAudit, logAuditGrouped, addCells } from "./audit.js";
 import {
   listenScenarioRoster, saveShiftMoves, listenRosterMonth,
@@ -1233,6 +1235,42 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const calsLineas = schedRoster?.lineas && schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? schedRoster.cals || [] : null;
   const calDeDia = d => (calsLineas ? calsLineas[schedRoster.calDia?.[d] ?? schedRoster.calDia?.[String(d)]] || null : null);
 
+  // Cada turno, de un trabajador: lo que se asigna aquí pasa solo a los días
+  // ya publicados a Control (de hoy en adelante, los de este mes), y a cada
+  // conductor le aparece su turno en «Mi turno». Los turnos ya empezados no se tocan.
+  const esLineas = !!schedRoster?.lineas;
+  const [serviciosLineas, setServiciosLineas] = useState([]);
+  useEffect(() => {
+    if (!esLineas || !activeProject?._id || !orgId) return;
+    return watchServiciosProyecto(activeProject._id, orgId, setServiciosLineas);
+  }, [esLineas, activeProject?._id, orgId]);
+  const firmaServRef = useRef({});
+  const [avisoServicio, setAvisoServicio] = useState(null);
+  useEffect(() => {
+    if (!esLineas || loading || !workers.length || !serviciosLineas.length) return;
+    const hoy = fechaLocal();
+    const delMes = serviciosLineas.filter(sv => sv.fecha.startsWith(viewMes) && sv.fecha >= hoy);
+    if (!delMes.length) return;
+    const t = setTimeout(async () => {
+      for (const sv of delMes) {
+        // solo si ha cambiado algo de ese día (lo asignado, los usuarios vinculados o la publicación)
+        const d = Number(sv.fecha.slice(8, 10));
+        const firma = JSON.stringify([sv.publicadoAt, Object.entries(asign).map(([w, ds]) => [w, ds?.[d]?.id || null]).filter(x => x[1]), workers.map(w => [w._id, w.uid || null])]);
+        if (firmaServRef.current[sv._id] === firma) continue;
+        firmaServRef.current[sv._id] = firma;
+        try {
+          const r = await aplicarRosterAlServicio(sv, orgId, asign, workers);
+          if (r.cambiados) setAvisoServicio(`Control actualizado: ${r.cambiados} turno(s) del ${Number(sv.fecha.slice(8))} con su trabajador${r.empezados ? ` · ${r.empezados} ya empezado(s) no se han cambiado` : ""}`);
+        } catch (e) {
+          delete firmaServRef.current[sv._id];
+          console.error("Rostering → Control:", e);
+        }
+      }
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [esLineas, loading, asign, workers, serviciosLineas, viewMes, orgId]);
+  useEffect(() => { if (!avisoServicio) return; const t = setTimeout(() => setAvisoServicio(null), 6000); return () => clearTimeout(t); }, [avisoServicio]);
+
   // Cobertura de los turnos del escenario libre en el mes que se ve
   const libreShifts = schedRoster?.modo === "libre" &&
     schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? (schedRoster.shifts || []) : null;
@@ -1326,6 +1364,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             Reglas
           </button>
 
+          {avisoServicio && <span style={{ fontSize: 11, color: "#34d399", borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
           {calsLineas && calsLineas.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10, flexWrap: "wrap" }} title="Calendarios de la red de líneas que circulan este mes">
               {calsLineas.map(c => (

@@ -80,3 +80,22 @@ export function turnosDelMes(red, diasMes, turnosPorDia) {
   }
   return { shifts, cals, calDia };
 }
+
+/**
+ * Del cuadrante del Rostering a los turnos de un día publicado: qué
+ * trabajador lleva cada turno ese día (solo los del mismo calendario que se
+ * publicó). asignaciones: trabajador → día → { id: "d|calendario|T12", … }
+ * → { "T12": { trabajadorId, nombre, uid } } (uid: su usuario de la app, si está vinculado)
+ */
+export function asignacionDelDia(asignaciones, trabajadores, d, dia) {
+  const pref = `${d}|${dia}|`;
+  const porId = new Map((trabajadores || []).map(w => [w._id ?? w.id, w]));
+  const out = {};
+  for (const [wid, dias] of Object.entries(asignaciones || {})) {
+    const a = dias?.[d] ?? dias?.[String(d)];
+    if (!a?.id || !String(a.id).startsWith(pref)) continue;
+    const w = porId.get(wid);
+    out[String(a.id).slice(pref.length)] = { trabajadorId: wid, nombre: w ? [w.nombre, w.apellidos].filter(Boolean).join(" ") || "Trabajador" : "Trabajador", uid: w?.uid || null };
+  }
+  return out;
+}
