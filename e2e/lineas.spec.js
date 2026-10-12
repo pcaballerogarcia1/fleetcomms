@@ -252,3 +252,54 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   expect(errores).toEqual([]);
   expect(erroresMovil).toEqual([]);
 });
+
+test("crear la red a mano (sin GTFS): paradas en el mapa, ida y vuelta, y el Scheduling la usa", async ({ page }) => {
+  const errores = vigilarErrores(page);
+  await entrarOficina(page);
+  await page.getByText("Nuevo proyecto").first().click();
+  await page.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await page.fill('input[placeholder="Nombre del proyecto *"]', "Red a mano e2e");
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect.poll(async () => (await listar("scheduling_projects")).filter(p => p.tipo === "lineas").length).toBe(1);
+  const pid = (await listar("scheduling_projects")).find(p => p.tipo === "lineas")._id;
+  await page.goto("/planning");
+
+  await page.getByRole("button", { name: "Crear la red a mano" }).click();
+  await expect(page.getByText("Diseñar la red")).toBeVisible();
+  await page.getByRole("button", { name: "+ Nueva línea" }).click();
+  // tres paradas pinchando en el mapa (cada clic, una parada nueva)
+  const mapa = await page.locator(".leaflet-container").first().boundingBox();
+  for (const [x, y] of [[0.4, 0.4], [0.5, 0.5], [0.6, 0.6]]) {
+    await page.mouse.click(mapa.x + mapa.width * x, mapa.y + mapa.height * y);
+    await page.waitForTimeout(150);
+  }
+  await expect(page.getByText("Paradas en orden (3)")).toBeVisible();
+  await page.locator('input[placeholder="Nombre (p. ej. Centro – Hospital)"]').fill("Centro – Hospital");
+  // la vuelta: la ida al revés (con sus horarios)
+  await page.getByRole("button", { name: /^Vuelta/ }).click();
+  await page.getByRole("button", { name: "Crear la vuelta (la ida al revés)" }).click();
+  await expect(page.getByText("Paradas en orden (3)")).toBeVisible();
+  // se guarda solo: una red normal, con su diseño
+  await expect(page.getByText("✓ Guardado")).toBeVisible({ timeout: 20_000 });
+  const ficha = await leer(`planning_layers/${pid}_red`);
+  expect(ficha).toMatchObject({ type: "red_lineas", totalLineas: 1, totalMarkers: 3, archivo: "Red diseñada en Operanzia" });
+
+  // Calendarios: los tres de siempre
+  await page.getByRole("button", { name: /^Calendarios \(3\)/ }).click();
+  await expect(page.locator('input[value="Laborables"]')).toBeVisible();
+
+  // La red ya se ve como cualquier otra, y el Scheduling saca autobuses y turnos
+  await page.getByRole("button", { name: "Ver la red" }).click();
+  await expect(page.getByText(/Centro – Hospital|Parada 1 ↔ Parada 3|Parada 3 ↔ Parada 1/).first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await expect(page.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: /Trabajadores/ }).first().click();
+  await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
+
+  // volver a editar: el diseño sigue ahí
+  await page.getByRole("button", { name: "Planning", exact: true }).first().click();
+  await page.getByRole("button", { name: "Diseñar red" }).click();
+  await expect(page.getByText("Diseñar la red")).toBeVisible();
+  await expect(page.locator('input[value="Centro – Hospital"]')).toBeVisible();
+  expect(errores).toEqual([]);
+});

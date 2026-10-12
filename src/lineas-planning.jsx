@@ -11,6 +11,7 @@ import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
 import { Horarios } from "./lineas-horarios.jsx";
+import { DisenoRed } from "./lineas-diseno.jsx";
 import { nombreDia, cabecerasDeRed } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
@@ -511,7 +512,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const [importando, setImportando] = useState(null); // texto del avance
   const [error, setError] = useState(null);
   const [eligiendo, setEligiendo] = useState(null);
-  const [vista, setVista] = useState("red"); // red · horarios · relevos // { archivo, red } leído del GTFS, a falta de elegir qué se queda
+  const [vista, setVista] = useState("red"); // red · horarios · relevos · diseno (red dibujada a mano)
   const fileRef = useRef(null);
 
   useEffect(() => watchRed(projectId, setEstado), [projectId]);
@@ -550,7 +551,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
 
   async function importar(file) {
     if (!file) return;
-    if (estado.red && !window.confirm(`Sustituir la red actual (${estado.red.lineas.length} líneas) por la de «${file.name}»? La configuración de las líneas que se llamen igual se conserva.`)) return;
+    if (estado.red && !window.confirm(`Sustituir la red actual (${estado.red.lineas.length} líneas) por la de «${file.name}»? La configuración de las líneas que se llamen igual se conserva.${estado.red.diseno ? " La red dibujada a mano se pierde." : ""}`)) return;
     setError(null); setImportando("Leyendo GTFS…");
     try {
       const r = await leerGtfs(file, (f, t) => setImportando(`${t.replace(/….*$/, "")} ${Math.round(f * 100)} %`), "red");
@@ -605,15 +606,17 @@ export function PlanningLineasPage({ projectId, orgId }) {
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
-      {red && (
+      {(red || vista === "diseno") && (
         <div style={{ display: "flex", alignItems: "center", padding: "0 18px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
+          {(!red || red.diseno) && pestana("diseno", "Diseñar red")}
           {pestana("red", "Red y mapa")}
           {pestana("horarios", "Horarios de salida")}
           {pestana("relevos", "Puntos de relevo")}
           {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Pincha una hora de salida o un tiempo de recorrido para cambiarlo. Los cambios los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
         </div>
       )}
-      {red && vista === "relevos" ? <PuntosRelevo red={red} cfg={cfg} onGuardar={guardarRelevos} /> : red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
+      {vista === "diseno" && !estado.cargando && (!red || red.diseno) ? <DisenoRed key={projectId} projectId={projectId} orgId={orgId} red={red} ficha={estado.ficha} onCerrar={red ? () => setVista("red") : null} />
+        : red && vista === "relevos" ? <PuntosRelevo red={red} cfg={cfg} onGuardar={guardarRelevos} /> : red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
     <div style={{ display: "flex", flex: 1, width: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}
@@ -631,7 +634,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
               <div>{estado.ficha.archivo || "Red importada"} · {(estado.ficha.totalLineas || 0).toLocaleString("es-ES")} líneas · {(estado.ficha.totalMarkers || 0).toLocaleString("es-ES")} paradas</div>
               {estado.ficha.agencias?.length > 0 && <div>Operadores: {estado.ficha.agencias.join(", ")}</div>}
               <div>Días de referencia: {TIPOS_DIA.map(t => `${t.nombre.split(" ")[0].toLowerCase()} ${fmtFecha(estado.ficha.dias?.[t.id])}`).join(" · ")}</div>
-              {red?.calendarios?.length > 0 && <div>{red.calendarios.length} calendario{red.calendarios.length > 1 ? "s" : ""} en el GTFS (se eligen en Scheduling)</div>}
+              {red?.calendarios?.length > 0 && <div>{red.calendarios.length} calendario{red.calendarios.length > 1 ? "s" : ""}{red.diseno ? "" : " en el GTFS"} (se eligen en Scheduling)</div>}
               {configuradas > 0 && <div style={{ color: C.amber }}>{configuradas} línea(s) con configuración propia</div>}
             </div>
           )}
@@ -651,6 +654,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
           {!estado.cargando && !red && !importando && (
             <div style={{ fontSize: 12, color: C.muted, padding: 14, lineHeight: 1.6 }}>
               Este proyecto es de <b style={{ color: C.text }}>Líneas regulares</b>. Importa el GTFS de la red (el .zip que publica el operador o el consorcio) para ver las líneas con su ida y vuelta, los viajes por tipo de día y los tiempos de recorrido.
+              <div style={{ margin: "12px 0 6px", color: C.dim }}>¿No tienes GTFS?</div>
+              <button onClick={() => setVista("diseno")} style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(52,211,153,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Crear la red a mano</button>
+              <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Paradas en el mapa, líneas con ida y vuelta, calendarios y horarios.</div>
             </div>
           )}
           {grupos.slice(0, 400).map(g => {
