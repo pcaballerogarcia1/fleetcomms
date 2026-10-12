@@ -74,3 +74,23 @@ describe("del cuadrante a los turnos publicados", () => {
     expect(asignacionDelDia(asign, trabajadores, 12, "cal:9")).toEqual({ T1: { trabajadorId: "w3", nombre: "Trabajador", uid: null } });
   });
 });
+
+describe("los próximos días del conductor", () => {
+  it("el cuadrante lleva el turno de cada día", async () => {
+    const { diasCuadrante } = await import("./lineas-rostering.js");
+    expect(diasCuadrante({ 12: "M", 13: "L", 14: "" }, { 12: { id: "12|cal:1|T7", vn: "T7 Mañana · Bus 3", s: 370, e: 800 } })).toEqual({
+      12: { c: "M", v: "T7 Mañana · Bus 3", s: 370, e: 800, t: "T7" },
+      13: { c: "L" },
+    });
+  });
+  it("de hoy en adelante, pasando de mes", async () => {
+    const { proximosTurnos } = await import("./lineas-rostering.js");
+    const cuadrantes = [
+      { mes: "2026-10", dias: { 30: { c: "M", t: "T7", v: "T7 · Bus 3", s: 370, e: 800 }, 31: { c: "L" } } },
+      { mes: "2026-11", dias: { 1: { c: "T", t: "T40", v: "T40 · Bus 9", s: 900, e: 1380 } } },
+    ];
+    const p = proximosTurnos(cuadrantes, "2026-10-30", 4);
+    expect(p.map(x => [x.fecha, x.c, x.t])).toEqual([["2026-10-30", "M", "T7"], ["2026-10-31", "L", null], ["2026-11-01", "T", "T40"], ["2026-11-02", null, null]]);
+    expect(p[0]).toMatchObject({ s: 370, e: 800, v: "T7 · Bus 3" });
+  });
+});

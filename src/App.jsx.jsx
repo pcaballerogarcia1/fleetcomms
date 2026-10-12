@@ -16,7 +16,7 @@ import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { setErrorUser } from "./error-report.js";
 import { parcheDe, cambiarEnLista } from "./concurrencia.js";
 import { MiTurno } from "./turno-conductor.jsx";
-import { watchServiciosFechas } from "./lineas-servicio-store.js";
+import { watchServiciosFechas, watchMisCuadrantes } from "./lineas-servicio-store.js";
 import { fechaLocal, sumarDias, servicioVigente } from "./lineas-servicio.js";
 const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 const CATS = [
@@ -2331,7 +2331,11 @@ export default function App(){
       if(!abiertoTurno.current && servicioVigente(l).length && !puedeGestionarRutasRol(sesion.rol)){ abiertoTurno.current=true; setTab(t=>t==="rutas"?"turno":t); }
     });
   },[sesion?.org_id,sesion?.rol]);
-  const hayBus=servicioVigente(servicios).length>0;
+  // y su cuadrante de líneas (turnos de los próximos días, del Rostering)
+  const [misCuadrantes,setMisCuadrantes]=useState([]);
+  useEffect(()=>watchMisCuadrantes(sesion?.org_id,sesion?.uid,setMisCuadrantes),[sesion?.org_id,sesion?.uid]);
+  const cuadrantesBus=misCuadrantes.filter(c=>c.lineas);
+  const hayBus=servicioVigente(servicios).length>0||cuadrantesBus.length>0;
 
   const isSA = sesion?.rol === "superadmin";
   const verTodosPlanes = isSA || puedeGestionarRutasRol(sesion?.rol);
@@ -2440,7 +2444,7 @@ export default function App(){
         </div>
       </div>
 
-      {tab==="turno"&&<MiTurno sesion={sesion} servicios={servicios}/>}
+      {tab==="turno"&&<MiTurno sesion={sesion} servicios={servicios} cuadrantes={cuadrantesBus}/>}
       {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
       {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}

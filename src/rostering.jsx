@@ -6,7 +6,8 @@ import {
 } from "./roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "./vrp-engine.js";
 import { publishWorker, escenarioParaPublicar, planesPublicados, planEmpezado } from "./publicar-rutas.js";
-import { watchServiciosProyecto, aplicarRosterAlServicio } from "./lineas-servicio-store.js";
+import { watchServiciosProyecto, aplicarRosterAlServicio, publicarCuadranteLineas } from "./lineas-servicio-store.js";
+import { diasCuadrante } from "./lineas-rostering.js";
 import { fechaLocal } from "./lineas-servicio.js";
 import { logAudit, logAuditGrouped, addCells } from "./audit.js";
 import {
@@ -1270,6 +1271,27 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     return () => clearTimeout(t);
   }, [esLineas, loading, asign, workers, serviciosLineas, viewMes, orgId]);
   useEffect(() => { if (!avisoServicio) return; const t = setTimeout(() => setAvisoServicio(null), 6000); return () => clearTimeout(t); }, [avisoServicio]);
+  // y el cuadrante del mes, a cada conductor vinculado a la app: en «Mi turno»
+  // ve sus turnos de los próximos días (se publica solo, al cambiar algo suyo)
+  const firmaCuadRef = useRef({});
+  useEffect(() => {
+    if (!calsLineas || loading || !orgId) return;
+    const t = setTimeout(async () => {
+      let n = 0;
+      for (const w of workers) {
+        if (!w.uid) continue;
+        const dias = diasCuadrante(grid[w._id], asign[w._id]);
+        const clave = `${viewMes}|${w._id}`;
+        const firma = JSON.stringify([w.uid, dias]);
+        if (firmaCuadRef.current[clave] === firma) continue;
+        firmaCuadRef.current[clave] = firma;
+        try { await publicarCuadranteLineas({ orgId, projectId: activeProject?._id, worker: w, year, month, dias }); n++; }
+        catch (e) { delete firmaCuadRef.current[clave]; console.error("Cuadrante al móvil:", e); }
+      }
+      if (n) setAvisoServicio(`Cuadrante enviado al móvil de ${n} conductor${n > 1 ? "es" : ""}`);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [calsLineas, loading, workers, grid, asign, viewMes, year, month, orgId, activeProject?._id]);
 
   // Cobertura de los turnos del escenario libre en el mes que se ve
   const libreShifts = schedRoster?.modo === "libre" &&

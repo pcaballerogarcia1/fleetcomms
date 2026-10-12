@@ -144,3 +144,22 @@ export async function aplicarRosterAlServicio(servicio, orgId, asignaciones, tra
   const lista = Object.values(porTurno);
   return { ...r, asignados: lista.length, sinUsuario: lista.filter(a => !a.uid).length, porTurno };
 }
+
+/**
+ * Publica en el móvil del conductor su cuadrante de líneas del mes (el mismo
+ * documento que «Mi cuadrante» de Rutas: cuadrantes/{org}_{mes}_{uid}), con
+ * el turno de cada día. Lo hace solo el Rostering al cambiar algo.
+ */
+export function publicarCuadranteLineas({ orgId, projectId, worker, year, month, dias }) {
+  const mes = `${year}-${String(month).padStart(2, "0")}`;
+  return setDoc(doc(db, "cuadrantes", `${orgId}_${mes}_${worker.uid}`), {
+    org_id: orgId, uid: worker.uid, workerId: worker._id, nombre: [worker.nombre, worker.apellidos].filter(Boolean).join(" ") || "Trabajador",
+    year, month, mes, dias, projectId: projectId || null, lineas: true, publicadoEn: Date.now(),
+  });
+}
+/** Los cuadrantes publicados de este conductor (todos sus meses) */
+export function watchMisCuadrantes(orgId, uid, cb) {
+  if (!orgId || !uid) { cb([]); return () => {}; }
+  const q = query(collection(db, "cuadrantes"), where("org_id", "==", orgId), where("uid", "==", uid));
+  return onSnapshot(q, s => cb(s.docs.map(d => ({ ...d.data(), _id: d.id }))), e => { console.error("cuadrantes:", e); cb([]); });
+}

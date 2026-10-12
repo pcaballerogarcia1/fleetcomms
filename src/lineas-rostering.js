@@ -99,3 +99,36 @@ export function asignacionDelDia(asignaciones, trabajadores, d, dia) {
   }
   return out;
 }
+
+/**
+ * El cuadrante de un trabajador para su móvil: por día, el código (M/T/N, L,
+ * B…) y, si el Rostering le ha puesto un turno de líneas, cuál, a qué hora y
+ * en qué autobús. → { "12": { c, t: "T12", v: "T12 Mañana · Bus 7", s, e } }
+ */
+export function diasCuadrante(gridWorker, asignWorker) {
+  const dias = {};
+  for (const [d, c] of Object.entries(gridWorker || {})) {
+    if (!c) continue;
+    const a = asignWorker?.[d];
+    const t = a?.id ? String(a.id).split("|").at(-1) : null;
+    dias[d] = { c, ...(a ? { v: a.vn || "", s: a.s ?? null, e: a.e ?? null } : {}), ...(t ? { t } : {}) };
+  }
+  return dias;
+}
+
+/**
+ * Los próximos días de un conductor (desde `desde`, n días) a partir de sus
+ * cuadrantes publicados: [{ fecha, c, t, v, s, e }] (c null = sin nada puesto)
+ */
+export function proximosTurnos(cuadrantes, desde, n = 14) {
+  const porMes = new Map((cuadrantes || []).map(c => [c.mes, c]));
+  const out = [];
+  const d0 = new Date(desde + "T12:00:00");
+  for (let i = 0; i < n; i++) {
+    const d = new Date(d0); d.setDate(d0.getDate() + i);
+    const fecha = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const dia = porMes.get(fecha.slice(0, 7))?.dias?.[String(d.getDate())];
+    out.push({ fecha, c: dia?.c || null, t: dia?.t || null, v: dia?.v || null, s: dia?.s ?? null, e: dia?.e ?? null });
+  }
+  return out;
+}

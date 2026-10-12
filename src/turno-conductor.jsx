@@ -5,7 +5,8 @@
 // ve en vivo. No hace falta tocar nada mientras se conduce.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { watchMisTurnos, cogerTurno, dejarTurno, empezarTurno, terminarTurno, guardarReal, escribirPosicion } from "./lineas-servicio-store.js";
-import { minutosDesde, hhmm, avanzar, retrasoActual, viajeActual, estadoPuntualidad, COLOR_PUNTUALIDAD, textoRetraso, servicioVigente } from "./lineas-servicio.js";
+import { minutosDesde, hhmm, avanzar, retrasoActual, viajeActual, estadoPuntualidad, COLOR_PUNTUALIDAD, textoRetraso, servicioVigente, fechaLocal } from "./lineas-servicio.js";
+import { proximosTurnos } from "./lineas-rostering.js";
 
 const C = {
   bg: "#0d1117", card: "#161b27", surface2: "#1c2333", border: "#252d3d", border2: "#2e3a50",
@@ -190,7 +191,38 @@ function HojaTurno({ servicio, turno, sesion }) {
   );
 }
 
-export function MiTurno({ sesion, servicios }) {
+// Sus turnos de los próximos días (del cuadrante que publica el Rostering)
+const NOMBRE_CODIGO = { L: "Libre", B: "Baja", D: "Disponible", G: "Guardia", M: "Mañana", T: "Tarde", N: "Noche" };
+function ProximosDias({ cuadrantes, desdeManana }) {
+  const hoy = fechaLocal();
+  const dias = proximosTurnos(cuadrantes, hoy, 15).filter(x => !desdeManana || x.fecha > hoy);
+  if (!dias.some(x => x.c)) return null;
+  return (
+    <div style={{ padding: "4px 16px 16px" }}>
+      <div style={{ fontSize: 11, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, margin: "10px 0 6px" }}>Próximos días</div>
+      {dias.map(x => {
+        const d = new Date(x.fecha + "T12:00:00");
+        const libre = !x.c || ["L", "B"].includes(x.c);
+        return (
+          <div key={x.fecha} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${C.border}`, opacity: libre ? 0.55 : 1 }}>
+            <div style={{ width: 54, flexShrink: 0 }}>
+              <div style={{ fontSize: 11, color: x.fecha === hoy ? C.blue : C.muted, textTransform: "capitalize" }}>{x.fecha === hoy ? "Hoy" : d.toLocaleDateString("es-ES", { weekday: "short" })}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.getDate()} <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>{d.toLocaleDateString("es-ES", { month: "short" })}</span></div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {x.t ? <>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{x.t}<span style={{ fontFamily: mono, fontWeight: 500, color: C.muted, marginLeft: 8 }}>{x.s != null ? `${hhmm(x.s)} – ${hhmm(x.e)}` : ""}</span></div>
+                <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(x.v || "").replace(/^T\d+\s*/, "")}</div>
+              </> : <div style={{ fontSize: 13, color: C.muted }}>{x.c ? NOMBRE_CODIGO[x.c] || x.c : "Sin turno"}</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function MiTurno({ sesion, servicios, cuadrantes = [] }) {
   const vigentes = useMemo(() => servicioVigente(servicios), [servicios]);
   const [elegido, setElegido] = useState(null);
   const servicio = vigentes.find(s => s._id === elegido) || vigentes[0] || null;
@@ -201,7 +233,12 @@ export function MiTurno({ sesion, servicios }) {
   const misTurnos = mios.sid === sid ? mios.lista : null;
   const [verTurno, setVerTurno] = useState(null);
 
-  if (!servicio) return <div style={{ padding: 24, fontSize: 14, color: C.muted, fontFamily: font, textAlign: "center" }}>Hoy no hay ningún servicio de autobús publicado. Cuando la oficina lo publique, aquí podrás coger tu turno.</div>;
+  if (!servicio) return (
+    <div style={{ fontFamily: font, paddingBottom: 90 }}>
+      <div style={{ padding: 24, fontSize: 14, color: C.muted, textAlign: "center" }}>Hoy no hay ningún servicio de autobús publicado. Cuando la oficina lo publique, aquí tendrás tu turno.</div>
+      <ProximosDias cuadrantes={cuadrantes} />
+    </div>
+  );
   const turno = misTurnos?.find(t => t.id === verTurno) || misTurnos?.find(t => t.inicioReal != null && t.finReal == null) || misTurnos?.find(t => t.finReal == null) || misTurnos?.[0];
   return (
     <div style={{ fontFamily: font, paddingBottom: 90 }}>
@@ -219,6 +256,7 @@ export function MiTurno({ sesion, servicios }) {
       {misTurnos === null ? <div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Cargando…</div>
         : turno ? <HojaTurno key={turno.id} servicio={servicio} turno={turno} sesion={sesion} />
         : <ListaTurnos servicio={servicio} sesion={sesion} onError={setError} />}
+      <ProximosDias cuadrantes={cuadrantes} desdeManana />
     </div>
   );
 }

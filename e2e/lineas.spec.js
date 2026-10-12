@@ -358,6 +358,10 @@ test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin c
   await page.getByRole("button", { name: "Optimizar", exact: true }).click();
   await expect(page.getByText("Resultado de la optimización")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Cerrar" }).last().click();
+  // el cuadrante del mes llega solo al móvil de Carlos (vinculado a la app), con el turno de cada día
+  await expect.poll(async () => (await listar("cuadrantes")).filter(c => c.uid === cond1 && c.lineas).length, { timeout: 30_000 }).toBe(1);
+  const cuad = (await listar("cuadrantes")).find(c => c.uid === cond1 && c.lineas);
+  const conTurnoMasTarde = Object.entries(cuad.dias).filter(([d, x]) => x.t && Number(d) > dia.getDate());
 
   // 2) publicar el día: avisa de que circula el calendario del GTFS, se cambia a él y se publica
   await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
@@ -387,6 +391,11 @@ test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin c
   await expect(m.getByRole("button", { name: "Empezar turno" })).toBeVisible({ timeout: 30_000 });
   await expect(m.getByText(deCarlos.sort((a, b) => a.inicio - b.inicio)[0].id, { exact: true })).toBeVisible();
   await expect(m.getByText("¿Qué turno haces hoy?")).toHaveCount(0);
+  // y debajo, sus turnos de los próximos días
+  if (conTurnoMasTarde.length) {
+    await expect(m.getByText("Próximos días")).toBeVisible();
+    await expect(m.getByText(conTurnoMasTarde[0][1].t, { exact: false }).first()).toBeVisible();
+  }
   await movil.close();
   expect(errores).toEqual([]);
 });
