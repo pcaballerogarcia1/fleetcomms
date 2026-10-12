@@ -1,0 +1,179 @@
+// Scheduling de líneas: colores, formatos y claves de escenario que comparten sus pantallas.
+
+
+import { TIPOS_VEHICULO } from "../lineas-store.js";
+import { clavePieza, PARAMS_DEFECTO, costeDia, OBJETIVOS, CAMPOS_VEHICULOS } from "../lineas-sched.js";
+import { minToHHMM } from "../gtfs-parse.js";
+
+
+
+
+
+
+
+
+
+// Mismos colores y tipografías que scheduling.jsx
+export const C = {
+  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
+  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
+  blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff",
+  green: "#34d399", greenDim: "#082a18",
+  orange: "#fb923c", red: "#f87171", amber: "#fbbf24",
+  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+};
+
+export const font = "'Inter',system-ui,sans-serif";
+
+export const mono = "'JetBrains Mono','Courier New',monospace";
+
+export const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+export const hm = m => (m == null ? "—" : `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`);
+
+// antes de las 00:00 (un autobús que sale de cochera la víspera): "23:40 (−1)"
+export const hhmm = m => (m == null ? "—" : m < 0 ? `${minToHHMM(m + 1440).slice(0, 5)} (−1)` : minToHHMM(m).slice(0, 5));
+
+export const horaEje = m => minToHHMM(((m % 1440) + 1440) % 1440).slice(0, 5);
+
+export const num = n => Math.round(n).toLocaleString("es-ES");
+
+export const nombreTipo = id => TIPOS_VEHICULO.find(t => t.id === id)?.nombre || "";
+
+export const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4];
+
+export const PAGINA = 150;
+
+export const ROW_H = 34;
+
+// ── Filas del Gantt: autobuses (vista Vehículos) o turnos (Trabajadores) ──
+export function filasDe(res, modo) {
+  if (modo === "vehicles") {
+    return res.autobuses.map(b => {
+      const bloques = b.bloques.map(id => res.vehiculos.find(v => v.id === id)).filter(Boolean).sort((x, y) => x.inicio - y.inicio);
+      const viajes = bloques.flatMap(x => x.viajes);
+      const vacios = bloques.slice(1).map((x, i) => ({ inicio: bloques[i].fin, fin: x.inicio }));
+      const relevos = bloques.flatMap(x => x.relevos);
+      return fila(`Bus ${b.id}`, nombreTipo(b.tipo) || "—", viajes, {
+        id: b.id, vacios, relevos, bloques: bloques.length, avisos: bloques.flatMap(x => x.avisos || []), manual: bloques.some(x => x.manual),
+      });
+    });
+  }
+  return res.turnos.map(t => {
+    const viajes = t.piezas.flatMap(pz => pz.viajes);
+    const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
+    // el split del partido: los huecos que ya no se pagan
+    const splits = tramosPausa.filter(x => x.fin - x.inicio >= (res.params?.huecoNoPagado ?? 60));
+    const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
+    return fila(`T${t.id}`, `${t.tipoNombre ? `${t.tipoNombre} · ` : t.tipo === null ? "Sin tipo · " : ""}${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos && t.tipo !== "partido" ? " · partido" : ""}`, viajes, {
+      id: t.id, tramosPausa, splits, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
+      relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
+      piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
+    });
+  });
+}
+
+export function fila(nombre, tipo, viajes, extra) {
+  const inicio = viajes[0]?.dep ?? 0, fin = viajes.at(-1)?.arr ?? 0;
+  const conduccion = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
+  const pausas = (extra.tramosPausa || []).reduce((s, x) => s + (x.fin - x.inicio), 0);
+  return {
+    nombre, tipo, viajes, inicio, fin, amplitud: fin - inicio, conduccion, pausas,
+    km: viajes.reduce((s, v) => s + v.km, 0), kmVacio: viajes.reduce((s, v) => s + (v.vacio ? v.km : 0), 0), nViajes: viajes.filter(v => !v.vacio).length,
+    lineas: [...new Set(viajes.filter(v => !v.vacio).map(v => v.nombre))], avisos: [], relevos: [], vacios: [], tramosPausa: [], splits: [], ...extra,
+  };
+}
+
+export const COLS = [
+  { k: "avisos", l: "", w: 22, align: "center", t: "Avisos de reglas (pasa el ratón por el !)" },
+  { k: "nombre", l: "Recurso", w: 92, align: "left" },
+  { k: "tipo", l: "Tipo", w: 86, align: "left" },
+  { k: "inicio", l: "Inicio", w: 80 },
+  { k: "fin", l: "Fin", w: 50 },
+  { k: "amplitud", l: "Amplitud", w: 62 },
+  { k: "conduccion", l: "Conduc.", w: 58, t: "Tiempo con viajeros" },
+  { k: "pausas", l: "Pausas", w: 52, t: "Pausa entre piezas del turno" },
+  { k: "km", l: "Km", w: 52, t: "Km totales, con los vacíos" },
+  { k: "kmVacio", l: "Vacío", w: 50, t: "Km en vacío (cochera y entre cabeceras)" },
+  { k: "nViajes", l: "Viajes", w: 50 },
+];
+
+export const TABLE_W = COLS.reduce((s, c) => s + c.w, 0) + 8;
+
+// ── Campo de número de las restricciones ────────────────────────────────
+// No guarda mientras se escribe (antes, al borrar el número para poner otro,
+// se guardaba 0 al instante y ahí se quedaba): se guarda al salir del campo o
+// con Enter. Vacío = el valor por defecto (o sin límite si vacioEsNulo).
+export const MINIMOS = { maxPiezas: 1, piezaMax: 30, amplitudMax: 60, jornadaMax: 60, huecoNoPagado: 1, conduccionContinuaMax: 30, conduccionDiariaMax: 60, velocidadVacio: 1 };
+
+// ── Tipos de turno (duty types) ─────────────────────────────────────────
+export const aHHMM = m => `${String(Math.floor((m ?? 0) / 60)).padStart(2, "0")}:${String((m ?? 0) % 60).padStart(2, "0")}`;
+
+export const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Number); return (a || 0) * 60 + (b || 0); };
+
+// ── Página ─────────────────────────────────────────────────────────────
+// Un escenario por calendario, en dos pasos (1 vehículos, 2 trabajadores),
+// con su estrategia, indicadores y ▲▼ propios.
+// lineasSched = { ...restricciones comunes, dia (el último visto),
+//   porCalendario: { [dia]: { estrategia, objetivoV, objetivoT, resumen, claveV, clave } } }
+// claveV resume con qué se hicieron los vehículos y clave, todo (también los
+// turnos): si ya no coinciden, está desactualizado. resumen.turnos es null
+// si solo se ha hecho el paso 1.
+export const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm"]; // entreLineas además es restricción
+
+const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
+
+// lo que cambia los vehículos (el resto solo cambia los turnos)
+const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "amplitudBusMax", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
+
+export const sinCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => !campos.includes(k)));
+
+export const soloCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => campos.includes(k)));
+
+function hashTexto(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+
+export const claveEscenario = (p, cfgTxt) => hashTexto(JSON.stringify(Object.keys(p).filter(k => !CAMPOS_COSTE.includes(k)).sort().map(k => [k, p[k]])) + cfgTxt);
+
+export const claveVehiculos = (p, cfgTxt) => hashTexto(JSON.stringify(CLAVES_VEHICULOS.map(k => [k, p[k] ?? null])) + cfgTxt);
+
+export const mismos = (campos, a = {}, b = {}) => campos.every(k => (a[k] ?? PARAMS_DEFECTO[k]) === (b[k] ?? PARAMS_DEFECTO[k]));
+
+export const baseDeResumen = (r, p) => (r ? {
+  vehicleCount: r.autobuses, turnos: r.turnos, eficPersonal: r.eficienciaPersonal, totalKm: r.km, eficVehiculo: r.km ? (r.km - (r.kmVacio || 0)) / r.km : null, totalStops: r.viajes, avisos: r.avisos,
+  coste: r.turnos == null ? null : costeDia(r, p),
+} : null);
+
+export const MAX_EN_MEMORIA = 5; // escenarios completos guardados en memoria (los de Roma ocupan)
+
+export const nombreObjetivo = id => OBJETIVOS.find(o => o.id === id)?.nombre.toLowerCase();
+
+// Indicadores en el formato de la KpiBar del Scheduling de puntos
+export function kpisBarra(res, p) {
+  const k = res.kpis;
+  const turnos = res.turnos || [];
+  const conduccion = turnos.reduce((s, t) => s + t.conduccion, 0);
+  const pagado = turnos.reduce((s, t) => s + t.trabajo, 0);
+  const coste = res.turnos ? costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses }, p) : null;
+  return {
+    vehiculos: k.autobuses, pvr: k.pico, turnos: k.turnos, paradas: k.viajes, km: k.km, kmVacio: k.kmVacio || 0,
+    conduccion, trabajo: 0, pagado, eficVehiculo: k.km ? (k.km - (k.kmVacio || 0)) / k.km : null, eficPersonal: k.eficienciaPersonal, coste,
+    avisos: turnos.reduce((s, t) => s + t.avisos.length, 0), filasConAviso: k.turnosConAviso, sinAsignar: 0,
+    // campos con los nombres que usa la comparación ▲▼
+    vehicleCount: k.autobuses, totalKm: k.km, totalStops: k.viajes,
+  };
+}
+
+export function cambiosKpi(res, p = res.params) {
+  const k = res.kpis;
+  return {
+    "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
+    "Turnos": { sub: res.turnos ? (Object.keys(k.turnosPorTipo || {}).length ? Object.entries(k.turnosPorTipo).sort((a, b) => b[1] - a[1]).map(([n, c]) => `${num(c)} ${n.toLowerCase()}`).join(" · ") : `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`) : "falta el paso 2 (turnos)", subColor: res.turnos ? undefined : C.amber, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
+    "Eficiencia vehículo": { sub: `km con viajeros / km totales · ${num(k.km - (k.kmVacio || 0))} / ${num(k.km)}`, ayuda: "Parte de los km que se hacen con viajeros: el resto son vacíos (salir y volver a cochera, ir a otra cabecera)." },
+    "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
+    "Km": { sub: `${num(k.kmVacio || 0)} en vacío · ${num(k.vacios || 0)} vacíos`, ayuda: "Kilómetros del día: los de los viajes y los vacíos (salida y vuelta a cochera, y entre cabeceras)." },
+    "Paradas": { l: "Viajes", sub: res.diaNombre, subColor: C.dim, ayuda: "Viajes del calendario elegido en las líneas del escenario." },
+    "Avisos": { ayuda: "Turnos que incumplen la conducción UE 561/2006 o el descanso del Estatuto (art. 34.4)." },
+    ...(!res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { v: "—", sub: "falta el paso 2 (turnos)" } }),
+    ...(res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
+  };
+}

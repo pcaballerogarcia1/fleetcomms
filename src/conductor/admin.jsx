@@ -107,8 +107,6 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
   const realizadas   = planesKML.reduce((s,p) => s + (p.ubicaciones?.filter(u=>u.realizado).length||0), 0);
   const tasaGlobal   = totalParadas ? Math.round(realizadas/totalParadas*100) : 0;
 
-  function getUser(id){ return usuarios.find(u=>u.id===id)||{nombre:"?",apellidos:""}; }
-
   function exportCSV(){
     const rows = [["Tipo","Nombre","Turno","Fecha","Total Paradas","Realizadas","% Completado"]];
     filtrados.forEach(p => {

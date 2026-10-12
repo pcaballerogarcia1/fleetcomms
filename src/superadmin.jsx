@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { db, auth, secondaryAuth, secondaryDb, getUserProfileSafe } from "./firebase.js";
+import { db, auth, secondaryAuth, getUserProfileSafe } from "./firebase.js";
 import {
-  collection, onSnapshot, doc, setDoc, updateDoc,
-  serverTimestamp, query, where, getDoc, writeBatch, runTransaction,
+  collection, onSnapshot, doc, updateDoc,
+  serverTimestamp, query, where, getDoc, runTransaction,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
@@ -445,20 +445,22 @@ function SuperAdminPanel({ sesion }) {
   }, []);
 
   // Contar usuarios activos por org en tiempo real
+  const idsOrgs = orgs.map(o => o.org_id).join(",");
   useEffect(() => {
-    if (orgs.length === 0) return;
-    const unsubs = orgs.map(org => {
+    if (!idsOrgs) return;
+    // una escucha por empresa; solo se rehacen si cambia la lista de empresas
+    const unsubs = idsOrgs.split(",").filter(Boolean).map(orgId => {
       const q = query(
         collection(db, "usuarios"),
-        where("org_id", "==", org.org_id),
+        where("org_id", "==", orgId),
         where("activo", "==", true),
       );
       return onSnapshot(q, snap => {
-        setUserCounts(prev => ({ ...prev, [org.org_id]: snap.size }));
+        setUserCounts(prev => ({ ...prev, [orgId]: snap.size }));
       });
     });
     return () => unsubs.forEach(u => u());
-  }, [orgs.length]);
+  }, [idsOrgs]);
 
   async function crearOrg() {
     if (!form.nombre.trim()) { setErr("El nombre es obligatorio"); return; }

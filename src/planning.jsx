@@ -1,19 +1,20 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { db, auth, getUserProfileSafe } from "./firebase.js";
+import { db } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, updateDoc, serverTimestamp, where, getDoc } from "firebase/firestore";
-import { onAuthStateChanged, signOut } from "firebase/auth";
 import { uploadLayerMarkers, loadLayerMarkers, localGet } from "./layer-store.js";
 import { logAudit } from "./audit.js";
-import { USUARIOS_INIT, cambiarDepots, getContenedor, getFraccion } from "./planning/datos.js";
-import { C, LAYER_COLORS, font, mono } from "./planning/estilo.js";
+import { cambiarDepots, getContenedor, getFraccion } from "./planning/datos.js";
+import { C, LAYER_COLORS, font } from "./planning/estilo.js";
 import { TabTimetable } from "./planning/horarios.jsx";
 import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
+import { useUltimo } from "./use-ultimo.js";
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
   const orgId = sesion?.org_id ?? null;
+  const orgIdRef = useUltimo(orgId); // la de ahora, dentro de las escuchas por proyecto
 
   const [layers,       setLayers]       = useState([]);
   // GTFS: líneas de cada capa ({ docId: { v, lineas } }), línea elegida y "ver todas"
@@ -129,18 +130,18 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               const old = JSON.parse(localStorage.getItem(`fc_layers_${projectId}`)) ?? [];
               for (const l of old) {
                 setDoc(doc(db, "planning_layers", `${projectId}_${l.id}`), {
-                  ...l, projectId, orgId, createdAt: serverTimestamp(),
+                  ...l, projectId, orgId: orgIdRef.current, createdAt: serverTimestamp(),
                 });
               }
               if (old.length > 0) localStorage.removeItem(`fc_layers_${projectId}`);
-            } catch {}
+            } catch { /* no crítico: se sigue sin ello */ }
             localStorage.setItem(migKey, "1");
           }
         }
       }
     });
     return () => unsub();
-  }, [projectId]);
+  }, [projectId, orgIdRef]);
 
   // ── Líneas de las capas GTFS: bloque aparte en la misma capa (layer-store)
   const lineasCargando = useRef(new Set());
@@ -247,18 +248,18 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
               const old = JSON.parse(localStorage.getItem(`fc_depots_${projectId}`)) ?? [];
               if (old.length > 0) {
                 setDoc(doc(db, "planning_depots", projectId), {
-                  depots: old, projectId, orgId, updatedAt: serverTimestamp(),
+                  depots: old, projectId, orgId: orgIdRef.current, updatedAt: serverTimestamp(),
                 });
                 localStorage.removeItem(`fc_depots_${projectId}`);
               }
-            } catch {}
+            } catch { /* no crítico: se sigue sin ello */ }
             localStorage.setItem(migKey, "1");
           }
         }
       }
     });
     return () => unsub();
-  }, [projectId]);
+  }, [projectId, orgIdRef]);
 
   // ── Settings: read once on mount, migrate from localStorage if needed ──
   useEffect(() => {
@@ -278,16 +279,16 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
             setMapStyle(oldStyle);
             setDoc(doc(db, "planning_settings", projectId), {
               barrioColors: oldColors, mapStyle: oldStyle,
-              projectId, orgId, updatedAt: serverTimestamp(),
+              projectId, orgId: orgIdRef.current, updatedAt: serverTimestamp(),
             });
             if (Object.keys(oldColors).length > 0) localStorage.removeItem(`fc_barrio_colors_${projectId}`);
             localStorage.removeItem(`fc_map_style_${projectId}`);
-          } catch {}
+          } catch { /* no crítico: se sigue sin ello */ }
           localStorage.setItem(migKey, "1");
         }
       }
     });
-  }, [projectId]);
+  }, [projectId, orgIdRef]);
 
   // Debounced helper for barrio color writes
   function saveBarrioColors(newColors) {
@@ -307,10 +308,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   const [searchQuery, setSearchQuery]       = useState("");
   const [fraccionFilter, setFraccionFilter]     = useState(null);
   const [contenedorFilter, setContenedorFilter] = useState(null);
-
-  const timetableCol = projectId
-    ? collection(db, "scheduling_projects", projectId, "timetable")
-    : collection(db, "planning_timetable");
 
   async function handleDepotImport(files) {
     setDepotUploading(true);
@@ -603,181 +600,4 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
   );
 
   return inner;
-}
-
-// ── LOGIN ─────────────────────────────────────────────────────────
-function LoginPlanning({ onLogin }) {
-  const [usuario, setUsuario] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function go() {
-    if (!usuario || !password) { setErr("Introduce usuario y contraseña."); return; }
-    setLoading(true); setErr("");
-
-    let found = null;
-    try {
-      await new Promise((resolve, reject) => {
-        const q = query(collection(db, "usuarios"));
-        const unsub = onSnapshot(q, snap => {
-          unsub();
-          const u = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
-            .find(u => u.usuario === usuario && u.password === password && u.activo !== false);
-          if (u) found = u;
-          resolve();
-        }, reject);
-      });
-    } catch {}
-
-    if (!found) {
-      found = USUARIOS_INIT.find(u => u.usuario === usuario && u.password === password);
-    }
-
-    if (!found) { setErr("Credenciales incorrectas."); setLoading(false); return; }
-    if (found.rol !== "admin") { setErr("Acceso restringido a administradores."); setLoading(false); return; }
-
-    onLogin(found);
-    setLoading(false);
-  }
-
-  const inputStyle = {
-    width: "100%", background: "rgba(255,255,255,0.04)",
-    border: `1px solid ${C.border}`, color: C.text,
-    padding: "11px 14px", borderRadius: 7, fontSize: 13,
-    boxSizing: "border-box", fontFamily: font, outline: "none",
-    transition: "border-color .15s",
-  };
-
-  return (
-    <div style={{
-      minHeight: "100vh", background: C.bg, display: "flex",
-      alignItems: "center", justifyContent: "center", fontFamily: font,
-    }}>
-      <div style={{
-        width: 360, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 12,
-        padding: "32px 28px",
-        boxShadow: "0 16px 48px rgba(0,0,0,.5)",
-        animation: "planning-fadein .3s ease both",
-      }}>
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Operanzia</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Planning</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso para administradores</div>
-        </div>
-
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>
-            Usuario
-          </label>
-          <input
-            value={usuario} onChange={e => setUsuario(e.target.value)}
-            placeholder="usuario" autoComplete="username"
-            onKeyDown={e => e.key === "Enter" && go()}
-            style={{
-              ...inputStyle,
-              borderColor: usuario ? "rgba(79,142,247,0.35)" : C.border,
-            }}
-            onFocus={e => e.target.style.borderColor = "rgba(79,142,247,0.5)"}
-            onBlur={e => e.target.style.borderColor = usuario ? "rgba(79,142,247,0.35)" : C.border}
-          />
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 10, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", display: "block", marginBottom: 6, fontWeight: 500 }}>
-            Contraseña
-          </label>
-          <input
-            value={password} onChange={e => setPassword(e.target.value)}
-            type="password" placeholder="••••••••" autoComplete="current-password"
-            onKeyDown={e => e.key === "Enter" && go()}
-            style={{
-              ...inputStyle,
-              borderColor: password ? "rgba(79,142,247,0.35)" : C.border,
-            }}
-            onFocus={e => e.target.style.borderColor = "rgba(79,142,247,0.5)"}
-            onBlur={e => e.target.style.borderColor = password ? "rgba(79,142,247,0.35)" : C.border}
-          />
-        </div>
-
-        {err && (
-          <div style={{
-            background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)",
-            color: C.red, borderRadius: 7, padding: "9px 13px",
-            fontSize: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8,
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            {err}
-          </div>
-        )}
-
-        <button
-          onClick={go} disabled={loading}
-          style={{
-            width: "100%", padding: "11px", fontSize: 13, fontWeight: 600,
-            background: loading ? C.blueDim : C.blue,
-            border: "none", color: loading ? C.blueText : "#fff",
-            borderRadius: 8, cursor: loading ? "wait" : "pointer",
-            fontFamily: font, transition: "all .15s",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          }}
-          onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#3a7ef5"; }}
-          onMouseLeave={e => { if (!loading) e.currentTarget.style.background = C.blue; }}
-        >
-          {loading
-            ? <><span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(163,196,252,0.3)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Accediendo…</>
-            : "Acceder"
-          }
-        </button>
-
-        <div style={{ marginTop: 20, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, marginBottom: 8, textTransform: "uppercase", fontWeight: 500 }}>Acceso de prueba</div>
-          <div
-            onClick={() => { setUsuario("admin"); setPassword("admin123"); }}
-            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "4px 0", transition: "opacity .15s" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = ".6"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
-            <span style={{ fontSize: 12, color: C.muted, fontFamily: mono }}>admin</span>
-            <span style={{ fontSize: 11, color: C.dim, fontFamily: mono }}>admin123</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── PLANNING APP (root) ───────────────────────────────────────────
-export default function PlanningApp() {
-  const [sesion, setSesion] = useState(undefined);
-
-  useEffect(() => {
-    return onAuthStateChanged(auth, async user => {
-      if (user) {
-        try {
-          const snap = await getUserProfileSafe(user.uid);
-          if (snap.exists() && snap.data().activo !== false) {
-            setSesion({ uid: user.uid, ...snap.data() });
-          } else { await signOut(auth); setSesion(null); }
-        } catch { setSesion(null); }
-      } else { setSesion(null); }
-    });
-  }, []);
-
-  async function handleLogout() {
-    await signOut(auth);
-    setSesion(null);
-    window.location.href = "/scheduling";
-  }
-
-  if (sesion === undefined) return null;
-  if (!sesion || sesion.rol !== "admin") {
-    window.location.href = "/scheduling";
-    return null;
-  }
-
-  return <PlanningPage sesion={sesion} onLogout={handleLogout} />;
 }

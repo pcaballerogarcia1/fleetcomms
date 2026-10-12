@@ -104,7 +104,7 @@ export async function loadTasksFromLayers(projectId) {
         allTasks.forEach(t => { if (t.duracion == null) t.duracion = defDur; });
       }
     }
-  } catch {}
+  } catch { /* no crítico: se sigue sin ello */ }
 
   return allTasks;
 }

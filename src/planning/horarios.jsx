@@ -6,6 +6,7 @@ import { listenPrices, saveDefaultPrice, savePointPrices, effectivePrice, fmtEur
 import { logAudit, logAuditGrouped } from "../audit.js";
 import { TT_PAGINA, getBarrio, loadXLSX, normTxt } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
+import { useUltimo } from "../use-ultimo.js";
 
 // ── TIMETABLE ROW ─────────────────────────────────────────────────
 function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = null, defaultPrice = null, onPrice }) {
@@ -30,11 +31,17 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
     || `${entry.lat?.toFixed(4)}, ${entry.lng?.toFixed(4)}`;
   const [localNombre, setLocalNombre] = useState(entry.nombre || "");
 
-  useEffect(() => { setLocalStart(entry.horaInicio || ""); },                          [entry.horaInicio]);
-  useEffect(() => { setLocalDur(entry.duracion != null ? String(entry.duracion) : ""); }, [entry.duracion]);
-  useEffect(() => { setFranjaIni(entry.franjaInicio || ""); },                          [entry.franjaInicio]);
-  useEffect(() => { setFranjaFin(entry.franjaFin || ""); },                             [entry.franjaFin]);
-  useEffect(() => { setLocalNombre(entry.nombre || ""); },                              [entry.nombre]);
+  // Si el dato guardado cambia (lo cambia otra persona o se recarga), lo que
+  // se ve en la fila pasa a ser lo nuevo (solo el campo que ha cambiado)
+  const [visto, setVisto] = useState(entry);
+  if (visto.horaInicio !== entry.horaInicio || visto.duracion !== entry.duracion || visto.franjaInicio !== entry.franjaInicio || visto.franjaFin !== entry.franjaFin || visto.nombre !== entry.nombre) {
+    if (visto.horaInicio !== entry.horaInicio) setLocalStart(entry.horaInicio || "");
+    if (visto.duracion !== entry.duracion) setLocalDur(entry.duracion != null ? String(entry.duracion) : "");
+    if (visto.franjaInicio !== entry.franjaInicio) setFranjaIni(entry.franjaInicio || "");
+    if (visto.franjaFin !== entry.franjaFin) setFranjaFin(entry.franjaFin || "");
+    if (visto.nombre !== entry.nombre) setLocalNombre(entry.nombre || "");
+    setVisto(entry);
+  }
 
   const camposRows = Object.entries(entry.campos || {})
     .filter(([k, v]) => k.toLowerCase() !== "barrio" && v !== "" && v != null);
@@ -204,6 +211,9 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
   );
 }
 
+// Dónde se guardan los horarios: los del proyecto, o los antiguos sin proyecto
+const colTimetable = id => (id ? collection(db, "scheduling_projects", id, "timetable") : collection(db, "planning_timetable"));
+
 export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false, orgId = null }) {
   // ── Precios por punto (solo administradores) ──
   const [prices, setPrices] = useState({ defaultPrecio: null, byKey: new Map(), ready: false });
@@ -260,9 +270,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
     }).filter(Boolean));
   }, [isLarge, layers, firestoreEntries]);
 
-  const timetableCol = ttProjectId
-    ? collection(db, "scheduling_projects", ttProjectId, "timetable")
-    : collection(db, "planning_timetable");
+  const timetableCol = colTimetable(ttProjectId);
 
   // Real-time listener
   useEffect(() => {
@@ -317,15 +325,18 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
     setApplyingDur(false);
   }
 
+  // (el proyecto de ahora: esto se rehace solo al cambiar las capas, no al cambiar de proyecto)
+  const proyectoTTRef = useUltimo(ttProjectId);
   // Sync newly uploaded layers → Firebase timetable in batches of 499
   useEffect(() => {
+    const colTT = colTimetable(proyectoTTRef.current);
     const total = layers.reduce((s, l) => s + (l.markers?.length ?? 0), 0);
     if (total === 0) return;
 
     if (total > 2000) {
       // Large dataset: delete any stale timetable entries (e.g. from a previous smaller upload)
-      if (!ttProjectId) return;
-      getDocs(timetableCol).then(snap => {
+      if (!proyectoTTRef.current) return;
+      getDocs(colTT).then(snap => {
         if (snap.empty) return;
         const b = writeBatch(db);
         snap.docs.forEach(d => b.delete(d.ref));
@@ -337,7 +348,8 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
     if (allMarkers.length === 0) return;
 
     const entries = allMarkers.map(m => {
-      const { lat: rawLat, lng: rawLng, layerColor, nombre: _n, name: _nm, ...campos } = m;
+      const { lat: rawLat, lng: rawLng, layerColor, ...campos } = m;
+      delete campos.nombre; delete campos.name; // el nombre ya va aparte
       const lat = parseFloat(rawLat), lng = parseFloat(rawLng);
       if (!isFinite(lat) || !isFinite(lng)) return null; // skip invalid coords
       const nombre  = m.nombre || m.name || m.id || m.pa
@@ -357,7 +369,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
       // volvería a escribir el nombre recalculado desde el layer original,
       // borrando en silencio cualquier renombrado hecho a mano en el
       // Timetable (ver TimetableRow). El resto de campos sí se resincroniza.
-      const existingKeys = new Set((await getDocs(timetableCol)).docs.map(d => d.id));
+      const existingKeys = new Set((await getDocs(colTT)).docs.map(d => d.id));
       const BATCH_SIZE = 499;
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
@@ -365,12 +377,12 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
           const payload = existingKeys.has(e.puntoKey)
             ? { lat: e.lat, lng: e.lng, campos: e.campos, barrio: e.barrio, layerColor: e.layerColor, updatedAt: serverTimestamp() }
             : { ...e, updatedAt: serverTimestamp() };
-          batch.set(doc(timetableCol, e.puntoKey), payload, { merge: true });
+          batch.set(doc(colTT, e.puntoKey), payload, { merge: true });
         });
         await batch.commit();
       }
     })();
-  }, [layers]);
+  }, [layers, proyectoTTRef]);
 
   async function updateEntry(id, changes) {
     await updateDoc(doc(timetableCol, id), { ...changes, updatedAt: serverTimestamp() });
@@ -418,7 +430,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
   }, [canPrice, effectiveEntries, prices]);
 
   // Which barrios to render (after filter)
-  const renderBarrios = barrioFiltro ? [barrioFiltro] : barrios;
+  const renderBarrios = useMemo(() => (barrioFiltro ? [barrioFiltro] : barrios), [barrioFiltro, barrios]);
 
   const qNorm = normTxt(busqueda.trim());
   const claveLista = `${barrioFiltro ?? ""}|${qNorm}`;

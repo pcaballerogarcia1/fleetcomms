@@ -135,7 +135,7 @@ export function ModuloIncidencias({sesion,usuarios}){
 
 // ── PANEL STATS ───────────────────────────────────────────────────
 function PanelStats({incidencias,onClose}){
-  const [periodo,setPeriodo]=useState("todo");const now2=Date.now();
+  const [periodo,setPeriodo]=useState("todo");const [now2]=useState(()=>Date.now()); // la hora al abrir el panel
   const f=incidencias.filter(i=>{const c=periodo==="7d"?now2-86400000*7:periodo==="30d"?now2-86400000*30:0;return(i.fecha??0)>=c;});
   const ab=f.filter(i=>i.estado==="abierta").length,rev=f.filter(i=>i.estado==="en revisión").length,cer=f.filter(i=>i.estado==="cerrada").length,urg=f.filter(i=>i.prioridad==="alta").length;
   const evol=Array.from({length:7},(_,i)=>{const d=new Date(now2-86400000*(6-i));const s=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();return{dia:d.toLocaleDateString("es-ES",{weekday:"short"}),total:incidencias.filter(x=>(x.fecha??0)>=s&&(x.fecha??0)<s+86400000).length,cerradas:incidencias.filter(x=>(x.fecha??0)>=s&&(x.fecha??0)<s+86400000&&x.estado==="cerrada").length};});

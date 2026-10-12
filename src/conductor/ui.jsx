@@ -1,6 +1,7 @@
 // App del conductor: piezas de pantalla compartidas (botón, tooltip de gráficos, mapa).
 import { useState, useRef, useEffect } from "react";
 import { C, barrioColor, font, mono } from "./comun.js";
+import { useUltimo } from "../use-ultimo.js";
 
 // Componente base de botón con hover
 export const Btn = ({children, onClick, style={}, variant="primary", size="md", disabled=false, title=""}) => {
@@ -51,6 +52,8 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   const mapRef=useRef(null);
   const layersRef=useRef([]);
 
+  // el mapa se crea una vez; pinta siempre con las funciones de ahora
+  const initMapRef = useUltimo(initMap);
   useEffect(()=>{
     if(!document.getElementById("leaflet-css")){
       const css=document.createElement("link");
@@ -61,10 +64,10 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     if(!window.L){
       const js=document.createElement("script");
       js.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-      js.onload=()=>initMap();
+      js.onload=()=>initMapRef.current();
       document.head.appendChild(js);
-    } else { initMap(); }
-  },[]);
+    } else { initMapRef.current(); }
+  },[initMapRef]);
 
   function initMap(){
     if(!divRef.current||mapRef.current)return;
@@ -93,7 +96,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       const l=L.polyline(pts.map(u=>[u.lat,u.lng]),{color:"#2a3142",weight:1.5,opacity:0.4,dashArray:"4,8"}).addTo(map);
       layersRef.current.push(l);
     }
-    pts.forEach((u,idx)=>{
+    pts.forEach((u)=>{
       const isSel=selId===u.id;
       const baseColor=barrioColor(u.barri);
       const color=u.realizado?C.green:isSel?C.orange:baseColor;
@@ -109,16 +112,18 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     if(pts.length>0) map.fitBounds(pts.map(u=>[u.lat,u.lng]),{padding:[20,20]});
   }
 
+  const drawLayersRef = useUltimo(drawLayers);
   useEffect(()=>{
-    if(window.L&&mapRef.current) drawLayers();
-    else { const t=setTimeout(()=>{if(window.L&&!mapRef.current)initMap();else if(window.L)drawLayers();},600); return()=>clearTimeout(t); }
-  },[ubicaciones,selId,recorrido]);
+    if(window.L&&mapRef.current) drawLayersRef.current();
+    else { const t=setTimeout(()=>{if(window.L&&!mapRef.current)initMapRef.current();else if(window.L)drawLayersRef.current();},600); return()=>clearTimeout(t); }
+  },[ubicaciones, selId, recorrido, drawLayersRef, initMapRef]);
 
+  const ubicacionesRef = useUltimo(ubicaciones);
   useEffect(()=>{
     if(!mapRef.current||!selId)return;
-    const u=ubicaciones.find(x=>x.id===selId);
+    const u=ubicacionesRef.current.find(x=>x.id===selId);
     if(u) mapRef.current.setView([u.lat,u.lng],17,{animate:true});
-  },[selId]);
+  },[selId, ubicacionesRef]);
 
   return (
     <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>

@@ -11,7 +11,7 @@ import { TabProyectos } from "./scheduling/proyectos.jsx";
 
 // Lo que otros módulos importan de aquí (main.jsx, lineas-scheduling.jsx)
 export { TabTrabajadores, TabVehiculos } from "./scheduling/flota.jsx";
-export { KpiBar } from "./scheduling/gantt.jsx";
+export { KpiBar } from "./scheduling/kpi-bar.jsx";
 export { TabPlanificacion } from "./scheduling/planificacion.jsx";
 export { TabProyectos } from "./scheduling/proyectos.jsx";
 
@@ -43,7 +43,7 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
       </div>
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         <div style={{ flex: 1, display: subTab === "vrp" ? "flex" : "none", overflow: "hidden" }}>
-          <TabPlanificacion
+          <TabPlanificacion key={activeProject?._id || "sin-proyecto"}
             vehicles={vehicles} workers={workers}
             activeProject={activeProject}
             onProjectUpdate={onProjectUpdate}
@@ -53,6 +53,28 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
         {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}
         {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} activeProject={activeProject} orgId={orgId} />}
       </div>
+    </div>
+  );
+}
+
+// Botón del menú lateral (Planning / Scheduling)
+function RailBtn({ navKey, icon, label, tab, goToTab }) {
+  const active = tab === navKey;
+  return (
+    <div style={{ position: "relative", display: "flex", justifyContent: "center" }} className="rail-item">
+      <button onClick={() => goToTab(navKey)} title={label} style={{
+        width: 44, height: 44, borderRadius: 10,
+        background: active ? `${C.blue}22` : "none",
+        border: `1px solid ${active ? `${C.blue}55` : "transparent"}`,
+        color: active ? C.blue : C.dim,
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "all .15s",
+      }}
+        onMouseEnter={e => { if (!active) { e.currentTarget.style.background = C.surface2; e.currentTarget.style.color = C.muted; } }}
+        onMouseLeave={e => { if (!active) { e.currentTarget.style.background = active ? `${C.blue}22` : "none"; e.currentTarget.style.color = active ? C.blue : C.dim; } }}
+      >
+        {icon}
+      </button>
     </div>
   );
 }
@@ -111,13 +133,6 @@ function SchedulingPage({ sesion, onLogout }) {
     if (key === "planning") setPlanningEverOpen(true);
     setTab(key);
   }
-
-  const PROJECT_TABS = [
-    { key: "planning",      label: "Planning" },
-    { key: "planificacion", label: "Scheduling" },
-    { key: "vehiculos",     label: `Vehículos${vehicles.length ? ` (${vehicles.length})` : ""}` },
-    { key: "trabajadores",  label: `Trabajadores${workers.length ? ` (${workers.length})` : ""}` },
-  ];
 
   const UserAvatar = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -179,32 +194,9 @@ function SchedulingPage({ sesion, onLogout }) {
   }
 
   /* ── PROJECT WORKSPACE (active project) ────────────────────────── */
-  const STATUS_COLORS = { nuevo: C.dim, con_planning: C.blue, schedulado: C.green, publicado: "#f59e0b" };
-  const STATUS_LABELS = { nuevo: "Nuevo", con_planning: "Con planning", schedulado: "Schedulado", publicado: "Publicado" };
 
   const IconPlanning = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
   const IconSchedule = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-
-  function RailBtn({ navKey, icon, label }) {
-    const active = tab === navKey;
-    return (
-      <div style={{ position: "relative", display: "flex", justifyContent: "center" }} className="rail-item">
-        <button onClick={() => goToTab(navKey)} title={label} style={{
-          width: 44, height: 44, borderRadius: 10,
-          background: active ? `${C.blue}22` : "none",
-          border: `1px solid ${active ? `${C.blue}55` : "transparent"}`,
-          color: active ? C.blue : C.dim,
-          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "all .15s",
-        }}
-          onMouseEnter={e => { if (!active) { e.currentTarget.style.background = C.surface2; e.currentTarget.style.color = C.muted; } }}
-          onMouseLeave={e => { if (!active) { e.currentTarget.style.background = active ? `${C.blue}22` : "none"; e.currentTarget.style.color = active ? C.blue : C.dim; } }}
-        >
-          {icon}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: "flex", height: "100vh", background: C.bg, fontFamily: font }}>
@@ -241,8 +233,8 @@ function SchedulingPage({ sesion, onLogout }) {
         </div>
 
         {/* Nav icons */}
-        <RailBtn navKey="planning"      icon={IconPlanning} label="Planning"   />
-        <RailBtn navKey="planificacion" icon={IconSchedule} label="Scheduling" />
+        <RailBtn navKey="planning"      icon={IconPlanning} label="Planning"   tab={tab} goToTab={goToTab} />
+        <RailBtn navKey="planificacion" icon={IconSchedule} label="Scheduling" tab={tab} goToTab={goToTab} />
 
         {/* User at bottom */}
         <div style={{ flex: 1 }} />

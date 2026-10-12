@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { db } from "./firebase.js";
 import { DEFAULT_ROSTER_RULES, CODE_WINDOWS } from "./roster-optimizer.js";
 import { watchServiciosProyecto, aplicarRosterAlServicio, publicarCuadranteLineas } from "./lineas-servicio-store.js";
@@ -66,14 +66,16 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const { grid: vehicleGrid } = useVehicleAvailability(orgId, year, month, { live: true });
 
   // ── Scheduling roster (populated when a scenario is generated) ──
-  const [schedRoster, setSchedRoster] = useState(null); // { mes, turnoByWorker, daysWorked }
-
+  // { mes, turnoByWorker, daysWorked }, con el proyecto del que viene
+  const [rosterDe, setRosterDe] = useState({ id: null, valor: null });
+  const idProyecto = activeProject?._id || null;
   useEffect(() => {
-    if (!activeProject?._id) { setSchedRoster(null); return; }
+    if (!idProyecto) return;
     // Ficha principal + partes (roster-store.js): los turnos y el detalle
     // diario van troceados para no pasar de 1 MB.
-    return listenScenarioRoster(activeProject._id, setSchedRoster);
-  }, [activeProject?._id]);
+    return listenScenarioRoster(idProyecto, valor => setRosterDe({ id: idProyecto, valor }));
+  }, [idProyecto]);
+  const schedRoster = idProyecto && rosterDe.id === idProyecto ? rosterDe.valor : null;
 
   // Given a calendar day in the current view, return the scheduling day number
   // (1-indexed from the first day of schedRoster.mes). Returns null if out of range.
@@ -99,7 +101,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   // Local grid state (Firestore is the backing store, but we edit locally)
   const [grid,    setGrid]    = useState({});
-  const [loading, setLoading] = useState(true);
+  // el mes del cuadrante ya leído (se ve «cargando» mientras no sea el que toca)
+  const [cargadoDe, setCargadoDe] = useState(null);
   // Asignaciones de Optimizar (modo libre): trabajador → día → { id, v, vn, s, e }
   // (turno cubierto, vehículo y horario). Una celda con asignación la puso
   // el optimizador; sin ella, la escribió alguien a mano.
@@ -135,6 +138,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const docId = orgId
     ? `${orgId}_${year}_${String(month).padStart(2, "0")}`
     : null;
+  const loading = !!docId && cargadoDe !== docId;
 
   // Load workers
   useEffect(() => {
@@ -155,13 +159,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   // Load rostering for selected month
   useEffect(() => {
-    if (!docId) { setGrid({}); setAsign({}); asignRef.current = {}; setLoading(false); return; }
+    // lo del mes anterior se olvida; la pantalla espera («cargando») a la primera lectura
+    gridRef.current = {}; asignRef.current = {}; savedRef.current = {};
+    if (!docId) return;
     loadedRef.current = false;
     docIdRef.current = docId;
-    updateGrid({});
-    setAsign({}); asignRef.current = {};
-    savedRef.current = {};
-    setLoading(true);
     // En vivo: lo que cambian otras personas aparece aquí sin recargar. Las
     // casillas tocadas aquí y aún sin guardar se respetan (mergeCells), y se
     // guarda casilla a casilla (saveRosterMonth), así nadie pisa a nadie.
@@ -172,7 +174,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         savedRef.current = m.legacy ? {} : savedSnapshotOf(m.grid, m.asignaciones);
         legacyRef.current = m.legacy;
         loadedRef.current = true;
-        setLoading(false);
+        setCargadoDe(docId);
         return;
       }
       if (legacyRef.current) return; // formato antiguo: se migra entero al primer guardado
@@ -446,7 +448,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
 
   // Líneas regulares: qué calendario circula cada día del mes que se ve
   // (lo manda el Scheduling de líneas con «Enviar a Rostering»)
-  const calsLineas = schedRoster?.lineas && schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? schedRoster.cals || [] : null;
+  const calsLineas = useMemo(() => (schedRoster?.lineas && schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? schedRoster.cals || [] : null), [schedRoster, year, month]);
   const calDeDia = d => (calsLineas ? calsLineas[schedRoster.calDia?.[d] ?? schedRoster.calDia?.[String(d)]] || null : null);
 
   // Cada turno, de un trabajador: lo que se asigna aquí pasa solo a los días

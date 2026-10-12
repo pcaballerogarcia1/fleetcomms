@@ -269,11 +269,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
       navigator.geolocation.clearWatch(watchId);
       setDoc(ref,{activo:false},{merge:true}).catch(e=>console.error("[ubicación] error al marcar inactivo:", e));
     };
-  },[sesion?.id, sesion?.org_id, planActivo?._id]);
-
-  // Separar planes KML de tareas correctivo
-  const planesKML   = planes.filter(p=>p.tipo!=="corr");
-  const tareasCorr  = planes.filter(p=>p.tipo==="corr");
+  },[sesion?.id, sesion?.org_id, sesion?.nombre, sesion?.apellidos, planActivo?._id]);
 
   // Si hay plan activo, mostrar detalle: la versión del SERVIDOR (así se ven
   // las paradas que marcan otros a la vez) con los cambios propios que aún

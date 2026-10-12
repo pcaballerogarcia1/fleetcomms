@@ -14,7 +14,8 @@ import { loadScenarioCloud, watchScenarioMeta } from "../scenario-store.js";
 import { applyTaskMove, turnoWindow } from "../vrp-engine.js";
 import { ROSTER_TURNO, applyShiftMoves, deriveWorkerRows, lastScenarioDay, loadTasksFromLayers, spliceWorkerWindowIntoVehicle } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
-import { GanttChart, KpiBar } from "./gantt.jsx";
+import { GanttChart } from "./gantt.jsx";
+import { KpiBar } from "./kpi-bar.jsx";
 import { idbLoad, idbSave } from "./idb.js";
 import { ConstraintsPanel } from "./restricciones.jsx";
 import {
@@ -29,17 +30,16 @@ import {
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
   const lang = useLang();
   const [tasks,        setTasks]       = useState([]);
-  const [loadingTasks, setLoadingTasks]= useState(false);
 
-  // Load tasks when project opens (from IDB for large localOnly layers, Firestore for rest)
+  // Al abrir el proyecto, sus tareas (de IndexedDB para capas grandes solo
+  // locales, de Firestore el resto). Esta pantalla se crea de nuevo con cada
+  // proyecto (key en scheduling.jsx), así que no hay nada que vaciar antes.
+  const idProyecto = activeProject?._id;
+  const hayTareas = !!activeProject?.planning?.tasksCount;
   useEffect(() => {
-    setTasks([]);
-    if (!activeProject?._id || !activeProject?.planning?.tasksCount) return;
-    setLoadingTasks(true);
-    loadTasksFromLayers(activeProject._id)
-      .then(t => { setTasks(t); setLoadingTasks(false); })
-      .catch(() => setLoadingTasks(false));
-  }, [activeProject?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!idProyecto || !hayTareas) return;
+    loadTasksFromLayers(idProyecto).then(t => setTasks(t)).catch(() => {});
+  }, [idProyecto, hayTareas]);
 
   const [importing,    setImporting]   = useState(false);
   const [mode,         setMode]        = useState("vehicles");
@@ -81,7 +81,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // proyecto grande es indistinguible de uno colgado.
   const [scaleProgress, setScaleProgress] = useState(null);
   const [focusMode,    setFocusMode]   = useState(false); // hide all panels except gantt
-  const [elapsedSec,   setElapsedSec]  = useState(0);
+  const [segundosGen,  setSegundosGen] = useState(0);
   const genStartRef = useRef(null);
 
   const GEN_PHASES = {
@@ -90,15 +90,16 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     workers: { label: "Asignando trabajadores…",          pct: 78 },
   };
 
-  // Elapsed-time counter — starts when generating=true, resets when done
+  // Segundos que lleva generando (0 cuando no genera)
   useEffect(() => {
-    if (!generating) { setElapsedSec(0); return; }
+    if (!generating) return;
     genStartRef.current = Date.now();
-    const id = setInterval(() => {
-      setElapsedSec(Math.floor((Date.now() - genStartRef.current) / 1000));
-    }, 1000);
-    return () => clearInterval(id);
+    const tic = () => setSegundosGen(Math.floor((Date.now() - genStartRef.current) / 1000));
+    const t0 = setTimeout(tic, 0);
+    const id = setInterval(tic, 1000);
+    return () => { clearTimeout(t0); clearInterval(id); };
   }, [generating]);
+  const elapsedSec = generating ? segundosGen : 0;
 
   const [publishModal, setPublishModal] = useState(null);
   const [publishing,   setPublishing]  = useState(false);
@@ -495,17 +496,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
   // When active project changes, restore its scheduling state (IndexedDB first, Firestore summary as fallback)
   useEffect(() => {
-    setMoveHistory([]); setHistoryIndex(-1); // el historial de deshacer no sobrevive a un cambio de proyecto
-    if (!activeProject) {
-      setSchedules({ vehicles: null, workers: null });
-      return;
-    }
+    // (el historial de deshacer y la nube empiezan vacíos: la pantalla es nueva con cada proyecto)
+    if (!activeProject) return;
     const pid = activeProject._id;
     const sc = activeProject.scheduling;
     let cancelled = false, unsub = null;
     cloudVRef.current = null;
-    setCloudSync(null);
-    setCloudMeta(null);
     idbLoad(`vrp_${pid}`).then(cached => {
       if (cancelled) return;
       const hasLocal = !!cached?.vehicles?.length;
@@ -562,7 +558,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // Historial de versiones del escenario (solo métricas — ver comentario
   // junto a addDoc en runGenerate) — últimas 20, más reciente primero.
   useEffect(() => {
-    if (!activeProject?._id) { setScenarioHistory([]); return; }
+    if (!activeProject?._id) return;
     return onSnapshot(
       query(collection(db, "scheduling_projects", activeProject._id, "scenario_history"), limit(100)),
       snap => {
@@ -739,7 +735,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
       {!schedule?.length ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: C.dim }}>
-          {!!!tasks.length
+          {!tasks.length
             ? <>
                 <div style={{ fontSize: 13, color: C.muted }}>Importa los datos desde Planning para empezar</div>
                 <div style={{ fontSize: 11 }}>Planning → Timetable → Exportar a Scheduling</div>

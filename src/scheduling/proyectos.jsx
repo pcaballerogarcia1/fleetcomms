@@ -29,7 +29,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
   const [projects,    setProjects]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [newModal,    setNewModal]    = useState(null);
-  const [creating,    setCreating]    = useState(false);
+  const [creating, setCreating] = useState(false);
   const [orgs,        setOrgs]        = useState([]);
   const [filterOrg,   setFilterOrg]   = useState("__all__");
 
@@ -73,8 +73,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     return () => unsub();
   }, [effectiveOrgId]);
 
-  function createProject() {
-    if (!newModal?.nombre?.trim()) return;
+  async function createProject() {
+    if (!newModal?.nombre?.trim() || creating) return;
     const docId  = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const nombre = newModal.nombre.trim();
     const desc   = newModal.descripcion?.trim() || "";
@@ -88,22 +88,29 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     // valor. El botón ya se desactiva en este caso, pero esto es la última
     // barrera por si algo lo evita (Enter en el formulario, etc.).
     if (!projectOrgId) { alert("No se puede crear el proyecto sin organización. Selecciona una."); return; }
-    logAudit({ modulo: "Proyectos", accion: "Creó un proyecto", detalle: `${nombre} (${mes})`, projectId: docId, proyecto: nombre, orgId: projectOrgId });
 
-    // Close modal and navigate immediately (optimistic)
-    setNewModal(null);
-    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId, tipo });
-
-    // Save in background — alert only on failure
-    setDoc(doc(db, "scheduling_projects", docId), {
-      nombre, descripcion: desc, mes, status: "nuevo", tipo,
-      org_id: projectOrgId,
-      planning: null, scheduling: null,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    }).catch(e => {
+    // Se abre cuando el servidor ya lo tiene guardado: las reglas de sus capas,
+    // cocheras y ajustes miran de qué empresa es el proyecto, y si se abría
+    // antes (como antes, «optimista»), esas escuchas se cortaban con «sin
+    // permisos» y el proyecto recién creado no se actualizaba hasta recargar.
+    setCreating(true);
+    try {
+      await setDoc(doc(db, "scheduling_projects", docId), {
+        nombre, descripcion: desc, mes, status: "nuevo", tipo,
+        org_id: projectOrgId,
+        planning: null, scheduling: null,
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
       console.error("createProject:", e);
       alert("Error al guardar el proyecto en la nube: " + e.message);
-    });
+      setCreating(false);
+      return;
+    }
+    logAudit({ modulo: "Proyectos", accion: "Creó un proyecto", detalle: `${nombre} (${mes})`, projectId: docId, proyecto: nombre, orgId: projectOrgId });
+    setCreating(false);
+    setNewModal(null);
+    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId, tipo });
   }
 
   async function removeProject(id) {

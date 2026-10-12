@@ -4,6 +4,7 @@ import { db } from "../firebase.js";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { barrioColor, coordQuality, getBarrio, isJunkCoord, routeStats } from "./datos.js";
 import { C, MAP_STYLES, font } from "./estilo.js";
+import { useUltimo } from "../use-ultimo.js";
 
 // ── POPUP HTML ────────────────────────────────────────────────────
 function makePopupHtml(marker, color) {
@@ -44,8 +45,8 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
 
   const [selMode,      setSelMode]      = useState(false);
   const [selected,     setSelected]     = useState([]);  // [{lat,lng,nombre}]
-  const [routeData,    setRouteData]    = useState(null); // {km, minutes, geometry}
-  const [routeLoading, setRouteLoading] = useState(false);
+  // ruta por carretera (OSRM) de los puntos elegidos: { clave, data: {km, minutes, geometry} | null }
+  const [ruta, setRuta] = useState({ clave: null, data: null });
 
   // Refs so Leaflet click handlers always see current values
   const selModeRef  = useRef(false);
@@ -54,26 +55,22 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
   useEffect(() => { selectedRef.current = selected;  }, [selected]);
 
   // Fetch road route via OSRM when selection has ≥2 points
+  const claveRuta = selected.length >= 2 ? selected.map(p => `${p.lng},${p.lat}`).join(";") : null;
   useEffect(() => {
-    if (selected.length < 2) { setRouteData(null); return; }
+    if (!claveRuta) return;
     const ctrl = new AbortController();
-    const coords = selected.map(p => `${p.lng},${p.lat}`).join(";");
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    setRouteLoading(true);
+    const url = `https://router.project-osrm.org/route/v1/driving/${claveRuta}?overview=full&geometries=geojson`;
     fetch(url, { signal: ctrl.signal })
       .then(r => r.json())
       .then(data => {
-        if (data.code === "Ok" && data.routes?.[0]) {
-          const r = data.routes[0];
-          setRouteData({ km: r.distance / 1000, minutes: Math.round(r.duration / 60), geometry: r.geometry });
-        } else {
-          setRouteData(null);
-        }
-        setRouteLoading(false);
+        const r = data.code === "Ok" && data.routes?.[0];
+        setRuta({ clave: claveRuta, data: r ? { km: r.distance / 1000, minutes: Math.round(r.duration / 60), geometry: r.geometry } : null });
       })
-      .catch(e => { if (e.name !== "AbortError") { setRouteData(null); setRouteLoading(false); } });
+      .catch(e => { if (e.name !== "AbortError") setRuta({ clave: claveRuta, data: null }); });
     return () => ctrl.abort();
-  }, [selected]);
+  }, [claveRuta]);
+  const routeData = claveRuta && ruta.clave === claveRuta ? ruta.data : null;
+  const routeLoading = !!claveRuta && ruta.clave !== claveRuta;
 
   const drawLayers = useCallback(() => {
     const L = window.L;
@@ -89,16 +86,16 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     }
 
     // Remove previous Leaflet marker layers
-    leafletLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
+    leafletLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch { /* ya no estaba en el mapa */ } });
     leafletLayersRef.current = [];
 
     // Clean up previous canvas/renderer overlay
     if (canvasOverlayRef.current) {
       const { canvas, drawFn, renderer, clickFn } = canvasOverlayRef.current;
-      if (drawFn) { try { map.off('moveend zoomend viewreset resize', drawFn); } catch {} }
+      if (drawFn) { try { map.off('moveend zoomend viewreset resize', drawFn); } catch { /* el mapa ya se había cerrado */ } }
       if (clickFn) { try { map.off('click', clickFn); } catch { /* ya no estaba */ } }
-      if (canvas)   { try { canvas.remove(); } catch {} }
-      if (renderer) { try { renderer.remove(); } catch {} }
+      if (canvas)   { try { canvas.remove(); } catch { /* ya quitado */ } }
+      if (renderer) { try { renderer.remove(); } catch { /* ya quitado */ } }
       canvasOverlayRef.current = null;
     }
     // Remove any orphan canvas nodes from earlier attempts
@@ -272,7 +269,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     }
 
     // Render depots (orange house markers, above stops)
-    depotLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
+    depotLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch { /* ya no estaba en el mapa */ } });
     depotLayersRef.current = [];
     depots.forEach((d, i) => {
       const dIcon = L.divIcon({
@@ -337,7 +334,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
 
     // Remove old
     if (selPolyRef.current) { map.removeLayer(selPolyRef.current); selPolyRef.current = null; }
-    selPinsRef.current.forEach(p => { try { map.removeLayer(p); } catch {} });
+    selPinsRef.current.forEach(p => { try { map.removeLayer(p); } catch { /* ya no estaba en el mapa */ } });
     selPinsRef.current = [];
 
     if (selected.length < 1) return;
@@ -398,6 +395,8 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     tileRef.current.bringToBack();
   }, [mapStyle]);
 
+  // el mapa se crea una vez; pinta siempre con la función de ahora
+  const initMapRef = useUltimo(initMap);
   useEffect(() => {
     if (!document.getElementById("leaflet-css")) {
       const css = document.createElement("link");
@@ -408,24 +407,24 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     if (!window.L) {
       const js = document.createElement("script");
       js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-      js.onload = () => initMap();
+      js.onload = () => initMapRef.current();
       document.head.appendChild(js);
     } else {
-      initMap();
+      initMapRef.current();
     }
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-  }, []);
+  }, [initMapRef]);
 
   useEffect(() => {
     if (window.L && mapRef.current) drawLayers();
     else {
       const t = setTimeout(() => {
-        if (window.L && !mapRef.current) initMap();
+        if (window.L && !mapRef.current) initMapRef.current();
         else if (window.L) drawLayers();
       }, 800);
       return () => clearTimeout(t);
     }
-  }, [layers, drawLayers]);
+  }, [layers, drawLayers, initMapRef]);
 
   // Add-point mode: crosshair cursor + click handler
   const addPointModeRef = useRef(addPointMode);

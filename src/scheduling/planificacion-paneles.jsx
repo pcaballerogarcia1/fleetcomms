@@ -23,15 +23,15 @@ export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, can
       }}>
         {/* Import */}
         <button onClick={importFromPlanning} disabled={importing} style={{
-          padding: "5px 11px", background: importing ? C.surface2 : !!tasks.length ? C.greenDim : C.surface2,
-          border: `1px solid ${!!tasks.length ? C.green + "44" : C.border}`,
-          color: !!tasks.length ? C.green : C.muted,
+          padding: "5px 11px", background: importing ? C.surface2 : tasks.length ? C.greenDim : C.surface2,
+          border: `1px solid ${tasks.length ? C.green + "44" : C.border}`,
+          color: tasks.length ? C.green : C.muted,
           borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: importing ? "wait" : "pointer",
           fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
         }}>
           {importing
             ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(52,211,153,.2)", borderTopColor: C.green, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Importando…</>
-            : !!tasks.length
+            : tasks.length
               ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {tasks.length.toLocaleString()} paradas</>
               : "Importar desde Planning"
           }

@@ -1,6 +1,6 @@
 // Rostering: datos y utilidades sin pantalla — códigos de turno y de vehículo,
 // el cuadrante del mes y la disponibilidad de vehículos (Firestore), estilos.
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { listenRosterMonth } from "../roster-store.js";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -51,33 +51,27 @@ export function fmtClock(min) {
 // Rostering), y como Scheduling y Rostering se quedan montados a la vez,
 // Scheduling no veía una baja marcada después de abrirlo: ni avisaba del
 // conflicto ni la tenía en cuenta al generar o publicar.
-export function useRostering(orgId, year, month) {
-  const [grid,    setGrid]    = useState({});
-  // Trabajador → día → { v, vn, s, e }: qué vehículo y horario le asignó
-  // Rostering → Optimizar (escenarios en modo libre). Publicar a Rutas lo
-  // usa para saber quién conduce cada tramo.
-  const [asignaciones, setAsignaciones] = useState({});
-  const [loading, setLoading] = useState(true);
+// Mes sin datos (siempre el mismo objeto, para no rehacer cálculos)
+const VACIO = Object.freeze({});
 
+export function useRostering(orgId, year, month) {
   const docId = (orgId && year && month)
     ? `${orgId}_${year}_${String(month).padStart(2, "0")}`
     : null;
+  // El mes leído, con el documento del que viene (al cambiar de mes no se ve
+  // el anterior). asignaciones: trabajador → día → { v, vn, s, e }: qué
+  // vehículo y horario le asignó Rostering → Optimizar (modo libre).
+  const [mes, setMes] = useState({ docId: null, grid: VACIO, asignaciones: VACIO });
 
   useEffect(() => {
-    if (!docId) { setGrid({}); setAsignaciones({}); setLoading(false); return; }
-    setGrid({});
-    setAsignaciones({});
-    setLoading(true);
+    if (!docId) return;
     // Una ficha por trabajador (roster-store.js) — antes todo el mes en un
     // solo documento, que pasaba de 1 MB con plantillas grandes.
-    return listenRosterMonth(orgId, year, month, m => {
-      setGrid(m.grid);
-      setAsignaciones(m.asignaciones);
-      setLoading(false);
-    });
+    return listenRosterMonth(orgId, year, month, m => setMes({ docId, grid: m.grid, asignaciones: m.asignaciones }));
   }, [docId, orgId, year, month]);
 
-  return { grid, asignaciones, loading, docId };
+  const listo = !!docId && mes.docId === docId;
+  return { grid: listo ? mes.grid : VACIO, asignaciones: listo ? mes.asignaciones : VACIO, loading: !!docId && !listo, docId };
 }
 
 // Helper exported for scheduling conflict check
@@ -106,30 +100,24 @@ export const VEHICLE_STATUS_META = {
 // Firestore. Por defecto (la propia vista de Rostering, que edita en
 // local) solo aplica la primera lectura para no pisar las ediciones.
 export function useVehicleAvailability(orgId, year, month, { live = false } = {}) {
-  const [grid,    setGrid]    = useState({});
-  const [loading, setLoading] = useState(true);
-
   const docId = (orgId && year && month)
     ? `${orgId}_${year}_${String(month).padStart(2, "0")}`
     : null;
-
-  const loadedRef = useRef(false);
+  const [leido, setLeido] = useState({ docId: null, grid: VACIO });
 
   useEffect(() => {
-    if (!docId) { setGrid({}); setLoading(false); return; }
-    loadedRef.current = false;
-    setGrid({});
-    setLoading(true);
+    if (!docId) return;
+    let cargado = false;
     return onSnapshot(doc(db, "rostering_vehicles", docId), snap => {
-      if (live || !loadedRef.current) {
-        setGrid(snap.exists() ? (snap.data().grid ?? {}) : {});
-        loadedRef.current = true;
+      if (live || !cargado) {
+        setLeido({ docId, grid: snap.exists() ? (snap.data().grid ?? {}) : {} });
+        cargado = true;
       }
-      setLoading(false);
     });
   }, [docId, live]);
 
-  return { grid, loading, docId };
+  const listo = !!docId && leido.docId === docId;
+  return { grid: listo ? leido.grid : VACIO, loading: !!docId && !listo, docId };
 }
 
 // Helper exported for scheduling conflict check / publish-time filtering

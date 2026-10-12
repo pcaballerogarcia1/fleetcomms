@@ -74,7 +74,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
   };
   const [checks, setChecks]     = useState(initParte);
   const [obs, setObs]           = useState(ub.parte?.observaciones || "");
-  const [firmado, setFirmado]   = useState(ub.parte?.firmado || false);
+  const [firmado]   = useState(ub.parte?.firmado || false);
 
   const total  = PUNTOS_INSPECCION.reduce((s,g)=>s+g.puntos.length,0);
   const marcados = Object.values(checks).filter(Boolean).length;

@@ -50,7 +50,7 @@ export async function idbDel(key) {
       const r = tx.objectStore(_IDB_STORE).delete(key);
       r.onsuccess = res; r.onerror = () => rej(r.error);
     });
-  } catch {}
+  } catch { /* no crítico: se sigue sin ello */ }
 }
 
 // Misma paleta y función que scheduling — colores deterministas por barrio
@@ -228,13 +228,6 @@ export function routeStats(pts) {
   for (let i = 1; i < pts.length; i++)
     km += haversineKm(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
   return { km, minAt30: Math.round(km / 30 * 60) };
-}
-
-// ── TIME HELPERS ─────────────────────────────────────────────────
-function timeToMin(t) {
-  if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
-  return isNaN(h) ? null : h * 60 + (m || 0);
 }
 
 // ── TIMETABLE TAB ─────────────────────────────────────────────────

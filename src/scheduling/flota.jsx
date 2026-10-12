@@ -271,6 +271,15 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
 }
 
 // ── WORKERS TAB ───────────────────────────────────────────────────
+// Desplegable de vehículo de un trabajador
+const VehicleSelect = ({ value, onChange, vehicles, selStyle }) => (
+  <select value={value} onChange={e => onChange(e.target.value)}
+    style={{ ...selStyle, color: value ? C.text : C.dim }}>
+    <option value="">Sin vehículo asignado</option>
+    {(vehicles || []).map(v => <option key={v._id} value={v._id}>{v.nombre || v.matricula}{v.matricula && v.nombre ? ` (${v.matricula})` : ""}</option>)}
+  </select>
+);
+
 export function TabTrabajadores({ workers, vehicles, loading, activeProject, orgId }) {
   const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "", depotLat: "", depotLng: "" };
   const [form,     setForm]     = useState(empty);
@@ -343,14 +352,6 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
       style={selStyle} />
   );
 
-  const VehicleSelect = ({ value, onChange }) => (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ ...selStyle, color: value ? C.text : C.dim }}>
-      <option value="">Sin vehículo asignado</option>
-      {(vehicles || []).map(v => <option key={v._id} value={v._id}>{v.nombre || v.matricula}{v.matricula && v.nombre ? ` (${v.matricula})` : ""}</option>)}
-    </select>
-  );
-
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 720 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -387,7 +388,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <VehicleSelect value={form.vehiculoId} onChange={v => setForm({ ...form, vehiculoId: v })} />
+            <VehicleSelect value={form.vehiculoId} onChange={v => setForm({ ...form, vehiculoId: v })} vehicles={vehicles} selStyle={selStyle} />
             <button onClick={create} disabled={saving || !form.nombre.trim()} style={{
               padding: "8px 18px", background: C.blue, border: "none", color: "#fff",
               borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer",
@@ -426,7 +427,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <VehicleSelect value={editForm.vehiculoId} onChange={v => setEditForm({ ...editForm, vehiculoId: v })} />
+                <VehicleSelect value={editForm.vehiculoId} onChange={v => setEditForm({ ...editForm, vehiculoId: v })} vehicles={vehicles} selStyle={selStyle} />
                 <button onClick={() => save(w._id)} disabled={saving} style={{ padding: "8px 16px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
                   {saving ? "…" : "Guardar"}
                 </button>

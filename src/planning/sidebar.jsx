@@ -9,6 +9,29 @@ import { barrioColor, cambiarDepots, coordQuality, getBarrio, getContenedor, get
 import { C, font, mono } from "./estilo.js";
 import { DepotIcon } from "./mapa.jsx";
 
+// Flecha y cabecera plegable de cada sección del panel
+const Chevron = ({ open }) => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+    style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+const SecBtn = ({ label, badge, open, onToggle, extra }) => (
+  <button onClick={onToggle} style={{
+    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+    background: "none", border: "none", cursor: "pointer", padding: "8px 12px 6px",
+    color: C.dim, fontFamily: font,
+  }}>
+    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <Chevron open={open} />
+      <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+        {label}{badge != null ? ` (${badge})` : ""}
+      </span>
+    </span>
+    {extra}
+  </button>
+);
+
 export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
@@ -22,28 +45,6 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
   const [openDepots,      setOpenDepots]      = useState(true);
   const [openLayers,      setOpenLayers]      = useState(true);
   const [openBarrios,     setOpenBarrios]     = useState(false);
-
-  const Chevron = ({ open }) => (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-      style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  );
-  const SecBtn = ({ label, badge, open, onToggle, extra }) => (
-    <button onClick={onToggle} style={{
-      width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-      background: "none", border: "none", cursor: "pointer", padding: "8px 12px 6px",
-      color: C.dim, fontFamily: font,
-    }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <Chevron open={open} />
-        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
-          {label}{badge != null ? ` (${badge})` : ""}
-        </span>
-      </span>
-      {extra}
-    </button>
-  );
 
   async function removeLayer(id) {
     if (projectId) {

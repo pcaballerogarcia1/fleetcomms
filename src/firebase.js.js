@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentSingleTabManager, memoryLocalCache,
   collection, onSnapshot, addDoc, updateDoc,
-  deleteDoc, doc, serverTimestamp, query, orderBy, where, setDoc, getDoc, getDocFromServer,
+  deleteDoc, doc, serverTimestamp, query, where, setDoc, getDoc, getDocFromServer,
   connectFirestoreEmulator,
 } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";

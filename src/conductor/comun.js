@@ -2,7 +2,7 @@
 // estilos y utilidades que comparten todas sus pantallas.
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore";
 
 
 
@@ -31,11 +31,15 @@ export function haversineKm(lat1,lng1,lat2,lng2){
 }
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────
+const SIN_DATOS = [];
 export function useCollection(colName, orderField = "fecha", orgId = null, superAdmin = false, limitN = null) {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // lo recibido va con la consulta de la que viene: al cambiar de consulta no se
+  // enseña lo de la anterior (y sin empresa no se pide nada)
+  const activo = !!(orgId || superAdmin);
+  const clave = `${colName}|${orderField}|${orgId}|${superAdmin}|${limitN}`;
+  const [estado, setEstado] = useState({ clave: null, data: SIN_DATOS });
   useEffect(() => {
-    if (!orgId && !superAdmin) { setData([]); setLoading(false); return; }
+    if (!activo) return;
     // fechaSubida/fecha son número (Date.now()) o Timestamp de servidor
     // siempre presentes desde la creación del doc, así que orderBy no
     // deja fuera documentos antiguos por falta del campo.
@@ -54,21 +58,18 @@ export function useCollection(colName, orderField = "fecha", orgId = null, super
           const bm = bv?.toMillis ? bv.toMillis() : (typeof bv === "number" ? bv : 0);
           return bm - am;
         });
-      setData(docs); setLoading(false);
-    }, err => { console.error(colName, err); setLoading(false); });
+      setEstado({ clave, data: docs });
+    }, err => { console.error(colName, err); setEstado(e => ({ clave, data: e.clave === clave ? e.data : SIN_DATOS })); });
     return () => unsub();
-  }, [colName, orgId, superAdmin, limitN]);
-  return { data, loading };
+  }, [activo, clave, colName, orderField, orgId, limitN]);
+  if (!activo) return { data: SIN_DATOS, loading: false };
+  return estado.clave === clave ? { data: estado.data, loading: false } : { data: SIN_DATOS, loading: true };
 }
 
 export const nuevoComentario = (usuarioId, texto) => ({ usuarioId, texto, fecha: Date.now() });
 
 export async function fbAdd(colName, data) {
   return await addDoc(collection(db, colName), { ...data, fecha: serverTimestamp() });
-}
-
-async function fbSet(colName, id, data) {
-  return await setDoc(doc(db, colName, id), data, { merge: true });
 }
 
 export async function fbUpdate(colName, id, data) {
@@ -404,12 +405,3 @@ export const hhmm=m=>{ if(m==null) return ""; const x=((m%1440)+1440)%1440; retu
 
 // ── INVENTARIO ────────────────────────────────────────────────────
 export const CATS_INV = ["Filtros","Frenos","Neumáticos","Motor","Eléctrico","Carrocería","Fluidos","Otros"];
-
-const PRODUCTOS_DEMO = [
-  {id:"p1",nombre:"Filtro de aceite",referencia:"FO-4521",categoria:"Filtros",unidad:"ud",stock:8,stockMin:3,ubicacion:"Estante A1"},
-  {id:"p2",nombre:"Pastillas de freno delanteras",referencia:"PF-7734",categoria:"Frenos",unidad:"juego",stock:2,stockMin:4,ubicacion:"Estante A2"},
-  {id:"p3",nombre:"Aceite motor 5W-40 (5L)",referencia:"AM-5W40",categoria:"Fluidos",unidad:"bidón",stock:12,stockMin:5,ubicacion:"Estante B1"},
-  {id:"p4",nombre:"Batería 12V 74Ah",referencia:"BA-7412",categoria:"Eléctrico",unidad:"ud",stock:1,stockMin:2,ubicacion:"Estante C1"},
-  {id:"p5",nombre:"Correa de distribución",referencia:"CD-3310",categoria:"Motor",unidad:"ud",stock:4,stockMin:2,ubicacion:"Estante A3"},
-  {id:"p6",nombre:"Líquido de frenos DOT4",referencia:"LF-DOT4",categoria:"Fluidos",unidad:"litro",stock:0,stockMin:3,ubicacion:"Estante B2"},
-];
