@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 vi.mock("./firebase.js", () => ({ db: {}, auth: {}, getUserProfileSafe: vi.fn() }));
-const { coordQuality, isJunkCoord } = await import("./planning.jsx");
+const { coordQuality, isJunkCoord } = await import("./planning/datos.js");
 
 describe("calidad de coordenadas de una capa", () => {
   // 5.000 puntos por Madrid + filas problemáticas del Excel

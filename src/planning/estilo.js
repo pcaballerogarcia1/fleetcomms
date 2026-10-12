@@ -1,0 +1,72 @@
+// Planning de rutas por puntos: colores, fuentes y estilos de mapa.
+
+
+
+
+
+
+
+
+
+
+// ── DESIGN TOKENS ─────────────────────────────────────────────────
+export const C = {
+  bg:      "#0f1623",
+  card:    "#172035",
+  surface2:"#1e2d48",
+  border:  "rgba(88,130,225,0.22)",
+  border2: "rgba(88,130,225,0.40)",
+  blue:    "#5c9bff",
+  blueDim: "#0d2550",
+  blueText:"#b0ccff",
+  cyan:    "#5c9bff",
+  cyanDim: "#0d2550",
+  cyanText:"#b0ccff",
+  green:   "#34d399",
+  greenDim:"#072015",
+  orange:  "#fb923c",
+  red:     "#f87171",
+  amber:   "#fbbf24",
+  text:    "#f0f4f8",
+  muted:   "#8b95a5",
+  dim:     "#3d4d63",
+};
+
+export const font = "'Inter',system-ui,sans-serif";
+
+export const mono = "'JetBrains Mono','Courier New',monospace";
+
+export const LAYER_COLORS = [
+  "#4f8ef7","#fb923c","#34d399","#f87171",
+  "#a78bfa","#fbbf24","#f472b6","#22d3ee",
+];
+
+// ── MAP STYLES ────────────────────────────────────────────────────
+export const MAP_STYLES = [
+  {
+    // CARTO (basemaps.cartocdn.com) empezó a exigir API key en sus tiles
+    // dark_all/light_all — sin ella, cada tile llega con la marca de agua
+    // "API KEY REQUIRED" en vez del mapa. Esri sirve estos "Canvas" (mismo
+    // estilo: base minimalista en gris/oscuro pensada para pintar datos
+    // encima) sin necesidad de key, con el mismo esquema {z}/{y}/{x} que ya
+    // usa "Satélite" un poco más abajo.
+    key: "dark", label: "Oscuro", preview: "#1a2035",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    // El "Base" de Esri es solo el fondo, sin nombres de calles/barrios —
+    // esos vienen en una capa "Reference" aparte pensada para apilar encima.
+    labelsUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+  },
+  {
+    key: "light", label: "Claro", preview: "#f5f5f0",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    labelsUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+  },
+  {
+    key: "satellite", label: "Satélite", preview: "#2d4a2d",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  },
+  {
+    key: "osm", label: "Calles", preview: "#e8d5b0",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  },
+];

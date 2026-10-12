@@ -3,8 +3,8 @@
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { loadLayerMarkers } from "../layer-store.js";
-import { idbGet, isJunkCoord } from "../planning.jsx";
-import { isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering.jsx";
+import { idbGet, isJunkCoord } from "../planning/datos.js";
+import { isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { shiftForDay, timeToMin, turnoWindow } from "../vrp-engine.js";
 
 // ── helpers for loading tasks from planning_layers ────────────────

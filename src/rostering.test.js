@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { workerCodeOnDay, isUnavailable, SHIFTS, SHIFT_META } from "./rostering.jsx";
+import { workerCodeOnDay, isUnavailable, SHIFTS, SHIFT_META } from "./rostering/datos.js";
 
 describe("workerCodeOnDay", () => {
   const grid = { w1: { "5": "M", "6": "L" } };
