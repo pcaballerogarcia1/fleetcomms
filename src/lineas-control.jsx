@@ -6,6 +6,7 @@
 // Los proyectos de rutas por puntos siguen con su Control (control.jsx).
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLeaflet } from "./use-leaflet.js";
+import { GanttVivo } from "./lineas-control-gantt.jsx";
 import { watchRed } from "./lineas-store.js";
 import { watchServiciosProyecto, watchTurnos, watchPosiciones } from "./lineas-servicio-store.js";
 import {
@@ -279,11 +280,13 @@ export function ControlLineasPage({ projectId, orgId }) {
       <div style={{ display: "flex", alignItems: "center", padding: "0 16px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         {pestana("vivo", "En vivo")}
         {pestana("informe", "Informe del día")}
+        {pestana("gantt", "Programado frente a real")}
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 10.5, color: C.dim }}>
           {[["ok", `en hora (−${ADELANTO_OK}/+${RETRASO_OK})`], ["tarde", "tarde"], ["muy", "+10 min"], ["adelantado", "adelantado"]].map(([k, t]) => <span key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 5, background: COLOR_PUNTUALIDAD[k] }} />{t}</span>)}
         </span>
       </div>
-      {vista === "informe" ? <Informe c={c} servicio={servicio} turnos={ordenados} /> : (
+      {vista === "gantt" ? <GanttVivo turnos={ordenados} ahora={ahora} esHoy={esHoy} onElegirTurno={id => { if (id) { setFoco(id); setVista("vivo"); } }} />
+        : vista === "informe" ? <Informe c={c} servicio={servicio} turnos={ordenados} /> : (
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
             <MapaFlota red={estadoRed.red} posiciones={posiciones} ahoraMs={ahoraMs} foco={foco} onElegir={setFoco} />

@@ -245,6 +245,13 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   await expect(page.getByText(/Empezó \d\d:\d\d/)).toBeVisible();
   await page.getByRole("button", { name: "Informe del día" }).click();
   await expect(page.getByRole("button", { name: "Descargar Excel" })).toBeVisible();
+  // programado (gris) frente a real (color): el T1 ya ha empezado y está en el Gantt
+  await page.getByRole("button", { name: "Programado frente a real" }).click();
+  await expect(page.getByText("real (color = puntualidad)")).toBeVisible();
+  await page.getByText("Solo en marcha").click();
+  await expect(page.getByText(/^1 turnos$/)).toBeVisible();
+  await page.getByRole("button", { name: "Autobuses" }).click();
+  await expect(page.getByText(/^Bus \d+$/).first()).toBeVisible();
 
   await m.getByRole("button", { name: "Terminar turno" }).click();
   await expect(m.getByText(/Turno terminado/)).toBeVisible();
