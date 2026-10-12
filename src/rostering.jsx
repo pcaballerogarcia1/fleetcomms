@@ -1162,7 +1162,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       vehicleOff[vid] = Object.entries(byDay || {}).filter(([, c]) => isVehicleUnavailable(c)).map(([d]) => Number(d));
     }
 
-    const res = optimizeRoster({ shifts, workers: optWorkers, fixed, rules, year, month, daysInMonth, vehicleOff });
+    // Líneas regulares: cada turno es del día de su calendario (el servicio del
+    // lunes no se puede hacer el martes), así que no se mueve ninguno de día
+    const reglas = schedRoster.lineas ? { ...rules, moverTurnos: false } : rules;
+    const res = optimizeRoster({ shifts, workers: optWorkers, fixed, rules: reglas, year, month, daysInMonth, vehicleOff });
 
     const newGrid = { ...baseGrid };
     const newAsign = {};
@@ -1224,6 +1227,11 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     }
     return CODE_WINDOWS[code];
   }
+
+  // Líneas regulares: qué calendario circula cada día del mes que se ve
+  // (lo manda el Scheduling de líneas con «Enviar a Rostering»)
+  const calsLineas = schedRoster?.lineas && schedRoster.mes === `${year}-${String(month).padStart(2, "0")}` ? schedRoster.cals || [] : null;
+  const calDeDia = d => (calsLineas ? calsLineas[schedRoster.calDia?.[d] ?? schedRoster.calDia?.[String(d)]] || null : null);
 
   // Cobertura de los turnos del escenario libre en el mes que se ve
   const libreShifts = schedRoster?.modo === "libre" &&
@@ -1318,6 +1326,17 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
             Reglas
           </button>
 
+          {calsLineas && calsLineas.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10, flexWrap: "wrap" }} title="Calendarios de la red de líneas que circulan este mes">
+              {calsLineas.map(c => (
+                <span key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 2, background: c.color }} />
+                  {c.nombre} <span style={{ color: C.dim }}>· {c.turnos} turnos/día · {c.dias} día{c.dias === 1 ? "" : "s"}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
           {libreShifts && (
             <span title="Turnos del escenario (modo libre) con trabajador asignado"
               style={{
@@ -1411,6 +1430,15 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
                       <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#fb923c88" : C.muted }}>
                         {d}
                       </div>
+                      {calsLineas && (() => {
+                        const cal = calDeDia(d);
+                        const deDia = cal ? libreShifts?.filter(sh => sh.d === d) || [] : [];
+                        const cubiertos = deDia.filter(sh => coveredIds.has(sh.id)).length;
+                        return (
+                          <div title={cal ? `${cal.nombre}: ${deDia.length} turnos · ${cubiertos} cubiertos` : "Sin servicio"}
+                            style={{ margin: "2px auto 0", width: CELL_W - 6, height: 5, borderRadius: 2, background: cal ? cal.color : "transparent", border: cal ? "none" : `1px dashed ${C.border}`, opacity: cal && cubiertos < deDia.length ? 0.55 : 1 }} />
+                        );
+                      })()}
                     </th>
                   );
                 })}

@@ -303,6 +303,18 @@ test("crear la red a mano (sin GTFS): paradas en el mapa, ida y vuelta, y el Sch
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
 
+  // Enviar el mes al Rostering: cada día con los turnos de su calendario
+  await page.getByRole("button", { name: "Enviar a Rostering" }).first().click();
+  await expect(page.getByText(/Cada día del mes se cubre con los turnos del calendario/)).toBeVisible();
+  await expect(page.getByText("Laborables", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Enviar a Rostering" }).last().click();
+  await expect(page.getByText(/✓ Enviados \d+ turnos/)).toBeVisible({ timeout: 60_000 });
+  const roster = await leer(`scheduling_roster/${pid}`);
+  expect(roster).toMatchObject({ lineas: true, modo: "libre" });
+  expect(roster.cals.map(c => c.id)).toContain("cal:lab");
+  await page.getByRole("button", { name: "Ir a Rostering" }).click();
+  await expect(page.getByText(/turnos\/día/).first()).toBeVisible({ timeout: 30_000 });
+
   // volver a editar: el diseño sigue ahí
   await page.getByRole("button", { name: "Planning", exact: true }).first().click();
   await page.getByRole("button", { name: "Diseñar red" }).click();

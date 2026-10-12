@@ -3,10 +3,13 @@
 //  · { tipo: "vehiculos" | "turnos", red, cfg, cocheras, params, objetivo } → optimiza un paso de un calendario
 //  · { tipo: "grupos", red, cfg, cocheras, params, opsV } → la partición de turnos de un
 //    calendario (grupos de claves de pieza): «Generar turnos» sin congelar la pantalla
+//  · { tipo: "turnosDia", red, cfg, cocheras, params, manuales } → los turnos de un calendario tal y
+//    como salen en la pantalla (con la partición y los cambios a mano), en pequeño, para el Rostering
 //  · { tipo: "lote", red, cfg, cocheras, params, dias: [{ dia, estrategia }], optimizar, objetivoVehiculos, objetivoTurnos }
 //    → calcula (u optimiza, los dos pasos) varios calendarios y manda el
 //      resumen de cada uno según termina
 import { optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO, esCambioVehiculos, esCambioTurnos } from "./lineas-sched.js";
+import { turnosCompactos } from "./lineas-rostering.js";
 
 self.onmessage = e => {
   const { tipo, red, cfg, params, objetivo, cocheras = [] } = e.data;
@@ -15,6 +18,14 @@ self.onmessage = e => {
       // los mismos vehículos que en la pantalla (con sus cambios a mano) y su partición
       const veh = aplicarCambios(generarVehiculos(red, cfg, params, { cocheras }), e.data.opsV || []).res;
       self.postMessage({ ok: gruposTurnos(veh, params) });
+      return;
+    }
+    if (tipo === "turnosDia") {
+      const ops = e.data.manuales || [];
+      const veh = aplicarCambios(generarVehiculos(red, cfg, params, { cocheras }), ops.filter(esCambioVehiculos)).res;
+      const grupos = (params.metodo ?? PARAMS_DEFECTO.metodo) === "particion" ? gruposTurnos(veh, params) : null;
+      const r = aplicarCambios(generarTurnos(veh, params, { grupos }), ops.filter(esCambioTurnos)).res;
+      self.postMessage({ ok: turnosCompactos(r) });
       return;
     }
     if (tipo === "lote") {

@@ -14,6 +14,8 @@ import { SelectorCalendario, Horarios } from "./lineas-horarios.jsx";
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { logAudit } from "./audit.js";
 import { PublicarServicio } from "./lineas-publicar.jsx";
+import { EnviarRostering } from "./lineas-enviar-rostering.jsx";
+import { turnosCompactos } from "./lineas-rostering.js";
 
 // Mismos colores y tipografías que scheduling.jsx
 const C = {
@@ -649,6 +651,7 @@ const nombreObjetivo = id => OBJETIVOS.find(o => o.id === id)?.nombre.toLowerCas
 export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const [subTab, setSubTab] = useState("escenario");
   const [publicando, setPublicando] = useState(false);
+  const [aRostering, setARostering] = useState(false);
   const [estado, setEstado] = useState({ red: null, cargando: true });
   const [cfg, setCfg] = useState({});
   const [guardados, setGuardados] = useState(undefined);
@@ -866,6 +869,18 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
     return !n || window.confirm(`Se perderán ${n} cambio${n > 1 ? "s" : ""} a mano de ${f === "vehiculos" ? "vehículos y turnos" : "turnos"}. ¿Seguir?`);
   };
 
+  // Rostering: los turnos de un calendario tal y como salen aquí (el de pantalla si está al día; si no, se calculan aparte)
+  const alDia = d => { const c = cache[d]; return !!(c?.res?.turnos && c.clave === claveEscenario(paramsPara(d), cfgTxt)); };
+  const estadoParaRoster = d => (alDia(d) ? "pantalla" : porCalendario[d]?.clave ? "guardado" : "nuevo");
+  function turnosParaRoster(d) {
+    if (alDia(d)) return Promise.resolve(turnosCompactos(cache[d].res));
+    return new Promise((resolve, reject) => {
+      const w = new Worker(new URL("./lineas-opt.worker.js", import.meta.url), { type: "module" });
+      w.onmessage = e => { w.terminate(); if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.ok); };
+      w.onerror = e => { w.terminate(); reject(new Error(e.message || "error en el cálculo")); };
+      w.postMessage({ tipo: "turnosDia", red, cfg, cocheras, params: paramsPara(d), manuales: cache[d]?.manuales ?? porCalendario[d]?.manuales ?? [] });
+    });
+  }
   function nuevoWorker() {
     workerRef.current?.terminate();
     const w = new Worker(new URL("./lineas-opt.worker.js", import.meta.url), { type: "module" });
@@ -1067,6 +1082,10 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
                 Publicar a Control
               </button>
+              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al Rostering: cada día, los del calendario que circula" style={{ ...btnSec, opacity: orgId ? 1 : 0.4 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                Enviar a Rostering
+              </button>
             </>}
             <div style={{ flex: 1 }} />
             <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" style={{ width: 130, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
@@ -1093,6 +1112,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>
           )}
+          {aRostering && red && <EnviarRostering red={red} projectId={projectId} orgId={orgId} estadoDe={estadoParaRoster} turnosDe={turnosParaRoster} onCerrar={() => setARostering(false)} />}
           {publicando && res?.turnos && <PublicarServicio red={red} res={res} dia={dia} cocheras={cocheras} projectId={projectId} orgId={orgId} proyecto={proyecto} sesion={sesion}
             avisoManual={calculando || opt.estado === "corriendo" ? "Hay un cálculo en marcha: espera a que termine para publicar lo último." : null} onCerrar={() => setPublicando(false)} />}
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
