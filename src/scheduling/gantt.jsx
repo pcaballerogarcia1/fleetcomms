@@ -10,6 +10,7 @@ import {
   TABLE_COLS, TABLE_W, ZOOM_STEPS, rowName, turnoCorto,
 } from "./gantt-comun.js";
 import { ClockBadge } from "./kpi-bar.jsx";
+import { FilaLienzo } from "./gantt-lienzo.jsx";
 
 export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null }) {
   // Vista "Tabla" (columnas de datos) o "Compacta" (solo nombre y resumen)
@@ -48,15 +49,26 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
   // vuelve lentísima. Solo se pinta el contenido real de las filas
   // visibles (+ margen); el resto deja un hueco vacío de la misma altura
   // para que el scroll y el tamaño total no cambien.
+  // Lo mismo en horizontal: de cada fila solo se pintan las paradas de las
+  // horas que se ven (+ margen). Un día entero de 150 rutas eran ~45.000
+  // elementos y cada botón (zoom, ordenar…) tardaba segundos en repintar.
+  // La posición se guarda en minutos (no en píxeles) para que al hacer zoom
+  // la ventana siga siendo válida; y redondeada a filas / medias horas para
+  // no repintar en cada píxel de scroll.
   const ganttScrollRef = useRef(null);
-  const [viewport, setViewport] = useState({ top: 0, height: 800 });
+  const [viewport, setViewport] = useState({ top: 0, height: 800, leftMin: 0, width: 1600 });
   const handleGanttScroll = e => {
-    setViewport({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight });
+    const el = e.currentTarget;
+    const top = Math.floor(el.scrollTop / ROW_H) * ROW_H;
+    const leftMin = Math.floor(el.scrollLeft / pxPerMin / 30) * 30;
+    setViewport(v => (v.top === top && v.height === el.clientHeight && v.leftMin === leftMin && v.width === el.clientWidth
+      ? v : { top, height: el.clientHeight, leftMin, width: el.clientWidth }));
   };
   useEffect(() => {
-    if (ganttScrollRef.current) setViewport(v => ({ ...v, height: ganttScrollRef.current.clientHeight }));
+    const el = ganttScrollRef.current;
+    if (el) setViewport(v => ({ ...v, height: el.clientHeight, width: el.clientWidth }));
   }, []);
-  const ROW_BUFFER = 10;
+  const ROW_BUFFER = 4;
   const firstVisibleRow = Math.max(0, Math.floor(viewport.top / ROW_H) - ROW_BUFFER);
   const lastVisibleRow  = Math.ceil((viewport.top + viewport.height) / ROW_H) + ROW_BUFFER;
 
@@ -316,6 +328,22 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
 
   const zoomLabel = pxPerMin >= 1 ? `${pxPerMin}×` : `${pxPerMin}×`;
 
+  // Minutos del día que se pintan: los que se ven y, a cada lado, otro tanto
+  const spanMin = Math.max(60, viewport.width / pxPerMin);
+  const winLo = viewport.leftMin - spanMin / 2;
+  const winHi = viewport.leftMin + 1.5 * spanMin;
+  // Las líneas de horas y medias horas de cada fila, como fondo (antes, un
+  // elemento por línea y fila)
+  const hourPx = 60 * tickStep * pxPerMin;
+  const subPx = subMin * pxPerMin;
+  // Paradas estrechas (zoom 2× o menos): cada fila se dibuja en un lienzo
+  const usarLienzo = pxPerMin <= 2;
+  const tareasDelDia = useMemo(() => {
+    const off = selectedDay * 1440;
+    return new Map(rows.map(r => [r._id || r.id, (r.assignments || []).filter(a => a._start >= off && a._start < off + maxShiftEnd)]));
+  }, [rows, selectedDay, maxShiftEnd]);
+  const gridBg = `repeating-linear-gradient(90deg, rgba(88,130,225,0.11) 0 1px, transparent 1px ${hourPx}px), repeating-linear-gradient(90deg, rgba(88,130,225,0.035) 0 1px, transparent 1px ${subPx}px)`;
+
   const leftW = vista === "tabla" ? TABLE_W : labelW;
   const fmtCell = (k, m) => {
     if (!m.activo) return "—";
@@ -528,10 +556,11 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
               <div
                 style={{
                   position: "relative", width: chartW, flexShrink: 0,
-                  background: dropRowId === (row._id || row.id) && dragging
+                  backgroundColor: dropRowId === (row._id || row.id) && dragging
                     ? `${C.blue}18`
                     : ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
-                  transition: "background .1s",
+                  backgroundImage: gridBg,
+                  transition: "background-color .1s",
                 }}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropRowId(row._id || row.id); }}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropRowId(null); }}
@@ -570,12 +599,6 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   attemptMove(task, fromRow, row, best, dayOffset);
                 }}
               >
-                {ticks.map(({ h, x }) => (
-                  <div key={h} style={{ position: "absolute", left: x, top: 0, bottom: 0, width: 1, background: C.border, opacity: .5 }} />
-                ))}
-                {subTicks.map(({ x }, i) => (
-                  <div key={i} style={{ position: "absolute", left: x, top: 0, bottom: 0, width: 1, background: C.border, opacity: .15 }} />
-                ))}
                 {/* Midnight marker for night shifts */}
                 {hasNightShift && (
                   <div style={{ position: "absolute", left: (1440 - selectedDay * 1440 < 0 ? 0 : (1440 - selectedDay * 1440)) * pxPerMin, top: 0, bottom: 0, width: 2, background: `${C.blue}55`, pointerEvents: "none", zIndex: 2 }} />
@@ -596,10 +619,19 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   ));
                 })()}
 
-              {(row.assignments || []).filter(task => {
+              {usarLienzo ? (
+                <FilaLienzo tareas={tareasDelDia.get(row._id || row.id) || []} dayOffset={selectedDay * 1440} pxPerMin={pxPerMin} chartW={chartW}
+                  activa={stackPanel?.task} arrastrada={dragging?.task}
+                  onAbrir={task => openTaskPanel(task, row)}
+                  onTooltip={t => { if (!dragging) setTooltip(t ? { ...t, row } : null); }}
+                  onArrastrar={task => setDragging({ task, fromRowId: row._id || row.id })}
+                  onSoltar={() => setDragging(null)} />
+              ) : (row.assignments || []).map((task, ti) => {
                   const dayOffset = selectedDay * 1440;
-                  return task._start >= dayOffset && task._start < dayOffset + maxShiftEnd;
-                }).map((task, ti) => {
+                  if (!(task._start >= dayOffset && task._start < dayOffset + maxShiftEnd)) return null;
+                  // fuera de las horas que se ven: no se pinta (la parada abierta, siempre)
+                  const t0 = task._start - dayOffset;
+                  if ((t0 + (task.duracion || 15) < winLo || t0 > winHi) && stackPanel?.task !== task && dragging?.task !== task) return null;
                   const left = (task._start - selectedDay * 1440) * pxPerMin;
                   const dur  = task.duracion || 15;
                   const w    = Math.max(dur * pxPerMin - 2, 3);
@@ -710,18 +742,17 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                       }}
                     >
                       {hasWindow && <ClockBadge />}
-                      <div style={{ position: "absolute", inset: 0, borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", gap: 3, padding: "0 4px" }}>
-                        {w >= 14 && (
-                          <>
-                            <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
-                            {w >= 22 && (
-                              <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
-                                {w >= 60 ? label : label.slice(0, Math.max(2, Math.floor(w / 7)))}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {/* las paradas estrechas (lo normal con el día entero a la vista) van sin nada dentro */}
+                      {w >= 14 && (
+                        <div style={{ position: "absolute", inset: 0, borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", gap: 3, padding: "0 4px" }}>
+                          <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
+                          {w >= 22 && (
+                            <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                              {w >= 60 ? label : label.slice(0, Math.max(2, Math.floor(w / 7)))}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
