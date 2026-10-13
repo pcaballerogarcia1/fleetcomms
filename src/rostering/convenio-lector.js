@@ -174,5 +174,11 @@ export function leerConvenio(paginas) {
     t = t.replace(/\s+c[oó]digo de convenio.*$/i, "").trim();
     meta.nombre = t.charAt(0).toUpperCase() + t.slice(1);
   }
-  return { reglas, meta, sinTexto };
+  // Convenios estatales que no fijan cifras y las dejan a los de ámbito
+  // inferior (provinciales) o al Estatuto: se avisa en vez de dar 0 sin más
+  const remite = {
+    inferior: /convenios? colectivos? (?:sectoriales|provinciales|subsectoriales)[^.;]{0,80}?(?:ambito inferior|provincial)|(?:establecida|fijada|que se establezca) [^.;]{0,60}?convenios? [^.;]{0,60}?ambito inferior/.test(plano),
+    estatuto: /(?:establecid[oa]s?|previst[oa]s?|dispuesto) en el estatuto de los trabajadores/.test(plano),
+  };
+  return { reglas, meta, sinTexto, remite };
 }

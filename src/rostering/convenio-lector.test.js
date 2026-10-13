@@ -79,3 +79,11 @@ describe("la frase citada", () => {
     expect(f).toContain("1.712 horas");
   });
 });
+
+describe("convenios que remiten a otros", () => {
+  it("un estatal que deja la jornada a los provinciales y los descansos al Estatuto se reconoce", () => {
+    const x = leerConvenio(["Artículo 46. La duración máxima de la jornada ordinaria de trabajo para el sector del metal será, en cómputo anual, la establecida actualmente en los convenios colectivos sectoriales o subsectoriales de ámbito inferior. Se deberá respetar los límites en materia de jornada máxima diaria y descansos establecidos en el Estatuto de los Trabajadores."]);
+    expect(Object.keys(x.reglas)).toEqual([]);
+    expect(x.remite).toEqual({ inferior: true, estatuto: true });
+  });
+});

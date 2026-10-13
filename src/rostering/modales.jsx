@@ -187,6 +187,12 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
                     Encontrado en el convenio · {Object.keys(lectura.reglas).length} de {RULE_FIELDS.length} reglas
                   </div>
                   <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Revisa cada una (la frase es la del convenio) y desmarca lo que no sea así.</div>
+                  {Object.keys(lectura.reglas).length < 3 && (lectura.remite?.inferior || lectura.remite?.estatuto) && (
+                    <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, background: `${C.blue}14`, borderRadius: 6, padding: "8px 10px", marginBottom: 8 }}>
+                      Este convenio casi no fija cifras de jornada ni descansos: {lectura.remite.inferior ? "las deja a los convenios de ámbito inferior (provinciales o de empresa)" : ""}{lectura.remite.inferior && lectura.remite.estatuto ? " y " : ""}{lectura.remite.estatuto ? "se remite al Estatuto de los Trabajadores" : ""}.
+                      Sube el convenio provincial que os aplica, o usa <b>Rellenar mínimos del Estatuto</b>.
+                    </div>
+                  )}
                   {[...Object.entries(lectura.meta).map(([k, v]) => ({ k, nombre: META_CONVENIO[k], valor: v, ahora: cv[k] })),
                     ...RULE_FIELDS.filter(f => lectura.reglas[f.key]).map(f => ({ k: f.key, nombre: f.label, valor: `${lectura.reglas[f.key].valor} ${f.suffix}`.trim(), ahora: r[f.key] ? `${r[f.key]}` : "", x: lectura.reglas[f.key] }))
                   ].map(it => (
