@@ -42,7 +42,8 @@ function TiposTurno({ tipos, onChange }) {
               <th style={th}>Usar</th><th style={th}>Nombre</th><th style={th}>Empieza entre</th>
               <th style={th}>Trabajo mínimo</th><th style={th}>Trabajo máximo</th><th style={th}>Amplitud máxima</th><th style={th}>Partido</th>
               <th style={th} title="El hueco sin pagar del partido no puede ser más largo (en blanco: sin límite)">Split máximo</th>
-              <th style={th} title="Como mucho tantos turnos de este tipo al día (en blanco: sin límite)">Máximo al día</th><th style={th} />
+              <th style={th} title="Como mucho tantos turnos de este tipo al día (en blanco: sin límite)">Máximo al día</th>
+              <th style={th} title="Si un conductor de este tipo de turno puede cambiar de autobús durante la jornada (sin marcar: hace todo el turno en el mismo autobús)">Cambio de bus</th><th style={th} />
             </tr>
           </thead>
           <tbody>
@@ -61,6 +62,12 @@ function TiposTurno({ tipos, onChange }) {
                     onChange={e => cambiar(i, { maximo: e.target.value === "" ? null : Math.max(1, parseInt(e.target.value) || 1) })}
                     style={{ ...estiloCampo, width: 84 }} />
                 </td>
+                <td style={td}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 11, color: C.muted }}>
+                    <input type="checkbox" checked={x.cambiosBus !== 0} onChange={e => cambiar(i, { cambiosBus: e.target.checked ? null : 0 })} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} />
+                    {x.cambiosBus !== 0 ? "permite" : "no"}
+                  </label>
+                </td>
                 <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
               </tr>
             ))}
@@ -72,7 +79,7 @@ function TiposTurno({ tipos, onChange }) {
           style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font }}>+ Añadir tipo</button>
         <button onClick={() => onChange(TIPOS_TURNO_DEFECTO)} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Volver a los de por defecto</button>
         <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
-          Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja y aún tiene sitio («Máximo al día»). Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). «Split máximo»: el hueco sin pagar más largo que se permite en el partido. Split máximo y máximo al día en blanco: sin límite. Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
+          Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja y aún tiene sitio («Máximo al día»). Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). «Split máximo»: el hueco sin pagar más largo que se permite en el partido. «Cambio de bus» sin marcar: el conductor hace todo el turno en el mismo autobús. Split máximo y máximo al día en blanco: sin límite. Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
         </span>
       </div>
     </div>
@@ -156,9 +163,14 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {row("Pieza máxima", numInput("piezaMax", "min de relevo a relevo"))}
           {row("Pieza mínima", numInput("piezaMin", "min (no se releva antes)"))}
           {row("Piezas por turno", numInput("maxPiezas", "como mucho"))}
-          {row("Cambios de autobús por turno", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
-            <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = todo el turno en el mismo autobús)</span></div>)}
+          {conTipos
+            ? <div style={{ fontSize: 11, color: C.muted, margin: "0 0 9px", lineHeight: 1.5 }}>Si un turno puede cambiar de autobús: lo marca cada <b style={{ color: C.text }}>tipo de turno</b> (abajo, «Cambio de bus»).</div>
+            : row("Cambios de autobús por turno", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
+              <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = siempre el mismo autobús)</span></div>)}
+          {row("Cambios de autobús en todo el escenario", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <CampoNumero valor={p.maxCambiosBusTotal} defecto={PARAMS_DEFECTO.maxCambiosBusTotal} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBusTotal", v)} />
+            <span style={{ fontSize: 11, color: C.dim }}>como mucho, sumando todos los turnos del día (vacío = sin límite)</span></div>)}
           {row("Relevo en la misma cabecera", numInput("relevoMin", "min"))}
           {row("Ir a otra cabecera", numInput("desplazamiento", "min como mínimo; si está lejos, lo que se tarde (distancia a la velocidad de los vacíos)"))}
           {sub("Descanso en la jornada continuada")}

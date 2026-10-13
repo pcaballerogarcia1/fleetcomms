@@ -52,3 +52,23 @@ describe("cambios de autobús por turno", () => {
     expect(cerrarTurno({ piezas: dos }, p0).avisos.some(a => /cambios de autobús/.test(a))).toBe(true);
   });
 });
+
+describe("cambio de autobús según el tipo de turno", () => {
+  const tipo = (id, partido, cambiosBus) => ({ id, nombre: id, activo: true, desde: 0, hasta: 1439, trabajoMin: 60, trabajoMax: 600, amplitudMax: 900, partido, cambiosBus });
+  const partido = [pieza(1, 360, 600, "A", "A", A, A), pieza(2, 900, 1140, "A", "A", A, A)]; // 5 h de hueco, otro autobús
+  const seguido = [pieza(1, 360, 480, "A", "A", A, A), pieza(2, 490, 600, "A", "A", A, A)];
+  it("el partido que permite cambio de bus puede volver en otro autobús; el seguido que no, no", () => {
+    const p = { ...P, tiposTurno: [tipo("continuo", false, 0), tipo("partido", true, null)] };
+    const t = cerrarTurno({ piezas: partido }, p);
+    expect(t.tipo).toBe("partido");
+    expect(t.cambiosBus).toBe(1);
+    // seguido con cambio de autobús: el único continuo no lo permite → sin tipo y con aviso
+    const c = cerrarTurno({ piezas: seguido }, p);
+    expect(c.tipo).toBeNull();
+    expect(cerrarTurno({ piezas: [seguido[0], { ...seguido[1], vehiculo: 1 }] }, p).tipo).toBe("continuo"); // en el mismo autobús, sí
+  });
+  it("si ningún tipo permite cambiar, el partido tampoco puede", () => {
+    const p = { ...P, tiposTurno: [tipo("partido", true, 0)] };
+    expect(validar(partido, p)).toBeNull();
+  });
+});

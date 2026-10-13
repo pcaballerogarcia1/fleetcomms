@@ -647,3 +647,17 @@ describe("optimizar todo junto (vehículos y turnos a la vez)", () => {
     expect(con.vehiculos.length).toBeGreaterThanOrEqual(sin.vehiculos.length);
   });
 });
+
+describe("cambios de autobús en todo el escenario", () => {
+  it("el total no pasa del máximo (partición y voraz)", async () => {
+    const { gruposTurnos } = await import("./lineas-sched/turnos.js");
+    for (const metodo of ["particion", "voraz"]) {
+      const p = { dia: "laborable", metodo, piezaMax: 90, tiposTurno: [], maxCambiosBusTotal: 0 };
+      const v = generarVehiculos(RED, {}, p);
+      const r = generarTurnos(v, p, { grupos: metodo === "particion" ? gruposTurnos(v, p) : null });
+      expect(r.kpis.cambiosBus).toBe(0);
+      const libre = generarTurnos(v, { ...p, maxCambiosBusTotal: null }, { grupos: metodo === "particion" ? gruposTurnos(v, { ...p, maxCambiosBusTotal: null }) : null });
+      expect(libre.kpis.turnos).toBeLessThanOrEqual(r.kpis.turnos);
+    }
+  });
+});

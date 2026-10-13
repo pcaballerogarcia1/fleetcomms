@@ -44,6 +44,7 @@ export function kpisServicio(viajes, vehiculos, turnosODeNull, autobuses = []) {
     turnosDosPiezas: turnos.filter(t => t.piezas.length >= 2).length, // con relevo (dos o más piezas)
     piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
     turnosPartidos: turnos.filter(t => t.partidos > 0).length,
+    cambiosBus: sinTurnos ? null : turnos.reduce((s, t) => s + (t.cambiosBus || 0), 0),
     turnosConAviso: sinTurnos ? null : turnos.filter(t => t.avisos.length).length,
     turnosPorTipo: turnos.reduce((o, t) => { const k = t.tipoNombre || (t.tipo === null ? "Sin tipo" : null); if (k) o[k] = (o[k] || 0) + 1; return o; }, {}),
     horasPagadas: sinTurnos ? null : pagado / 60,

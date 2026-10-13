@@ -37,6 +37,7 @@ export function entrePiezas(a, b, p) {
   return { sigue, cambio, viaje, hace: viaje, km };
 }
 const conLimiteCambios = p => p.maxCambiosBus != null && p.maxCambiosBus !== "" && p.maxCambiosBus >= 0;
+const conLimiteTotal = p => p.maxCambiosBusTotal != null && p.maxCambiosBusTotal !== "" && p.maxCambiosBusTotal >= 0;
 
 function cortarPiezas(vehiculos, p, find, geo = null) {
   const piezas = [];
@@ -105,6 +106,7 @@ export function encajaTipo(t, tipo, final = false) {
   if (t.fin - t.inicio > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
   if (t.partidos > (tipo.partido ? 1 : 0)) return false;
   if (t.partidos && tipo.splitMax > 0 && (t.split || 0) > tipo.splitMax) return false; // hueco del partido demasiado largo
+  if (tipo.cambiosBus != null && (t.cambios || 0) > tipo.cambiosBus) return false; // este tipo no permite (tantos) cambios de autobús
   if (final && tipo.partido && !t.partidos) return false; // un partido tiene que tener su hueco (sin él, es otro tipo)
   return !final || t.trabajo >= tipo.trabajoMin;
 }
@@ -142,10 +144,10 @@ function anadir(t, pz, p) {
     const e = entrePiezas(ultima, pz, p);
     if (hueco < e.hace) return null;
     if (t.piezas.length >= p.maxPiezas) return null;
-    if (e.cambio) { cambios++; if (conLimiteCambios(p) && cambios > p.maxCambiosBus) return null; }
     viaje = e.viaje; // ir a la otra cabecera: trabajo, no pausa
     partido = hueco - viaje >= p.huecoNoPagado;
     if (partido && t.partidos >= p.maxPartidos) return null;
+    if (e.cambio) { cambios++; if (!p._tipos && conLimiteCambios(p) && cambios > p.maxCambiosBus) return null; }
   }
   const inicio = t ? t.inicio : pz.inicio;
   if (pz.fin - inicio > p.amplitudMax) return null;
@@ -191,7 +193,7 @@ export function asignarTipos(turnos, pOriginal) {
     t.tipo = tipo?.id || null; t.tipoNombre = tipo?.nombre || null;
     if (tipo) usados.set(tipo.id, (usados.get(tipo.id) || 0) + 1);
     else if (posibles.length) t.avisos.push(`Ya hay el máximo de turnos de tipo ${posibles.map(x => `${x.nombre} (${x.maximo})`).join(" / ")}`);
-    else t.avisos.push(`No encaja en ningún tipo de turno: ${hm(t.trabajo)} de trabajo, de ${reloj(t.inicio)} a ${reloj(t.fin)}${t.partidos ? `, partido con ${hm(t.split || 0)} de hueco` : ""}`);
+    else t.avisos.push(`No encaja en ningún tipo de turno: ${hm(t.trabajo)} de trabajo, de ${reloj(t.inicio)} a ${reloj(t.fin)}${t.partidos ? `, partido con ${hm(t.split || 0)} de hueco` : ""}${t.cambios ? `, ${t.cambios} cambio${t.cambios > 1 ? "s" : ""} de autobús` : ""}`);
   }
   return turnos;
 }
@@ -218,6 +220,8 @@ function turnosPorParticion(piezas, p) {
   const splitMax = partidos.length && partidos.every(x => x.splitMax > 0) ? Math.max(...partidos.map(x => x.splitMax)) : Infinity;
   const grupos = particionTurnos(piezas, {
     valida: l => validar(l, p), coste: (e, l) => costeTurno(e, l, p),
+    // cambios de autobús de todo el escenario, como mucho
+    ...(conLimiteTotal(p) ? { recurso: { usa: e => e.cambios || 0, max: p.maxCambiosBusTotal } } : {}),
     ...(conTope ? { topes, tipoDe: e => p._tipos.findIndex(x => encajaTipo(e, x, true)) } : {}),
     huecoMax: splitMax,
     extiende: (e, pz) => { const x = anadir(e, pz, p); return x && { ...x, piezas: [...e.piezas, pz] }; },
@@ -275,22 +279,26 @@ export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo =
   // horas ("llena"); si no cabe en ninguno, entra un conductor nuevo.
   let activos = [];
   const deLaPieza = new Map(); // pieza → turno (para seguir en el mismo autobús)
+  // cambios de autobús de todo el escenario: lo que llevan los turnos hechos
+  const topeTotal = conLimiteTotal(p) ? p.maxCambiosBusTotal : Infinity;
+  let usados = 0;
+  const cabeTotal = (antes, despues) => usados - (antes?.cambios || 0) + (despues?.cambios || 0) <= topeTotal;
   for (let i = 0; i < (p.metodo === "voraz" ? piezas.length : 0); i++) {
     const pz = piezas[i];
     if (i % 200 === 0) activos = activos.filter(t => t.inicio + p.amplitudMax > pz.inicio);
     let mejor = null, nuevo = null, nota = -Infinity;
     const previo = pz.previa && deLaPieza.get(pz.previa);
-    if (previo) { const x = anadir(previo, pz, p); if (x) { mejor = previo; nuevo = x; nota = Infinity; } }
+    if (previo) { const x = anadir(previo, pz, p); if (x && cabeTotal(previo, x)) { mejor = previo; nuevo = x; nota = Infinity; } }
     if (!mejor) {
       for (const t of activos) {
         if (t.fin > pz.inicio || t.inicio + p.amplitudMax < pz.fin) continue;
         const x = anadir(t, pz, p);
-        if (!x) continue;
+        if (!x || !cabeTotal(t, x)) continue;
         const n = p.emparejar === "llena" ? x.trabajo * 1000 - (pz.inicio - t.fin) : -(pz.inicio - t.fin) * 1000 + x.trabajo;
         if (n > nota) { nota = n; mejor = t; nuevo = x; }
       }
     }
-    if (mejor) { Object.assign(mejor, nuevo); mejor.piezas.push(pz); deLaPieza.set(pz, mejor); continue; }
+    if (mejor) { usados += (nuevo.cambios || 0) - (mejor.cambios || 0); Object.assign(mejor, nuevo); mejor.piezas.push(pz); deLaPieza.set(pz, mejor); continue; }
     const t0 = anadir(null, pz, p);
     const t = t0 ? { ...t0, piezas: [pz] } : { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0 };
     turnos.push(t); activos.push(t); deLaPieza.set(pz, t);
@@ -302,6 +310,7 @@ export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo =
   const cortos = [...turnos].filter(t => t.trabajo < p.jornadaMax * 0.6 || (p._tipos && !tipoDeTurno(t, p))).sort((a, b) => a.trabajo - b.trabajo);
   const quitados = new Set();
   let intentos = 0;
+  let totalCambios = turnos.reduce((s, t) => s + (t.cambios || 0), 0);
   for (const c of cortos) {
     if (quitados.has(c) || intentos > 400000) continue;
     const cambios = []; // [turno, estado anterior]
@@ -317,14 +326,16 @@ export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo =
         const x = validar([...t.piezas, pz], p);
         // con tipos de turno, el turno que recibe la pieza tiene que seguir encajando en uno
         if (x && p._tipos && !tipoDeTurno(x, p)) continue;
+        if (x && totalCambios - (t.cambios || 0) + (x.cambios || 0) > topeTotal) continue; // se pasaría del total de cambios de autobús
         if (x && (!estado || x.trabajo > estado.trabajo)) { destino = t; estado = x; }
       }
       if (!destino) { ok = false; break; }
       cambios.push([destino, { ...destino }]);
+      totalCambios += (estado.cambios || 0) - (destino.cambios || 0);
       Object.assign(destino, estado);
     }
-    if (ok) quitados.add(c);
-    else for (const [t, antes] of cambios.reverse()) Object.assign(t, antes);
+    if (ok) { quitados.add(c); totalCambios -= c.cambios || 0; }
+    else for (const [t, antes] of cambios.reverse()) { totalCambios += (antes.cambios || 0) - (t.cambios || 0); Object.assign(t, antes); }
     if (ok) lista = lista.filter(t => t !== c);
   }
   const finales = asignarTipos(turnos.filter(t => !quitados.has(t)).map(t => cerrarTurno({ piezas: [...t.piezas].sort((a, b) => a.inicio - b.inicio) }, p)), p);
@@ -346,7 +357,7 @@ export function cerrarTurno(t, pOriginal) {
   t.trabajo = t.duracion - sinPagar.reduce((s, h) => s + h, 0);
   t.partidos = sinPagar.length;
   t.split = Math.max(0, ...sinPagar);
-  t.cambiosBus = entre.filter(e => e.cambio).length;
+  t.cambiosBus = t.cambios = entre.filter(e => e.cambio).length;
   t.desplazamientos = entre.filter(e => e.viaje > 0).map(e => ({ inicio: e.a.fin, fin: e.a.fin + e.viaje, km: e.km, desde: e.a.d, hasta: e.b.o }));
   t.conduccion = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
   t.vehiculos = [...new Set(t.piezas.map(pz => pz.vehiculo))];
@@ -379,7 +390,7 @@ export function cerrarTurno(t, pOriginal) {
     if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
   }
   if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
-  if (conLimiteCambios(p) && t.cambiosBus > p.maxCambiosBus) t.avisos.push(`${t.cambiosBus} cambios de autobús: más de ${p.maxCambiosBus}`);
+  if (!p._tipos && conLimiteCambios(p) && t.cambiosBus > p.maxCambiosBus) t.avisos.push(`${t.cambiosBus} cambios de autobús: más de ${p.maxCambiosBus}`);
   for (const e of entre) {
     if (e.hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(e.a.inicio)} y las ${reloj(e.b.inicio)} se solapan`); continue; }
     if (e.hueco < e.hace) t.avisos.push(`Solo ${e.hueco} min para ${e.viaje ? `ir a otra cabecera${e.km ? ` (${String(e.km).replace(".", ",")} km)` : ""}` : "relevar"} a las ${reloj(e.b.inicio)} (hacen falta ${e.hace})`);

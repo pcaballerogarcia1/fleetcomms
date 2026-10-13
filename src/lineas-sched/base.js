@@ -39,7 +39,8 @@ export const PARAMS_DEFECTO = {
   huecoNoPagado: 60,    // min: un hueco entre piezas desde este largo no se paga (jornada partida)
   relevoMin: 5,         // min para relevar en la misma cabecera
   desplazamiento: 20,   // min como mínimo para ir a otra cabecera a coger otra pieza (si está lejos, lo que se tarde: distancia a la velocidad de los vacíos)
-  maxCambiosBus: null,  // cambios de autobús por turno como mucho (null = sin límite; 0 = todo el turno en el mismo)
+  maxCambiosBus: null,  // cambios de autobús por turno como mucho, sin tipos de turno (null = sin límite; 0 = todo el turno en el mismo). Con tipos: tipo.cambiosBus
+  maxCambiosBusTotal: null, // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
