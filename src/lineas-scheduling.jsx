@@ -24,7 +24,7 @@ import {
   nombreObjetivo, nombreTipo, num, sinCampos, soloCampos,
 } from "./lineas-scheduling/comun.js";
 import { Gantt } from "./lineas-scheduling/gantt.jsx";
-import { PanelOptimizar, ResumenCalendarios, SelectorLineas } from "./lineas-scheduling/paneles.jsx";
+import { PanelOptimizar, PorQueSinTipo, ResumenCalendarios, SelectorLineas } from "./lineas-scheduling/paneles.jsx";
 import { Restricciones } from "./lineas-scheduling/restricciones.jsx";
 
 export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
@@ -537,6 +537,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
               {" "}Prueba «Optimizar» o relaja las restricciones.
             </div>
           )}
+          {res?.turnos && <PorQueSinTipo res={res} p={params} onRestricciones={() => setShowC(true)} />}
 
           {res && !res.conCocheras && (
             <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(251,191,36,0.08)", borderBottom: "1px solid rgba(251,191,36,0.3)" }}>

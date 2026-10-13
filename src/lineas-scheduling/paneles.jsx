@@ -1,7 +1,7 @@
 // Scheduling de líneas: Optimizar, el resumen de calendarios y el selector de líneas.
 import { useState } from "react";
 import { TIPOS_DIA } from "../gtfs-red.js";
-import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstrategia } from "../lineas-sched.js";
+import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstrategia, porQueSinTipo } from "../lineas-sched.js";
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lineas-horarios-util.js";
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
 
@@ -147,6 +147,33 @@ function OptimizarJunto({ p, opt, ocupado, bloqueado, onOptimizar, onAplicar, on
             {orientativos && <> Con precios orientativos ({num(pr.costeVehiculoDia)} €/autobús·día, {String(pr.costeHora).replace(".", ",")} €/h, {String(pr.costeKm).replace(".", ",")} €/km, {num(pr.costeCambioBus)} € por cambio de autobús): <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 10.5, fontFamily: font }}>pon los tuyos en Restricciones</button>.</>}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Por qué hay turnos sin tipo ─────────────────────────────────────────
+export function PorQueSinTipo({ res, p, onRestricciones }) {
+  const [abierto, setAbierto] = useState(true);
+  const d = res?.turnos ? porQueSinTipo(res.turnos, p, res.kpis) : null;
+  if (!d) return null;
+  return (
+    <div style={{ padding: "7px 16px", fontSize: 11.5, color: C.text, background: "rgba(251,191,36,0.07)", borderBottom: "1px solid rgba(251,191,36,0.3)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ color: C.amber, fontWeight: 700 }}>⚠ {num(d.total)} turno{d.total > 1 ? "s" : ""} sin tipo</span>
+        <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11.5, fontFamily: font }}>{abierto ? "ocultar por qué" : "ver por qué"}</button>
+        <button onClick={onRestricciones} style={{ marginLeft: "auto", background: "none", border: `1px solid ${C.border2}`, borderRadius: 5, padding: "2px 9px", color: C.blueText, cursor: "pointer", fontSize: 11, fontFamily: font }}>Cambiar en Restricciones</button>
+      </div>
+      {abierto && (
+        <ul style={{ margin: "6px 0 2px", paddingLeft: 18, lineHeight: 1.6, maxHeight: 150, overflowY: "auto" }}>
+          {d.cambiosAgotados != null && (
+            <li><b>Se han gastado los {num(d.cambiosAgotados)} cambios de autobús del escenario</b>: los trozos sueltos de un autobús no se pueden juntar con los de otro. <span style={{ color: C.muted }}>→ Sube «Cambios de autobús en todo el escenario».</span></li>
+          )}
+          {d.grupos.slice(0, 6).map((g, i) => (
+            <li key={i}><b>{num(g.n)}</b> {g.texto}. <span style={{ color: C.muted }}>→ {g.consejo.charAt(0).toUpperCase() + g.consejo.slice(1)}.</span></li>
+          ))}
+          {d.grupos.length > 6 && <li style={{ color: C.muted }}>…y {num(d.grupos.slice(6).reduce((s, g) => s + g.n, 0))} más por otros motivos.</li>}
+        </ul>
       )}
     </div>
   );

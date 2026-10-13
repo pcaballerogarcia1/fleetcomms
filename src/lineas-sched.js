@@ -49,6 +49,7 @@ export { ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, cabecerasDeRed, claveS
 export { asignarTipos, encajaTipo, gruposTurnos, tipoDeTurno, validar } from "./lineas-sched/turnos.js";
 export { aplicarCambios, clavePieza, claveViaje, esCambioTurnos, esCambioVehiculos, moverPieza, moverViaje, moverViajes, moverViajesTurno } from "./lineas-sched/manual.js";
 export { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";
+export { porQueSinTipo } from "./lineas-sched/sin-tipo.js";
 
 /**
  * @param red      { lineas: [...] } (lineas-store)
