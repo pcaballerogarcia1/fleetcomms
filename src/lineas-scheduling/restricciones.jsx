@@ -170,7 +170,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
               <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
               <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = siempre el mismo autobús)</span></div>)}
           {row("No mezclar líneas en un turno", <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>{check("turnoUnaLinea")}
-            <span style={{ fontSize: 11, color: C.dim }}>cada conductor hace una sola línea en toda su jornada (las variantes de una línea cuentan como la misma)</span></label>)}
+            <span style={{ fontSize: 11, color: C.dim }}>cada conductor hace una sola línea en toda su jornada (las variantes cuentan como la misma). Sin marcar puede hacer varias, pero solo si su autobús cambia de línea («Un autobús puede cambiar de línea en cabecera», o pasando por cochera) o si él cambia de autobús («Cambio de bus» de su tipo de turno y el máximo del escenario)</span></label>)}
           {row("Cambios de autobús en todo el escenario", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <CampoNumero valor={p.maxCambiosBusTotal} defecto={PARAMS_DEFECTO.maxCambiosBusTotal} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBusTotal", v)} />
             <span style={{ fontSize: 11, color: C.dim }}>como mucho, sumando todos los turnos del día (vacío = sin límite)</span></div>)}
@@ -195,7 +195,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         <div>
           {titulo("Línea")}
           {row("Regulación en cabecera", numInput("regulacion", "min (si la línea no tiene la suya)"))}
-          {row("Cambiar de línea en la misma cabecera", check("entreLineas"))}
+          {row("Un autobús puede cambiar de línea en cabecera", <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>{check("entreLineas")}
+            <span style={{ fontSize: 11, color: C.dim }}>sin pasar por cochera. Sin marcar, el autobús solo cambia de línea pasando por cochera (es de los autobuses, no de los conductores)</span></label>)}
           {sub("Vacíos entre cabeceras")}
           {row("Distancia máxima", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
           {row("Velocidad", numInput("velocidadVacio", "km/h"))}
