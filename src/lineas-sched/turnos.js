@@ -2,7 +2,7 @@
 // turnos de conductor (tipos de turno, partición, validación).
 
 import { particionTurnos } from "../lineas-particion.js";
-import { hm, reloj, kmRecta } from "./base.js";
+import { hm, reloj, kmRecta, claveMezclaTurno } from "./base.js";
 import { clavePieza } from "./manual.js";
 
 // 2) Turnos de conductor
@@ -48,6 +48,7 @@ const lineasDe = viajes => [...new Set(viajes.filter(v => !v.vacio).map(v => v.n
 function cortarPiezas(vehiculos, p, find, geo = null) {
   const piezas = [];
   const puedeRelevar = relevoPermitido(p, find);
+  const clave = claveMezclaTurno(p); // lo que no se mezcla en un turno (línea o grupo), o null
   for (const veh of vehiculos) {
     let lim = p.piezaMax;
     if (p.corte === "equilibrado") {
@@ -72,7 +73,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
         const con = [...actual, tramo];
         // obligatorio: conducción continua o pieza máxima; por estrategia, solo si la pieza ya tiene el mínimo
         // y, si los turnos no mezclan líneas, donde el autobús cambia de línea
-        const cambiaLinea = p.turnoUnaLinea && lineaDe(tramo) != null && lineaDe(tramo) !== lineaDe(actual.at(-1));
+        const cambiaLinea = !!clave && lineaDe(tramo) != null && lineaDe(actual.at(-1)) != null && clave(lineaDe(tramo)) !== clave(lineaDe(actual.at(-1)));
         const obligado = (p.aplicar561 && conduccion(con) > p.conduccionContinuaMax) || largo(con) > p.piezaMax || cambiaLinea;
         const quiere = largo(con) > lim && largo(actual) >= minima;
         const aqui = puedeRelevar(dondeAcaba(actual.flat()));
@@ -87,7 +88,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
     if (actual.length) {
       // el final del autobús, si es más corto que el mínimo, se queda con la pieza anterior si cabe
       const ant = grupos.at(-1);
-      if (ant && largo(actual) < minima && largo([...ant, ...actual]) <= p.piezaMax && (!p.turnoUnaLinea || lineasDe([...ant, ...actual].flat()).length <= 1) && (!p.aplicar561 || conduccion([...ant, ...actual]) <= p.conduccionContinuaMax)) ant.push(...actual);
+      if (ant && largo(actual) < minima && largo([...ant, ...actual]) <= p.piezaMax && (!clave || new Set(lineasDe([...ant, ...actual].flat()).map(clave)).size <= 1) && (!p.aplicar561 || conduccion([...ant, ...actual]) <= p.conduccionContinuaMax)) ant.push(...actual);
       else grupos.push(actual);
     }
     let previa = null;
@@ -149,7 +150,8 @@ function anadir(t, pz, p) {
   let hueco = 0, partido = false, viaje = 0, cambios = t ? t.cambios || 0 : 0;
   // turnos de una sola línea: la pieza nueva, de la misma línea que el turno
   const lineas = t ? (t.lineas || []) : (pz.lineas || []);
-  if (t && p.turnoUnaLinea && (pz.lineas || []).some(l => lineas.length && !lineas.includes(l))) return null;
+  const clave = claveMezclaTurno(p);
+  if (t && clave && lineas.length && (pz.lineas || []).some(l => clave(l) !== clave(lineas[0]))) return null;
   if (t) {
     const ultima = t.piezas[t.piezas.length - 1];
     hueco = pz.inicio - t.fin;
@@ -403,7 +405,8 @@ export function cerrarTurno(t, pOriginal) {
   }
   if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
   t.lineas = lineasDe(viajes);
-  if (p.turnoUnaLinea && t.lineas.length > 1) t.avisos.push(`Mezcla líneas: ${t.lineas.join(", ")}`);
+  const clave = claveMezclaTurno(p);
+  if (clave && new Set(t.lineas.map(clave)).size > 1) t.avisos.push(`Mezcla líneas${p.turnoUnaLinea || p.mezclaTurnos === "linea" ? "" : " de distintos grupos"}: ${t.lineas.join(", ")}`);
   if (!p._tipos && conLimiteCambios(p) && t.cambiosBus > p.maxCambiosBus) t.avisos.push(`${t.cambiosBus} cambios de autobús: más de ${p.maxCambiosBus}`);
   for (const e of entre) {
     if (e.hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(e.a.inicio)} y las ${reloj(e.b.inicio)} se solapan`); continue; }

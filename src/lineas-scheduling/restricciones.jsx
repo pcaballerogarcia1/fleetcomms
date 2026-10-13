@@ -86,6 +86,56 @@ function TiposTurno({ tipos, onChange }) {
   );
 }
 
+// ── Grupos de líneas ─────────────────────────────────────────────────────
+const COLORES_GRUPO = ["#5c9bff", "#34d399", "#fb923c", "#f472b6", "#a78bfa", "#fbbf24", "#22d3ee", "#f87171"];
+function GruposLineas({ red, grupos, onChange }) {
+  const lista = grupos || [];
+  const nombres = [...new Set((red?.lineas || []).map(l => String(l.nombre)))].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  const deLinea = new Map(lista.flatMap((g, i) => (g.lineas || []).map(n => [String(n), i])));
+  const cambiar = (i, cambio) => onChange(lista.map((g, k) => (k === i ? { ...g, ...cambio } : g)));
+  // pulsar una línea: entra en este grupo (y sale del que estuviera) o sale de él
+  const alternar = (i, n) => onChange(lista.map((g, k) => {
+    const ls = (g.lineas || []).map(String).filter(x => x !== n);
+    return k === i && deLinea.get(n) !== i ? { ...g, lineas: [...ls, n] } : { ...g, lineas: ls };
+  }));
+  const sinGrupo = nombres.filter(n => !deLinea.has(n));
+  return (
+    <div>
+      {lista.map((g, i) => {
+        const color = COLORES_GRUPO[i % COLORES_GRUPO.length];
+        return (
+          <div key={g.id} style={{ border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 8, padding: "10px 12px", marginBottom: 10, background: C.bg }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <input value={g.nombre} onChange={e => cambiar(i, { nombre: e.target.value })} placeholder="Nombre del grupo"
+                style={{ width: 200, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontWeight: 600, fontFamily: font, outline: "none" }} />
+              <span style={{ fontSize: 11, color: C.dim }}>{(g.lineas || []).length} línea{(g.lineas || []).length === 1 ? "" : "s"} · pulsa una línea para meterla o sacarla</span>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este grupo (las líneas quedan sin grupo)" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {nombres.map(n => {
+                const aqui = deLinea.get(n) === i, otro = deLinea.has(n) && !aqui;
+                return (
+                  <button key={n} onClick={() => alternar(i, n)} title={otro ? `Está en «${lista[deLinea.get(n)].nombre}»: pulsa para pasarla aquí` : aqui ? "Sacar del grupo" : "Meter en el grupo"}
+                    style={{ minWidth: 38, padding: "3px 8px", borderRadius: 5, fontSize: 11.5, fontWeight: 700, fontFamily: mono, cursor: "pointer",
+                      border: `1px solid ${aqui ? color : C.border}`, background: aqui ? `${color}33` : "transparent", color: aqui ? C.text : otro ? C.dim : C.muted, opacity: otro ? 0.45 : 1 }}>{n}</button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => onChange([...lista, { id: `g${Date.now().toString(36)}`, nombre: `Grupo ${lista.length + 1}`, lineas: [] }])}
+          style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>+ Nuevo grupo</button>
+        <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
+          {sinGrupo.length ? `Sin grupo: ${sinGrupo.join(", ")}. Cada línea sin grupo cuenta como un grupo propio.` : "Todas las líneas están en algún grupo."} Lo que se puede mezclar dentro de un grupo se elige en «Mezclas».
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Restricciones ──────────────────────────────────────────────────────
 // Como en los programas del sector: buscador, «en uso / todas», las
 // categorías a la izquierda con sus apartados y, a la derecha, solo los
@@ -110,6 +160,7 @@ function Interruptor({ on, onCambiar, titulo }) {
 const ICONO = {
   vehiculos: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="14" rx="2" /><path d="M4 11h16M8 21v-4M16 21v-4" /></svg>,
   conductores: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>,
+  lineas: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8 7.5c4 2 4 7 8 9" /></svg>,
   optimizador: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></svg>,
 };
 
@@ -148,6 +199,15 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
     </select>
   );
 
+  const lista2 = (valor, alCambiar, opciones) => (
+    <select value={valor} onChange={e => alCambiar(e.target.value)}
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
+      {opciones.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+  const mezclaBus = !p.entreLineas ? "no" : p.mezclaBuses === "grupo" ? "grupo" : "libre";
+  const mezclaTurno = p.turnoUnaLinea || p.mezclaTurnos === "linea" ? "linea" : p.mezclaTurnos === "grupo" ? "grupo" : "libre";
+
   // ── categorías, apartados y ajustes ──
   // cada ajuste: [clave (para «en uso»), nombre, control, ayuda]
   const CATS = [
@@ -162,9 +222,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["amplitudBusMax", "Amplitud máxima del autobús", limite("amplitudBusMax", "min de la salida a la vuelta a cochera"), "Pasado este tiempo fuera, el autobús vuelve a cochera."],
         ["esperaMaxCabecera", "Espera larga en cabecera: a cochera", limite("esperaMaxCabecera", "min"), "Si un autobús va a esperar más en una cabecera, vuelve a cochera y sale otra vez (si le da tiempo)."],
       ] },
-      { id: "linea", nombre: "Líneas y regulación", items: [
+      { id: "regulacion", nombre: "Regulación", items: [
         ["regulacion", "Regulación en cabecera", numero("regulacion", "min (si la línea no tiene la suya)")],
-        ["entreLineas", "Un autobús puede cambiar de línea en cabecera", sino("entreLineas"), "Apagado: el autobús solo cambia de línea pasando por cochera. Es de los autobuses, no de los conductores."],
       ] },
       { id: "vacios", nombre: "Vacíos entre cabeceras", items: [
         ["vacioMaxKm", "Distancia máxima de un vacío", numero("vacioMaxKm", "km (0 = no se hacen)", { decimal: true, step: 0.5 })],
@@ -189,10 +248,9 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["relevoMin", "Relevo en la misma cabecera", numero("relevoMin", "min")],
         ["desplazamiento", "Ir a otra cabecera", numero("desplazamiento", "min como mínimo"), "Si está lejos, lo que se tarde (distancia a la velocidad de los vacíos). Es trabajo, no pausa."],
       ] },
-      { id: "cambios", nombre: "Cambios de bus y líneas", items: [
+      { id: "cambios", nombre: "Cambios de bus", items: [
         ...(conTipos ? [] : [["maxCambiosBus", "Cambios de autobús por turno", limite("maxCambiosBus", "como mucho (0 = siempre el mismo)", { cero: true })]]),
         ["maxCambiosBusTotal", "Cambios de autobús en todo el escenario", limite("maxCambiosBusTotal", "como mucho, sumando todos los turnos", { cero: true })],
-        ["turnoUnaLinea", "No mezclar líneas en un turno", sino("turnoUnaLinea"), "Cada conductor hace una sola línea (las variantes cuentan como la misma). Apagado puede hacer varias si su autobús cambia de línea o si él cambia de autobús."],
         ["costeCambioBus", "Coste de cada cambio de autobús", limite("costeCambioBus", "€ por cambio", { decimal: true, cero: true }), "Lo que te molesta que un conductor cambie de autobús (Optimizar todo junto)."],
       ], nota: conTipos ? "Si un turno puede cambiar de autobús lo marca cada tipo de turno («Cambio de bus»)." : null },
       { id: "descansos", nombre: "Descansos", items: [
@@ -210,6 +268,17 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["costeHora", "Coste por hora de conductor", limite("costeHora", "€/h", { decimal: true })],
       ] },
     ] },
+    { id: "lineas", nombre: "Líneas", secs: [
+      { id: "grupos", nombre: "Grupos de líneas", grupos: true, items: [["gruposLineas", "Grupos de líneas", null]] },
+      { id: "mezclas", nombre: "Mezclas", items: [
+        [["entreLineas", "mezclaBuses"], "Un autobús, en cabecera, puede seguir con…", lista2(mezclaBus, v => onChange({ entreLineas: v !== "no", mezclaBuses: v === "grupo" ? "grupo" : "libre" }), [
+          ["libre", "Cualquier línea"], ["grupo", "Solo líneas de su grupo"], ["no", "La misma línea (otra solo pasando por cochera)"]]),
+          "Pasando por cochera, un autobús siempre puede salir con otra línea."],
+        [["turnoUnaLinea", "mezclaTurnos"], "Un conductor, en su turno, puede hacer…", lista2(mezclaTurno, v => onChange({ turnoUnaLinea: v === "linea", mezclaTurnos: v === "grupo" ? "grupo" : "libre" }), [
+          ["libre", "Cualquier línea"], ["grupo", "Solo líneas de un mismo grupo"], ["linea", "Una sola línea"]]),
+          "Las variantes de una línea cuentan como la misma. Para hacer varias, su autobús tiene que cambiar de línea o él cambiar de autobús («Cambio de bus»)."],
+      ], nota: (p.gruposLineas || []).length ? null : "Aún no hay grupos: «Solo líneas de su grupo» funciona como «la misma línea». Créalos en «Grupos de líneas»." },
+    ] },
     { id: "optimizador", nombre: "Optimizador", secs: [
       { id: "estrategia", nombre: "Estrategia de este calendario", items: [
         ["eleccion", "Qué autobús coge cada viaje", lista("eleccion", [["optimo", "El mínimo de autobuses (óptimo)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]])],
@@ -222,17 +291,18 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   ];
 
   // en uso: lo que no está como viene por defecto
-  const usado = k => { const v = p[k], d = PARAMS_DEFECTO[k]; return !(v === d || (v == null && d == null) || (v === "" && d == null)); };
+  const usado1 = k => { const v = p[k], d = PARAMS_DEFECTO[k]; if (Array.isArray(d)) return (v || []).length > 0; return !(v === d || (v == null && d == null) || (v === "" && d == null)); };
+  const usado = k => (Array.isArray(k) ? k.some(usado1) : usado1(k));
   const secUsada = s => (s.tipos ? conTipos : s.items.some(([k]) => usado(k)));
   const q = norm(busca.trim());
   const coincide = it => !q || norm(`${it[1]} ${it[3] || ""}`).includes(q);
-  const visibles = CATS.map(c => ({ ...c, secs: c.secs.filter(s => (!enUso || secUsada(s)) && (!q || (s.tipos ? norm("tipos de turno mañana tarde partido refuerzo cambio de bus").includes(q) : s.items.some(coincide) || norm(s.nombre).includes(q)))) })).filter(c => c.secs.length);
+  const visibles = CATS.map(c => ({ ...c, secs: c.secs.filter(s => (!enUso || secUsada(s)) && (!q || (s.tipos ? norm("tipos de turno mañana tarde partido refuerzo cambio de bus").includes(q) : s.grupos ? norm("grupos de lineas agrupar mezclar").includes(q) : s.items.some(coincide) || norm(s.nombre).includes(q)))) })).filter(c => c.secs.length);
   const todasSecs = visibles.flatMap(c => c.secs);
   const actual = q ? null : todasSecs.find(s => s.id === sec) || todasSecs[0];
 
   const revision = revisarRestricciones(p);
   const fila = it => (
-    <div key={it[0]} style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+    <div key={String(it[0])} style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
       <div>
         <div style={{ fontSize: 12, lineHeight: 1.35, color: usado(it[0]) ? C.text : C.muted, fontWeight: usado(it[0]) ? 600 : 400 }}>{it[1]}</div>
         {it[3] && <div style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.45, marginTop: 2 }}>{it[3]}</div>}
@@ -244,7 +314,9 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
     <div key={s.id} style={{ marginBottom: 18 }}>
       <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>
       {s.nota && <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 6px", lineHeight: 1.5 }}>{s.nota}</div>}
-      {s.tipos ? <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} /> : (q ? s.items.filter(coincide) : s.items).map(fila)}
+      {s.tipos ? <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} />
+        : s.grupos ? <GruposLineas red={red} grupos={p.gruposLineas} onChange={v => set("gruposLineas", v)} />
+        : (q ? s.items.filter(coincide) : s.items).map(fila)}
     </div>
   );
 

@@ -41,7 +41,10 @@ export const PARAMS_DEFECTO = {
   relevoMin: 5,         // min para relevar en la misma cabecera
   desplazamiento: 20,   // min como mínimo para ir a otra cabecera a coger otra pieza (si está lejos, lo que se tarde: distancia a la velocidad de los vacíos)
   maxCambiosBus: null,  // cambios de autobús por turno como mucho, sin tipos de turno (null = sin límite; 0 = todo el turno en el mismo). Con tipos: tipo.cambiosBus
-  turnoUnaLinea: false,  // cada turno, de una sola línea (no se mezclan líneas; las variantes de una línea cuentan como la misma)
+  turnoUnaLinea: false,  // (= mezclaTurnos "linea")
+  gruposLineas: [],      // [{ id, nombre, lineas: [nombre de línea] }]: las que no están en ninguno, cada una su grupo
+  mezclaBuses: "libre",  // con entreLineas: "libre" (cualquier línea) · "grupo" (solo dentro de su grupo)
+  mezclaTurnos: "libre", // "libre" · "grupo" (un conductor, solo líneas de un grupo) · "linea" (una sola línea; o turnoUnaLinea)  // cada turno, de una sola línea (no se mezclan líneas; las variantes de una línea cuentan como la misma)
   maxCambiosBusTotal: null, // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
@@ -209,6 +212,22 @@ export const vacio = (desde, hasta, dep, minutos, km, tipo, hacia) => ({
   sentido: tipo === "salida" ? "Salida de cochera" : tipo === "vuelta" ? "Vuelta a cochera" : `Vacío a cabecera${hacia ? ` de la ${hacia}` : ""}`,
   dep, arr: dep + minutos, o: desde, d: hasta, km,
 });
+
+// Grupo de cada línea (por nombre); las que no están en ninguno, cada una el suyo
+const gruposCache = new WeakMap();
+export function grupoDe(p) {
+  const g = p.gruposLineas || [];
+  if (gruposCache.has(g)) return gruposCache.get(g);
+  const m = new Map();
+  for (const gr of g) for (const n of gr.lineas || []) m.set(String(n), gr.id);
+  const f = n => m.get(String(n)) ?? `linea:${n}`;
+  gruposCache.set(g, f);
+  return f;
+}
+/** ¿Puede un autobús que viene de la línea a seguir con la b en la cabecera (sin pasar por cochera)? (por nombre) */
+export const autobusPuedeSeguir = p => (a, b) => a === b || (!!p.entreLineas && (p.mezclaBuses !== "grupo" || grupoDe(p)(a) === grupoDe(p)(b)));
+/** Lo que no se puede mezclar en un turno: la línea, su grupo, o nada (null) */
+export const claveMezclaTurno = p => (p.turnoUnaLinea || p.mezclaTurnos === "linea" ? n => String(n) : p.mezclaTurnos === "grupo" ? grupoDe(p) : null);
 
 export const hm = m => `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`;
 

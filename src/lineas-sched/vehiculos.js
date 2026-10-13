@@ -2,7 +2,7 @@
 // y repartir los bloques entre autobuses físicos.
 
 
-import { PEGADAS_KM, admite, hm, tipoDeLinea, vacio } from "./base.js";
+import { PEGADAS_KM, admite, hm, tipoDeLinea, vacio, autobusPuedeSeguir } from "./base.js";
 import { montarBloque } from "./manual.js";
 
 // Lo que puede estar un autobús fuera de cochera: la restricción (amplitud
@@ -42,7 +42,8 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     const ida = ci ? minCochera(ultimo.d, ci) + p.margenCochera + minCochera(ci, v.o) : p.margenVacio;
     return v.dep - ultimo.arr >= ida;
   };
-  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo) && cabe(veh, v) && !aCochera(veh, v);
+  const sigue = autobusPuedeSeguir(p);
+  const vale = (veh, v, c) => (veh.linea === v.linea || sigue(veh.nombreLinea, v.nombre)) && admite(c, veh.tipo) && cabe(veh, v) && !aCochera(veh, v);
   for (const v of viajes) {
     const c = cfg[v.linea];
     const donde = find(v.o);
@@ -79,7 +80,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
       vehiculos.push(veh);
     }
     veh.viajes.push(v);
-    veh.linea = v.linea;
+    veh.linea = v.linea; veh.nombreLinea = v.nombre;
     veh.libre = v.arr + (c?.regulacion ?? p.regulacion);
     const fin = find(v.d);
     if (!esperando.has(fin)) esperando.set(fin, []);
@@ -101,7 +102,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     veh.kmVacio = Math.round(veh.viajes.reduce((s, x) => s + (x.vacio ? x.km : 0), 0) * 10) / 10;
     // un solo viaje (con la salida y la vuelta) ya más largo que el máximo: no se puede partir, se avisa
     if (ampMax < Infinity && veh.fin - veh.inicio > ampMax) veh.avisos = [`Amplitud del autobús de ${hm(veh.fin - veh.inicio)}: supera ${hm(ampMax)}`];
-    delete veh.libre; delete veh.linea; delete veh.cocheraEst; delete veh.salida0;
+    delete veh.libre; delete veh.linea; delete veh.nombreLinea; delete veh.cocheraEst; delete veh.salida0;
   }
   return vehiculos;
 }
@@ -120,6 +121,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   const vmax = p.vacios === false || !geo ? 0 : Math.min(p.vacioMaxKm || 0, p.vacioKm ?? Infinity);
   const reg = v => cfg[v.linea]?.regulacion ?? p.regulacion;
   const tipoDe = v => tipoDeLinea(cfg[v.linea]);
+  const sigue = autobusPuedeSeguir(p);
   const compatibles = (a, b) => { const ta = tipoDe(a), tb = tipoDe(b); return admite(cfg[b.linea], ta) && admite(cfg[a.linea], tb) && (ta == null || tb == null || ta === tb); };
   const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
   const minK = (a, b) => { const k = geo ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
@@ -143,7 +145,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
     const a = viajes[i], t0 = a.arr + reg(a), puesto = new Set();
     let l = adyA[i] = [];
     const poner = j => { if (!puesto.has(j)) { puesto.add(j); l.push(j); } };
-    const mismaLinea = b => p.entreLineas || b.linea === a.linea;
+    const mismaLinea = b => b.linea === a.linea || sigue(a.nombre, b.nombre);
     // 1) en la misma cabecera, la siguiente que sale
     const aqui = porLugar.get(find(a.d)) || [];
     // (en cabeceras con mucho tráfico, las siguientes K salen en minutos: se mira una ventana de 2 h)
@@ -228,7 +230,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   // los km; sin esto, en redes grandes metía muchos vacíos innecesarios.
   const costeEnlace = (a, b) => {
     if (b.dep < a.arr + reg(a) || !compatibles(a, b)) return Infinity;
-    const misma = p.entreLineas || b.linea === a.linea;
+    const misma = b.linea === a.linea || sigue(a.nombre, b.nombre);
     if (misma && find(a.d) === find(b.o)) return 0;
     if (misma && vmax > 0) { const k = geo.km(a.d, b.o); if (k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k))) return k; }
     const ci = cocheraDe(a);
@@ -275,7 +277,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
       const ida = ci ? minK(a.d, ci) + p.margenCochera + minK(ci, b.o) : p.margenVacio;
       if (b.dep - a.arr >= ida) return false;
     }
-    if (!p.entreLineas && b.linea !== a.linea) return false; // cambiar de línea sin pasar por cochera no se permite
+    if (b.linea !== a.linea && !sigue(a.nombre, b.nombre)) return false; // cambiar de línea sin pasar por cochera (o fuera del grupo) no se permite
     if (find(a.d) === find(b.o)) return true;
     const k = vmax > 0 ? geo.km(a.d, b.o) : null;
     return k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k));

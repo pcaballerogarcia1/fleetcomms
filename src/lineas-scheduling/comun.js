@@ -129,7 +129,7 @@ export const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacio
 const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
 
 // lo que cambia los vehículos (el resto solo cambia los turnos)
-const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "amplitudBusMax", "esperaMaxCabecera", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
+const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "amplitudBusMax", "esperaMaxCabecera", "gruposLineas", "mezclaBuses", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
 
 export const sinCampos = (o, campos) => Object.fromEntries(Object.entries(o).filter(([k]) => !campos.includes(k)));
 

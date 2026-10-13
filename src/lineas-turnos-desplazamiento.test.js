@@ -95,3 +95,25 @@ describe("el mismo autobús después de pasar por cochera", () => {
     expect(entrePiezas(manana, { ...tarde, autobus: 8 }, P).cambio).toBe(true);
   });
 });
+
+describe("grupos de líneas", async () => {
+  const { autobusPuedeSeguir, claveMezclaTurno } = await import("./lineas-sched/base.js");
+  const grupos = [{ id: "leg", nombre: "Leganés", lineas: ["481", "484"] }, { id: "fue", nombre: "Fuenlabrada", lineas: ["491"] }];
+  it("un autobús: cualquier línea, solo su grupo, o la misma", () => {
+    expect(autobusPuedeSeguir({ entreLineas: true, mezclaBuses: "libre", gruposLineas: grupos })("481", "491")).toBe(true);
+    const g = autobusPuedeSeguir({ entreLineas: true, mezclaBuses: "grupo", gruposLineas: grupos });
+    expect(g("481", "484")).toBe(true);
+    expect(g("481", "491")).toBe(false);
+    expect(g("482", "483")).toBe(false); // sin grupo: cada una el suyo
+    expect(autobusPuedeSeguir({ entreLineas: false, gruposLineas: grupos })("481", "484")).toBe(false);
+  });
+  it("un conductor: solo líneas de un grupo", () => {
+    const p = { ...P, mezclaTurnos: "grupo", gruposLineas: grupos };
+    expect(claveMezclaTurno(p)("484")).toBe(claveMezclaTurno(p)("481"));
+    const conLinea = (pz, nombre) => ({ ...pz, lineas: [nombre], viajes: pz.viajes.map(v => ({ ...v, nombre })) });
+    const a = conLinea(pieza(1, 360, 480, "A", "A", A, A), "481");
+    expect(validar([a, conLinea(pieza(2, 490, 600, "A", "A", A, A), "484")], p)).not.toBeNull();
+    expect(validar([a, conLinea(pieza(2, 490, 600, "A", "A", A, A), "491")], p)).toBeNull();
+    expect(cerrarTurno({ piezas: [a, conLinea(pieza(2, 490, 600, "A", "A", A, A), "491")] }, p).avisos.some(x => /distintos grupos/.test(x))).toBe(true);
+  });
+});
