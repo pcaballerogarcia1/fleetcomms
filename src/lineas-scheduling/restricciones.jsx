@@ -144,6 +144,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
           {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min"))}
           {row("Amplitud máxima del autobús", decInput("amplitudBusMax", "min de la salida a la vuelta a cochera (vacío = sin límite)", 1))}
+          {row("Espera larga en cabecera: a cochera", decInput("esperaMaxCabecera", "min: si va a esperar más, vuelve a cochera y sale otra vez (vacío = espera en la cabecera)", 1))}
           {sub("Coste")}
           {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
           {row("Coste por km", decInput("costeKm", "€/km (con los vacíos)"))}

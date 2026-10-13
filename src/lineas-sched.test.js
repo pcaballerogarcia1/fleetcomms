@@ -661,3 +661,28 @@ describe("cambios de autobús en todo el escenario", () => {
     }
   });
 });
+
+describe("espera larga en cabecera: el autobús vuelve a cochera", () => {
+  // una línea con viajes por la mañana y por la tarde (hueco de 6 h)
+  const sal = [h(6), h(7), h(15), h(16)];
+  const red = { lineas: [{ id: "M", nombre: "M", color: "#0f0", sentidos: [
+    { dir: 0, nombre: "Ida", paradas: ["C1", "C2"], km: 10, viajes: { laborable: 4 }, salidas: { laborable: sal, sabado: [], festivo: [] }, tiempos: ["06-09", "13-16", "16-20"].map(f => ({ franja: f, min: 25, viajes: 1 })) },
+    { dir: 1, nombre: "Vuelta", paradas: ["C2", "C1"], km: 10, viajes: { laborable: 4 }, salidas: { laborable: sal.map(x => x + 30), sabado: [], festivo: [] }, tiempos: ["06-09", "13-16", "16-20"].map(f => ({ franja: f, min: 25, viajes: 1 })) },
+  ] }],
+    paradas: [{ id: "C1", lat: 40.40, lng: -3.70 }, { id: "C2", lat: 40.41, lng: -3.70 }] };
+  const cocheras = [{ id: "k", nombre: "Cochera", lat: 40.40, lng: -3.69 }];
+  for (const eleccion of ["optimo", "ultimo"]) {
+    it(`sin la restricción espera; con ella, vuelve a cochera (${eleccion})`, () => {
+      const sin = generarServicio(red, {}, { dia: "laborable", eleccion }, { cocheras });
+      const con = generarServicio(red, {}, { dia: "laborable", eleccion, esperaMaxCabecera: 120 }, { cocheras });
+      const vueltas = r => r.vehiculos.flatMap(v => v.viajes).filter(x => x.vacio && x.tipo === "vuelta").length;
+      expect(vueltas(con)).toBeGreaterThan(vueltas(sin));
+      // ningún bloque con una espera de más de 2 h entre viajes
+      for (const v of con.vehiculos) {
+        const reales = v.viajes.filter(x => !x.vacio);
+        reales.slice(1).forEach((x, i) => expect(x.dep - reales[i].arr).toBeLessThanOrEqual(120 + 10));
+      }
+      expect(con.kpis.autobuses).toBe(sin.kpis.autobuses); // el mismo autobús, que pasa por cochera
+    });
+  }
+});

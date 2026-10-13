@@ -28,6 +28,7 @@ export const PARAMS_DEFECTO = {
   margenVacio: 30,      // min entre dos bloques del mismo autobús, sin cocheras (ir y volver incluido)
   margenCochera: 10,    // min parado en cochera entre dos bloques del mismo autobús (con cocheras)
   amplitudBusMax: null, // min de un autobús desde que sale de cochera hasta que vuelve (null = sin límite)
+  esperaMaxCabecera: null, // min: si un autobús va a esperar más en una cabecera, vuelve a cochera (si le da tiempo) · null = espera donde esté
   vacioMaxKm: 20,       // km como mucho de un vacío entre cabeceras (0 = no se hacen)
   factorRodeo: 1.35,    // km por carretera / km en línea recta
   velocidadVacio: 25,   // km/h de los vacíos

@@ -35,7 +35,14 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
   const minCochera = (a, b) => { const k = geo?.hayCocheras ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
   const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
   const cabe = (veh, v) => ampMax === Infinity || v.arr + (veh.cocheraEst ? minCochera(v.d, veh.cocheraEst) : 0) - veh.salida0 <= ampMax;
-  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo) && cabe(veh, v);
+  // espera larga en cabecera: el autobús se va a cochera (si le da tiempo a ir y volver) y este viaje lo empieza otro bloque
+  const aCochera = (veh, v) => {
+    if (!(p.esperaMaxCabecera > 0) || v.dep - veh.libre <= p.esperaMaxCabecera) return false;
+    const ultimo = veh.viajes.at(-1), ci = cocheraDe(v) || cocheraDe(ultimo);
+    const ida = ci ? minCochera(ultimo.d, ci) + p.margenCochera + minCochera(ci, v.o) : p.margenVacio;
+    return v.dep - ultimo.arr >= ida;
+  };
+  const vale = (veh, v, c) => (p.entreLineas || veh.linea === v.linea) && admite(c, veh.tipo) && cabe(veh, v) && !aCochera(veh, v);
   for (const v of viajes) {
     const c = cfg[v.linea];
     const donde = find(v.o);
@@ -262,6 +269,12 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   // Caminos = autobuses; se parten en bloques donde el enlace pasa por cochera
   const enLinea = (a, b) => {
     if (b.dep < a.arr + reg(a)) return false;
+    if (p.esperaMaxCabecera > 0 && b.dep - (a.arr + reg(a)) > p.esperaMaxCabecera) {
+      // espera larga: a cochera, si da tiempo a ir y volver (si no, espera en la cabecera)
+      const ci = cocheraDe(a);
+      const ida = ci ? minK(a.d, ci) + p.margenCochera + minK(ci, b.o) : p.margenVacio;
+      if (b.dep - a.arr >= ida) return false;
+    }
     if (!p.entreLineas && b.linea !== a.linea) return false; // cambiar de línea sin pasar por cochera no se permite
     if (find(a.d) === find(b.o)) return true;
     const k = vmax > 0 ? geo.km(a.d, b.o) : null;
