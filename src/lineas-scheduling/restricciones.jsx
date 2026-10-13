@@ -1,8 +1,8 @@
-// Scheduling de líneas: el panel de Restricciones (vehículos, conductores y línea) y los tipos de turno.
+// Scheduling de líneas: el panel de Restricciones (categorías y apartados, con buscador) y los tipos de turno.
 import { useState } from "react";
 import { PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones } from "../lineas-sched.js";
 import { SelectorCalendario } from "../lineas-horarios.jsx";
-import { C, MINIMOS, aHHMM, deHHMM, font, hm, mono } from "./comun.js";
+import { C, MINIMOS, aHHMM, deHHMM, font, hm, mono, norm } from "./comun.js";
 
 function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, textoVacio = "—", step, onCambiar }) {
   const [texto, setTexto] = useState(null); // null = no se está editando
@@ -86,138 +86,216 @@ function TiposTurno({ tipos, onChange }) {
   );
 }
 
-// ── Restricciones (mismo formato que las del Scheduling de puntos) ──────
+// ── Restricciones ──────────────────────────────────────────────────────
+// Como en los programas del sector: buscador, «en uso / todas», las
+// categorías a la izquierda con sus apartados y, a la derecha, solo los
+// ajustes del apartado elegido. Los límites opcionales llevan un interruptor
+// (apagado = sin límite) y el número al lado.
+
+// Valor con el que se enciende un límite opcional (apagado es null = sin límite)
+const AL_ENCENDER = {
+  flotaMax: 100, amplitudBusMax: 960, esperaMaxCabecera: 120, conductoresMax: 300, maxCambiosBus: 1, maxCambiosBusTotal: 100,
+  jornadaSinPausaMax: 360, costeVehiculoDia: 250, costeKm: 0.9, costeHora: 22, costeCambioBus: 5,
+};
+
+function Interruptor({ on, onCambiar, titulo }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} title={titulo} onClick={() => onCambiar(!on)}
+      style={{ width: 34, height: 18, borderRadius: 9, border: "none", padding: 2, cursor: "pointer", flexShrink: 0, background: on ? C.green : "#3a475e", transition: "background .15s", display: "flex", justifyContent: on ? "flex-end" : "flex-start" }}>
+      <span style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", display: "block" }} />
+    </button>
+  );
+}
+
+const ICONO = {
+  vehiculos: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="14" rx="2" /><path d="M4 11h16M8 21v-4M16 21v-4" /></svg>,
+  conductores: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>,
+  optimizador: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></svg>,
+};
+
 export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
   const set = (k, v) => onChange(k === "vacioKm" ? { vacioKm: v, vacios: v !== 0 } : { [k]: v });
-  const titulo = t => <div style={{ fontSize: 12, color: C.blueText, fontWeight: 700, marginBottom: 10, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>{t}</div>;
-  const sub = t => <div style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, margin: "12px 0 8px" }}>{t}</div>;
-  const row = (label, children) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
-      <label style={{ fontSize: 11, color: C.muted, width: 190, flexShrink: 0 }}>{label}</label>
-      {children}
-    </div>
+  const conTipos = (p.tiposTurno || []).some(x => x.activo !== false);
+  const [busca, setBusca] = useState("");
+  const [enUso, setEnUso] = useState(false);
+  const [sec, setSec] = useState("tipos");
+
+  // ── controles ──
+  const numero = (k, sufijo, { decimal = false, step } = {}) => (
+    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <CampoNumero valor={p[k]} defecto={PARAMS_DEFECTO[k]} min={MINIMOS[k] ?? 0} decimal={decimal} step={step} onCambiar={v => set(k, v)} />
+      {sufijo && <span style={{ fontSize: 11, color: C.dim }}>{sufijo}</span>}
+    </span>
   );
-  const numInput = (k, suffix) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <CampoNumero valor={p[k]} defecto={PARAMS_DEFECTO[k]} min={MINIMOS[k] ?? 0} onCambiar={v => set(k, v)} />
-      {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
-    </div>
-  );
-  const sel = (k, opciones) => (
+  // límite opcional: interruptor + número (apagado = sin límite)
+  const limite = (k, sufijo, { decimal = false, step, cero = false } = {}) => {
+    const on = cero ? p[k] != null && p[k] !== "" : p[k] != null && p[k] !== "" && p[k] > 0;
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Interruptor on={on} onCambiar={v => set(k, v ? (AL_ENCENDER[k] ?? 1) : (k === "jornadaSinPausaMax" ? 0 : null))} titulo={on ? "Quitar el límite" : "Poner límite"} />
+        {on
+          ? <><CampoNumero valor={p[k]} defecto={AL_ENCENDER[k]} min={MINIMOS[k] ?? 0} decimal={decimal} step={step} onCambiar={v => set(k, v)} />{sufijo && <span style={{ fontSize: 11, color: C.dim }}>{sufijo}</span>}</>
+          : <span style={{ fontSize: 11, color: C.dim }}>sin límite</span>}
+      </span>
+    );
+  };
+  const sino = (k, invertido = false) => <Interruptor on={invertido ? !p[k] : !!p[k]} onCambiar={v => set(k, invertido ? !v : v)} />;
+  const lista = (k, opciones) => (
     <select value={String(p[k])} onChange={e => { const o = opciones.find(x => String(x[0]) === e.target.value); set(k, o[0]); }}
-      style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none" }}>
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
       {opciones.map(([v, l]) => <option key={v} value={String(v)}>{l}</option>)}
     </select>
   );
-  const decInput = (k, suffix, step = 0.01) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <CampoNumero valor={p[k]} defecto={PARAMS_DEFECTO[k]} min={MINIMOS[k] ?? 0} step={step} decimal vacioEsNulo={PARAMS_DEFECTO[k] == null} onCambiar={v => set(k, v)} />
-      {suffix && <span style={{ fontSize: 11, color: C.dim }}>{suffix}</span>}
+
+  // ── categorías, apartados y ajustes ──
+  // cada ajuste: [clave (para «en uso»), nombre, control, ayuda]
+  const CATS = [
+    { id: "vehiculos", nombre: "Vehículos", secs: [
+      { id: "flota", nombre: "Flota y coste", items: [
+        ["flotaMax", "Flota disponible", limite("flotaMax", "autobuses"), "El optimizador no usa más autobuses que estos."],
+        ["costeVehiculoDia", "Coste por autobús y día", limite("costeVehiculoDia", "€/autobús·día", { decimal: true }), "Para el coste estimado y «Menor coste»."],
+        ["costeKm", "Coste por km", limite("costeKm", "€/km (con los vacíos)", { decimal: true, step: 0.01 })],
+      ] },
+      { id: "cochera", nombre: "Cochera", items: [
+        ["margenCochera", "Rato mínimo en cochera entre dos salidas", numero("margenCochera", "min")],
+        ["amplitudBusMax", "Amplitud máxima del autobús", limite("amplitudBusMax", "min de la salida a la vuelta a cochera"), "Pasado este tiempo fuera, el autobús vuelve a cochera."],
+        ["esperaMaxCabecera", "Espera larga en cabecera: a cochera", limite("esperaMaxCabecera", "min"), "Si un autobús va a esperar más en una cabecera, vuelve a cochera y sale otra vez (si le da tiempo)."],
+      ] },
+      { id: "linea", nombre: "Líneas y regulación", items: [
+        ["regulacion", "Regulación en cabecera", numero("regulacion", "min (si la línea no tiene la suya)")],
+        ["entreLineas", "Un autobús puede cambiar de línea en cabecera", sino("entreLineas"), "Apagado: el autobús solo cambia de línea pasando por cochera. Es de los autobuses, no de los conductores."],
+      ] },
+      { id: "vacios", nombre: "Vacíos entre cabeceras", items: [
+        ["vacioMaxKm", "Distancia máxima de un vacío", numero("vacioMaxKm", "km (0 = no se hacen)", { decimal: true, step: 0.5 })],
+        ["velocidadVacio", "Velocidad de los vacíos", numero("velocidadVacio", "km/h"), "También la usa el conductor para ir de una cabecera a otra."],
+        ["factorRodeo", "Factor de rodeo", numero("factorRodeo", "× la línea recta", { decimal: true, step: 0.05 })],
+      ] },
+    ] },
+    { id: "conductores", nombre: "Conductores", secs: [
+      { id: "tipos", nombre: "Tipos de turno", tipos: true, items: [] },
+      { id: "jornada", nombre: "Jornada", items: [
+        ...(conTipos ? [] : [
+          ["amplitudMax", "Amplitud máxima del turno", numero("amplitudMax", "min")],
+          ["jornadaMax", "Jornada de trabajo máxima", numero("jornadaMax", "min (piezas + huecos cortos)")],
+          ["maxPartidos", "Jornadas partidas por turno", numero("maxPartidos", "como mucho (0 = sin partidos)")],
+        ]),
+        ["huecoNoPagado", "Hueco que ya no se paga", numero("huecoNoPagado", "min o más (jornada partida)")],
+      ], nota: conTipos ? "Amplitud, trabajo mínimo y máximo y partidos: los marca cada tipo de turno." : null },
+      { id: "piezas", nombre: "Piezas y relevos", items: [
+        ["piezaMax", "Pieza máxima", numero("piezaMax", "min de relevo a relevo")],
+        ["piezaMin", "Pieza mínima", numero("piezaMin", "min (no se releva antes)")],
+        ["maxPiezas", "Piezas por turno", numero("maxPiezas", "como mucho")],
+        ["relevoMin", "Relevo en la misma cabecera", numero("relevoMin", "min")],
+        ["desplazamiento", "Ir a otra cabecera", numero("desplazamiento", "min como mínimo"), "Si está lejos, lo que se tarde (distancia a la velocidad de los vacíos). Es trabajo, no pausa."],
+      ] },
+      { id: "cambios", nombre: "Cambios de bus y líneas", items: [
+        ...(conTipos ? [] : [["maxCambiosBus", "Cambios de autobús por turno", limite("maxCambiosBus", "como mucho (0 = siempre el mismo)", { cero: true })]]),
+        ["maxCambiosBusTotal", "Cambios de autobús en todo el escenario", limite("maxCambiosBusTotal", "como mucho, sumando todos los turnos", { cero: true })],
+        ["turnoUnaLinea", "No mezclar líneas en un turno", sino("turnoUnaLinea"), "Cada conductor hace una sola línea (las variantes cuentan como la misma). Apagado puede hacer varias si su autobús cambia de línea o si él cambia de autobús."],
+        ["costeCambioBus", "Coste de cada cambio de autobús", limite("costeCambioBus", "€ por cambio", { decimal: true, cero: true }), "Lo que te molesta que un conductor cambie de autobús (Optimizar todo junto)."],
+      ], nota: conTipos ? "Si un turno puede cambiar de autobús lo marca cada tipo de turno («Cambio de bus»)." : null },
+      { id: "descansos", nombre: "Descansos", items: [
+        ["jornadaSinPausaMax", "Exigir descanso si la jornada pasa de", limite("jornadaSinPausaMax", "min (Estatuto: 360)")],
+        ["pausaJornadaMin", "Descanso de", numero("pausaJornadaMin", "min seguidos entre viajes")],
+      ] },
+      { id: "561", nombre: "Conducción (UE 561/2006)", items: [
+        ["aplicar561", "Aplicar la UE 561/2006", sino("aplicar561"), "No se aplica a líneas regulares de hasta 50 km (la mayoría de las urbanas). Apagado: sin pausa de conducción ni corte de pieza a las 4 h 30."],
+        ["conduccionContinuaMax", "Conducción continua máxima", numero("conduccionContinuaMax", "min")],
+        ["pausaConduccionMin", "Pausa de conducción", numero("pausaConduccionMin", "min (se puede partir 15 + 30)")],
+        ["conduccionDiariaMax", "Conducción diaria máxima", numero("conduccionDiariaMax", "min")],
+      ] },
+      { id: "plantilla", nombre: "Plantilla y coste", items: [
+        ["conductoresMax", "Conductores disponibles", limite("conductoresMax", "turnos")],
+        ["costeHora", "Coste por hora de conductor", limite("costeHora", "€/h", { decimal: true })],
+      ] },
+    ] },
+    { id: "optimizador", nombre: "Optimizador", secs: [
+      { id: "estrategia", nombre: "Estrategia de este calendario", items: [
+        ["eleccion", "Qué autobús coge cada viaje", lista("eleccion", [["optimo", "El mínimo de autobuses (óptimo)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]])],
+        ["vacioKm", "Vacíos entre cabeceras", lista("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]])],
+        ["corte", "Dónde se corta la pieza (relevo)", lista("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[225, 210, 180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])])],
+        ["metodo", "Cómo se forman los turnos", lista("metodo", [["particion", "La mejor combinación"], ["voraz", "Pieza a pieza (rápido)"]])],
+        ...(p.metodo === "voraz" ? [["emparejar", "A qué conductor va cada pieza", lista("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]])]] : []),
+      ], nota: "La elige Optimizar; también puedes fijarla a mano." },
+    ] },
+  ];
+
+  // en uso: lo que no está como viene por defecto
+  const usado = k => { const v = p[k], d = PARAMS_DEFECTO[k]; return !(v === d || (v == null && d == null) || (v === "" && d == null)); };
+  const secUsada = s => (s.tipos ? conTipos : s.items.some(([k]) => usado(k)));
+  const q = norm(busca.trim());
+  const coincide = it => !q || norm(`${it[1]} ${it[3] || ""}`).includes(q);
+  const visibles = CATS.map(c => ({ ...c, secs: c.secs.filter(s => (!enUso || secUsada(s)) && (!q || (s.tipos ? norm("tipos de turno mañana tarde partido refuerzo cambio de bus").includes(q) : s.items.some(coincide) || norm(s.nombre).includes(q)))) })).filter(c => c.secs.length);
+  const todasSecs = visibles.flatMap(c => c.secs);
+  const actual = q ? null : todasSecs.find(s => s.id === sec) || todasSecs[0];
+
+  const revision = revisarRestricciones(p);
+  const fila = it => (
+    <div key={it[0]} style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+      <div>
+        <div style={{ fontSize: 12, lineHeight: 1.35, color: usado(it[0]) ? C.text : C.muted, fontWeight: usado(it[0]) ? 600 : 400 }}>{it[1]}</div>
+        {it[3] && <div style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.45, marginTop: 2 }}>{it[3]}</div>}
+      </div>
+      <div>{it[2]}</div>
     </div>
   );
-  const revision = revisarRestricciones(p);
-  const conTipos = (p.tiposTurno || []).some(x => x.activo !== false);
-  const check = (k, invertido = false) => (
-    <input type="checkbox" checked={invertido ? !p[k] : !!p[k]} onChange={e => set(k, invertido ? !e.target.checked : e.target.checked)}
-      style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} />
+  const apartado = s => (
+    <div key={s.id} style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>
+      {s.nota && <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 6px", lineHeight: 1.5 }}>{s.nota}</div>}
+      {s.tipos ? <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} /> : (q ? s.items.filter(coincide) : s.items).map(fila)}
+    </div>
   );
+
   return (
-    // Altura limitada con su propia barra: el panel no puede empujar fuera de
-    // la pantalla la barra de botones ni el Gantt (antes se quedaba atascado)
-    <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "0 20px 14px", flexShrink: 0, maxHeight: "min(58vh, 620px)", overflowY: "auto", animation: "sched-fadein .15s ease both" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", marginBottom: 4, position: "sticky", top: 0, zIndex: 2, background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
+    <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, flexShrink: 0, height: "min(62vh, 660px)", display: "flex", flexDirection: "column", animation: "sched-fadein .15s ease both" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Restricciones</span>
-        {row("Calendario", <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />)}
+        <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />
         <span style={{ flex: 1 }} />
-        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font, marginBottom: 9 }}>Cerrar ✕</button>}
+        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar ✕</button>}
       </div>
-      {revision.length > 0 && (
-        <div style={{ margin: "8px 0 12px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
-          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "4px 36px", marginBottom: 14 }}>
-        <div>
-          {titulo("Vehículos")}
-          {row("Flota disponible", decInput("flotaMax", "autobuses (vacío = sin límite)", 1))}
-          {row("Rato mínimo en cochera entre dos bloques", numInput("margenCochera", "min"))}
-          {row("Amplitud máxima del autobús", decInput("amplitudBusMax", "min de la salida a la vuelta a cochera (vacío = sin límite)", 1))}
-          {row("Espera larga en cabecera: a cochera", decInput("esperaMaxCabecera", "min: si va a esperar más, vuelve a cochera y sale otra vez (vacío = espera en la cabecera)", 1))}
-          {sub("Coste")}
-          {row("Coste por autobús y día", decInput("costeVehiculoDia", "€/autobús·día"))}
-          {row("Coste por km", decInput("costeKm", "€/km (con los vacíos)"))}
-        </div>
-        <div>
-          {titulo("Conductores")}
-          {sub("Jornada")}
-          {conTipos ? (
-            <div style={{ fontSize: 11, color: C.muted, margin: "0 0 9px", lineHeight: 1.5 }}>Amplitud, trabajo y partidos: los marca cada <b style={{ color: C.text }}>tipo de turno</b> (abajo).</div>
-          ) : <>
-            {row("Amplitud máxima del turno", numInput("amplitudMax", "min"))}
-            {row("Jornada de trabajo máxima", numInput("jornadaMax", "min (piezas + huecos cortos)"))}
-            {row("Jornadas partidas por turno", numInput("maxPartidos", "como mucho (0 = sin partidos)"))}
-          </>}
-          {row("Hueco que ya no se paga", numInput("huecoNoPagado", "min o más (jornada partida)"))}
-          {sub("Piezas y relevos")}
-          {row("Pieza máxima", numInput("piezaMax", "min de relevo a relevo"))}
-          {row("Pieza mínima", numInput("piezaMin", "min (no se releva antes)"))}
-          {row("Piezas por turno", numInput("maxPiezas", "como mucho"))}
-          {conTipos
-            ? <div style={{ fontSize: 11, color: C.muted, margin: "0 0 9px", lineHeight: 1.5 }}>Si un turno puede cambiar de autobús: lo marca cada <b style={{ color: C.text }}>tipo de turno</b> (abajo, «Cambio de bus»).</div>
-            : row("Cambios de autobús por turno", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
-              <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = siempre el mismo autobús)</span></div>)}
-          {row("No mezclar líneas en un turno", <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>{check("turnoUnaLinea")}
-            <span style={{ fontSize: 11, color: C.dim }}>cada conductor hace una sola línea en toda su jornada (las variantes cuentan como la misma). Sin marcar puede hacer varias, pero solo si su autobús cambia de línea («Un autobús puede cambiar de línea en cabecera», o pasando por cochera) o si él cambia de autobús («Cambio de bus» de su tipo de turno y el máximo del escenario)</span></label>)}
-          {row("Cambios de autobús en todo el escenario", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CampoNumero valor={p.maxCambiosBusTotal} defecto={PARAMS_DEFECTO.maxCambiosBusTotal} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBusTotal", v)} />
-            <span style={{ fontSize: 11, color: C.dim }}>como mucho, sumando todos los turnos del día (vacío = sin límite)</span></div>)}
-          {row("Relevo en la misma cabecera", numInput("relevoMin", "min"))}
-          {row("Ir a otra cabecera", numInput("desplazamiento", "min como mínimo; si está lejos, lo que se tarde (distancia a la velocidad de los vacíos)"))}
-          {sub("Descanso en la jornada continuada")}
-          {row("Exigir descanso si la jornada pasa de", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CampoNumero valor={p.jornadaSinPausaMax > 0 ? p.jornadaSinPausaMax : null} defecto={PARAMS_DEFECTO.jornadaSinPausaMax} vacioEsNulo textoVacio="no" onCambiar={v => set("jornadaSinPausaMax", v ?? 0)} />
-            <span style={{ fontSize: 11, color: C.dim }}>min (vacío = sin descanso; Estatuto: 360)</span></div>)}
-          {row("Descanso de", numInput("pausaJornadaMin", "min seguidos entre viajes"))}
-          {sub("Conducción (UE 561/2006)")}
-          {row("Conducción continua máxima", numInput("conduccionContinuaMax", "min"))}
-          {row("Pausa de conducción", numInput("pausaConduccionMin", "min (se puede partir 15 + 30)"))}
-          {row("Conducción diaria máxima", numInput("conduccionDiariaMax", "min"))}
-          {row("No aplicar la UE 561/2006", check("aplicar561", true))}
-          <div style={{ fontSize: 10.5, color: C.dim, margin: "-4px 0 8px", lineHeight: 1.5 }}>La UE 561/2006 no se aplica a líneas regulares de viajeros de hasta 50 km (la mayoría de las urbanas). Marcada: sin pausa de conducción ni corte de pieza a las 4 h 30.</div>
-          {sub("Disponibles y coste")}
-          {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
-          {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
-          {row("Coste de cada cambio de autobús", decInput("costeCambioBus", "€ por cambio (lo que te molesta que un conductor cambie de autobús; Optimizar todo junto)"))}
-        </div>
-        <div>
-          {titulo("Línea")}
-          {row("Regulación en cabecera", numInput("regulacion", "min (si la línea no tiene la suya)"))}
-          {row("Un autobús puede cambiar de línea en cabecera", <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>{check("entreLineas")}
-            <span style={{ fontSize: 11, color: C.dim }}>sin pasar por cochera. Sin marcar, el autobús solo cambia de línea pasando por cochera (es de los autobuses, no de los conductores)</span></label>)}
-          {sub("Vacíos entre cabeceras")}
-          {row("Distancia máxima", decInput("vacioMaxKm", "km (0 = no se hacen)", 0.5))}
-          {row("Velocidad", numInput("velocidadVacio", "km/h"))}
-          {row("Factor de rodeo", decInput("factorRodeo", "× la línea recta", 0.05))}
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10, lineHeight: 1.5 }}>
-            Lo propio de cada línea (tiempos de recorrido por franja, su regulación y los tipos de vehículo que admite) se configura en Planning, en la ficha de la línea.
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {/* Izquierda: buscador, en uso / todas, categorías */}
+        <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`, padding: "12px 12px", overflowY: "auto", background: C.bg }}>
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
+            style={{ width: "100%", boxSizing: "border-box", background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 10 }} />
+          <div style={{ display: "flex", border: `1px solid ${C.border2}`, borderRadius: 6, overflow: "hidden", marginBottom: 14 }}>
+            {[[true, "En uso"], [false, "Todas"]].map(([v, t]) => (
+              <button key={t} onClick={() => setEnUso(v)} style={{ flex: 1, padding: "5px 0", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: font, background: enUso === v ? C.surface2 : "transparent", color: enUso === v ? C.text : C.dim }}>{t}</button>
+            ))}
           </div>
+          {visibles.map(c => (
+            <div key={c.id} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.green, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>{ICONO[c.id]}{c.nombre}</div>
+              {c.secs.map(s => {
+                const activo = !q && actual?.id === s.id;
+                return (
+                  <button key={s.id} onClick={() => { setBusca(""); setSec(s.id); }} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", padding: "5px 8px 5px 23px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 12, fontFamily: font, background: activo ? C.surface2 : "none", color: activo ? C.text : C.muted }}>
+                    <span style={{ flex: 1 }}>{s.nombre}</span>
+                    {secUsada(s) && <span title="Tiene algo cambiado" style={{ width: 6, height: 6, borderRadius: 3, background: C.green, flexShrink: 0 }} />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          {!visibles.length && <div style={{ fontSize: 11.5, color: C.dim, padding: 6 }}>{enUso ? "No has cambiado nada todavía: está todo como viene." : `Nada con «${busca}».`}</div>}
         </div>
-      </div>
-      <div style={{ fontSize: 12, color: C.blueText, fontWeight: 700, margin: "6px 0 10px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Tipos de turno <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>· de conductor (mañana, tarde, partido, refuerzo…)</span></div>
-      <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} />
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, margin: "6px 0 12px", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>Estrategia del optimizador para este calendario <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· la elige Optimizar; también puedes fijarla a mano</span></div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
-        <div>
-          {row("Qué autobús coge cada viaje", sel("eleccion", [["optimo", "El mínimo de autobuses (óptimo, como Optibus)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]]))}
-          {row("Vacíos entre cabeceras", sel("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]]))}
-        </div>
-        <div>
-          {row("Dónde se corta la pieza (relevo)", sel("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[225, 210, 180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])]))}
-          {row("Cómo se forman los turnos", sel("metodo", [["particion", "La mejor combinación (como Optibus / GoalSystem)"], ["voraz", "Pieza a pieza (rápido)"]]))}
-          {p.metodo === "voraz" && row("A qué conductor va cada pieza", sel("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]]))}
+        {/* Derecha: el apartado elegido (o lo que coincide con la búsqueda) */}
+        <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "14px 24px" }}>
+          {revision.length > 0 && (
+            <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
+              {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
+            </div>
+          )}
+          {q
+            ? (todasSecs.length ? todasSecs.map(apartado) : <div style={{ fontSize: 12, color: C.dim }}>Ninguna restricción con «{busca}».</div>)
+            : actual && <>
+              <div style={{ fontSize: 16, color: C.text, fontWeight: 600, marginBottom: 12 }}>{actual.nombre}</div>
+              {apartado({ ...actual, nombre: "" })}
+            </>}
         </div>
       </div>
     </div>
