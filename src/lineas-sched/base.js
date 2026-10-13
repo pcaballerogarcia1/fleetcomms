@@ -73,9 +73,10 @@ export function salidasDe(sentido, dia, red, cfgLinea) {
     const cal = red?.calendarios?.find(c => c.id === dia);
     if (!cal || !sentido.porServicio) return { lista: [], aproximado: !sentido.porServicio };
     const set = new Set(cal.servicios);
-    return { lista: sentido.porServicio.filter(([k]) => set.has(k)).flatMap(([, l]) => l).sort((a, b) => a - b), aproximado: false };
+    // sin repetidas: el mismo viaje en dos servicios del calendario (error del GTFS) es uno
+    return { lista: [...new Set(sentido.porServicio.filter(([k]) => set.has(k)).flatMap(([, l]) => l))].sort((a, b) => a - b), aproximado: false };
   }
-  if (Array.isArray(sentido.salidas?.[dia])) return { lista: sentido.salidas[dia], aproximado: false };
+  if (Array.isArray(sentido.salidas?.[dia])) return { lista: [...new Set(sentido.salidas[dia])], aproximado: false };
   const n = sentido.viajes?.[dia] || 0;
   const a = hhmmAMin(sentido.primera), b = hhmmAMin(sentido.ultima);
   if (!n || a == null) return { lista: [], aproximado: true };

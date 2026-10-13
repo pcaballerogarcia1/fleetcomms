@@ -76,6 +76,51 @@ export function kmTrazado(pts) {
   return Math.round(km * 10) / 10;
 }
 
+// Tipo de día que lleva escrito el código del viaje en los GTFS del Consorcio
+// de Transportes de Madrid: «…-8__481____2_06:00:00_1_-…» → 2 (1 laborable,
+// 2 sábado, 3 domingo/festivo). 0 si no lo lleva.
+/** Horas de salida ordenadas y sin repetir (dos salidas en el mismo minuto = el mismo viaje). */
+export const sinRepetidas = l => [...new Set(l)].sort((a, b) => a - b);
+
+export function tipoDiaDelViaje(tripId) {
+  const m = /_([123])_\d{2}:\d{2}:\d{2}_\d+_/.exec(tripId || "");
+  return m ? Number(m[1]) : 0;
+}
+// Días de la semana (getUTCDay) de cada tipo
+const SEMANA_TIPO = { 1: [1, 2, 3, 4, 5], 2: [6], 3: [0] };
+
+/**
+ * El Consorcio mete en un mismo servicio (un autobús) los viajes de
+ * laborable, sábado y festivo, y le pone «todos los días» en calendar.txt:
+ * leído tal cual, un lunes salían también los viajes del sábado y del
+ * domingo (tres salidas a la misma hora). Los servicios que mezclan viajes
+ * de varios tipos se parten en uno por tipo, con solo sus días de la semana.
+ * Los que no mezclan (o feeds sin esos códigos) no se tocan.
+ */
+export function separarServiciosMixtos(vServ, vTipo, servDias, servIdx) {
+  const tipos = new Map(); // servicio → Set(tipo)
+  for (let v = 0; v < vServ.length; v++) {
+    if (!vTipo[v]) continue;
+    if (!tipos.has(vServ[v])) tipos.set(vServ[v], new Set());
+    tipos.get(vServ[v]).add(vTipo[v]);
+  }
+  const nombres = [];
+  for (const [id, k] of servIdx) nombres[k] = id;
+  const nuevo = new Map(); // "servicio|tipo" → índice del servicio partido
+  for (let v = 0; v < vServ.length; v++) {
+    const k = vServ[v], t = vTipo[v];
+    if (!t || (tipos.get(k)?.size || 0) < 2) continue;
+    const clave = `${k}|${t}`;
+    if (!nuevo.has(clave)) {
+      const dias = [...servDias[k]].filter(d => SEMANA_TIPO[t].includes(new Date(d + "T00:00:00Z").getUTCDay()));
+      nuevo.set(clave, servDias.length);
+      servIdx.set(`${nombres[k]}#${t}`, servDias.length);
+      servDias.push(new Set(dias.length ? dias : servDias[k]));
+    }
+    vServ[v] = nuevo.get(clave);
+  }
+}
+
 export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
   const entries = await zipEntries(blob);
   for (const f of ["stops.txt", "routes.txt", "trips.txt", "stop_times.txt"]) {
@@ -140,7 +185,7 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
   // Viajes
   paso("Leyendo viajes…");
   const viajeIdx = new Map();
-  const vRuta = [], vDir = [], vCab = [], vServ = [], vShape = [];
+  const vRuta = [], vDir = [], vCab = [], vServ = [], vShape = [], vTipo = [];
   await leerCsv(blob, entries, "trips.txt", (c, i) => {
     const r = rutaIdx.get(c[i.route_id]);
     if (r === undefined) return;
@@ -150,8 +195,10 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     vCab.push(i.trip_headsign != null ? (c[i.trip_headsign] || "").trim() : "");
     vServ.push(serv(c[i.service_id]));
     vShape.push(i.shape_id != null ? c[i.shape_id] || "" : "");
+    vTipo.push(tipoDiaDelViaje(c[i.trip_id]));
   }, bytes);
   const nV = vRuta.length;
+  separarServiciosMixtos(vServ, vTipo, servDias, servIdx);
   const vPat = new Int32Array(nV).fill(-1), vIni = new Int32Array(nV).fill(-1), vFin = new Int32Array(nV).fill(-1);
 
   // Horarios de paso: patrón de paradas y hora de salida/llegada de cada viaje.
@@ -191,6 +238,29 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
       if (v !== undefined && resto.has(v)) resto.get(v).push(fila(c, i));
     });
     for (const [v, rows] of resto) cerrar(v, rows);
+  }
+
+  // Salidas a las 00:00 (o de madrugada) que en realidad cierran el día: el
+  // Consorcio de Madrid pone el último autobús a «00:00:00» en vez de
+  // «24:00:00» y salía el primero de la lista. Por línea y sentido: si hay
+  // salidas antes de las 4:00 seguidas de un hueco de más de 1,5 h hasta la
+  // siguiente, se pasan al final del día (24:00 = 1440). Los búhos (servicio
+  // seguido toda la noche) no tienen ese hueco y se quedan como están.
+  {
+    const porSentido = new Map();
+    for (let v = 0; v < nV; v++) {
+      if (vIni[v] < 0) continue;
+      const k = `${vRuta[v]}|${vDir[v]}`;
+      if (!porSentido.has(k)) porSentido.set(k, []);
+      porSentido.get(k).push(v);
+    }
+    for (const vs of porSentido.values()) {
+      const horas = [...new Set(vs.map(v => vIni[v]))].sort((a, b) => a - b);
+      let corte = -1;
+      for (let j = 0; j < horas.length - 1 && horas[j] < 240; j++) if (horas[j + 1] - horas[j] > 90) corte = horas[j];
+      if (corte < 0) continue;
+      for (const v of vs) if (vIni[v] <= corte) { vIni[v] += 1440; if (vFin[v] >= 0) vFin[v] += 1440; }
+    }
   }
 
   // Día de referencia de cada tipo: el que más viajes tiene
@@ -265,8 +335,10 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     const porServicio = [...porServ].map(([k, l]) => [k, l.sort((a, b) => a - b)]);
     for (const t of TIPOS_DIA) {
       const delDia = sinCalendario ? (t.id === "laborable" ? vs : []) : vs.filter(v => activo[t.id].has(vServ[v]));
-      viajes[t.id] = delDia.length;
-      salidas[t.id] = delDia.map(v => vIni[v]).filter(x => x >= 0).sort((a, b) => a - b);
+      // sin repetidas: el mismo viaje en dos servicios que coinciden ese día
+      // (errores de calendario del operador) es un solo autobús
+      salidas[t.id] = sinRepetidas(delDia.map(v => vIni[v]).filter(x => x >= 0));
+      viajes[t.id] = salidas[t.id].length || delDia.length;
     }
     const porFranja = new Map();
     let primera = null, ultima = null;

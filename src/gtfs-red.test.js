@@ -119,3 +119,66 @@ describe("red de líneas desde GTFS", () => {
     expect(tiempoEfectivo(s, "13-16", {})).toEqual({ min: null, manual: false, viajes: 0 });
   });
 });
+
+// GTFS del Consorcio de Madrid: un servicio (un autobús) con viajes de
+// laborable (_1_), sábado (_2_) y festivo (_3_), marcado «todos los días»;
+// y el último autobús a las «00:00:00»
+describe("GTFS del Consorcio de Madrid", () => {
+  const crtm = () => {
+    const viaje = (tipo, hora, n) => `81_L__481___-L__481____${tipo}_${hora}_1_-__${n}_L__481___`;
+    const filas = [["1", "06:00:00", 1], ["1", "06:20:00", 2], ["2", "06:00:00", 3], ["3", "06:00:00", 4], ["1", "00:00:00", 5], ["2", "08:00:00", 6]];
+    const f = {
+      "agency.txt": "agency_id,agency_name\nCRTM,Consorcio\n",
+      "routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nL,CRTM,481,,3\n",
+      "stops.txt": "stop_id,stop_name,stop_lat,stop_lon\nA,Oca,40.40,-3.70\nB,Hospital,40.41,-3.71\n",
+      "trips.txt": "route_id,service_id,trip_id,direction_id\n" + filas.map(([t, h, n]) => `L,81,${viaje(t, h, n)},0\n`).join(""),
+      "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n" + filas.map(([t, h, n]) => {
+        const [hh, mm] = h.split(":").map(Number), fin = hh * 60 + mm + 40;
+        const f2 = `${String(Math.floor(fin / 60)).padStart(2, "0")}:${String(fin % 60).padStart(2, "0")}:00`;
+        return `${viaje(t, h, n)},${h},${h},A,1\n${viaje(t, h, n)},${f2},${f2},B,2\n`;
+      }).join(""),
+      // del lunes 5 al domingo 11 de octubre de 2026, todos los días
+      "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n81,1,1,1,1,1,1,1,20261005,20261011\n",
+    };
+    return new Blob([zipSync(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, strToU8(v)])))]);
+  };
+  it("cada viaje sale solo en su tipo de día (no tres salidas a la misma hora)", async () => {
+    const r = await parseGtfsRed(crtm());
+    const ida = r.lineas[0].sentidos[0];
+    expect(ida.salidas.laborable).toEqual([360, 380, 1440]);
+    expect(ida.salidas.sabado).toEqual([360, 480]);
+    expect(ida.salidas.festivo).toEqual([360]);
+    // y los calendarios: lunes a viernes, sábado y domingo por separado
+    expect(r.calendarios.map(c => c.fechas.length).sort()).toEqual([1, 1, 5]);
+  });
+  it("la salida de las 00:00 va al final del día (24:00), no al principio", async () => {
+    const ida = (await parseGtfsRed(crtm())).lineas[0].sentidos[0];
+    expect(ida.salidas.laborable.at(-1)).toBe(1440);
+    expect(ida.primera).toBe("06:00");
+  });
+  it("si el GTFS no lleva esos códigos, no se toca nada", async () => {
+    const r = await parseGtfsRed(red());
+    expect(r.lineas.find(l => l.id === "L1").sentidos[0].viajes).toEqual({ laborable: 2, sabado: 1, festivo: 0 });
+  });
+});
+
+describe("viajes repetidos en el GTFS", () => {
+  it("el mismo viaje en dos servicios que coinciden ese día cuenta una vez", async () => {
+    const f = {
+      "agency.txt": "agency_id,agency_name\nA,Op\n",
+      "routes.txt": "route_id,agency_id,route_short_name,route_type\nR,A,651,3\n",
+      "stops.txt": "stop_id,stop_name,stop_lat,stop_lon\nA,Uno,40.40,-3.70\nB,Dos,40.41,-3.71\n",
+      "trips.txt": "route_id,service_id,trip_id,direction_id\nR,LJ,t1,0\nR,LUN,t2,0\nR,LJ,t3,0\n",
+      "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n" +
+        "t1,05:44:04,05:44:04,A,1\nt1,06:20:00,06:20:00,B,2\nt2,05:44:04,05:44:04,A,1\nt2,06:20:00,06:20:00,B,2\nt3,07:00:00,07:00:00,A,1\nt3,07:30:00,07:30:00,B,2\n",
+      // lunes a jueves, y «solo lunes» (con la fecha de fin mal: siguen los dos)
+      "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nLJ,1,1,1,1,0,0,0,20261005,20261008\nLUN,1,0,0,0,0,0,0,20261005,20271005\n",
+    };
+    const r = await parseGtfsRed(new Blob([zipSync(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, strToU8(v)])))]));
+    const ida = r.lineas[0].sentidos[0];
+    expect(ida.salidas.laborable).toEqual([344, 420]);
+    expect(ida.viajes.laborable).toBe(2);
+    const lunes = r.calendarios.find(c => c.fechas.includes("2026-10-05"));
+    expect(salidasDe(ida, lunes.id, r).lista).toEqual([344, 420]);
+  });
+});
