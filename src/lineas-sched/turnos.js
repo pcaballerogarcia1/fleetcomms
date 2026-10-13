@@ -2,7 +2,7 @@
 // turnos de conductor (tipos de turno, partición, validación).
 
 import { particionTurnos } from "../lineas-particion.js";
-import { hm, reloj } from "./base.js";
+import { hm, reloj, kmRecta } from "./base.js";
 import { clavePieza } from "./manual.js";
 
 // 2) Turnos de conductor
@@ -16,7 +16,29 @@ export const relevoPermitido = (p, find) => {
 // La cabecera donde acaba un trozo de autobús (la llegada de su último viaje con viajeros)
 export const dondeAcaba = viajes => { for (let i = viajes.length - 1; i >= 0; i--) if (!viajes[i].vacio) return viajes[i].d; return viajes.at(-1)?.d; };
 
-function cortarPiezas(vehiculos, p, find) {
+// ── Entre dos piezas seguidas de un turno ──
+// Seguir en el mismo autobús: nada. Cambiar de autobús en la misma cabecera:
+// el relevo. En otra cabecera: el conductor tiene que llegar hasta allí; se
+// tarda lo que diga la distancia (a la velocidad de los vacíos, con el
+// rodeo), y como poco el mínimo de las restricciones. Ese viaje es trabajo:
+// no cuenta como pausa ni como hueco sin pagar.
+export function entrePiezas(a, b, p) {
+  // seguir en el mismo autobús: la pieza siguiente de ese autobús (mientras se
+  // calcula, `previa`); ya cerrado, el mismo autobús y donde lo dejó
+  const sigue = b.previa !== undefined ? b.previa === a : a.vehiculo === b.vehiculo && a.d === b.o;
+  const cambio = a.vehiculo !== b.vehiculo;
+  if (sigue) return { sigue, cambio: false, viaje: 0, hace: 0, km: 0 };
+  if (a.d != null && a.d === b.o) return { sigue, cambio, viaje: 0, hace: p.relevoMin, km: 0 };
+  let km = null, viaje = p.desplazamiento;
+  if (a.dLL && b.oLL) {
+    km = Math.round(kmRecta(a.dLL, b.oLL) * (p.factorRodeo || 1.35) * 10) / 10;
+    viaje = Math.max(p.desplazamiento, Math.ceil((km / Math.max(1, p.velocidadVacio || 25)) * 60));
+  }
+  return { sigue, cambio, viaje, hace: viaje, km };
+}
+const conLimiteCambios = p => p.maxCambiosBus != null && p.maxCambiosBus !== "" && p.maxCambiosBus >= 0;
+
+function cortarPiezas(vehiculos, p, find, geo = null) {
   const piezas = [];
   const puedeRelevar = relevoPermitido(p, find);
   for (const veh of vehiculos) {
@@ -65,6 +87,8 @@ function cortarPiezas(vehiculos, p, find) {
       const pz = {
         vehiculo: veh.id, inicio: viajes[0].dep, fin: viajes.at(-1).arr, conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes, previa,
         o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
+        // dónde coge y deja el autobús el conductor (para lo que tarda en ir de una pieza a otra)
+        oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,
       };
       piezas.push(pz); previa = pz;
     }
@@ -111,19 +135,21 @@ function efectivos(p) {
 
 // Estado de un turno al añadirle una pieza (null si no cabe)
 function anadir(t, pz, p) {
-  let hueco = 0, partido = false;
+  let hueco = 0, partido = false, viaje = 0, cambios = t ? t.cambios || 0 : 0;
   if (t) {
     const ultima = t.piezas[t.piezas.length - 1];
     hueco = pz.inicio - t.fin;
-    const sigue = pz.previa === ultima; // sigue en el mismo autobús: no hay relevo
-    if (hueco < (sigue ? 0 : t.d === pz.o ? p.relevoMin : p.desplazamiento)) return null;
+    const e = entrePiezas(ultima, pz, p);
+    if (hueco < e.hace) return null;
     if (t.piezas.length >= p.maxPiezas) return null;
-    partido = hueco >= p.huecoNoPagado;
+    if (e.cambio) { cambios++; if (conLimiteCambios(p) && cambios > p.maxCambiosBus) return null; }
+    viaje = e.viaje; // ir a la otra cabecera: trabajo, no pausa
+    partido = hueco - viaje >= p.huecoNoPagado;
     if (partido && t.partidos >= p.maxPartidos) return null;
   }
   const inicio = t ? t.inicio : pz.inicio;
   if (pz.fin - inicio > p.amplitudMax) return null;
-  const trabajo = (t ? t.trabajo : 0) + (partido ? 0 : hueco) + (pz.fin - pz.inicio);
+  const trabajo = (t ? t.trabajo : 0) + (partido ? viaje : hueco) + (pz.fin - pz.inicio);
   if (trabajo > p.jornadaMax) return null;
   const conduccion = (t ? t.conduccion : 0) + pz.conduccion;
   if (p.aplicar561 && conduccion > p.conduccionDiariaMax) return null;
@@ -131,7 +157,7 @@ function anadir(t, pz, p) {
   let seguido = t ? t.seguido : 0, pausaAcum = t ? t.pausaAcum : 0, hay15 = t ? t.hay15 : false, finPrev = t ? t.fin : null;
   for (const v of pz.viajes) {
     if (finPrev != null) {
-      const h = v.dep - finPrev;
+      const h = v.dep - finPrev - (v === pz.viajes[0] ? viaje : 0); // el viaje a la otra cabecera no es descanso
       if (h >= 15) pausaAcum += h; // la pausa de conducción se puede partir 15 + 30
       if (h >= (p.pausaJornadaMin || 15)) hay15 = true; // descanso de jornada (Estatuto / convenio)
       if (pausaAcum >= p.pausaConduccionMin) { seguido = 0; pausaAcum = 0; }
@@ -141,7 +167,7 @@ function anadir(t, pz, p) {
     finPrev = v.arr;
   }
   if (p.jornadaSinPausaMax > 0 && pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // descanso si la jornada pasa de X (sin valor: no se exige)
-  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco : 0) };
+  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, cambios, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco - viaje : 0) };
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
 }
@@ -175,14 +201,14 @@ export function asignarTipos(turnos, pOriginal) {
 // ningún tipo, muchísimo (solo se usa si no hay otra forma de cubrir la pieza).
 function costeTurno(e, piezas, p) {
   const porConductor = p.objetivoTurnos === "horas" ? 60 : 600;
-  let c = porConductor + e.trabajo + piezas.length * 5;
+  let c = porConductor + e.trabajo + piezas.length * 5 + (e.cambios || 0) * 5;
   if (e.sinValidar) c += 5000;
   else if (p._tipos && !tipoDeTurno(e, p)) c += 900;
   return c;
 }
 
 function estadoSuelto(pz) {
-  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0 };
+  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0 };
 }
 
 function turnosPorParticion(piezas, p) {
@@ -222,7 +248,7 @@ function turnosDeGrupos(piezas, grupos, p) {
 export function gruposTurnos(resVehiculos, opciones = {}) {
   const r = resVehiculos;
   const p = efectivos({ ...r.params, ...opciones });
-  const piezas = cortarPiezas(r.vehiculos, p, r.find);
+  const piezas = cortarPiezas(r.vehiculos, p, r.find, r.ctx?.geo);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
   return turnosPorParticion(piezas, p).map(t => t.piezas.map(clavePieza));
 }
@@ -239,9 +265,9 @@ export function validar(piezas, p) {
   return t;
 }
 
-export function programarTurnos(vehiculos, pOriginal, find, grupos = null) {
+export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo = null) {
   const p = efectivos(pOriginal);
-  const piezas = cortarPiezas(vehiculos, p, find);
+  const piezas = cortarPiezas(vehiculos, p, find, geo);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
   const turnos = p.metodo === "voraz" ? [] : grupos ? turnosDeGrupos(piezas, grupos, p) : turnosPorParticion(piezas, p);
   // Voraz: cada pieza va al conductor que mejor la aprovecha: el que sigue en
@@ -314,17 +340,23 @@ export function cerrarTurno(t, pOriginal) {
   t.inicio = t.piezas[0].inicio;
   t.fin = t.piezas.at(-1).fin;
   t.duracion = t.fin - t.inicio; // amplitud
-  t.trabajo = t.duracion - t.piezas.slice(1).reduce((s, pz, i) => { const h = pz.inicio - t.piezas[i].fin; return s + (h >= p.huecoNoPagado ? h : 0); }, 0);
-  t.partidos = t.piezas.slice(1).filter((pz, i) => pz.inicio - t.piezas[i].fin >= p.huecoNoPagado).length;
-  t.split = Math.max(0, ...t.piezas.slice(1).map((pz, i) => pz.inicio - t.piezas[i].fin).filter(h => h >= p.huecoNoPagado));
+  // entre cada dos piezas: el cambio de autobús y lo que se tarda en ir a la otra cabecera
+  const entre = t.piezas.slice(1).map((pz, i) => ({ ...entrePiezas(t.piezas[i], pz, p), hueco: pz.inicio - t.piezas[i].fin, a: t.piezas[i], b: pz }));
+  const sinPagar = entre.map(e => e.hueco - e.viaje).filter(h => h >= p.huecoNoPagado);
+  t.trabajo = t.duracion - sinPagar.reduce((s, h) => s + h, 0);
+  t.partidos = sinPagar.length;
+  t.split = Math.max(0, ...sinPagar);
+  t.cambiosBus = entre.filter(e => e.cambio).length;
+  t.desplazamientos = entre.filter(e => e.viaje > 0).map(e => ({ inicio: e.a.fin, fin: e.a.fin + e.viaje, km: e.km, desde: e.a.d, hasta: e.b.o }));
   t.conduccion = viajes.reduce((s, v) => s + (v.arr - v.dep), 0);
   t.vehiculos = [...new Set(t.piezas.map(pz => pz.vehiculo))];
+  const viajeAntes = new Map(entre.map(e => [e.b.viajes[0], e.viaje])); // el viaje a la otra cabecera no es descanso
   // Conducción continua: se acumula hasta una pausa de pausaConduccionMin
   // (puede partirse en 15 + 30); la pausa entre piezas y las esperas largas cuentan
   let seguido = 0, peor = 0, pausaAcum = 0, hayPausa15 = false;
   viajes.forEach((v, i) => {
     if (i > 0) {
-      const hueco = v.dep - viajes[i - 1].arr;
+      const hueco = v.dep - viajes[i - 1].arr - (viajeAntes.get(v) || 0);
       if (hueco >= 15) pausaAcum += hueco;
       if (hueco >= (p.pausaJornadaMin || 15)) hayPausa15 = true;
       if (pausaAcum >= p.pausaConduccionMin) { seguido = 0; pausaAcum = 0; }
@@ -347,12 +379,10 @@ export function cerrarTurno(t, pOriginal) {
     if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
   }
   if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
-  t.piezas.slice(1).forEach((pz, i) => {
-    const a = t.piezas[i], hueco = pz.inicio - a.fin;
-    if (hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(a.inicio)} y las ${reloj(pz.inicio)} se solapan`); return; }
-    const sigue = a.vehiculo === pz.vehiculo; // sigue en el mismo autobús: no hay relevo
-    const hace = sigue ? 0 : a.d != null && a.d === pz.o ? p.relevoMin : p.desplazamiento;
-    if (hueco < hace) t.avisos.push(`Solo ${hueco} min para ${a.d === pz.o ? "relevar" : "ir a otra cabecera"} a las ${reloj(pz.inicio)} (hacen falta ${hace})`);
-  });
+  if (conLimiteCambios(p) && t.cambiosBus > p.maxCambiosBus) t.avisos.push(`${t.cambiosBus} cambios de autobús: más de ${p.maxCambiosBus}`);
+  for (const e of entre) {
+    if (e.hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(e.a.inicio)} y las ${reloj(e.b.inicio)} se solapan`); continue; }
+    if (e.hueco < e.hace) t.avisos.push(`Solo ${e.hueco} min para ${e.viaje ? `ir a otra cabecera${e.km ? ` (${String(e.km).replace(".", ",")} km)` : ""}` : "relevar"} a las ${reloj(e.b.inicio)} (hacen falta ${e.hace})`);
+  }
   return t;
 }

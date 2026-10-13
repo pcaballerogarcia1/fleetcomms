@@ -76,7 +76,7 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
 export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {}) {
   const r = resVehiculos;
   const p = { ...r.params, ...opciones };
-  const { turnos, piezas } = programarTurnos(r.vehiculos, p, r.find, grupos);
+  const { turnos, piezas } = programarTurnos(r.vehiculos, p, r.find, grupos, r.ctx?.geo);
   const porVehiculo = new Map(r.vehiculos.map(v => [v.id, (v.relevos = [])]));
   for (const pz of [...piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
   return { ...r, turnos, params: p, kpis: kpisServicio(r.viajes, r.vehiculos, turnos, r.autobuses) };
@@ -185,7 +185,7 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
   const variantes = cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]);
   const probadas = [];
   for (const dt of variantes) {
-    const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" ? "horas" : "conductores", ...dt }, base.find);
+    const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" ? "horas" : "conductores", ...dt }, base.find, null, base.ctx?.geo);
     const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
     const r = {
       estrategia: dt, turnos: turnos.length, horasPagadas,

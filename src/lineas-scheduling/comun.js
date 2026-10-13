@@ -61,12 +61,17 @@ export function filasDe(res, modo) {
   }
   return res.turnos.map(t => {
     const viajes = t.piezas.flatMap(pz => pz.viajes);
-    const tramosPausa = t.piezas.slice(1).map((pz, i) => ({ inicio: t.piezas[i].fin, fin: pz.inicio }));
+    // entre piezas: primero el viaje a la otra cabecera (si cambia de cabecera) y lo que queda, pausa
+    const desplazamientos = t.desplazamientos || [];
+    const tramosPausa = t.piezas.slice(1).map((pz, i) => {
+      const d = desplazamientos.find(x => x.inicio === t.piezas[i].fin);
+      return { inicio: d ? Math.min(d.fin, pz.inicio) : t.piezas[i].fin, fin: pz.inicio };
+    }).filter(x => x.fin > x.inicio);
     // el split del partido: los huecos que ya no se pagan
     const splits = tramosPausa.filter(x => x.fin - x.inicio >= (res.params?.huecoNoPagado ?? 60));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
     return fila(`T${t.id}`, `${t.tipoNombre ? `${t.tipoNombre} · ` : t.tipo === null ? "Sin tipo · " : ""}${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos && t.tipo !== "partido" ? " · partido" : ""}`, viajes, {
-      id: t.id, tramosPausa, splits, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}`, manual: !!t.manual,
+      id: t.id, tramosPausa, splits, desplazamientos, cambiosBus: t.cambiosBus || 0, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}${t.desplazamientos?.length ? ` · ${t.desplazamientos.length} desplaz.` : ""}`, manual: !!t.manual,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
       piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
     });

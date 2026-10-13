@@ -38,7 +38,8 @@ export const PARAMS_DEFECTO = {
   tiposTurno: TIPOS_TURNO_DEFECTO, // si hay alguno activo, sus límites mandan sobre amplitudMax, jornadaMax y maxPartidos
   huecoNoPagado: 60,    // min: un hueco entre piezas desde este largo no se paga (jornada partida)
   relevoMin: 5,         // min para relevar en la misma cabecera
-  desplazamiento: 20,   // min para ir a otra cabecera a coger otra pieza
+  desplazamiento: 20,   // min como mínimo para ir a otra cabecera a coger otra pieza (si está lejos, lo que se tarde: distancia a la velocidad de los vacíos)
+  maxCambiosBus: null,  // cambios de autobús por turno como mucho (null = sin límite; 0 = todo el turno en el mismo)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
@@ -164,7 +165,7 @@ const COLOR_VACIO = "#64748b";
 
 export const PEGADAS_KM = 0.3; // dos sitios a menos de esto son el mismo (sin vacío)
 
-function kmRecta([a, b], [c, d]) {
+export function kmRecta([a, b], [c, d]) {
   const dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a * Math.PI / 180) * Math.cos(c * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));

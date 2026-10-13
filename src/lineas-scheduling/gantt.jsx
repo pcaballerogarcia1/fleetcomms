@@ -92,6 +92,12 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                 <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
                   background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)", border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3 }} />
               ))}
+              {(r.desplazamientos || []).map((x, i) => (
+                // el conductor va de una cabecera a otra para coger el siguiente autobús (trabajo, no pausa)
+                <div key={`d${i}`} title={`Desplazamiento a otra cabecera ${hhmm(x.inicio)}–${hhmm(x.fin)} · ${x.fin - x.inicio} min${x.km ? ` · ${String(x.km).replace(".", ",")} km` : ""}`}
+                  style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4, zIndex: 1,
+                    background: "repeating-linear-gradient(90deg,rgba(167,139,250,0.35) 0,rgba(167,139,250,0.35) 3px,transparent 3px,transparent 6px)", border: "1px solid rgba(167,139,250,0.7)", borderRadius: 3 }} />
+              ))}
               {r.splits.map((x, i) => {
                 // split del partido: línea naranja de punta a punta del hueco sin pagar, con su duración
                 const w = X(x.fin) - X(x.inicio);

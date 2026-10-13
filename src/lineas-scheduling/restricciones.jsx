@@ -156,8 +156,11 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {row("Pieza máxima", numInput("piezaMax", "min de relevo a relevo"))}
           {row("Pieza mínima", numInput("piezaMin", "min (no se releva antes)"))}
           {row("Piezas por turno", numInput("maxPiezas", "como mucho"))}
+          {row("Cambios de autobús por turno", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
+            <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = todo el turno en el mismo autobús)</span></div>)}
           {row("Relevo en la misma cabecera", numInput("relevoMin", "min"))}
-          {row("Ir a otra cabecera", numInput("desplazamiento", "min entre piezas"))}
+          {row("Ir a otra cabecera", numInput("desplazamiento", "min como mínimo; si está lejos, lo que se tarde (distancia a la velocidad de los vacíos)"))}
           {sub("Descanso en la jornada continuada")}
           {row("Exigir descanso si la jornada pasa de", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <CampoNumero valor={p.jornadaSinPausaMax > 0 ? p.jornadaSinPausaMax : null} defecto={PARAMS_DEFECTO.jornadaSinPausaMax} vacioEsNulo textoVacio="no" onCambiar={v => set("jornadaSinPausaMax", v ?? 0)} />

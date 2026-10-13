@@ -368,7 +368,7 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo se hacen los turnos de conductor?",
-      a: "Cada bloque se corta en piezas con relevo en cabecera y cada conductor va encadenando piezas de cualquier autobús (con el tiempo de relevo, o de desplazamiento si cambia de cabecera) hasta llenar su jornada: tantas piezas como quepan. Se cumplen la amplitud y la jornada máximas, la conducción continua y diaria (UE 561/2006), el descanso de 15 min del Estatuto y las piezas y jornadas partidas máximas (todo en Restricciones). Los huecos cortos entre piezas se pagan; los largos son jornada partida. Optimizar prueba distintos largos de pieza y formas de repartirlas. En el Gantt, las marcas blancas \"T12\" son los relevos; la vista Trabajadores enseña cada turno con sus piezas.",
+      a: "Cada bloque se corta en piezas con relevo en cabecera y cada conductor va encadenando piezas de cualquier autobús (con el tiempo de relevo; si cambia de cabecera, lo que tarda en llegar según la distancia, que cuenta como trabajo y no como pausa; y como mucho los cambios de autobús que se pongan en Restricciones) hasta llenar su jornada: tantas piezas como quepan. Se cumplen la amplitud y la jornada máximas, la conducción continua y diaria (UE 561/2006), el descanso de 15 min del Estatuto y las piezas y jornadas partidas máximas (todo en Restricciones). Los huecos cortos entre piezas se pagan; los largos son jornada partida. Optimizar prueba distintos largos de pieza y formas de repartirlas. En el Gantt, las marcas blancas \"T12\" son los relevos; la vista Trabajadores enseña cada turno con sus piezas.",
       tags: "turnos conductor piezas relevo pausa jornada amplitud 561 estatuto",
     },
     {
