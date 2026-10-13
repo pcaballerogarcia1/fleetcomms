@@ -195,8 +195,11 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
     if (!c?.res) return false;
     const claves = Array.isArray(clave) ? clave : null;
     const deVeh = tipo === "viaje" || tipo === "viajes";
-    const r = tipo === "viaje" ? moverViaje(c.res, clave, destino)
-      : tipo === "viajes" ? moverViajes(c.res, claves, destino)
+    // las expediciones se mueven sobre los autobuses del paso 1 tal cual (sin los
+    // intercambios de «los autobuses siguen al conductor»), como al recalcular
+    const baseVeh = c.res.vehiculosBase ? { ...c.res, vehiculos: c.res.vehiculosBase, vehiculosBase: undefined } : c.res;
+    const r = tipo === "viaje" ? moverViaje(baseVeh, clave, destino)
+      : tipo === "viajes" ? moverViajes(baseVeh, claves, destino)
         : tipo === "viajesTurno" ? moverViajesTurno(c.res, claves, destino)
           : moverPieza(c.res, clave, destino);
     if (r.error) { setNota({ texto: `No se puede: ${r.error}`, error: true }); return false; }

@@ -89,7 +89,8 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
 
   // 7) Restricciones: borrar un número para escribir otro ya no deja un 0 guardado
   await page.getByRole("button", { name: /Restricciones/ }).first().click();
-  const piezas = page.locator("div").filter({ has: page.locator("label", { hasText: /^Piezas por turno$/ }) }).last().locator("input");
+  await page.getByRole("button", { name: "Piezas y relevos" }).click();
+  const piezas = page.locator("div").filter({ has: page.getByText("Piezas por turno", { exact: true }) }).filter({ has: page.locator("input") }).last().locator("input");
   await piezas.fill("");
   await piezas.fill("1");
   await piezas.press("Enter");

@@ -250,6 +250,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       ] },
       { id: "cambios", nombre: "Cambios de bus", items: [
         ...(conTipos ? [] : [["maxCambiosBus", "Cambios de autobús por turno", limite("maxCambiosBus", "como mucho (0 = siempre el mismo)", { cero: true })]]),
+        ["busSigueConductor", "Los autobuses siguen al conductor", sino("busSigueConductor"), "Después de hacer los turnos, donde un conductor cambiaría de autobús en una cabecera, se intercambia lo que les queda a los dos autobuses para que siga en el suyo. No cambia los turnos ni el número de autobuses."],
         ["maxCambiosBusTotal", "Cambios de autobús en todo el escenario", limite("maxCambiosBusTotal", "como mucho, sumando todos los turnos", { cero: true })],
         ["costeCambioBus", "Coste de cada cambio de autobús", limite("costeCambioBus", "€ por cambio", { decimal: true, cero: true }), "Lo que te molesta que un conductor cambie de autobús (Optimizar todo junto)."],
       ], nota: conTipos ? "Si un turno puede cambiar de autobús lo marca cada tipo de turno («Cambio de bus»)." : null },
@@ -283,7 +284,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       { id: "estrategia", nombre: "Estrategia de este calendario", items: [
         ["eleccion", "Qué autobús coge cada viaje", lista("eleccion", [["optimo", "El mínimo de autobuses (óptimo)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]])],
         ["vacioKm", "Vacíos entre cabeceras", lista("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]])],
-        ["corte", "Dónde se corta la pieza (relevo)", lista("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ...[225, 210, 180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])])],
+        ["corte", "Dónde se corta la pieza (relevo)", lista("corte", [["max", "Piezas lo más largas posible"], ["equilibrado", "Piezas de largo parecido"], ["flexible", "Cortes flexibles (el optimizador elige dónde relevar)"], ...[225, 210, 180, 150, 120, 90, 60].filter(m => m < p.piezaMax).map(m => [m, `Piezas de hasta ${hm(m)}`])])],
         ["metodo", "Cómo se forman los turnos", lista("metodo", [["particion", "La mejor combinación"], ["voraz", "Pieza a pieza (rápido)"]])],
         ...(p.metodo === "voraz" ? [["emparejar", "A qué conductor va cada pieza", lista("emparejar", [["primera", "Al que menos espera"], ["llena", "Al que lleva más horas (llenar turnos)"]])]] : []),
       ], nota: "La elige Optimizar; también puedes fijarla a mano." },

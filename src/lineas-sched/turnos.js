@@ -25,7 +25,8 @@ export const dondeAcaba = viajes => { for (let i = viajes.length - 1; i >= 0; i-
 export function entrePiezas(a, b, p) {
   // seguir en el mismo autobús: la pieza siguiente de ese autobús (mientras se
   // calcula, `previa`); ya cerrado, el mismo autobús y donde lo dejó
-  const sigue = b.previa !== undefined ? b.previa === a : a.vehiculo === b.vehiculo && a.d === b.o;
+  const sigue = a.uFin != null && b.uIni != null ? a.vehiculo === b.vehiculo && a.uFin + 1 === b.uIni
+    : b.previa !== undefined ? b.previa === a : a.vehiculo === b.vehiculo && a.d === b.o;
   // cambio de autobús = otro autobús físico (volver a coger el mismo tras pasar por cochera no lo es)
   const cambio = (a.autobus ?? a.vehiculo) !== (b.autobus ?? b.vehiculo);
   if (sigue) return { sigue, cambio: false, viaje: 0, hace: 0, km: 0 };
@@ -106,6 +107,71 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
   }
   return piezas;
 }
+
+// ── Cortes flexibles ──
+// En vez de cortar cada autobús por su cuenta (largo de pieza fijo), se parte
+// en unidades de trabajo entre puntos de relevo y se proponen muchas piezas
+// posibles (tramos seguidos de unidades); la partición elige a la vez dónde
+// cortar y cómo juntar las piezas en turnos, mirando todos los autobuses
+// (como HASTUS: dónde conviene cortar un autobús depende de los demás).
+// Cada unidad tiene además su pieza de reserva (ella sola), para que todo
+// se pueda cubrir. → { piezas, unidades }
+export const esFlexible = p => p.corte === "flexible";
+function cortarCandidatas(vehiculos, p, find, geo = null) {
+  const piezas = [];
+  const puedeRelevar = relevoPermitido(p, find);
+  const clave = claveMezclaTurno(p);
+  // unidad mínima: tramos de hora y media como poco (más finos, la partición tarda más y no sale mejor)
+  const largoMin = Math.min(90, Math.max(30, Math.round((p.piezaMax || 240) / 2)));
+  // la pieza mínima no se aplica a las posibles: si no, los trozos del medio no encajan y se fragmenta
+  let nU = 0;
+  for (const veh of vehiculos) {
+    const tramos = [];
+    let sueltos = [];
+    for (const v of veh.viajes) { sueltos.push(v); if (!v.vacio) { tramos.push(sueltos); sueltos = []; } }
+    if (sueltos.length) { if (tramos.length) tramos.at(-1).push(...sueltos); else tramos.push(sueltos); }
+    // unidades: tramos seguidos hasta un punto de relevo, de largoMin como poco
+    const unidades = [];
+    let actual = [];
+    tramos.forEach((tramo, k) => {
+      // antes de pasarse de la pieza máxima, se cierra donde se pueda relevar
+      if (actual.length && tramo.at(-1).arr - actual[0].dep > p.piezaMax && puedeRelevar(dondeAcaba(tramos[k - 1]))) { unidades.push({ viajes: actual }); actual = []; }
+      actual.push(...tramo);
+      const ultimo = k === tramos.length - 1;
+      const sigLinea = !ultimo && clave && lineaDe(tramos[k + 1]) != null && lineaDe(tramo) != null && clave(lineaDe(tramos[k + 1])) !== clave(lineaDe(tramo));
+      const aqui = !ultimo && puedeRelevar(dondeAcaba(tramo));
+      if (ultimo || (aqui && (sigLinea || actual.at(-1).arr - actual[0].dep >= largoMin))) { unidades.push({ viajes: actual, corteLinea: sigLinea }); actual = []; }
+    });
+    if (actual.length) { if (unidades.length) unidades.at(-1).viajes.push(...actual); else unidades.push({ viajes: actual }); }
+    // la última, si es muy corta, con la anterior (salvo que ahí cambie de línea y no se pueda mezclar)
+    if (unidades.length > 1) {
+      const u = unidades.at(-1), ant = unidades.at(-2);
+      if (u.viajes.at(-1).arr - u.viajes[0].dep < largoMin / 2 && !ant.corteLinea && u.viajes.at(-1).arr - ant.viajes[0].dep <= p.piezaMax) { ant.viajes.push(...u.viajes); unidades.pop(); }
+    }
+    const base = nU;
+    nU += unidades.length;
+    const ult = unidades.length - 1;
+    for (let i = 0; i <= ult; i++) {
+      for (let j = i; j <= ult; j++) {
+        if (j > i && unidades[j - 1].corteLinea) break; // no cruzar un cambio de línea que no se puede mezclar
+        const viajes = unidades.slice(i, j + 1).flatMap(x => x.viajes);
+        const dur = viajes.at(-1).arr - viajes[0].dep;
+        if (j > i && dur > p.piezaMax) break;
+        // todas las de una unidad (las de reserva) hasta la pieza máxima
+                piezas.push({
+          vehiculo: veh.id, autobus: veh.autobus ?? null, inicio: viajes[0].dep, fin: viajes.at(-1).arr,
+          conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes,
+          o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
+          oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,
+          lineas: lineasDe(viajes), u: Array.from({ length: j - i + 1 }, (_, k) => base + i + k), uIni: base + i, uFin: base + j,
+        });
+      }
+    }
+  }
+  return { piezas, unidades: nU };
+}
+// clave para pasar los grupos del worker: con cortes flexibles hay piezas que empiezan igual
+const claveGrupo = pz => (pz.uIni != null ? `${clavePieza(pz)}|${pz.fin}` : clavePieza(pz));
 
 // ── Tipos de turno ──
 const enFranja = (min, desde, hasta) => { const m = ((min % 1440) + 1440) % 1440; return desde <= hasta ? m >= desde && m <= hasta : m >= desde || m <= hasta; };
@@ -227,7 +293,7 @@ function estadoSuelto(pz) {
   return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0, lineas: pz.lineas || [] };
 }
 
-function turnosPorParticion(piezas, p) {
+function turnosPorParticion(piezas, p, unidades = null) {
   const topes = p._tipos ? p._tipos.map(x => (x.maximo > 0 ? x.maximo : Infinity)) : [];
   const conTope = topes.some(Number.isFinite);
   const partidos = (p._tipos || []).filter(x => x.partido);
@@ -241,14 +307,16 @@ function turnosPorParticion(piezas, p) {
     extiende: (e, pz) => { const x = anadir(e, pz, p); return x && { ...x, piezas: [...e.piezas, pz] }; },
     desplazamiento: p.desplazamiento, amplitudMax: p.amplitudMax, huecoNoPagado: p.huecoNoPagado, jornadaMax: p.jornadaMax,
     maxPiezas: Math.min(4, p.maxPiezas),
+    ...(unidades != null ? { unidades } : {}),
   });
-  return grupos.map(g => { const l = g.map(i => piezas[i]); return validar(l, p) || estadoSuelto(l[0]); });
+  // (si un grupo no valiera, cada pieza en su turno: no se pierde ninguna)
+  return grupos.flatMap(g => { const l = g.map(i => piezas[i]); const t = validar(l, p); return t ? [t] : l.map(estadoSuelto); });
 }
 
 // La partición calculada en otro sitio (el worker) llega como grupos de
 // claves de pieza; aquí se montan los turnos con las piezas de este cálculo.
 function turnosDeGrupos(piezas, grupos, p) {
-  const porClave = new Map(piezas.map(pz => [clavePieza(pz), pz]));
+  const porClave = new Map(piezas.map(pz => [claveGrupo(pz), pz]));
   const puestas = new Set();
   const turnos = [];
   for (const g of grupos) {
@@ -258,7 +326,11 @@ function turnosDeGrupos(piezas, grupos, p) {
     turnos.push(validar(l, p) || estadoSuelto(l[0]));
     if (!validar(l, p)) for (const pz of l.slice(1)) turnos.push(estadoSuelto(pz)); // no debería pasar
   }
-  for (const pz of piezas) if (!puestas.has(pz)) turnos.push(validar([pz], p) || estadoSuelto(pz));
+  if (piezas.some(pz => pz.u)) {
+    // cortes flexibles: lo que quede sin cubrir, con las piezas de reserva (una unidad)
+    const cubiertas = new Set([...puestas].flatMap(pz => pz.u));
+    for (const pz of piezas) if (pz.u.length === 1 && !cubiertas.has(pz.u[0])) turnos.push(validar([pz], p) || estadoSuelto(pz));
+  } else for (const pz of piezas) if (!puestas.has(pz)) turnos.push(validar([pz], p) || estadoSuelto(pz));
   return turnos;
 }
 
@@ -266,7 +338,11 @@ function turnosDeGrupos(piezas, grupos, p) {
 export function gruposTurnos(resVehiculos, opciones = {}) {
   const r = resVehiculos;
   const p = efectivos({ ...r.params, ...opciones });
-  const piezas = cortarPiezas(r.vehiculos, p, r.find, r.ctx?.geo);
+  if (esFlexible(p)) {
+    const { piezas, unidades } = cortarCandidatas(r.vehiculosBase || r.vehiculos, p, r.find, r.ctx?.geo);
+    return turnosPorParticion(piezas, p, unidades).map(t => t.piezas.map(claveGrupo));
+  }
+  const piezas = cortarPiezas(r.vehiculosBase || r.vehiculos, p, r.find, r.ctx?.geo);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
   return turnosPorParticion(piezas, p).map(t => t.piezas.map(clavePieza));
 }
@@ -284,10 +360,13 @@ export function validar(piezas, p) {
 }
 
 export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo = null) {
-  const p = efectivos(pOriginal);
-  const piezas = cortarPiezas(vehiculos, p, find, geo);
+  const p0 = efectivos(pOriginal);
+  // los cortes flexibles solo tienen sentido con la partición
+  const p = esFlexible(p0) && p0.metodo === "voraz" ? efectivos({ ...pOriginal, metodo: "particion" }) : p0;
+  const flex = esFlexible(p) ? cortarCandidatas(vehiculos, p, find, geo) : null;
+  const piezas = flex ? flex.piezas : cortarPiezas(vehiculos, p, find, geo);
   piezas.sort((x, y) => x.inicio - y.inicio || x.fin - y.fin);
-  const turnos = p.metodo === "voraz" ? [] : grupos ? turnosDeGrupos(piezas, grupos, p) : turnosPorParticion(piezas, p);
+  const turnos = p.metodo === "voraz" ? [] : grupos ? turnosDeGrupos(piezas, grupos, p) : turnosPorParticion(piezas, p, flex ? flex.unidades : null);
   // Voraz: cada pieza va al conductor que mejor la aprovecha: el que sigue en
   // ese autobús, si no el que menos espera ("primera") o el que lleva más
   // horas ("llena"); si no cabe en ninguno, entra un conductor nuevo.
@@ -355,8 +434,10 @@ export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo =
   const finales = asignarTipos(turnos.filter(t => !quitados.has(t)).map(t => cerrarTurno({ piezas: [...t.piezas].sort((a, b) => a.inicio - b.inicio) }, p)), p);
   finales.sort((x, y) => x.inicio - y.inicio);
   finales.forEach((t, i) => { t.id = i + 1; for (const pz of t.piezas) pz.turno = t.id; });
-  for (const pz of piezas) { delete pz.previa; }
-  return { turnos: finales, piezas };
+  // con cortes flexibles, las piezas son las elegidas (no todas las posibles)
+  const usadas = flex ? finales.flatMap(t => t.piezas) : piezas;
+  for (const pz of usadas) { delete pz.previa; delete pz.u; delete pz.uIni; delete pz.uFin; }
+  return { turnos: finales, piezas: usadas };
 }
 
 export function cerrarTurno(t, pOriginal) {

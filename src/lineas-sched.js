@@ -43,6 +43,7 @@
 import { PARAMS_DEFECTO, geografia, nombreDia, viajesDelDia } from "./lineas-sched/base.js";
 import { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";
 import { programarTurnos } from "./lineas-sched/turnos.js";
+import { seguirConductores } from "./lineas-sched/seguir.js";
 import { vehiculosYAutobuses } from "./lineas-sched/vehiculos.js";
 // Lo de cada paso vive en src/lineas-sched/; desde aquí se sigue ofreciendo todo
 export { ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, cabecerasDeRed, claveSalidas, duracionViaje, esCalendario, nombreDia, pasosPorParada, salidasDe, viajesDia } from "./lineas-sched/base.js";
@@ -77,10 +78,15 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
 export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {}) {
   const r = resVehiculos;
   const p = { ...r.params, ...opciones };
-  const { turnos, piezas } = programarTurnos(r.vehiculos, p, r.find, grupos, r.ctx?.geo);
-  const porVehiculo = new Map(r.vehiculos.map(v => [v.id, (v.relevos = [])]));
-  for (const pz of [...piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
-  return { ...r, turnos, params: p, kpis: kpisServicio(r.viajes, r.vehiculos, turnos, r.autobuses) };
+  // los turnos se hacen siempre sobre los autobuses del paso 1 tal cual (si r ya
+  // trae turnos, sus autobuses pueden venir intercambiados: se usan los de antes)
+  const base = r.vehiculosBase || r.vehiculos;
+  const prog = programarTurnos(base, p, r.find, grupos, r.ctx?.geo);
+  // los autobuses siguen a los conductores (intercambios en cabecera; los turnos no cambian)
+  const { vehiculos, turnos, intercambios } = seguirConductores(base, r.autobuses, prog.turnos, p, r.ctx?.cfg);
+  const porVehiculo = new Map(vehiculos.map(v => [v.id, (v.relevos = [])]));
+  for (const pz of [...prog.piezas].sort((a, b) => a.inicio - b.inicio)) porVehiculo.get(pz.vehiculo).push({ inicio: pz.inicio, fin: pz.fin, turno: pz.turno });
+  return { ...r, vehiculos, vehiculosBase: base, turnos, intercambiosBus: intercambios, params: p, kpis: kpisServicio(r.viajes, vehiculos, turnos, r.autobuses) };
 }
 
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
@@ -128,7 +134,7 @@ export const preciosTotal = p => Object.fromEntries(Object.entries(PRECIOS_ORIEN
 
 /** Nombre corto de una estrategia para enseñarla */
 export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
-  const corte = v.corte === "equilibrado" ? "piezas equilibradas"
+  const corte = v.corte === "flexible" ? "cortes flexibles" : v.corte === "equilibrado" ? "piezas equilibradas"
     : typeof v.corte === "number" && v.corte < piezaMax ? `piezas de hasta ${Math.floor(v.corte / 60)}h${String(v.corte % 60).padStart(2, "0")}` : "piezas largas";
   return [
     v.eleccion != null && (v.eleccion === "optimo" ? "mínimo de autobuses (óptimo)" : v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera"),
@@ -188,8 +194,9 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
   const p = { ...base.params, ...opciones };
   // 3h30–3h45: dos piezas + la pausa de 45 min caben en 8 h (dos de 4 h no)
   const cortes = ["max", 225, 210, 180, 150, 120].filter(c => typeof c !== "number" || c < p.piezaMax);
-  // por cada corte: la partición (como Optibus/GoalSystem) y las dos voraces de antes; se queda la mejor
-  const variantes = cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]);
+  // por cada corte: la partición (como Optibus/GoalSystem) y las dos voraces de antes; y los cortes
+  // flexibles (la partición elige también dónde relevar); se queda la mejor
+  const variantes = [...cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]), { corte: "flexible", metodo: "particion" }];
   const probadas = [];
   for (const dt of variantes) {
     const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" ? "horas" : "conductores", ...dt }, base.find, null, base.ctx?.geo);
@@ -236,7 +243,7 @@ export function optimizarConjunto(red, cfg = {}, opciones = {}, { onProgreso, co
   for (const bloqueMax of bloques) for (const vacioKm of radios) for (const eleccion of ["optimo", "ultimo"]) for (const entreLineas of entre) {
     variantesV.push({ eleccion, entreLineas, vacios: vacioKm > 0, vacioKm, bloqueMax });
   }
-  const variantesT = [{ corte: 150, metodo: "particion" }, { corte: 210, metodo: "particion" }, { corte: "max", metodo: "particion" }];
+  const variantesT = [{ corte: 150, metodo: "particion" }, { corte: 210, metodo: "particion" }, { corte: "max", metodo: "particion" }, { corte: "flexible", metodo: "particion" }];
   const total = variantesV.length * variantesT.length;
   const probadas = [];
   for (const dv of variantesV) {
@@ -244,7 +251,8 @@ export function optimizarConjunto(red, cfg = {}, opciones = {}, { onProgreso, co
     const { vehiculos, autobuses: buses } = vehiculosYAutobuses(viajes, cfg, find, q, geo);
     const kmVacio = vehiculos.reduce((s, v) => s + (v.kmVacio || 0), 0);
     for (const dt of variantesT) {
-      const { turnos } = programarTurnos(vehiculos, { ...q, ...dt }, find, null, geo);
+      const prog = programarTurnos(vehiculos, { ...q, ...dt }, find, null, geo);
+      const { turnos } = seguirConductores(vehiculos, buses, prog.turnos, { ...q, ...dt }, cfg);
       const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
       const cambiosBus = turnos.reduce((s, t) => s + (t.cambiosBus || 0), 0);
       const r = {

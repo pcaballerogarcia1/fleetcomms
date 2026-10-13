@@ -45,14 +45,15 @@ export const PARAMS_DEFECTO = {
   gruposLineas: [],      // [{ id, nombre, lineas: [nombre de línea] }]: las que no están en ninguno, cada una su grupo
   mezclaBuses: "libre",  // con entreLineas: "libre" (cualquier línea) · "grupo" (solo dentro de su grupo)
   mezclaTurnos: "libre", // "libre" · "grupo" (un conductor, solo líneas de un grupo) · "linea" (una sola línea; o turnoUnaLinea)  // cada turno, de una sola línea (no se mezclan líneas; las variantes de una línea cuentan como la misma)
-  maxCambiosBusTotal: null, // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
+  maxCambiosBusTotal: null,
+  busSigueConductor: true, // después de los turnos: intercambiar autobuses en cabecera para que el conductor no cambie // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
   conductoresMax: null, // conductores disponibles ese día
   // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
   eleccion: "optimo",   // "optimo": el mínimo de autobuses (emparejamiento) · "ultimo": el autobús que quedó libre más tarde · "primero": el que lleva más esperando
-  corte: 150,           // "max": piezas lo más largas posible · "equilibrado" · número: pieza objetivo en min (150: el mejor con la partición en redes grandes)
+  corte: 150,           // "max": piezas lo más largas posible · "equilibrado" · "flexible" (la partición elige dónde relevar) · número: pieza objetivo en min (150: el mejor con la partición en redes grandes)
   emparejar: "primera", // "primera": el conductor que menos espera · "llena": el que lleva más horas (solo "voraz")
   metodo: "particion",  // "particion": muchos turnos posibles y se elige la mejor combinación (como Optibus/GoalSystem) · "voraz": pieza a pieza
   objetivoTurnos: "conductores", // a qué da prioridad la partición: "conductores" o "horas" (pagadas)
