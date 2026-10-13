@@ -26,7 +26,8 @@ export function entrePiezas(a, b, p) {
   // seguir en el mismo autobús: la pieza siguiente de ese autobús (mientras se
   // calcula, `previa`); ya cerrado, el mismo autobús y donde lo dejó
   const sigue = b.previa !== undefined ? b.previa === a : a.vehiculo === b.vehiculo && a.d === b.o;
-  const cambio = a.vehiculo !== b.vehiculo;
+  // cambio de autobús = otro autobús físico (volver a coger el mismo tras pasar por cochera no lo es)
+  const cambio = (a.autobus ?? a.vehiculo) !== (b.autobus ?? b.vehiculo);
   if (sigue) return { sigue, cambio: false, viaje: 0, hace: 0, km: 0 };
   if (a.d != null && a.d === b.o) return { sigue, cambio, viaje: 0, hace: p.relevoMin, km: 0 };
   let km = null, viaje = p.desplazamiento;
@@ -93,7 +94,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
     for (const g of grupos) {
       const viajes = g.flat();
       const pz = {
-        vehiculo: veh.id, inicio: viajes[0].dep, fin: viajes.at(-1).arr, conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes, previa,
+        vehiculo: veh.id, autobus: veh.autobus ?? null, inicio: viajes[0].dep, fin: viajes.at(-1).arr, conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes, previa,
         o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
         // dónde coge y deja el autobús el conductor (para lo que tarda en ir de una pieza a otra)
         oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,

@@ -87,3 +87,11 @@ describe("no mezclar líneas en un turno", () => {
     expect(cerrarTurno({ piezas: [a, b] }, p1).avisos.some(x => /Mezcla líneas: 481, 482/.test(x))).toBe(true);
   });
 });
+
+describe("el mismo autobús después de pasar por cochera", () => {
+  it("no cuenta como cambio de autobús (otra salida de cochera, mismo autobús físico)", () => {
+    const manana = { ...pieza(1, 360, 600, "K", "K", A, A), autobus: 7 }, tarde = { ...pieza(2, 900, 1140, "K", "K", A, A), autobus: 7 };
+    expect(entrePiezas(manana, tarde, P).cambio).toBe(false);
+    expect(entrePiezas(manana, { ...tarde, autobus: 8 }, P).cambio).toBe(true);
+  });
+});
