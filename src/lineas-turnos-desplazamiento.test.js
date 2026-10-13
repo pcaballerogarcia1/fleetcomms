@@ -72,3 +72,18 @@ describe("cambio de autobús según el tipo de turno", () => {
     expect(validar(partido, p)).toBeNull();
   });
 });
+
+describe("no mezclar líneas en un turno", () => {
+  const conLinea = (pz, nombre) => ({ ...pz, lineas: [nombre], viajes: pz.viajes.map(v => ({ ...v, nombre })) });
+  const a = conLinea(pieza(1, 360, 480, "A", "A", A, A), "481"), b = conLinea(pieza(2, 490, 600, "A", "A", A, A), "482");
+  const b481 = conLinea(pieza(2, 490, 600, "A", "A", A, A), "481");
+  it("sin la restricción se pueden juntar piezas de dos líneas", () => {
+    expect(validar([a, b], P)).not.toBeNull();
+  });
+  it("con la restricción, solo de la misma línea", () => {
+    const p1 = { ...P, turnoUnaLinea: true };
+    expect(validar([a, b], p1)).toBeNull();
+    expect(validar([a, b481], p1)).not.toBeNull();
+    expect(cerrarTurno({ piezas: [a, b] }, p1).avisos.some(x => /Mezcla líneas: 481, 482/.test(x))).toBe(true);
+  });
+});

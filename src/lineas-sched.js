@@ -230,8 +230,10 @@ export function optimizarConjunto(red, cfg = {}, opciones = {}, { onProgreso, co
   const bloques = [null, ...new Set(jornadas.flatMap(j => [j, j + 60]))].slice(0, 4);
   const radios = geo && p.vacioMaxKm > 0 ? [0, p.vacioMaxKm] : [0];
   const variantesV = [];
-  for (const bloqueMax of bloques) for (const vacioKm of radios) for (const eleccion of ["optimo", "ultimo"]) {
-    variantesV.push({ eleccion, entreLineas: p.entreLineas, vacios: vacioKm > 0, vacioKm, bloqueMax });
+  // con turnos de una sola línea, también autobuses que no cambian de línea (menos piezas sueltas)
+  const entre = p.entreLineas && p.turnoUnaLinea ? [true, false] : [p.entreLineas];
+  for (const bloqueMax of bloques) for (const vacioKm of radios) for (const eleccion of ["optimo", "ultimo"]) for (const entreLineas of entre) {
+    variantesV.push({ eleccion, entreLineas, vacios: vacioKm > 0, vacioKm, bloqueMax });
   }
   const variantesT = [{ corte: 150, metodo: "particion" }, { corte: 210, metodo: "particion" }, { corte: "max", metodo: "particion" }];
   const total = variantesV.length * variantesT.length;

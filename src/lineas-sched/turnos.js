@@ -39,6 +39,11 @@ export function entrePiezas(a, b, p) {
 const conLimiteCambios = p => p.maxCambiosBus != null && p.maxCambiosBus !== "" && p.maxCambiosBus >= 0;
 const conLimiteTotal = p => p.maxCambiosBusTotal != null && p.maxCambiosBusTotal !== "" && p.maxCambiosBusTotal >= 0;
 
+// La línea de unos viajes (por nombre: las variantes de una línea cuentan como
+// la misma); los vacíos no cuentan. null si no hay ninguno con viajeros.
+const lineaDe = viajes => { for (const v of viajes) if (!v.vacio) return v.nombre ?? v.linea; return null; };
+const lineasDe = viajes => [...new Set(viajes.filter(v => !v.vacio).map(v => v.nombre ?? v.linea))];
+
 function cortarPiezas(vehiculos, p, find, geo = null) {
   const piezas = [];
   const puedeRelevar = relevoPermitido(p, find);
@@ -65,7 +70,9 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
       if (actual.length) {
         const con = [...actual, tramo];
         // obligatorio: conducción continua o pieza máxima; por estrategia, solo si la pieza ya tiene el mínimo
-        const obligado = (p.aplicar561 && conduccion(con) > p.conduccionContinuaMax) || largo(con) > p.piezaMax;
+        // y, si los turnos no mezclan líneas, donde el autobús cambia de línea
+        const cambiaLinea = p.turnoUnaLinea && lineaDe(tramo) != null && lineaDe(tramo) !== lineaDe(actual.at(-1));
+        const obligado = (p.aplicar561 && conduccion(con) > p.conduccionContinuaMax) || largo(con) > p.piezaMax || cambiaLinea;
         const quiere = largo(con) > lim && largo(actual) >= minima;
         const aqui = puedeRelevar(dondeAcaba(actual.flat()));
         if ((obligado || quiere) && aqui) { grupos.push(actual); actual = []; corteAtras = -1; }
@@ -79,7 +86,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
     if (actual.length) {
       // el final del autobús, si es más corto que el mínimo, se queda con la pieza anterior si cabe
       const ant = grupos.at(-1);
-      if (ant && largo(actual) < minima && largo([...ant, ...actual]) <= p.piezaMax && (!p.aplicar561 || conduccion([...ant, ...actual]) <= p.conduccionContinuaMax)) ant.push(...actual);
+      if (ant && largo(actual) < minima && largo([...ant, ...actual]) <= p.piezaMax && (!p.turnoUnaLinea || lineasDe([...ant, ...actual].flat()).length <= 1) && (!p.aplicar561 || conduccion([...ant, ...actual]) <= p.conduccionContinuaMax)) ant.push(...actual);
       else grupos.push(actual);
     }
     let previa = null;
@@ -90,6 +97,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
         o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
         // dónde coge y deja el autobús el conductor (para lo que tarda en ir de una pieza a otra)
         oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,
+        lineas: lineasDe(viajes),
       };
       piezas.push(pz); previa = pz;
     }
@@ -138,6 +146,9 @@ function efectivos(p) {
 // Estado de un turno al añadirle una pieza (null si no cabe)
 function anadir(t, pz, p) {
   let hueco = 0, partido = false, viaje = 0, cambios = t ? t.cambios || 0 : 0;
+  // turnos de una sola línea: la pieza nueva, de la misma línea que el turno
+  const lineas = t ? (t.lineas || []) : (pz.lineas || []);
+  if (t && p.turnoUnaLinea && (pz.lineas || []).some(l => lineas.length && !lineas.includes(l))) return null;
   if (t) {
     const ultima = t.piezas[t.piezas.length - 1];
     hueco = pz.inicio - t.fin;
@@ -169,7 +180,7 @@ function anadir(t, pz, p) {
     finPrev = v.arr;
   }
   if (p.jornadaSinPausaMax > 0 && pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // descanso si la jornada pasa de X (sin valor: no se exige)
-  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, cambios, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco - viaje : 0) };
+  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, cambios, lineas: t ? [...new Set([...lineas, ...(pz.lineas || [])])] : lineas, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco - viaje : 0) };
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
 }
@@ -210,7 +221,7 @@ function costeTurno(e, piezas, p) {
 }
 
 function estadoSuelto(pz) {
-  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0 };
+  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0, lineas: pz.lineas || [] };
 }
 
 function turnosPorParticion(piezas, p) {
@@ -390,6 +401,8 @@ export function cerrarTurno(t, pOriginal) {
     if (t.partidos > p.maxPartidos) t.avisos.push(`${t.partidos} jornadas partidas: más de ${p.maxPartidos}`);
   }
   if (t.piezas.length > p.maxPiezas) t.avisos.push(`${t.piezas.length} piezas: más de ${p.maxPiezas}`);
+  t.lineas = lineasDe(viajes);
+  if (p.turnoUnaLinea && t.lineas.length > 1) t.avisos.push(`Mezcla líneas: ${t.lineas.join(", ")}`);
   if (!p._tipos && conLimiteCambios(p) && t.cambiosBus > p.maxCambiosBus) t.avisos.push(`${t.cambiosBus} cambios de autobús: más de ${p.maxCambiosBus}`);
   for (const e of entre) {
     if (e.hueco < 0) { t.avisos.push(`Las piezas de las ${reloj(e.a.inicio)} y las ${reloj(e.b.inicio)} se solapan`); continue; }

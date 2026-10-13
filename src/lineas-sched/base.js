@@ -40,6 +40,7 @@ export const PARAMS_DEFECTO = {
   relevoMin: 5,         // min para relevar en la misma cabecera
   desplazamiento: 20,   // min como mínimo para ir a otra cabecera a coger otra pieza (si está lejos, lo que se tarde: distancia a la velocidad de los vacíos)
   maxCambiosBus: null,  // cambios de autobús por turno como mucho, sin tipos de turno (null = sin límite; 0 = todo el turno en el mismo). Con tipos: tipo.cambiosBus
+  turnoUnaLinea: false,  // cada turno, de una sola línea (no se mezclan líneas; las variantes de una línea cuentan como la misma)
   maxCambiosBusTotal: null, // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado

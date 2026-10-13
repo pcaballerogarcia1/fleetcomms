@@ -168,6 +168,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
             : row("Cambios de autobús por turno", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <CampoNumero valor={p.maxCambiosBus} defecto={PARAMS_DEFECTO.maxCambiosBus} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBus", v)} />
               <span style={{ fontSize: 11, color: C.dim }}>como mucho (vacío = sin límite; 0 = siempre el mismo autobús)</span></div>)}
+          {row("No mezclar líneas en un turno", <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>{check("turnoUnaLinea")}
+            <span style={{ fontSize: 11, color: C.dim }}>cada conductor hace una sola línea en toda su jornada (las variantes de una línea cuentan como la misma)</span></label>)}
           {row("Cambios de autobús en todo el escenario", <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <CampoNumero valor={p.maxCambiosBusTotal} defecto={PARAMS_DEFECTO.maxCambiosBusTotal} vacioEsNulo textoVacio="sin límite" onCambiar={v => set("maxCambiosBusTotal", v)} />
             <span style={{ fontSize: 11, color: C.dim }}>como mucho, sumando todos los turnos del día (vacío = sin límite)</span></div>)}
