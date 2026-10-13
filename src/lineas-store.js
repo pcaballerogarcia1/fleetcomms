@@ -11,6 +11,7 @@ import { db } from "./firebase.js";
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, deleteField, query, collection, where } from "firebase/firestore";
 import { uploadLayerMarkers, loadLayerMarkers, deleteLayerPieces } from "./layer-store.js";
 import { cambiarDocumento } from "./concurrencia.js";
+import { PALETA } from "./gtfs-parse.js";
 
 export const TIPOS_VEHICULO = [
   { id: "micro", nombre: "Microbús", detalle: "hasta ~25 plazas" },
@@ -30,6 +31,7 @@ export const redDocId = projectId => `${projectId}_red`;
 // (después de importar, la pantalla no se enteraba de la red nueva).
 export function watchRed(projectId, cb) {
   let vigente = null;
+  let ultima = null; // { v, red }: la red ya descargada (cambiar un color no la vuelve a bajar)
   const q = query(collection(db, "planning_layers"), where("projectId", "==", projectId));
   return onSnapshot(q, async snap => {
     const d = snap.docs.find(x => x.id === redDocId(projectId));
@@ -37,21 +39,51 @@ export function watchRed(projectId, cb) {
     const ficha = d.data();
     if (!ficha.cloud) { cb({ ficha, red: null, cargando: false }); return; }
     vigente = ficha.cloud.v;
+    if (ultima?.v === ficha.cloud.v) { cb({ ficha, red: colorearRed(ultima.red, ficha.colores), cargando: false }); return; }
     cb({ ficha, red: null, cargando: true });
     try {
       const [red] = await loadLayerMarkers(redDocId(projectId), ficha.cloud);
-      if (vigente === ficha.cloud.v) cb({ ficha, red, cargando: false });
+      ultima = { v: ficha.cloud.v, red };
+      if (vigente === ficha.cloud.v) cb({ ficha, red: colorearRed(red, ficha.colores), cargando: false });
     } catch (e) {
       cb({ ficha, red: null, cargando: false, error: e.message || String(e) });
     }
   }, e => cb({ ficha: null, red: null, cargando: false, error: e.message }));
 }
 
+// Color de cada línea: el que se ha elegido en el Planning; si no, el del
+// GTFS. Cuando el GTFS pone a todas el mismo (p. ej. el Consorcio de Madrid,
+// todas verdes), una de la paleta por línea (las variantes, el mismo).
+export function colorearRed(red, colores = {}) {
+  if (!red?.lineas) return red;
+  const delGtfs = new Set(red.lineas.map(l => l.color));
+  const nombres = [...new Set(red.lineas.map(l => l.nombre))];
+  const paleta = delGtfs.size === 1 && nombres.length >= 3 && !red.diseno
+    ? new Map(nombres.map((n, i) => [n, PALETA[i % PALETA.length]])) : null;
+  return {
+    ...red,
+    lineas: red.lineas.map(l => {
+      const c = colores?.[l.id] || paleta?.get(l.nombre);
+      return c && c !== l.color ? { ...l, color: c } : l;
+    }),
+  };
+}
+
+/** Cambia el color de una línea (null = volver al de siempre). Para todas las pantallas. */
+export function guardarColorLinea(projectId, lineaId, color) {
+  return updateDoc(doc(db, "planning_layers", redDocId(projectId)), { [`colores.${lineaId}`]: color || deleteField() });
+}
+
 /** Guarda una red nueva (sustituye a la anterior, que se borra después). */
 export async function guardarRed(projectId, orgId, red, { archivo, anterior } = {}) {
   const id = redDocId(projectId);
   const cloud = await uploadLayerMarkers(id, projectId, [red]);
+  // los colores elegidos se conservan (las líneas que sigan existiendo)
+  const previa = await getDoc(doc(db, "planning_layers", id)).catch(() => null);
+  const ids = new Set(red.lineas.map(l => l.id));
+  const colores = Object.fromEntries(Object.entries(previa?.data()?.colores || {}).filter(([k]) => ids.has(k)));
   await setDoc(doc(db, "planning_layers", id), {
+    colores,
     id: "red", name: archivo || "Red de líneas", type: "red_lineas", visible: true, markers: [],
     cloud, totalMarkers: red.paradas.length, totalLineas: red.lineas.length,
     agencias: red.agencias, dias: red.dias, archivo: archivo || null,

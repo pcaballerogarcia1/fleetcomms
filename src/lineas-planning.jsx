@@ -9,7 +9,7 @@ import { useLeaflet } from "./use-leaflet.js";
 import { agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { leerGtfs } from "./gtfs-import.js";
 import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
-import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
+import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, guardarColorLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
 import { Horarios } from "./lineas-horarios.jsx";
 import { DisenoRed } from "./lineas-diseno.jsx";
 import { nombreDia, cabecerasDeRed } from "./lineas-sched.js";
@@ -44,6 +44,7 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
     const map = L.map(divRef.current, { zoomControl: true, preferCanvas: true }).setView([40.4, -3.7], 6);
+    map.attributionControl.setPrefix(false); // sin el «Leaflet» de la esquina
     // Mismo fondo que el Planning de puntos (Esri; CARTO pide ya API key)
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
@@ -149,7 +150,34 @@ function NumeroEditable({ valor, placeholder, onGuardar, sufijo = "min", ancho =
   );
 }
 
-function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras = [] }) {
+// Colores para elegir rápido (y el selector libre al final)
+const COLORES_RAPIDOS = ["#5c9bff", "#34d399", "#fb923c", "#f87171", "#a78bfa", "#fbbf24", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#94a3b8", "#ffffff"];
+
+function ElegirColor({ color, elegido, onColor }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setAbierto(a => !a)} title="Cambiar el color de la línea" style={{ width: 26, height: 26, borderRadius: 13, background: color, border: `2px solid ${C.border2}`, cursor: "pointer", padding: 0 }} />
+      {abierto && (
+        <div style={{ position: "absolute", right: 0, top: 32, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: 10, width: 176, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Color de la línea (en todas las pantallas)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+            {COLORES_RAPIDOS.map(c => (
+              <button key={c} onClick={() => { onColor(c); setAbierto(false); }} style={{ width: 22, height: 22, borderRadius: 11, background: c, cursor: "pointer", padding: 0, border: `2px solid ${c === color ? "#fff" : "transparent"}` }} />
+            ))}
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 11.5, color: C.text, cursor: "pointer" }}>
+            <input type="color" value={color} onChange={e => onColor(e.target.value)} style={{ width: 28, height: 24, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
+            Otro color…
+          </label>
+          {elegido && <button onClick={() => { onColor(null); setAbierto(false); }} style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: C.blue, fontSize: 11, cursor: "pointer", fontFamily: font }}>Volver al color original</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras = [], colorElegido, onColor }) {
   const [tab, setTab] = useState("sentidos");
   const [abierto, setAbierto] = useState(null); // sentido con la lista de paradas desplegada
   const tipos = cfg?.tipos || [];
@@ -170,6 +198,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
             </div>
             <div style={{ fontSize: 11, color: C.dim }}>{linea.tipo}{linea.agencia ? ` · ${linea.agencia}` : ""}</div>
           </div>
+          <ElegirColor color={linea.color} elegido={colorElegido} onColor={onColor} />
           <button onClick={onCerrar} title="Cerrar" style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer" }}>×</button>
         </div>
       </div>
@@ -726,6 +755,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
       {linea && (
         <FichaLinea key={linea.id} linea={linea} cfg={cfg[linea.id]} paradasPorId={paradasPorId} dias={red.dias} cocheras={cocheras}
           onCfg={cambios => guardarCfgLinea(projectId, linea.id, cambios, { nombreLinea: linea.nombre }).catch(e => alert("No se pudo guardar: " + (e.message || e)))}
+          colorElegido={!!estado.ficha?.colores?.[linea.id]}
+          onColor={c => guardarColorLinea(projectId, linea.id, c)
+            .catch(e => alert("No se pudo guardar el color: " + (e.message || e)))}
           onCerrar={() => setSel(null)} />
       )}
     </div>

@@ -4,7 +4,7 @@
 // Cada cambio se guarda solo (a los 2 s) como una red normal (red-diseno.js).
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLeaflet } from "./use-leaflet.js";
-import { guardarRed, anotarCambioPlanning } from "./lineas-store.js";
+import { guardarRed, anotarCambioPlanning, guardarColorLinea } from "./lineas-store.js";
 import { FRANJAS, kmTrazado } from "./gtfs-red.js";
 import { construirRed, disenoNuevo, fechasCalendario, salidasDeTramos, revisarDiseno, vueltaDe, quitarParada, nuevoId, trazadoSentido, tiempoPropuesto, hhmmMin, PALETA_LINEAS } from "./red-diseno.js";
 import { simplificar } from "./lineas-servicio.js";
@@ -47,6 +47,7 @@ function MapaDiseno({ d, linea, dir, anadiendo, onPinchar, onMoverParada, onEleg
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
     const map = L.map(divRef.current, { zoomControl: true, doubleClickZoom: false }).setView([40.4, -3.7], 6);
+    map.attributionControl.setPrefix(false); // sin el «Leaflet» de la esquina
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
     map.on("click", e => { if (cb.current.anadiendo) cb.current.onPinchar([e.latlng.lat, e.latlng.lng]); });
@@ -346,7 +347,11 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
     return () => clearTimeout(t);
   }, [d, projectId, orgId]);
 
-  const cambiarLinea = cambios => setD(x => ({ ...x, lineas: x.lineas.map(l => (l.id === selLinea ? { ...l, ...cambios } : l)) }));
+  const cambiarLinea = cambios => {
+    // el color elegido aquí manda sobre el que se pusiera en el Planning
+    if (cambios.color && ficha?.colores?.[selLinea]) guardarColorLinea(projectId, selLinea, null).catch(() => {});
+    setD(x => ({ ...x, lineas: x.lineas.map(l => (l.id === selLinea ? { ...l, ...cambios } : l)) }));
+  };
   const cambiarSentido = cambios => setD(x => ({ ...x, lineas: x.lineas.map(l => (l.id === selLinea ? { ...l, sentidos: l.sentidos.map(s => (s.dir === dir ? { ...s, ...cambios } : s)) } : l)) }));
 
   function nuevaLinea() {

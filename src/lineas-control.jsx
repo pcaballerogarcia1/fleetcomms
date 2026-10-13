@@ -45,6 +45,7 @@ function MapaFlota({ red, posiciones, ahoraMs, foco, onElegir }) {
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
     const map = L.map(divRef.current, { zoomControl: true, preferCanvas: true }).setView([40.4, -3.7], 6);
+    map.attributionControl.setPrefix(false); // sin el «Leaflet» de la esquina
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
     mapRef.current = map;
