@@ -4,6 +4,10 @@ import { db } from "../firebase.js";
 import { describeReasons, DEFAULT_ROSTER_RULES, ESTATUTO_RULES, ESTATUTO_ARTS } from "../roster-optimizer.js";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { C, PDF_CHUNK, PDF_MAX_BYTES, RULE_FIELDS, TIPOS_RUTA, fmtClock, font, parseFestivos, primaryBtn, secondaryBtn, inputStyle } from "./datos.js";
+import { leerConvenio } from "./convenio-lector.js";
+import { textoDelPdf } from "./convenio-pdf.js";
+
+const META_CONVENIO = { nombre: "Nombre del convenio", codigo: "Código de convenio", vigencia: "Vigencia" };
 
 export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, onSave }) {
   const [r, setR] = useState({ ...DEFAULT_ROSTER_RULES, ...rules });
@@ -12,7 +16,50 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
   const [festText, setFestText] = useState((rules.festivos || []).join(", "));
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(null); // texto de progreso
+  // Lo que ha encontrado al leer el convenio: { reglas, meta, sinTexto, marcadas: Set }
+  const [lectura, setLectura] = useState(null);
   const fileRef = useRef(null);
+
+  // Lee el texto del PDF y propone las reglas (sin aplicarlas: se revisan antes)
+  async function leer(archivo) {
+    setPdfBusy("Leyendo el convenio…");
+    try {
+      const paginas = await textoDelPdf(archivo, { onProgreso: (i, n) => setPdfBusy(`Leyendo el convenio… página ${i} de ${n}`) });
+      const res = leerConvenio(paginas);
+      const marcadas = new Set([
+        ...Object.keys(res.reglas),
+        ...Object.keys(res.meta).filter(k => !cv[k]), // los datos del convenio, solo si no estaban puestos
+      ]);
+      setLectura({ ...res, marcadas });
+    } catch (e) {
+      alert("No se pudo leer el convenio: " + (e.message || e));
+    } finally {
+      setPdfBusy(null);
+    }
+  }
+  async function bytesDelPdfGuardado() {
+    let b64 = "";
+    for (let i = 0; i < cv.pdf.chunks; i++) {
+      const snap = await getDoc(doc(db, "rostering", `${orgId}_convenio_pdf_${cv.pdf.uploadId}_${i}`));
+      b64 += snap.data()?.data || "";
+    }
+    return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  }
+  async function leerGuardado() {
+    setPdfBusy("Abriendo convenio…");
+    try { await leer((await bytesDelPdfGuardado()).buffer); }
+    catch (e) { setPdfBusy(null); alert("No se pudo abrir el convenio: " + (e.message || e)); }
+  }
+  function aplicarLectura() {
+    const next = { ...r }, arts = { ...(cv.arts || {}) }, metaNueva = {};
+    for (const k of lectura.marcadas) {
+      if (lectura.reglas[k]) { next[k] = lectura.reglas[k].valor; if (lectura.reglas[k].art) arts[k] = lectura.reglas[k].art; }
+      else if (lectura.meta[k]) metaNueva[k] = lectura.meta[k];
+    }
+    setR(next);
+    setCv({ ...cv, ...metaNueva, arts });
+    setLectura(null);
+  }
 
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
 
@@ -41,21 +88,17 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
       setPdfUrl(URL.createObjectURL(file)); // se abre ya, sin volver a descargarlo
     } catch (e) {
       alert("No se pudo subir el convenio: " + (e.message || e));
-    } finally {
       setPdfBusy(null);
+      return;
     }
+    await leer(file); // y se lee, para proponer las reglas
   }
 
   async function openPdf() {
     if (pdfUrl || !cv.pdf?.chunks) return;
     setPdfBusy("Abriendo convenio…");
     try {
-      let b64 = "";
-      for (let i = 0; i < cv.pdf.chunks; i++) {
-        const snap = await getDoc(doc(db, "rostering", `${orgId}_convenio_pdf_${cv.pdf.uploadId}_${i}`));
-        b64 += snap.data()?.data || "";
-      }
-      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const bytes = await bytesDelPdfGuardado();
       setPdfUrl(URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })));
     } catch (e) {
       alert("No se pudo abrir el convenio: " + (e.message || e));
@@ -105,7 +148,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
         <div style={{ flex: "1 1 520px", minWidth: 0 }}>
           {/* ── Convenio ── */}
           <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>
-            Sube el convenio colectivo y rellena cada regla con lo que dice, anotando el artículo.
+            Sube el convenio colectivo en PDF: se lee solo y te propone cada regla con su artículo para que la revises.
             Se aplican al pulsar <b style={{ color: C.muted }}>Optimizar</b> y se comprueban siempre en la columna de resumen.
             0 = no se aplica.
           </div>
@@ -118,6 +161,9 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
             {cv.pdf && !pdfUrl && (
               <button onClick={openPdf} disabled={!!pdfBusy} style={secondaryBtn}>Abrir al lado</button>
             )}
+            {cv.pdf && !lectura && (
+              <button onClick={leerGuardado} disabled={!!pdfBusy} style={secondaryBtn} title="Buscar en el texto del convenio lo que dice de cada regla">Leer el convenio</button>
+            )}
             {pdfUrl && <button onClick={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }} style={secondaryBtn}>Cerrar PDF</button>}
             <button onClick={fillEstatuto} style={secondaryBtn}
               title="Jornada diaria 9h, descanso entre jornadas 12h, descanso semanal 36h, jornada anual 1.826h">
@@ -128,6 +174,47 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
               <span style={{ fontSize: 11, color: C.dim }}>{cv.pdf.name} · {(cv.pdf.size / 1024 / 1024).toFixed(1)} MB</span>
             )}
           </div>
+          {lectura && (
+            <div style={{ border: `1px solid ${C.blue}55`, background: `${C.blue}10`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+              {lectura.sinTexto ? (
+                <div style={{ fontSize: 12, color: C.amber || "#fbbf24", lineHeight: 1.5 }}>
+                  Este PDF es una imagen escaneada: no tiene texto que leer. Rellena las reglas a mano con el PDF al lado, o
+                  busca la versión en texto del convenio en el BOE o el boletín de tu provincia.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>
+                    Encontrado en el convenio · {Object.keys(lectura.reglas).length} de {RULE_FIELDS.length} reglas
+                  </div>
+                  <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Revisa cada una (la frase es la del convenio) y desmarca lo que no sea así.</div>
+                  {[...Object.entries(lectura.meta).map(([k, v]) => ({ k, nombre: META_CONVENIO[k], valor: v, ahora: cv[k] })),
+                    ...RULE_FIELDS.filter(f => lectura.reglas[f.key]).map(f => ({ k: f.key, nombre: f.label, valor: `${lectura.reglas[f.key].valor} ${f.suffix}`.trim(), ahora: r[f.key] ? `${r[f.key]}` : "", x: lectura.reglas[f.key] }))
+                  ].map(it => (
+                    <label key={it.k} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 0", borderTop: `1px solid ${C.border}`, cursor: "pointer" }}>
+                      <input type="checkbox" checked={lectura.marcadas.has(it.k)} style={{ accentColor: C.blue, marginTop: 2 }}
+                        onChange={e => setLectura(l => { const m = new Set(l.marcadas); if (e.target.checked) m.add(it.k); else m.delete(it.k); return { ...l, marcadas: m }; })} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 12, color: C.text }}>{it.nombre}: <b>{it.valor}</b></span>
+                        {it.x?.art && <span style={{ fontSize: 11, color: C.blue }}> · {it.x.art}</span>}
+                        {it.x?.pagina && <span style={{ fontSize: 11, color: C.dim }}> · pág. {it.x.pagina}</span>}
+                        {it.ahora && String(it.ahora) !== String(it.x ? it.x.valor : it.valor) && <span style={{ fontSize: 11, color: C.dim }}> · ahora: {it.ahora}</span>}
+                        {it.x?.frase && <span style={{ display: "block", fontSize: 10.5, color: C.muted, fontStyle: "italic", marginTop: 2 }}>«{it.x.frase.length > 220 ? it.x.frase.slice(0, 220) + "…" : it.x.frase}»</span>}
+                      </span>
+                    </label>
+                  ))}
+                  {RULE_FIELDS.some(f => !lectura.reglas[f.key]) && (
+                    <div style={{ fontSize: 11, color: C.dim, borderTop: `1px solid ${C.border}`, paddingTop: 6, marginTop: 2 }}>
+                      No lo he encontrado (búscalo en el PDF): {RULE_FIELDS.filter(f => !lectura.reglas[f.key]).map(f => f.label.toLowerCase()).join(", ")}.
+                    </div>
+                  )}
+                </>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                <button onClick={() => setLectura(null)} style={secondaryBtn}>Cerrar</button>
+                {!lectura.sinTexto && <button onClick={aplicarLectura} disabled={!lectura.marcadas.size} style={primaryBtn}>Rellenar las marcadas ({lectura.marcadas.size})</button>}
+              </div>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {meta("nombre", "Nombre del convenio")}
             {meta("codigo", "Código de convenio (REGCON)")}
