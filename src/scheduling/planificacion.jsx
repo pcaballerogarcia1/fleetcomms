@@ -18,6 +18,7 @@ import { GanttChart } from "./gantt.jsx";
 import { KpiBar } from "./kpi-bar.jsx";
 import { idbLoad, idbSave } from "./idb.js";
 import { ConstraintsPanel } from "./restricciones.jsx";
+import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import {
   runCloudSave as runCloudSaveMod, takeTheirScenario as takeTheirScenarioMod, restorePoint as restorePointMod, importFromPlanning as importFromPlanningMod, runGenerate as runGenerateMod, runSimulation as runSimulationMod,
   downloadVehicleXLSX as downloadVehicleXLSXMod, downloadCrewXLSX as downloadCrewXLSXMod, handleUploadXLSX as handleUploadXLSXMod, publishToRoutes as publishToRoutesMod,
@@ -51,11 +52,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [simRunning,   setSimRunning]   = useState(false);
   const [simResult,    setSimResult]    = useState(null);
   const [simError,     setSimError]     = useState(null);
-  const [constraints,  setConstraints] = useState({
-    maxShiftMin: 0, maxStops: 0, breakAfter: 240, breakDur: 30,
-    startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
-    optimizeWeight: 0, virtualShiftMin: 0, rosterMode: "cuadrante",
-  });
+  const [constraints,  setConstraints] = useState(() => ({ ...RESTRICCIONES_DEFECTO }));
   const [schedules,    setSchedules]   = useState({ vehicles: null, workers: null });
   const [moveHistory,  setMoveHistory] = useState([]); // { beforeVehicles, afterVehicles, beforeWorkers, afterWorkers, unassignedTask, label }
   const [historyIndex, setHistoryIndex] = useState(-1); // -1 = nada aplicado todavía
@@ -690,7 +687,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
       })()}
 
       {/* Constraints panel */}
-      {!focusMode && showC && <ConstraintsPanel c={constraints} onChange={setConstraints} orgId={orgId} />}
+      {!focusMode && showC && <ConstraintsPanel c={constraints} onChange={setConstraints} orgId={orgId} onCerrar={() => setShowC(false)} />}
 
       <ProgresoGeneracion {...{ GEN_PHASES, elapsedSec, genPhase, generating, scaleProgress, tasks, vehicles, workers }} />
 

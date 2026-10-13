@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones } from "../lineas-sched.js";
 import { SelectorCalendario } from "../lineas-horarios.jsx";
-import { C, MINIMOS, aHHMM, deHHMM, font, hm, mono, norm } from "./comun.js";
+import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restricciones.jsx";
+import { C, MINIMOS, aHHMM, deHHMM, font, hm, mono } from "./comun.js";
 
 function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, textoVacio = "—", step, onCambiar }) {
   const [texto, setTexto] = useState(null); // null = no se está editando
@@ -148,29 +149,10 @@ const AL_ENCENDER = {
   jornadaSinPausaMax: 360, costeVehiculoDia: 250, costeKm: 0.9, costeHora: 22, costeCambioBus: 5,
 };
 
-function Interruptor({ on, onCambiar, titulo }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} title={titulo} onClick={() => onCambiar(!on)}
-      style={{ width: 34, height: 18, borderRadius: 9, border: "none", padding: 2, cursor: "pointer", flexShrink: 0, background: on ? C.green : "#3a475e", transition: "background .15s", display: "flex", justifyContent: on ? "flex-end" : "flex-start" }}>
-      <span style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", display: "block" }} />
-    </button>
-  );
-}
-
-const ICONO = {
-  vehiculos: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="14" rx="2" /><path d="M4 11h16M8 21v-4M16 21v-4" /></svg>,
-  conductores: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>,
-  lineas: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8 7.5c4 2 4 7 8 9" /></svg>,
-  optimizador: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></svg>,
-};
-
 export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   // el radio de los vacíos de la estrategia también enciende o apaga los vacíos
   const set = (k, v) => onChange(k === "vacioKm" ? { vacioKm: v, vacios: v !== 0 } : { [k]: v });
   const conTipos = (p.tiposTurno || []).some(x => x.activo !== false);
-  const [busca, setBusca] = useState("");
-  const [enUso, setEnUso] = useState(false);
-  const [sec, setSec] = useState("tipos");
 
   // ── controles ──
   const numero = (k, sufijo, { decimal = false, step } = {}) => (
@@ -211,7 +193,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   // ── categorías, apartados y ajustes ──
   // cada ajuste: [clave (para «en uso»), nombre, control, ayuda]
   const CATS = [
-    { id: "vehiculos", nombre: "Vehículos", secs: [
+    { id: "vehiculos", nombre: "Vehículos", icono: <IconoCategoria tipo="vehiculos" />, secs: [
       { id: "flota", nombre: "Flota y coste", items: [
         ["flotaMax", "Flota disponible", limite("flotaMax", "autobuses"), "El optimizador no usa más autobuses que estos."],
         ["costeVehiculoDia", "Coste por autobús y día", limite("costeVehiculoDia", "€/autobús·día", { decimal: true }), "Para el coste estimado y «Menor coste»."],
@@ -231,8 +213,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["factorRodeo", "Factor de rodeo", numero("factorRodeo", "× la línea recta", { decimal: true, step: 0.05 })],
       ] },
     ] },
-    { id: "conductores", nombre: "Conductores", secs: [
-      { id: "tipos", nombre: "Tipos de turno", tipos: true, items: [] },
+    { id: "conductores", nombre: "Conductores", icono: <IconoCategoria tipo="conductores" />, secs: [
+      { id: "tipos", nombre: "Tipos de turno", usado: conTipos, buscar: "tipos de turno mañana tarde noche partido refuerzo cambio de bus", contenido: <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} /> },
       { id: "jornada", nombre: "Jornada", items: [
         ...(conTipos ? [] : [
           ["amplitudMax", "Amplitud máxima del turno", numero("amplitudMax", "min")],
@@ -269,8 +251,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["costeHora", "Coste por hora de conductor", limite("costeHora", "€/h", { decimal: true })],
       ] },
     ] },
-    { id: "lineas", nombre: "Líneas", secs: [
-      { id: "grupos", nombre: "Grupos de líneas", grupos: true, items: [["gruposLineas", "Grupos de líneas", null]] },
+    { id: "lineas", nombre: "Líneas", icono: <IconoCategoria tipo="lineas" />, secs: [
+      { id: "grupos", nombre: "Grupos de líneas", usado: (p.gruposLineas || []).length > 0, buscar: "grupos de lineas agrupar mezclar", contenido: <GruposLineas red={red} grupos={p.gruposLineas} onChange={v => set("gruposLineas", v)} /> },
       { id: "mezclas", nombre: "Mezclas", items: [
         [["entreLineas", "mezclaBuses"], "Un autobús, en cabecera, puede seguir con…", lista2(mezclaBus, v => onChange({ entreLineas: v !== "no", mezclaBuses: v === "grupo" ? "grupo" : "libre" }), [
           ["libre", "Cualquier línea"], ["grupo", "Solo líneas de su grupo"], ["no", "La misma línea (otra solo pasando por cochera)"]]),
@@ -280,7 +262,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           "Las variantes de una línea cuentan como la misma. Para hacer varias, su autobús tiene que cambiar de línea o él cambiar de autobús («Cambio de bus»)."],
       ], nota: (p.gruposLineas || []).length ? null : "Aún no hay grupos: «Solo líneas de su grupo» funciona como «la misma línea». Créalos en «Grupos de líneas»." },
     ] },
-    { id: "optimizador", nombre: "Optimizador", secs: [
+    { id: "optimizador", nombre: "Optimizador", icono: <IconoCategoria tipo="optimizador" />, secs: [
       { id: "estrategia", nombre: "Estrategia de este calendario", items: [
         ["eleccion", "Qué autobús coge cada viaje", lista("eleccion", [["optimo", "El mínimo de autobuses (óptimo)"], ["ultimo", "El que menos espera en cabecera"], ["primero", "El que más espera (reparte la regulación)"]])],
         ["vacioKm", "Vacíos entre cabeceras", lista("vacioKm", [[null, `Hasta el máximo (${String(p.vacioMaxKm).replace(".", ",")} km)`], ...[8, 3].filter(k => k < p.vacioMaxKm).map(k => [k, `Hasta ${k} km`]), [0, "No (cada autobús sigue en su cabecera)"]])],
@@ -292,86 +274,17 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   ];
 
   // en uso: lo que no está como viene por defecto
-  const usado1 = k => { const v = p[k], d = PARAMS_DEFECTO[k]; if (Array.isArray(d)) return (v || []).length > 0; return !(v === d || (v == null && d == null) || (v === "" && d == null)); };
-  const usado = k => (Array.isArray(k) ? k.some(usado1) : usado1(k));
-  const secUsada = s => (s.tipos ? conTipos : s.items.some(([k]) => usado(k)));
-  const q = norm(busca.trim());
-  const coincide = it => !q || norm(`${it[1]} ${it[3] || ""}`).includes(q);
-  const visibles = CATS.map(c => ({ ...c, secs: c.secs.filter(s => (!enUso || secUsada(s)) && (!q || (s.tipos ? norm("tipos de turno mañana tarde partido refuerzo cambio de bus").includes(q) : s.grupos ? norm("grupos de lineas agrupar mezclar").includes(q) : s.items.some(coincide) || norm(s.nombre).includes(q)))) })).filter(c => c.secs.length);
-  const todasSecs = visibles.flatMap(c => c.secs);
-  const actual = q ? null : todasSecs.find(s => s.id === sec) || todasSecs[0];
-
+  const usado = k => { const v = p[k], d = PARAMS_DEFECTO[k]; if (Array.isArray(d)) return (v || []).length > 0; return !(v === d || (v == null && d == null) || (v === "" && d == null)); };
   const revision = revisarRestricciones(p);
-  const fila = it => (
-    <div key={String(it[0])} style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-      <div>
-        <div style={{ fontSize: 12, lineHeight: 1.35, color: usado(it[0]) ? C.text : C.muted, fontWeight: usado(it[0]) ? 600 : 400 }}>{it[1]}</div>
-        {it[3] && <div style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.45, marginTop: 2 }}>{it[3]}</div>}
-      </div>
-      <div>{it[2]}</div>
-    </div>
-  );
-  const apartado = s => (
-    <div key={s.id} style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>
-      {s.nota && <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 6px", lineHeight: 1.5 }}>{s.nota}</div>}
-      {s.tipos ? <TiposTurno tipos={p.tiposTurno} onChange={v => set("tiposTurno", v)} />
-        : s.grupos ? <GruposLineas red={red} grupos={p.gruposLineas} onChange={v => set("gruposLineas", v)} />
-        : (q ? s.items.filter(coincide) : s.items).map(fila)}
-    </div>
-  );
-
   return (
-    <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, flexShrink: 0, height: "min(62vh, 660px)", display: "flex", flexDirection: "column", animation: "sched-fadein .15s ease both" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Restricciones</span>
-        <SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />
-        <span style={{ flex: 1 }} />
-        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar ✕</button>}
-      </div>
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* Izquierda: buscador, en uso / todas, categorías */}
-        <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`, padding: "12px 12px", overflowY: "auto", background: C.bg }}>
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
-            style={{ width: "100%", boxSizing: "border-box", background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 10 }} />
-          <div style={{ display: "flex", border: `1px solid ${C.border2}`, borderRadius: 6, overflow: "hidden", marginBottom: 14 }}>
-            {[[true, "En uso"], [false, "Todas"]].map(([v, t]) => (
-              <button key={t} onClick={() => setEnUso(v)} style={{ flex: 1, padding: "5px 0", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: font, background: enUso === v ? C.surface2 : "transparent", color: enUso === v ? C.text : C.dim }}>{t}</button>
-            ))}
-          </div>
-          {visibles.map(c => (
-            <div key={c.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.green, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>{ICONO[c.id]}{c.nombre}</div>
-              {c.secs.map(s => {
-                const activo = !q && actual?.id === s.id;
-                return (
-                  <button key={s.id} onClick={() => { setBusca(""); setSec(s.id); }} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", padding: "5px 8px 5px 23px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 12, fontFamily: font, background: activo ? C.surface2 : "none", color: activo ? C.text : C.muted }}>
-                    <span style={{ flex: 1 }}>{s.nombre}</span>
-                    {secUsada(s) && <span title="Tiene algo cambiado" style={{ width: 6, height: 6, borderRadius: 3, background: C.green, flexShrink: 0 }} />}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-          {!visibles.length && <div style={{ fontSize: 11.5, color: C.dim, padding: 6 }}>{enUso ? "No has cambiado nada todavía: está todo como viene." : `Nada con «${busca}».`}</div>}
+    <PanelRestricciones categorias={CATS} usado={usado} onCerrar={onCerrar} seccionInicial="tipos"
+      cabecera={<SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />}
+      avisos={revision.length > 0 && (
+        <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
+          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
         </div>
-        {/* Derecha: el apartado elegido (o lo que coincide con la búsqueda) */}
-        <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "14px 24px" }}>
-          {revision.length > 0 && (
-            <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
-              {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
-            </div>
-          )}
-          {q
-            ? (todasSecs.length ? todasSecs.map(apartado) : <div style={{ fontSize: 12, color: C.dim }}>Ninguna restricción con «{busca}».</div>)
-            : actual && <>
-              <div style={{ fontSize: 16, color: C.text, fontWeight: 600, marginBottom: 12 }}>{actual.nombre}</div>
-              {apartado({ ...actual, nombre: "" })}
-            </>}
-        </div>
-      </div>
-    </div>
+      )} />
   );
 }
 
