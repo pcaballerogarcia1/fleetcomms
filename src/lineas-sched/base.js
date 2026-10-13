@@ -52,6 +52,8 @@ export const PARAMS_DEFECTO = {
   objetivoTurnos: "conductores", // a qué da prioridad la partición: "conductores" o "horas" (pagadas)
   vacios: true,         // vacíos entre cabeceras
   vacioKm: null,        // radio de los vacíos entre cabeceras (null = vacioMaxKm; nunca más)
+  bloqueMax: null,      // min que un autobús está fuera de cochera, como mucho (null = lo que dé; ~ un turno: cada conductor hace el autobús entero)
+  costeCambioBus: null, // € que se le pone a cada cambio de autobús de un conductor (Optimizar todo junto; null = el orientativo)
 };
 
 const hhmmAMin = s => {

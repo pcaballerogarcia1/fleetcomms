@@ -296,6 +296,36 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
     // turnos: con los vehículos tal cual están
     w.postMessage({ tipo: f, red, cfg, cocheras, params: f === "vehiculos" ? { ...p, entreLineas: p.entreLineasGlobal } : p, objetivo: obj });
   }
+  // Optimizar todo junto (vehículos y turnos a la vez, por el coste total)
+  const optJunto = optDe(dia, "conjunto");
+  function optimizarJunto() {
+    if (!red || optJunto.estado === "corriendo" || opt.estado === "corriendo" || lote || !perderManuales("vehiculos")) return;
+    marcarPlanningVisto(params.dia);
+    const p = params, d = p.dia;
+    const setO = x => setOptPorDia(m => ({ ...m, [`${d}|conjunto`]: typeof x === "function" ? x(m[`${d}|conjunto`] || {}) : x }));
+    setPanelLineas(false);
+    setO({ estado: "corriendo", progreso: [0, 0] });
+    const w = nuevoWorker();
+    w.onmessage = e => {
+      if (e.data.progreso) { setO(o => ({ ...o, progreso: e.data.progreso })); return; }
+      w.terminate(); workerRef.current = null;
+      if (e.data.error) { setO({ estado: "nada", progreso: [0, 0], error: e.data.error }); return; }
+      const { probadas, precios } = e.data.ok;
+      setO({ estado: "hecho", progreso: [0, 0], probadas, precios, params: p, aplicada: 0 });
+      if (probadas[0]) {
+        calcular({ ...p, ...probadas[0].estrategia }, "ambos", { objetivoV: "total", objetivoT: "total" });
+        logAudit({ modulo: "Scheduling", accion: "Optimizó vehículos y turnos de líneas a la vez", detalle: `${nombreDia(d, red)} · ${probadas[0].nombre}` });
+      }
+    };
+    w.onerror = e => { w.terminate(); workerRef.current = null; setO({ estado: "nada", progreso: [0, 0], error: e.message || "error en el cálculo" }); };
+    w.postMessage({ tipo: "conjunto", red, cfg, cocheras, params: { ...p, entreLineas: p.entreLineasGlobal } });
+  }
+  function aplicarJunto(i) {
+    const r = optJunto.probadas?.[i];
+    if (!r) return;
+    setOptPorDia(m => ({ ...m, [`${dia}|conjunto`]: { ...optJunto, aplicada: i } }));
+    calcular({ ...optJunto.params, ...r.estrategia }, "ambos", { objetivoV: "total", objetivoT: "total" });
+  }
   function aplicarOpt(i) {
     const r = opt.probadas?.[i];
     if (!r) return;
@@ -497,6 +527,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
             opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
+            optJunto={optJunto} onOptimizarJunto={optimizarJunto} onAplicarJunto={aplicarJunto}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
           {res && ((params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax) || (params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax)) && (
             <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.3)" }}>

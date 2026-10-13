@@ -83,7 +83,7 @@ export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {
 }
 
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
-export const CAMPOS_VEHICULOS = ["eleccion", "entreLineas", "vacios", "vacioKm"];
+export const CAMPOS_VEHICULOS = ["eleccion", "entreLineas", "vacios", "vacioKm", "bloqueMax"];
 
 export const CAMPOS_TURNOS = ["corte", "emparejar", "metodo"];
 
@@ -118,7 +118,12 @@ export const OBJETIVOS_TURNOS = [
   { id: "horas", nombre: "Menos horas pagadas", ayuda: "Primero las horas pagadas (el coste de personal); a igualdad, menos turnos." },
 ];
 
-export const OBJETIVOS = [...OBJETIVOS_VEHICULOS, ...OBJETIVOS_TURNOS];
+export const OBJETIVOS = [...OBJETIVOS_VEHICULOS, ...OBJETIVOS_TURNOS, { id: "total", nombre: "Menor coste total", ayuda: "Autobuses, conductores, km y cambios de autobús juntos." }];
+
+// Precios orientativos para «Optimizar todo junto» cuando no se han puesto los
+// de Restricciones (solo sirven para comparar unas formas con otras)
+export const PRECIOS_ORIENTATIVOS = { costeVehiculoDia: 250, costeHora: 22, costeKm: 0.9, costeCambioBus: 5 };
+export const preciosTotal = p => Object.fromEntries(Object.entries(PRECIOS_ORIENTATIVOS).map(([k, v]) => [k, p[k] > 0 || (k === "costeCambioBus" && p[k] === 0) ? p[k] : v]));
 
 /** Nombre corto de una estrategia para enseñarla */
 export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
@@ -128,6 +133,7 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
     v.eleccion != null && (v.eleccion === "optimo" ? "mínimo de autobuses (óptimo)" : v.eleccion === "primero" ? "reparte la regulación" : "menos espera en cabecera"),
     v.vacios != null && (v.vacios === false || v.vacioKm === 0 ? "sin vacíos entre cabeceras" : v.vacioKm != null ? `vacíos de hasta ${String(v.vacioKm).replace(".", ",")} km` : "vacíos hasta el máximo"),
     v.entreLineas === false ? "sin cambiar de línea" : null,
+    v.bloqueMax > 0 && `autobuses de hasta ${Math.floor(v.bloqueMax / 60)}h${String(v.bloqueMax % 60).padStart(2, "0")} fuera de cochera`,
     v.corte != null && corte,
     v.metodo === "particion" ? "turnos por partición (la mejor combinación)" : v.emparejar != null && (v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas"),
   ].filter(Boolean).join(" · ");
@@ -201,6 +207,57 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
   const exceso = r => Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
   ordenarPor(probadas, r => [exceso(r), r.avisos, ...(objetivo === "horas" ? [r.horasPagadas, r.turnos] : [r.turnos, r.horasPagadas])]);
   return { probadas, objetivo };
+}
+
+/**
+ * Optimizar todo junto: los vehículos ya no se eligen solo por tener menos
+ * autobuses, sino por lo que cuesta el día entero con sus turnos. Prueba
+ * formas de hacer los autobuses (entre ellas, autobuses que vuelven a cochera
+ * al largo de un turno, para que el conductor no tenga que cambiar de
+ * autobús) y, para cada una, formas de hacer los turnos; se queda con la de
+ * menor coste: autobuses + horas de conductor + km + cambios de autobús.
+ * @returns { probadas: [{ estrategia, autobuses, turnos, horasPagadas, km, kmVacio, cambiosBus, desplazamientos, avisos, coste, cumple, nombre }], objetivo: "total", precios }
+ */
+export function optimizarConjunto(red, cfg = {}, opciones = {}, { onProgreso, cocheras = [] } = {}) {
+  const p = { ...PARAMS_DEFECTO, ...opciones };
+  const precios = preciosTotal(p);
+  const { viajes, find } = viajesDelDia(red, cfg, p);
+  const geo = geografia(red, cfg, cocheras, p);
+  const kmReales = viajes.reduce((s, v) => s + v.km, 0);
+  // largos de autobús parecidos a un turno: la jornada (y la amplitud) de los tipos de turno
+  const tipos = (p.tiposTurno || []).filter(x => x.activo !== false && !x.partido);
+  const jornadas = [...new Set((tipos.length ? tipos.map(x => x.trabajoMax) : [p.jornadaMax]).filter(x => x > 0))];
+  const bloques = [null, ...new Set(jornadas.flatMap(j => [j, j + 60]))].slice(0, 4);
+  const radios = geo && p.vacioMaxKm > 0 ? [0, p.vacioMaxKm] : [0];
+  const variantesV = [];
+  for (const bloqueMax of bloques) for (const vacioKm of radios) for (const eleccion of ["optimo", "ultimo"]) {
+    variantesV.push({ eleccion, entreLineas: p.entreLineas, vacios: vacioKm > 0, vacioKm, bloqueMax });
+  }
+  const variantesT = [{ corte: 150, metodo: "particion" }, { corte: 210, metodo: "particion" }, { corte: "max", metodo: "particion" }];
+  const total = variantesV.length * variantesT.length;
+  const probadas = [];
+  for (const dv of variantesV) {
+    const q = { ...p, ...dv };
+    const { vehiculos, autobuses: buses } = vehiculosYAutobuses(viajes, cfg, find, q, geo);
+    const kmVacio = vehiculos.reduce((s, v) => s + (v.kmVacio || 0), 0);
+    for (const dt of variantesT) {
+      const { turnos } = programarTurnos(vehiculos, { ...q, ...dt }, find, null, geo);
+      const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
+      const cambiosBus = turnos.reduce((s, t) => s + (t.cambiosBus || 0), 0);
+      const r = {
+        estrategia: { ...dv, ...dt }, autobuses: buses.length, turnos: turnos.length, horasPagadas, km: kmReales + kmVacio, kmVacio, cambiosBus,
+        desplazamientos: turnos.reduce((s, t) => s + (t.desplazamientos?.length || 0), 0),
+        avisos: turnos.filter(t => t.avisos.length).length,
+        coste: buses.length * precios.costeVehiculoDia + horasPagadas * precios.costeHora + (kmReales + kmVacio) * precios.costeKm + cambiosBus * precios.costeCambioBus,
+      };
+      r.cumple = !(p.flotaMax > 0 && r.autobuses > p.flotaMax) && !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
+      r.nombre = nombreEstrategia(r.estrategia, p.piezaMax);
+      probadas.push(r);
+      onProgreso?.(probadas.length, total);
+    }
+  }
+  ordenarPor(probadas, r => [r.cumple ? 0 : 1, r.avisos > 0 ? 1 : 0, r.coste]);
+  return { probadas, objetivo: "total", precios };
 }
 
 /** Los dos pasos seguidos: los mejores vehículos y, sobre ellos, los mejores turnos */

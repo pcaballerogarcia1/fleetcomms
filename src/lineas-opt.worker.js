@@ -8,7 +8,7 @@
 //  · { tipo: "lote", red, cfg, cocheras, params, dias: [{ dia, estrategia }], optimizar, objetivoVehiculos, objetivoTurnos }
 //    → calcula (u optimiza, los dos pasos) varios calendarios y manda el
 //      resumen de cada uno según termina
-import { optimizarVehiculos, optimizarTurnos, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO, esCambioVehiculos, esCambioTurnos } from "./lineas-sched.js";
+import { optimizarVehiculos, optimizarTurnos, optimizarConjunto, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO, esCambioVehiculos, esCambioTurnos } from "./lineas-sched.js";
 import { turnosCompactos } from "./lineas-rostering.js";
 
 self.onmessage = e => {
@@ -58,7 +58,9 @@ self.onmessage = e => {
     const onProgreso = (k, n) => { const ahora = Date.now(); if (k === n || ahora - ultimo > 150) { ultimo = ahora; self.postMessage({ progreso: [k, n] }); } };
     const r = tipo === "turnos"
       ? optimizarTurnos(red, cfg, params, { objetivo, cocheras, onProgreso })
-      : optimizarVehiculos(red, cfg, params, { objetivo, cocheras, onProgreso });
+      : tipo === "conjunto"
+        ? optimizarConjunto(red, cfg, params, { cocheras, onProgreso })
+        : optimizarVehiculos(red, cfg, params, { objetivo, cocheras, onProgreso });
     self.postMessage({ ok: r });
   } catch (err) {
     self.postMessage({ error: err?.message || String(err) });

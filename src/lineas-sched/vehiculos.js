@@ -5,6 +5,11 @@
 import { PEGADAS_KM, admite, hm, tipoDeLinea, vacio } from "./base.js";
 import { montarBloque } from "./manual.js";
 
+// Lo que puede estar un autobús fuera de cochera: la restricción (amplitud
+// máxima del autobús) y, si la estrategia lo pide, el largo de un turno
+// (bloqueMax: así cada conductor puede hacer el autobús entero sin cambiar)
+const amplitudBus = p => Math.min(p.amplitudBusMax > 0 ? p.amplitudBusMax : Infinity, p.bloqueMax > 0 ? p.bloqueMax : Infinity);
+
 // 1) Vehículos: bloques de viajes encadenados en cabecera
 function programarVehiculos(viajes, cfg, find, p, geo) {
   const vehiculos = [];
@@ -26,7 +31,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
   };
   // Amplitud máxima del autobús: desde que sale de cochera (o del primer
   // viaje, sin cocheras) hasta que vuelve tras el último viaje
-  const ampMax = p.amplitudBusMax > 0 ? p.amplitudBusMax : Infinity;
+  const ampMax = amplitudBus(p);
   const minCochera = (a, b) => { const k = geo?.hayCocheras ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
   const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
   const cabe = (veh, v) => ampMax === Infinity || v.arr + (veh.cocheraEst ? minCochera(v.d, veh.cocheraEst) : 0) - veh.salida0 <= ampMax;
@@ -262,7 +267,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
     const k = vmax > 0 ? geo.km(a.d, b.o) : null;
     return k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k));
   };
-  const ampMax = p.amplitudBusMax > 0 ? p.amplitudBusMax : Infinity;
+  const ampMax = amplitudBus(p);
   const caminos = [];
   for (let i = 0; i < n; i++) {
     if (mR[i] >= 0) continue;
@@ -318,7 +323,9 @@ function repartirAutobuses(vehiculos, p) {
       if (bus.libre + (veh.cochera ? p.margenCochera : p.margenVacio) > veh.inicio) continue;
       if (veh.cochera && bus.cochera !== veh.cochera) continue;
       if (bus.tipo != null && veh.tipo != null && bus.tipo !== veh.tipo) continue;
-      if (p.amplitudBusMax > 0 && veh.fin - bus.inicio > p.amplitudBusMax) continue; // amplitud máxima del autobús
+      // amplitud máxima del autobús (la restricción, para el día entero; el
+      // largo de bloque de la estrategia es por salida de cochera y no cuenta aquí)
+      if (p.amplitudBusMax > 0 && veh.fin - bus.inicio > p.amplitudBusMax) continue;
       if (!mejor || bus.libre > mejor.libre) mejor = bus;
     }
     if (!mejor) { mejor = { id: autobuses.length + 1, tipo: veh.tipo, bloques: [], libre: 0, inicio: veh.inicio, cochera: veh.cochera || null }; autobuses.push(mejor); }

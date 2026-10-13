@@ -175,6 +175,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
           {sub("Disponibles y coste")}
           {row("Conductores disponibles", decInput("conductoresMax", "turnos (vacío = sin límite)", 1))}
           {row("Coste por hora de conductor", decInput("costeHora", "€/h"))}
+          {row("Coste de cada cambio de autobús", decInput("costeCambioBus", "€ por cambio (lo que te molesta que un conductor cambie de autobús; Optimizar todo junto)"))}
         </div>
         <div>
           {titulo("Línea")}

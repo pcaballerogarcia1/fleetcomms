@@ -6,7 +6,7 @@ import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lin
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
 
 
-export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado }) {
+export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado, optJunto, onOptimizarJunto, onAplicarJunto }) {
   const veh = fase === "vehiculos";
   const objetivos = veh ? OBJETIVOS_VEHICULOS : OBJETIVOS_TURNOS;
   const hayPrecio = o => !o.precios || o.precios.some(k => p[k] > 0);
@@ -78,6 +78,74 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
             </tbody>
           </table>
           <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{opt.probadas.length} combinaciones probadas. La primera ya está aplicada{veh ? "; los turnos se rehacen en el paso 2" : ""}.</div>
+        </>
+      )}
+      {optJunto && <OptimizarJunto p={p} opt={optJunto} ocupado={corriendo} bloqueado={bloqueado} onOptimizar={onOptimizarJunto} onAplicar={onAplicarJunto} onRestricciones={onRestricciones} />}
+    </div>
+  );
+}
+
+// Optimizar los dos pasos a la vez: cada forma de hacer los autobuses con sus
+// turnos, por el coste del día entero (autobuses, conductores, km y cambios de autobús)
+function OptimizarJunto({ p, opt, ocupado, bloqueado, onOptimizar, onAplicar, onRestricciones }) {
+  const corriendo = opt.estado === "corriendo";
+  const mejor = opt.probadas?.[0];
+  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
+  const td = { padding: "5px 8px", fontFamily: mono, fontSize: 11.5, textAlign: "right", color: C.muted };
+  const pr = opt.precios;
+  const orientativos = pr && !(p.costeVehiculoDia > 0 && p.costeHora > 0);
+  const cols = [
+    ["Autobuses", r => num(r.autobuses)], ["Turnos", r => num(r.turnos)], ["Horas pagadas", r => num(r.horasPagadas)],
+    ["Cambios de bus", r => num(r.cambiosBus)], ["Km vacío", r => num(r.kmVacio)], ["Coste/día", r => `${num(r.coste)} €`],
+  ];
+  return (
+    <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+          Optimizar todo junto <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· vehículos y turnos a la vez, por el coste del día entero</span>
+        </div>
+        <button onClick={onOptimizar} disabled={corriendo || ocupado || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: `1px solid ${C.green}`, background: "rgba(52,211,153,0.12)", color: C.green, fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
+          {corriendo ? `Probando ${opt.progreso[0]} de ${opt.progreso[1] || "…"}` : "Optimizar todo junto"}
+        </button>
+      </div>
+      {corriendo && (
+        <div style={{ height: 3, background: C.bg, borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${opt.progreso[1] ? (100 * opt.progreso[0]) / opt.progreso[1] : 3}%`, background: C.green, transition: "width .2s" }} />
+        </div>
+      )}
+      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>
+        Por pasos, primero se eligen los autobuses (los menos posibles) y luego los turnos encima. Aquí, cada forma de hacer los autobuses
+        se prueba con sus turnos y gana la que menos cuesta en total: a veces un autobús más ahorra conductores, horas o cambios de autobús.
+        También prueba autobuses que vuelven a cochera al largo de un turno.
+      </div>
+      {opt.error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 8 }}>No se ha podido optimizar: {opt.error}</div>}
+      {opt.estado === "hecho" && mejor && (
+        <>
+          {!mejor.cumple && <div style={{ fontSize: 11.5, color: C.red, marginTop: 10 }}>Ninguna combinación cabe en la flota o los conductores disponibles.</div>}
+          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
+            <thead><tr>
+              <th style={{ ...th, textAlign: "left" }}>#</th><th style={{ ...th, textAlign: "left" }}>Estrategia</th>
+              {cols.map(([t]) => <th key={t} style={th}>{t}</th>)}<th style={th} />
+            </tr></thead>
+            <tbody>
+              {opt.probadas.slice(0, 8).map((r, i) => (
+                <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(52,211,153,0.07)" : "none" }}>
+                  <td style={{ ...td, textAlign: "left", color: i === 0 ? C.green : C.dim }}>{i + 1}</td>
+                  <td style={{ ...td, textAlign: "left", fontFamily: font }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa del límite</span>}{r.avisos > 0 && <span style={{ color: C.amber }}> · {r.avisos} turnos con aviso</span>}</td>
+                  {cols.map(([t, f]) => <td key={t} style={{ ...td, color: i === 0 ? C.text : C.muted }}>{f(r)}</td>)}
+                  <td style={{ ...td, width: 110, whiteSpace: "nowrap" }}>
+                    {opt.aplicada === i
+                      ? <span style={{ fontSize: 11, color: C.green, fontFamily: font }}>En el escenario</span>
+                      : <button onClick={() => onAplicar(i)} style={{ padding: "3px 10px", borderRadius: 5, background: "none", border: `1px solid ${C.border2}`, color: C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font }}>Usar</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>
+            {opt.probadas.length} combinaciones probadas; la primera ya está aplicada (vehículos y turnos).
+            {orientativos && <> Con precios orientativos ({num(pr.costeVehiculoDia)} €/autobús·día, {String(pr.costeHora).replace(".", ",")} €/h, {String(pr.costeKm).replace(".", ",")} €/km, {num(pr.costeCambioBus)} € por cambio de autobús): <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 10.5, fontFamily: font }}>pon los tuyos en Restricciones</button>.</>}
+          </div>
         </>
       )}
     </div>

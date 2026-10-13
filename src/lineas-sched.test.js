@@ -623,3 +623,27 @@ describe("scheduling de líneas: puntos de relevo", () => {
   });
 });
 
+
+describe("optimizar todo junto (vehículos y turnos a la vez)", () => {
+  it("prueba formas de autobuses con sus turnos y ordena por coste total", async () => {
+    const { optimizarConjunto, PRECIOS_ORIENTATIVOS } = await import("./lineas-sched.js");
+    let avance = 0;
+    const r = optimizarConjunto(RED, {}, { dia: "laborable" }, { onProgreso: k => { avance = k; } });
+    expect(r.objetivo).toBe("total");
+    expect(r.precios).toEqual(PRECIOS_ORIENTATIVOS);
+    expect(avance).toBe(r.probadas.length);
+    const costes = r.probadas.filter(x => x.cumple && !x.avisos).map(x => x.coste);
+    expect(costes).toEqual([...costes].sort((a, b) => a - b));
+    const m = r.probadas[0];
+    expect(m).toMatchObject({ autobuses: expect.any(Number), turnos: expect.any(Number), cambiosBus: expect.any(Number) });
+    expect(m.coste).toBeCloseTo(m.autobuses * 250 + m.horasPagadas * 22 + m.km * 0.9 + m.cambiosBus * 5, 5);
+    // con los precios de Restricciones, mandan esos
+    expect(optimizarConjunto(RED, {}, { dia: "laborable", costeVehiculoDia: 100, costeHora: 30, costeCambioBus: 0 }).precios).toMatchObject({ costeVehiculoDia: 100, costeHora: 30, costeCambioBus: 0 });
+  });
+  it("el largo de autobús de la estrategia limita cada salida de cochera, no el día del autobús", () => {
+    const sin = generarServicio(RED, {}, { dia: "laborable" });
+    const con = generarServicio(RED, {}, { dia: "laborable", bloqueMax: 90 });
+    expect(con.vehiculos.every(v => v.fin - v.inicio <= 90)).toBe(true);
+    expect(con.vehiculos.length).toBeGreaterThanOrEqual(sin.vehiculos.length);
+  });
+});
