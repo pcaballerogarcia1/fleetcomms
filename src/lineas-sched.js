@@ -45,7 +45,7 @@ import { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";
 import { programarTurnos } from "./lineas-sched/turnos.js";
 import { vehiculosYAutobuses } from "./lineas-sched/vehiculos.js";
 // Lo de cada paso vive en src/lineas-sched/; desde aquí se sigue ofreciendo todo
-export { ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, cabecerasDeRed, claveSalidas, duracionViaje, esCalendario, nombreDia, salidasDe, viajesDia } from "./lineas-sched/base.js";
+export { ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, cabecerasDeRed, claveSalidas, duracionViaje, esCalendario, nombreDia, pasosPorParada, salidasDe, viajesDia } from "./lineas-sched/base.js";
 export { asignarTipos, encajaTipo, gruposTurnos, tipoDeTurno, validar } from "./lineas-sched/turnos.js";
 export { aplicarCambios, clavePieza, claveViaje, esCambioTurnos, esCambioVehiculos, moverPieza, moverViaje, moverViajes, moverViajesTurno } from "./lineas-sched/manual.js";
 export { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";

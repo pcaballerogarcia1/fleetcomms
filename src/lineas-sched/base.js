@@ -105,6 +105,38 @@ export function duracionViaje(sentido, salida, cfgLinea) {
   return otros.length ? otros[otros.length >> 1] : 30;
 }
 
+/**
+ * Pasos por parada de una expedición que sale a las `salida`: minutos de paso
+ * por cada parada del sentido. Se reparte el tiempo de recorrido de su franja
+ * (el corregido a mano, si lo hay) como lo hacen los viajes del GTFS; si la
+ * red no lo trae (dibujada a mano o importada antes), por la distancia entre
+ * paradas (aproximado).
+ * @returns { pasos: [min], aproximado }
+ */
+export function pasosPorParada(sentido, salida, red, cfgLinea) {
+  const n = sentido.paradas?.length || 0;
+  const dur = duracionViaje(sentido, salida, cfgLinea);
+  let fr = Array.isArray(sentido.fracciones) && sentido.fracciones.length === n ? sentido.fracciones : null;
+  const aproximado = !fr;
+  if (!fr) fr = fraccionesPorDistancia(sentido, red);
+  return { pasos: fr.map(f => Math.round(salida + f * dur)), aproximado };
+}
+const fracCache = new WeakMap();
+function fraccionesPorDistancia(sentido, red) {
+  if (fracCache.has(sentido)) return fracCache.get(sentido);
+  const n = sentido.paradas.length;
+  const coord = new Map((red?.paradas || []).map(p => [p.id, [p.lat, p.lng]]));
+  const acum = [0];
+  for (let i = 1; i < n; i++) {
+    const a = coord.get(sentido.paradas[i - 1]), b = coord.get(sentido.paradas[i]);
+    acum.push(acum[i - 1] + (a && b ? kmRecta(a, b) : 0));
+  }
+  const total = acum[n - 1];
+  const fr = total > 0 ? acum.map(x => x / total) : acum.map((_, i) => (n > 1 ? i / (n - 1) : 0));
+  fracCache.set(sentido, fr);
+  return fr;
+}
+
 /** Une cabeceras: llegada de la ida = salida de la vuelta (y al revés) de cada línea */
 /**
  * Las cabeceras de la red (las paradas donde empiezan y acaban los sentidos,

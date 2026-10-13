@@ -5,7 +5,7 @@
 // mandan sobre las del GTFS en el Scheduling.
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
-import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas } from "./lineas-sched.js";
+import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas, pasosPorParada } from "./lineas-sched.js";
 import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 
 const C = {
@@ -108,6 +108,54 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
   );
 }
 
+// ── Pasos por parada: una fila por parada y una columna por expedición ──
+function TablaPasos({ red, linea, sentido, salidas, cfgLinea }) {
+  const nombres = useMemo(() => new Map((red.paradas || []).map(p => [p.id, p.nombre])), [red]);
+  const filas = useMemo(() => salidas.map(m => pasosPorParada(sentido, m, red, cfgLinea)), [salidas, sentido, red, cfgLinea]);
+  const aproximado = filas.some(f => f.aproximado);
+  const n = sentido.paradas.length;
+  const celda = { padding: "5px 9px", fontFamily: mono, fontSize: 11.5, textAlign: "center", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` };
+  const pegada = { position: "sticky", left: 0, zIndex: 1, background: C.card, borderRight: `1px solid ${C.border2}` };
+  if (!salidas.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Sin expediciones este día en este sentido.</div>;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+      {aproximado && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber, borderBottom: `1px solid ${C.border}` }}>Pasos aproximados (repartidos por la distancia entre paradas): vuelve a importar el GTFS en Planning para tener los reales.</div>}
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 260px)" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0 }}>
+          <thead style={{ position: "sticky", top: 0, zIndex: 2, background: C.surface2 }}>
+            <tr>
+              <th style={{ ...celda, ...pegada, background: C.surface2, textAlign: "left", fontFamily: font, fontSize: 10, color: C.dim, letterSpacing: 1, minWidth: 230 }}>PARADAS</th>
+              {salidas.map((m, j) => <th key={j} style={{ ...celda, fontSize: 10, color: C.dim, fontWeight: 700 }}>{j + 1}</th>)}
+            </tr>
+            <tr>
+              <th style={{ ...celda, ...pegada, background: C.surface2, textAlign: "left", fontFamily: font, fontSize: 11, color: C.muted, fontWeight: 600 }}>Tiempo entre viajes</th>
+              {salidas.map((m, j) => <th key={j} style={{ ...celda, fontSize: 10.5, color: C.dim, fontWeight: 400 }}>{j ? `+${m - salidas[j - 1]}` : "0"}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {sentido.paradas.map((id, i) => {
+              const cab = i === 0 || i === n - 1;
+              return (
+                <tr key={`${id}-${i}`}>
+                  <td title={nombres.get(id) || id} style={{ ...celda, ...pegada, textAlign: "left", fontFamily: font, fontSize: 11.5, color: cab ? C.text : C.muted, fontWeight: cab ? 700 : 400, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, marginRight: 8, background: cab ? linea.color : "transparent", border: `1.5px solid ${linea.color}` }} />
+                    {nombres.get(id) || id}
+                  </td>
+                  {filas.map((f, j) => <td key={j} style={{ ...celda, color: cab ? C.text : C.muted, fontWeight: cab ? 700 : 400 }}>{hhmmTxt(f.pasos[i] % 1440)}</td>)}
+                </tr>
+              );
+            })}
+            <tr>
+              <td style={{ ...celda, ...pegada, textAlign: "left", fontFamily: font, fontSize: 11, color: C.muted, fontWeight: 600 }}>Tiempo total</td>
+              {filas.map((f, j) => <td key={j} style={{ ...celda, fontSize: 10.5, color: C.dim }}>{f.pasos[n - 1] - f.pasos[0]} min</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Horarios de salida ──────────────────────────────────────────────────
 
 /**
@@ -123,6 +171,8 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
   const [nueva, setNueva] = useState({}); // clave → texto de la salida a añadir
   const [tiempoEd, setTiempoEd] = useState(null); // { clave: "dir|franja", texto }
   const [error, setError] = useState(null);
+  const [vista, setVista] = useState("hora"); // hora (salidas por hora) · parada (pasos por parada)
+  const [dirPasos, setDirPasos] = useState(0);
   const lista = red.lineas.filter(l => !q.trim() || norm(`${l.nombre} ${l.sentidos.map(x => x.cabecera).join(" ")}`).includes(norm(q.trim())));
   const linea = lista.find(l => l.id === sel) || lista[0]; // al buscar, la primera que coincide
   const grupos = agruparVariantes(lista);
@@ -165,10 +215,27 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <SelectorCalendario red={red} valor={dia} onCambiar={d => { setDia(d); setEditando(null); }} ancho={420} />
           {!esCalendario(dia) && red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
-          {editable && <span style={{ fontSize: 11, color: C.muted }}>Pincha una hora para cambiarla o quitarla. Los cambios valen para este {esCalendario(dia) ? "calendario" : "tipo de día"} y los usa el Scheduling.</span>}
+          <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
+            {[["hora", "Salidas por hora"], ["parada", "Pasos por parada"]].map(([v, t]) => (
+              <button key={v} onClick={() => setVista(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: vista === v ? C.blue : "none", color: vista === v ? "#fff" : C.muted, fontSize: 11, fontWeight: vista === v ? 600 : 400, fontFamily: font }}>{t}</button>
+            ))}
+          </div>
+          {vista === "parada" && linea && linea.sentidos.length > 1 && (
+            <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
+              {linea.sentidos.map(s => (
+                <button key={s.dir} onClick={() => setDirPasos(s.dir)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: dirPasos === s.dir ? C.surface2 : "none", color: dirPasos === s.dir ? C.text : C.muted, fontSize: 11, fontWeight: dirPasos === s.dir ? 600 : 400, fontFamily: font }}>{s.dir === 0 ? "Ida" : "Vuelta"} → {s.cabecera}</button>
+              ))}
+            </div>
+          )}
+          {editable && vista === "hora" && <span style={{ fontSize: 11, color: C.muted }}>Pincha una hora para cambiarla o quitarla. Los cambios valen para este {esCalendario(dia) ? "calendario" : "tipo de día"} y los usa el Scheduling.</span>}
+          {vista === "parada" && <span style={{ fontSize: 11, color: C.muted }}>Las salidas y los tiempos de recorrido se cambian en «Salidas por hora».</span>}
         </div>
         {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
-        {linea && (
+        {linea && vista === "parada" && (() => {
+          const s = linea.sentidos.find(x => x.dir === dirPasos) || linea.sentidos[0];
+          return <TablaPasos red={red} linea={linea} sentido={s} salidas={salidasDe(s, dia, red, cfg[linea.id]).lista} cfgLinea={cfg[linea.id]} />;
+        })()}
+        {linea && vista === "hora" && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${linea.sentidos.length}, minmax(320px, 1fr))`, gap: 16 }}>
             {linea.sentidos.map(s => {
               const clave = claveSalidas(s.dir, dia);

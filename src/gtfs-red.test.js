@@ -182,3 +182,26 @@ describe("viajes repetidos en el GTFS", () => {
     expect(salidasDe(ida, lunes.id, r).lista).toEqual([344, 420]);
   });
 });
+
+describe("pasos por parada", async () => {
+  const { pasosPorParada } = await import("./lineas-sched.js");
+  it("del GTFS: en qué parte del recorrido pasa por cada parada", async () => {
+    const r = await parseGtfsRed(red());
+    const ida = r.lineas.find(l => l.id === "L1").sentidos[0];
+    expect(ida.fracciones[0]).toBe(0);
+    expect(ida.fracciones.at(-1)).toBe(1);
+    expect(ida.fracciones[1]).toBeGreaterThan(0.2);
+    expect(ida.fracciones[1]).toBeLessThan(0.5);
+    const { pasos, aproximado } = pasosPorParada(ida, 420, r);
+    expect(aproximado).toBe(false);
+    expect(pasos[0]).toBe(420);
+    expect(pasos.at(-1)).toBe(420 + 30); // el tiempo de recorrido de la franja
+  });
+  it("sin datos del GTFS, por la distancia entre paradas (aproximado)", () => {
+    const rr = { paradas: [{ id: "a", lat: 40, lng: -3 }, { id: "b", lat: 40.01, lng: -3 }, { id: "c", lat: 40.03, lng: -3 }] };
+    const s = { dir: 0, paradas: ["a", "b", "c"], tiempos: [{ franja: "06-09", min: 30 }] };
+    const { pasos, aproximado } = pasosPorParada(s, 420, rr);
+    expect(aproximado).toBe(true);
+    expect(pasos).toEqual([420, 430, 450]);
+  });
+});

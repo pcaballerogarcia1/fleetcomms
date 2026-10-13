@@ -207,15 +207,25 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
   // que solo recoge las filas de esos viajes (en GTFS ordenados no hace falta).
   paso("Cruzando horarios de paso (puede tardar con redes grandes)…");
   const patrones = [], patronIdx = new Map();
+  // Pasos por parada: para cada patrón, la suma de «qué parte del recorrido
+  // lleva» en cada parada (0 = sale, 1 = llega) de los viajes con todas las horas
+  const patSuma = [], patN = [];
   const cerrar = (v, rows) => {
     rows.sort((x, y) => x[0] - y[0]);
-    const seq = rows.map(r => r[1]).filter(st => st >= 0);
+    const validas = rows.filter(r => r[1] >= 0);
+    const seq = validas.map(r => r[1]);
     const key = seq.join(",");
     let pt = patronIdx.get(key);
-    if (pt === undefined) { pt = patrones.length; patronIdx.set(key, pt); patrones.push(seq); }
+    if (pt === undefined) { pt = patrones.length; patronIdx.set(key, pt); patrones.push(seq); patSuma.push(null); patN.push(0); }
     vPat[v] = pt;
     const ini = rows.find(r => r[2] >= 0), fin = [...rows].reverse().find(r => r[3] >= 0);
     vIni[v] = ini ? ini[2] : -1; vFin[v] = fin ? fin[3] : -1;
+    if (ini && fin && fin[3] > ini[2] && validas.length >= 2 && validas.every(r => r[3] >= 0 || r[2] >= 0)) {
+      const dur = fin[3] - ini[2];
+      if (!patSuma[pt]) patSuma[pt] = new Float64Array(seq.length);
+      validas.forEach((r, i) => { patSuma[pt][i] += Math.min(1, Math.max(0, ((r[3] >= 0 ? r[3] : r[2]) - ini[2]) / dur)); });
+      patN[pt]++;
+    }
   };
   const fila = (c, i) => [Number(c[i.stop_sequence]), paradaIdx.get(c[i.stop_id]) ?? -1,
     hhmm(c[i.departure_time] || c[i.arrival_time]) ?? -1, hhmm(c[i.arrival_time] || c[i.departure_time]) ?? -1];
@@ -318,7 +328,11 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     const enLab = sinCalendario ? vs : vs.filter(v => activo.laborable.has(vServ[v]));
     const base = enLab.length ? enLab : vs;
     const masComun = arr => { const m = new Map(); for (const x of arr) m.set(x, (m.get(x) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]; };
-    const pat = patrones[masComun(base.map(v => vPat[v]))] || [];
+    const patI = masComun(base.map(v => vPat[v]));
+    const pat = patrones[patI] || [];
+    // en qué parte del recorrido pasa por cada parada (0…1), de los viajes de ese patrón con horas
+    const fracciones = patN[patI] ? Array.from(patSuma[patI], x => Math.round((x / patN[patI]) * 1000) / 1000) : null;
+    if (fracciones) { fracciones[0] = 0; fracciones[fracciones.length - 1] = 1; }
     const cab = masComun(base.map(v => vCab[v]).filter(Boolean)) || paradas[pat[pat.length - 1]]?.nombre || "";
     const sh = masComun(base.map(v => vShape[v]).filter(Boolean));
     if (sh) { if (!shapesQuiero.has(sh)) shapesQuiero.set(sh, []); shapesQuiero.get(sh).push([r, dir]); }
@@ -353,7 +367,7 @@ export async function parseGtfsRed(blob, { onProgress = () => {} } = {}) {
     }
     const s = {
       dir, nombre: dir === 0 ? "Ida" : "Vuelta", cabecera: cab,
-      paradas: pat.map(p => paradas[p].id), trazado: [], km: null, viajes, salidas, porServicio,
+      paradas: pat.map(p => paradas[p].id), fracciones, trazado: [], km: null, viajes, salidas, porServicio,
       primera: minToHHMM(primera), ultima: minToHHMM(ultima),
       tiempos: FRANJAS.filter(f => porFranja.has(f.id)).map(f => ({ franja: f.id, min: mediana(porFranja.get(f.id)), viajes: porFranja.get(f.id).length })),
     };
