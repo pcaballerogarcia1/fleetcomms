@@ -3,6 +3,7 @@
 // pantalla (ctx) el estado y las funciones que usan; hacen lo mismo que hacían dentro.
 import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { logAudit } from "../audit.js";
+import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { db } from "../firebase.js";
 import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
@@ -945,6 +946,9 @@ export async function publishToRoutes(ctx, tipo, mes) {
     }
 
     setPublishModal(null);
+    // aviso al móvil de los conductores (las rutas por vehículo son de todos)
+    enviarAvisos(orgId, "todos", { titulo: "Rutas nuevas", cuerpo: `Ya están publicadas las rutas de ${mes}.`, url: "/rutas", etiqueta: `rutas-${mes}` })
+      .then(r => console.info("[avisos]", resumenEnvio(r)), e => console.warn("[avisos] no enviados:", e));
     logAudit({ modulo: "Scheduling", accion: "Publicó los planes en Rutas", detalle: `${docs.length} plan(es)${aSustituir.length ? ` · sustituye ${aSustituir.length}` : ""}${yaEmpezadas ? ` · ${yaEmpezadas} ya empezados se conservan` : ""}` });
   } catch (e) {
     console.error("publishToRoutes error:", e);

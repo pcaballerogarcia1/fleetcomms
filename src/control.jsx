@@ -3,6 +3,7 @@ import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, getCountFromServer, limit } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
 import { C, fmtMes, font, mono, userName } from "./control/datos.js";
+import { AvisoConductores } from "./control/aviso-conductores.jsx";
 import { PanelFichajes } from "./control/fichajes.jsx";
 import { MapaControl, MapaFlota } from "./control/mapas.jsx";
 import { ActivityFeed, PlanCard } from "./control/planes.jsx";
@@ -193,6 +194,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
                 }}>{l}</button>
               ))}
             </div>
+            {orgId && <AvisoConductores orgId={orgId} usuarios={usuarios} />}
             <select
               value={mesFilter}
               onChange={e => { setMesFilter(e.target.value); setSelectedId(null); setVisibleCount(PAGE_SIZE); }}

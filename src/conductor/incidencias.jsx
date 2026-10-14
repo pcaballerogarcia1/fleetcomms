@@ -4,6 +4,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveCo
 import { arrayUnion } from "firebase/firestore";
 import { rolesAsignablesPor } from "../roles.js";
 import { PanelAdmin } from "./admin.jsx";
+import { enviarAvisos } from "../avisos.js";
 import { C, CATS, PC, S, VEHICULOS, avatarOf, fbAdd, fbUpdate, mono, nuevoComentario, timeAgo, useCollection } from "./comun.js";
 import { CTip } from "./ui.jsx";
 
@@ -36,6 +37,8 @@ export function ModuloIncidencias({sesion,usuarios}){
   }
   async function cambiarEstado(inc,est){
     await fbUpdate("incidencias",inc._id,{estado:est});
+    // aviso al móvil de quien la abrió (si no es uno mismo)
+    if(inc.usuarioId&&inc.usuarioId!==sesion.uid) enviarAvisos(sesion.org_id,[inc.usuarioId],{titulo:`Incidencia ${est}`,cuerpo:inc.titulo||"",url:"/incidencias",etiqueta:`inc-${inc._id}`}).catch(e=>console.warn("Aviso de incidencia:",e));
   }
 
   if(showAdmin) return <PanelAdmin usuarios={usuarios} orgId={sesion.org_id} onClose={()=>setShowAdmin(false)} rolesCreables={rolesAsignablesPor(sesion.rol)}/>;

@@ -2,6 +2,7 @@
 // cuadrante). Reciben de la pantalla (ctx) el estado y las funciones que usan.
 
 
+import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { optimizeRoster } from "../roster-optimizer.js";
 import { turnoWindow, shiftCodeFromStart } from "../vrp-engine.js";
 import { publishWorker, escenarioParaPublicar, planesPublicados, planEmpezado } from "../publicar-rutas.js";
@@ -53,11 +54,17 @@ export async function doPublish(ctx, targets, tipo) {
       lines.push(`• ${w.nombre}: error — ${e.message || e}`);
     }
   }
+  // aviso al móvil de cada trabajador publicado
+  let avisos;
+  try {
+    const r = await enviarAvisos(orgId, targets.map(w => w.uid), { titulo: "Tu cuadrante y tus rutas", cuerpo: `Publicado ${viewMes}. Ábrelo para ver tus turnos y rutas.`, url: "/rutas", etiqueta: `cuadrante-${viewMes}` });
+    avisos = `\n\nAvisos al móvil: ${resumenEnvio(r)}.`;
+  } catch (e) { avisos = `\n\nNo se pudieron enviar los avisos al móvil (${e.message || e}).`; }
   setPublishing(null);
   logAudit({ modulo: "Rostering", accion: "Publicó el cuadrante en Rutas", detalle: `${targets.length} trabajador(es) · ${viewMes}` });
   alert(
     `Publicado en Rutas (${viewMes}):\n\n${lines.join("\n")}` +
-    (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${porQueNo}.`)
+    (scenario ? "" : `\n\nSolo se ha publicado el cuadrante: ${porQueNo}.`) + avisos
   );
 }
 

@@ -128,6 +128,18 @@ service cloud.firestore {
       allow create: if sameOrg(request.resource.data.org_id);
       allow update, delete: if sameOrg(resource.data.org_id);
     }
+    // Avisos al móvil: la suscripción de cada persona (src/avisos.js). La da
+    // de alta ella misma; la oficina de su organización la lee para enviarle
+    // avisos y quita las caducadas.
+    match /avisos_suscripciones/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || (sameOrg(resource.data.org_id) && puedeWorkspace()));
+      allow create: if isSignedIn() && request.auth.uid == uid && sameOrg(request.resource.data.org_id);
+      allow update: if isSignedIn() && (
+        (request.auth.uid == uid && sameOrg(request.resource.data.org_id)) ||
+        (sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id)
+      );
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
     // Pesadas de báscula (kg por camión, planta y fracción): las apunta la
     // oficina o el conductor en la planta; solo la oficina las corrige o borra.
     match /pesadas/{docId} {

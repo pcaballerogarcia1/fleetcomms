@@ -9,6 +9,7 @@ import {
   avatarOf, fbUpdate, fmtDuracion, fmtHora, fmtMes, font,
   haversineKm, hhmm, mono, parseKML, timeAgo,
 } from "./comun.js";
+import { AvisosMovil } from "./avisos-movil.jsx";
 import { DetallePlan } from "./ruta-detalle.jsx";
 import { Btn } from "./ui.jsx";
 
@@ -338,6 +339,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             <div style={{fontSize:20,color:C.border}}>›</div>
           </div>
         </div>
+        <AvisosMovil sesion={sesion}/>
         <div style={{fontSize:10,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>Selecciona tipo de trabajo</div>
         {TIPOS_TRABAJO.map(t=>{
           const planesTipo=planes.filter(p=>p.tipo===t.key);
