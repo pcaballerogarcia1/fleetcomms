@@ -96,3 +96,49 @@ test("una ruta antigua sin conductorUid aparece al conductor en cuanto entra un 
   await expect(conductor.getByText("3 planes", { exact: false })).toBeVisible();
   expect(errores).toEqual([]);
 });
+
+// ── Sin cobertura ─────────────────────────────────────────────────────
+test("sin cobertura: las paradas se marcan igual y se envían solas al volver, sin pisar las de otro", async ({ browser }) => {
+  const [a, b] = await Promise.all([browser.newContext({ viewport: { width: 420, height: 860 } }), browser.newContext({ viewport: { width: 420, height: 860 } })]);
+  const [pa, pb] = await Promise.all([a.newPage(), b.newPage()]);
+  const errores = vigilarErrores(pa);
+  await Promise.all([entrar(pa, "cond1@demo.test"), entrar(pb, "cond2@demo.test")]);
+  await Promise.all([abrirPlan(pa, "Ruta compartida"), abrirPlan(pb, "Ruta compartida")]);
+  await a.setOffline(true);
+  await pa.getByRole("button", { name: "Marcar", exact: true }).nth(0).click();
+  await pa.getByRole("button", { name: "Marcar", exact: true }).nth(0).click();
+  await expect(pa.getByTestId("aviso-cobertura")).toContainText("Sin cobertura · 2 cambios guardados en el móvil");
+  await expect(pa.getByText("2/5", { exact: true })).toBeVisible(); // se ven marcadas aunque no hayan llegado
+  // mientras, el compañero (con cobertura) marca la última
+  await pb.getByRole("button", { name: "Marcar", exact: true }).last().click();
+  await expect.poll(() => hechas("plan-compartido")).toEqual([5]);
+  await a.setOffline(false);
+  await expect.poll(() => hechas("plan-compartido"), { timeout: 30_000 }).toEqual([1, 2, 5]);
+  await expect(pa.getByTestId("aviso-cobertura")).toHaveCount(0);
+  await expect(pa.getByText("3/5", { exact: true })).toBeVisible();
+  expect(errores.filter(e => !/offline|ERR_INTERNET_DISCONNECTED|Failed to fetch|network/i.test(e))).toEqual([]);
+  await Promise.all([a.close(), b.close()]);
+});
+
+test.describe("con la app instalada", () => {
+  test.use({ serviceWorkers: "allow" });
+  test("sin cobertura: se cierra y se vuelve a abrir la app, y lo marcado sigue ahí y se envía después", async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 420, height: 860 }, serviceWorkers: "allow" });
+    const page = await ctx.newPage();
+    await entrar(page, "cond1@demo.test");
+    await page.waitForFunction(() => navigator.serviceWorker?.controller != null || navigator.serviceWorker.ready.then(() => true), null, { timeout: 30_000 });
+    await page.reload(); // ya con el service worker al mando (la app queda guardada en el móvil)
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30_000 });
+    await abrirPlan(page, "Ruta de prueba");
+    await ctx.setOffline(true);
+    await page.getByRole("button", { name: "Marcar", exact: true }).first().click();
+    await expect(page.getByTestId("aviso-cobertura")).toContainText("1 cambio guardado");
+    await page.reload(); // «cierra y abre» la app sin cobertura
+    await abrirPlan(page, "Ruta de prueba");
+    await expect(page.getByTestId("aviso-cobertura")).toContainText("1 cambio guardado");
+    expect(await hechas("plan-cond1")).toEqual([]);
+    await ctx.setOffline(false);
+    await expect.poll(() => hechas("plan-cond1"), { timeout: 30_000 }).toEqual([1]);
+    await ctx.close();
+  });
+});

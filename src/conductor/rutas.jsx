@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, orderBy, limit, setDoc } from "firebase/firestore";
 import { puedeGestionarRutas as puedeGestionarRutasRol } from "../roles.js";
-import { cambiarEnLista } from "../concurrencia.js";
+import { aplicarCambios, camposCambiados, colaDe } from "./cola.js";
 import {
   C, CUADRANTE_META, MESES_ES, S, TIPOS_TRABAJO, VEHICULOS,
   avatarOf, fbUpdate, fmtDuracion, fmtHora, fmtMes, font,
@@ -199,12 +199,37 @@ function FichajeWidget({ sesion }){
 }
 
 // ── MÓDULO RUTAS POR TIPO ─────────────────────────────────────────
+// Aviso de cobertura: cuántos cambios esperan en el móvil a ser enviados
+function useCola(uid){
+  const cola=colaDe(uid||"anonimo");
+  const [estado,setEstado]=useState(()=>cola.estado());
+  useEffect(()=>cola.suscribir(setEstado),[cola]);
+  useEffect(()=>{
+    const f=()=>setEstado(cola.estado());
+    window.addEventListener("online",f);window.addEventListener("offline",f);
+    return()=>{window.removeEventListener("online",f);window.removeEventListener("offline",f);};
+  },[cola]);
+  return [cola,estado];
+}
+export function AvisoCobertura({estado}){
+  if(estado.enLinea&&!estado.pendientes&&!estado.ultimoError) return null;
+  const sin=!estado.enLinea;
+  const color=estado.ultimoError?C.red:sin?C.orange:C.blue;
+  const n=estado.pendientes;
+  const texto=estado.ultimoError
+    ?estado.ultimoError
+    :sin
+      ?`Sin cobertura${n?` · ${n} cambio${n===1?"":"s"} guardado${n===1?"":"s"} en el móvil, se enviarán solos`:" · puedes seguir marcando paradas"}`
+      :`Enviando ${n} cambio${n===1?"":"s"}…`;
+  return <div data-testid="aviso-cobertura" style={{background:`${color}1f`,border:`1px solid ${color}55`,color,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,margin:"8px 14px 0"}}>{sin?"📶 ":"⏳ "}{texto}</div>;
+}
+
 function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [tipoActivo,setTipoActivo]   = useState(null); // null = portada
   const [planActivo,setPlanActivo]   = useState(null);
-  // Cambios de paradas de esta persona que aún se están guardando: se pintan
-  // encima de la versión del servidor (ver planMostrado)
-  const [pendientes,setPendientes]   = useState({}); // ubicId → [cambio]
+  // Cambios de paradas de esta persona que aún no han llegado al servidor
+  // (sin cobertura, o enviándose): se pintan encima de su versión
+  const [cola,estadoCola]            = useCola(sesion?.id);
   const [showUpload,setShowUpload]   = useState(false);
   const [showNuevaTarea,setShowNT]   = useState(false);
   const [subiendo,setSubiendo]       = useState(false);
@@ -279,26 +304,20 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 
   if(planActivo){
     const fresco=planes.find(p=>p._id===planActivo._id)||planActivo;
-    let ubic=fresco.ubicaciones||[];
-    for(const [id,cambios] of Object.entries(pendientes)) for(const c of cambios) ubic=ubic.map(u=>String(u.id)===id?c(u):u);
-    const planMostrado={...fresco,ubicaciones:ubic};
-    return <DetallePlan plan={planMostrado} sesion={sesion} onBack={()=>{setPlanActivo(null);setPendientes({});}} onUpdate={(updated,cambio)=>{
-      if(!cambio){
-        setPlanActivo(updated);
-        fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
-        return;
-      }
-      const id=String(cambio.ubicId);
-      setPendientes(p=>({...p,[id]:[...(p[id]||[]),cambio.cambio]}));
-      // deja de pintarlo encima cuando ya ha tenido tiempo de llegar del servidor
-      const soltar=()=>setTimeout(()=>setPendientes(p=>{
-        const l=(p[id]||[]).filter(f=>f!==cambio.cambio); const n={...p};
-        if(l.length) n[id]=l; else delete n[id];
-        return n;
-      }),1500);
-      cambiarEnLista(doc(db,"planes",updated._id),"ubicaciones",cambio.ubicId,cambio.cambio,updated.ubicaciones)
-        .then(soltar,e=>{console.error("Guardando parada:",e);soltar();});
-    }}/>;
+    const planMostrado={...fresco,ubicaciones:aplicarCambios(fresco.ubicaciones||[],cola.pendientesDe(fresco._id))};
+    return <>
+      <AvisoCobertura estado={estadoCola}/>
+      <DetallePlan plan={planMostrado} sesion={sesion} onBack={()=>setPlanActivo(null)} onUpdate={(updated,cambio)=>{
+        if(!cambio){
+          setPlanActivo(updated);
+          fbUpdate("planes",updated._id,{ubicaciones:updated.ubicaciones}).catch(e=>console.error("Guardando parada:",e));
+          return;
+        }
+        // se guarda en el móvil y se envía cuando se pueda (cola.js)
+        const antes=planMostrado.ubicaciones.find(u=>String(u.id)===String(cambio.ubicId));
+        if(antes) cola.encolar(fresco._id,cambio.ubicId,camposCambiados(antes,cambio.cambio(antes)));
+      }}/>
+    </>;
   }
 
   const tipo = TIPOS_TRABAJO.find(t=>t.key===tipoActivo);
@@ -306,6 +325,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // ── PORTADA ──
   if(!tipoActivo) return(
     <div style={{paddingBottom:80}}>
+      <AvisoCobertura estado={estadoCola}/>
       <FichajeWidget sesion={sesion} />
       <div style={{padding:"12px 14px 0"}}>
         <div onClick={()=>setVerCuadrante(true)} style={{...S.card,cursor:"pointer",borderLeft:"4px solid #5c9bff",marginBottom:18}}>

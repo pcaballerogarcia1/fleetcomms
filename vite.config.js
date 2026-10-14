@@ -61,7 +61,16 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // avisos al móvil (notificaciones push): public/avisos-sw.js
+        importScripts: ['avisos-sw.js'],
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          {
+            // Mapa del conductor: las calles ya vistas se guardan, para verlo sin cobertura
+            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'mapa', expiration: { maxEntries: 3000, maxAgeSeconds: 60 * 60 * 24 * 30 }, cacheableResponse: { statuses: [0, 200] } },
+          },
           {
             // Cache Google Fonts
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
