@@ -1,3 +1,4 @@
+/* global process */
 // POST /api/avisos — envía un aviso a los móviles de unos conductores
 // (ver _avisos/core.js y src/avisos.js). Claves en las variables de entorno
 // de Vercel: VAPID_PUBLICA y VAPID_PRIVADA.
