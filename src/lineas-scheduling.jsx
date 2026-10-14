@@ -20,7 +20,7 @@ import { EnviarRostering } from "./lineas-enviar-rostering.jsx";
 import { turnosCompactos } from "./lineas-rostering.js";
 import {
   C, ESTRATEGIA_UI, MAX_EN_MEMORIA, baseDeResumen, cambiosKpi, claveEscenario,
-  claveVehiculos, font, hhmm, kpisBarra, kpisDetalle, mismos, mono,
+  claveVehiculos, font, kpisBarra, kpisDetalle, mismos, mono,
   nombreObjetivo, nombreTipo, num, sinCampos, soloCampos,
 } from "./lineas-scheduling/comun.js";
 import { Gantt } from "./lineas-scheduling/gantt.jsx";
@@ -400,19 +400,29 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cfgTxt]);
 
-  async function exportar(tipo) {
-    if (!res || (tipo === "turnos" && !res.turnos)) return;
+  // Exportar: Excel (autobuses, turnos, resumen, nómina, todo) y PDF (hojas de servicio y de autobús)
+  const [menuExportar, setMenuExportar] = useState(false);
+  async function exportar(que) {
+    setMenuExportar(false);
+    if (!res) return;
+    const { hojasExcel, hojasDeServicio, hojasDeAutobus, imprimir } = await import("./lineas-exportar.js");
+    const nombreParada = id => paradasPorId.get(id)?.nombre || id;
+    const nombreArchivo = x => `${x}_${res.diaNombre.replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 60)}`;
+    if (que === "pdf-turnos" || que === "pdf-autobuses") {
+      const datos = { nombreParada, proyecto, dia: res.diaNombre };
+      if (que === "pdf-turnos") imprimir(`Hojas de servicio · ${res.diaNombre}`, hojasDeServicio(res, datos));
+      else imprimir(`Autobuses · ${res.diaNombre}`, hojasDeAutobus(res, datos));
+      logAudit({ modulo: "Scheduling", accion: que === "pdf-turnos" ? "Imprimió las hojas de servicio" : "Imprimió las hojas de autobús", detalle: res.diaNombre });
+      return;
+    }
     const XLSX = await import("xlsx");
-    const nom = id => paradasPorId.get(id)?.nombre || id;
-    const filas = tipo === "vehiculos"
-      ? res.vehiculos.flatMap(v => v.viajes.map(x => ({ "Autobús": v.autobus, "Bloque": v.id, "Tipo": nombreTipo(v.tipo), "Línea": x.vacio ? (x.hacia ? `Vacío → ${x.hacia}` : "Vacío") : x.nombre, "Sentido": x.sentido, "Salida": hhmm(x.dep), "Llegada": hhmm(x.arr), "Desde": nom(x.o), "Hasta": nom(x.d), "Km": x.km, "En vacío": x.vacio ? "sí" : "" })))
-      : res.turnos.flatMap(t => t.piezas.flatMap((pz, i) => pz.viajes.map(x => ({
-          "Turno": `T${t.id}`, "Pieza": i + 1, "Autobús": res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus, "Línea": x.vacio ? "Vacío" : x.nombre, "Sentido": x.sentido,
-          "Salida": hhmm(x.dep), "Llegada": hhmm(x.arr), "Desde": nom(x.o), "Hasta": nom(x.d), "Inicio turno": hhmm(t.inicio), "Fin turno": hhmm(t.fin), "Avisos": t.avisos.join(" · "),
-        }))));
+    const h = hojasExcel(res, { nombreParada, nombreTipo });
+    const libro = { autobuses: [["Autobuses", h.autobuses]], turnos: [["Turnos", h.detalle]], resumen: [["Resumen de turnos", h.resumen]], nomina: [["Nómina", h.nomina]],
+      todo: [["Resumen de turnos", h.resumen], ["Nómina", h.nomina], ["Turnos", h.detalle], ["Autobuses", h.autobuses]] }[que].filter(([, filas]) => filas.length);
+    if (!libro.length) return;
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), tipo === "vehiculos" ? "Autobuses" : "Turnos");
-    XLSX.writeFile(wb, `${tipo === "vehiculos" ? "vehiculos" : "turnos"}_${res.diaNombre.replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 60)}.xlsx`);
+    for (const [nombre, filas] of libro) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), nombre);
+    XLSX.writeFile(wb, `${nombreArchivo({ autobuses: "autobuses", turnos: "turnos", resumen: "resumen_turnos", nomina: "nomina", todo: "escenario" }[que])}.xlsx`);
   }
 
   const subTabs = [["escenario", "Escenario / Gantt"], ["calendarios", "Calendarios"], ["horarios", "Horarios de salida"]];
@@ -486,9 +496,18 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             </button>
             {res && <>
               {sep}
-              {modo === "vehicles"
-                ? <button onClick={() => exportar("vehiculos")} title="Descargar los autobuses, con los vacíos, en Excel" style={btnExcel}>{icoDescarga} Vehículos</button>
-                : <button onClick={() => exportar("turnos")} disabled={!res.turnos} title="Descargar los turnos de conductor en Excel" style={{ ...btnExcel, opacity: res.turnos ? 1 : 0.4 }}>{icoDescarga} Trabajadores</button>}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setMenuExportar(m => !m)} title="Descargar en Excel o imprimir (PDF)" style={btnExcel}>{icoDescarga} Exportar ▾</button>
+                {menuExportar && (
+                  <div onMouseLeave={() => setMenuExportar(false)} style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: 6, minWidth: 250, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+                    {[["t", "Excel"], ["autobuses", "Autobuses (con los vacíos)"], ["turnos", "Turnos (viaje a viaje)", true], ["resumen", "Resumen de turnos", true], ["nomina", "Nómina (horas y €)", true], ["todo", "Todo en un libro"],
+                      ["t", "PDF para imprimir"], ["pdf-turnos", "Hojas de servicio (una por turno)", true], ["pdf-autobuses", "Hojas de autobús (una por autobús)"]].map(([k, t, conTurnos]) => k === "t"
+                      ? <div key={t} style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, padding: "6px 8px 3px" }}>{t}</div>
+                      : <button key={k} onClick={() => exportar(k)} disabled={conTurnos && !res.turnos} title={conTurnos && !res.turnos ? "Primero hay que hacer los turnos (paso 2)" : undefined}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 5, border: "none", background: "none", color: conTurnos && !res.turnos ? C.dim : C.text, fontSize: 12, cursor: conTurnos && !res.turnos ? "not-allowed" : "pointer", fontFamily: font }}>{t}</button>)}
+                  </div>
+                )}
+              </div>
               <button onClick={() => setPublicando(true)} disabled={!res.turnos || !orgId} title={res.turnos ? "Publicar los turnos de este calendario para un día: los conductores los ven en el móvil y Control los sigue en vivo" : "Primero hay que hacer los turnos (paso 2)"}
                 style={{ ...btnSec, color: C.blueText || C.blue, border: `1px solid ${C.blue}66`, fontWeight: 600, opacity: res.turnos && orgId ? 1 : 0.4, cursor: res.turnos && orgId ? "pointer" : "not-allowed" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>

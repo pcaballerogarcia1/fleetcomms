@@ -228,7 +228,21 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
             </div>
           )}
           {editable && vista === "hora" && <span style={{ fontSize: 11, color: C.muted }}>Pincha una hora para cambiarla o quitarla. Los cambios valen para este {esCalendario(dia) ? "calendario" : "tipo de día"} y los usa el Scheduling.</span>}
-          {vista === "parada" && <span style={{ fontSize: 11, color: C.muted }}>Las salidas y los tiempos de recorrido se cambian en «Salidas por hora».</span>}
+          {vista === "parada" && linea && (() => {
+            const s0 = linea.sentidos.find(x => x.dir === dirPasos) || linea.sentidos[0];
+            const imprimirPasos = async cuadros => {
+              const { imprimir, hojaPasos, cuadrosPorParada } = await import("./lineas-exportar.js");
+              const sal = salidasDe(s0, dia, red, cfg[linea.id]).lista;
+              const datos = { dia: nombreDia(dia, red), proyecto: "" };
+              imprimir(`Línea ${linea.nombre} · ${cuadros ? "cuadros por parada" : "pasos por parada"}`, (cuadros ? cuadrosPorParada : hojaPasos)(red, linea, s0, sal, cfg[linea.id], datos));
+            };
+            const btn = { padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border2}`, background: "none", color: C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font };
+            return <>
+              <button onClick={() => imprimirPasos(false)} title="La tabla de pasos de este sentido, para imprimir o guardar en PDF" style={btn}>Imprimir tabla (PDF)</button>
+              <button onClick={() => imprimirPasos(true)} title="Una hoja por parada con sus horas de paso, para la marquesina" style={btn}>Cuadros por parada (PDF)</button>
+              <span style={{ fontSize: 11, color: C.muted }}>Las salidas y los tiempos de recorrido se cambian en «Salidas por hora».</span>
+            </>;
+          })()}
         </div>
         {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
         {linea && vista === "parada" && (() => {
