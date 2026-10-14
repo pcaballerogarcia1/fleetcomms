@@ -1,4 +1,5 @@
 // App del conductor → Admin: usuarios y KPIs de rutas (gestores).
+import { ChevronLeft, Folder, Users, X } from "lucide-react";
 import { useState } from "react";
 import { db, secondaryAuth } from "../firebase.js";
 import { updateDoc, doc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
@@ -54,7 +55,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
 
   return(
     <div style={S.page}>
-      <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
+      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>{[["lista","Usuarios"],["nuevo","+ Nuevo"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...S.btnGhost,borderColor:tab===k?C.blue:C.border,color:tab===k?C.blueText:C.muted,background:tab===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
         {tab==="lista"&&usuariosVisibles.map(u=>(
@@ -142,7 +143,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
           ].map(s=>(
             <div key={s.l} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
               <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing: 0.5,marginTop:2}}>{s.l}</div>
+              <div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -166,10 +167,10 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
             {meses.map(m=><option key={m} value={m}>{fmtMes(m)}</option>)}
           </select>
           <button onClick={exportCSV} style={{...S.btnSm,background:C.greenDim,borderColor:`${C.green}44`,color:C.green,whiteSpace:"nowrap"}}>
-            ⬇ CSV
+            CSV
           </button>
           <button onClick={()=>setShowUsuarios(true)} style={{...S.btnSm,whiteSpace:"nowrap"}}>
-            ⚙️ Usuarios
+            <Users size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Usuarios
           </button>
         </div>
 
@@ -190,12 +191,12 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
           const realizadosQR = ubs.reduce((s,u)=>s+(u.elementos?.filter(e=>e.realizado).length||0),0);
 
           return (
-            <div key={plan._id} style={{...S.card,marginBottom:8,borderLeft:`3px solid ${tasa===100?C.green:(tipo?.color||C.cyan)}`}}>
+            <div key={plan._id} style={{...S.card,marginBottom:8}}>
               {/* Cabecera */}
               <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                 <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setExpandId(isExp?null:plan._id)}>
                   <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
-                    <span style={{fontSize:13}}>{tipo?.icon||"📁"}</span>
+                    {tipo?.Icono?<tipo.Icono size={15} color={tipo.color}/>:<Folder size={15} color={C.muted}/>}
                     <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:(tipo?.color||C.cyan)+"18",color:tipo?.color||C.cyan,border:`1px solid ${(tipo?.color||C.cyan)}33`}}>
                       {tipo?.label||plan.tipo}
                     </span>
@@ -222,7 +223,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                   </button>
                   <button onClick={()=>{if(window.confirm("¿Eliminar este plan?"))deletePlan(plan._id);}}
                     style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
-                    ✕
+                    <X size={15}/>
                   </button>
                 </div>
               </div>
@@ -230,7 +231,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
               {/* Detalle expandido — lista de paradas */}
               {isExp && ubs.length > 0 && (
                 <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-                  <div style={{fontSize: 10.5,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:8}}>
+                  <div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:8}}>
                     Paradas ({ubs.length})
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>

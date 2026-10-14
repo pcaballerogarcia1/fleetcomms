@@ -1,6 +1,6 @@
 // App del conductor (Rutas, Incidencias, Inventario, Admin): datos, colores,
 // estilos y utilidades que comparten todas sus pantallas.
-import { Droplets, Hammer, Sparkles, Wrench } from "lucide-react";
+import { CarFront, CircleDot, Droplets, Hammer, Megaphone, Settings2, Sparkles, Wrench } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore";
@@ -12,11 +12,11 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 export const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 
 export const CATS = [
-  {label:"Avería mecánica",color:"#ef4444",icon:"🔧"},
-  {label:"Accidente / Golpe",color:"#f97316",icon:"⚠️"},
-  {label:"Neumáticos",color:"#eab308",icon:"⚙️"},
-  {label:"Mantenimiento",color:"#3b82f6",icon:"🛠️"},
-  {label:"Comunicado general",color:"#8b5cf6",icon:"📢"},
+  {label:"Avería mecánica",color:"#f26d6d",icon:"🔧",Icono:Wrench},
+  {label:"Accidente / Golpe",color:"#f59e5b",icon:"⚠️",Icono:CarFront},
+  {label:"Neumáticos",color:"#f5b84a",icon:"⚙️",Icono:CircleDot},
+  {label:"Mantenimiento",color:"#5b7cfa",icon:"🛠️",Icono:Settings2},
+  {label:"Comunicado general",color:"#a78bfa",icon:"📢",Icono:Megaphone},
 ];
 
 export const PC = {alta:"#f26d6d",media:"#f59e5b",baja:"#3fcf8e"};

@@ -1,4 +1,5 @@
 // App del conductor → Inventario (almacén).
+import { ChevronLeft, StickyNote, Truck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, doc, serverTimestamp, query, where, orderBy, limit, runTransaction } from "firebase/firestore";
@@ -92,24 +93,24 @@ export function ModuloInventario({sesion,usuarios}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:12}}>
           {[
             {l:"Productos",v:productos.length,c:C.blueText},
-            {l:"⚠️ Alertas",v:alertas,c:alertas>0?C.orange:C.green},
-            {l:"🚫 Agotados",v:agotados,c:agotados>0?C.red:C.green},
+            {l:"Alertas",v:alertas,c:alertas>0?C.orange:C.green},
+            {l:"Agotados",v:agotados,c:agotados>0?C.red:C.green},
           ].map(s=>(
             <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 8px",textAlign:"center",cursor:s.l.includes("Alertas")?"pointer":"default"}}
               onClick={()=>s.l.includes("Alertas")&&setSoloAlertas(v=>!v)}>
               <div style={{fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize: 10.5,color:soloAlertas&&s.l.includes("Alertas")?C.orange:C.dim,textTransform:"uppercase",letterSpacing: 0.5}}>{s.l}</div>
+              <div style={{fontSize:12,color:soloAlertas&&s.l.includes("Alertas")?C.orange:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div>
             </div>
           ))}
         </div>
 
         {/* Búsqueda */}
-        <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="🔍 Buscar por nombre o referencia..." style={{...S.input,marginBottom:8}}/>
+        <input value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar por nombre o referencia…" style={{...S.input,marginBottom:8}}/>
 
         {/* Filtro categoría */}
         <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
           <button onClick={()=>{setCatFilter("");setSoloAlertas(false);}} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:!catFilter&&!soloAlertas?C.blue:C.border,color:!catFilter&&!soloAlertas?C.blueText:C.muted,background:!catFilter&&!soloAlertas?C.blueDim:"none"}}>Todos</button>
-          <button onClick={()=>setSoloAlertas(v=>!v)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:soloAlertas?C.orange:C.border,color:soloAlertas?C.orange:C.muted,background:soloAlertas?"#2a1500":"none"}}>⚠️ Stock bajo</button>
+          <button onClick={()=>setSoloAlertas(v=>!v)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:soloAlertas?C.orange:C.border,color:soloAlertas?C.orange:C.muted,background:soloAlertas?"#2a1500":"none"}}>Stock bajo</button>
           {CATS_INV.map(cat=>(
             <button key={cat} onClick={()=>setCatFilter(catFilter===cat?"":cat)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:catFilter===cat?C.blue:C.border,color:catFilter===cat?C.blueText:C.muted,background:catFilter===cat?C.blueDim:"none"}}>{cat}</button>
           ))}
@@ -118,7 +119,7 @@ export function ModuloInventario({sesion,usuarios}){
         {/* Lista productos */}
         {prodFiltrados.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.dim}}>Sin productos</div>}
         {prodFiltrados.map(p=>(
-          <div key={p._id} onClick={()=>{setSelId(p._id);setVista("detalle");}} style={{...S.card,cursor:"pointer",borderLeft:`3px solid ${stockColor(p)}`}}
+          <div key={p._id} onClick={()=>{setSelId(p._id);setVista("detalle");}} style={{...S.card,cursor:"pointer"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText}
             onMouseLeave={e=>e.currentTarget.style.borderColor=stockColor(p)}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
@@ -127,7 +128,7 @@ export function ModuloInventario({sesion,usuarios}){
                 <div style={{fontSize:10,color:C.muted,marginBottom:4}}>Ref: {p.referencia} · {p.categoria} · {p.ubicacion}</div>
                 {p.stock<=p.stockMin&&(
                   <div style={{fontSize:10,color:p.stock===0?C.red:C.orange,fontWeight:700}}>
-                    {p.stock===0?"🚫 AGOTADO":`⚠️ Stock bajo (mín: ${p.stockMin} ${p.unidad})`}
+                    {p.stock===0?"Agotado":`Stock bajo (mín: ${p.stockMin} ${p.unidad})`}
                   </div>
                 )}
               </div>
@@ -150,10 +151,10 @@ export function ModuloInventario({sesion,usuarios}){
   // ── VISTA DETALLE ──
   if(vista==="detalle"&&prodActual) return(
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("lista")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>← Volver</button></div>
+      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("lista")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{padding:"10px 14px 0"}}>
         {/* Cabecera producto */}
-        <div style={{...S.card,borderLeft:`3px solid ${stockColor(prodActual)}`}}>
+        <div style={{...S.card}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div style={{flex:1}}>
               <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{prodActual.nombre}</div>
@@ -161,7 +162,7 @@ export function ModuloInventario({sesion,usuarios}){
               <div style={{fontSize:11,color:C.muted,marginBottom:2}}>{prodActual.categoria} · {prodActual.ubicacion}</div>
               {prodActual.stock<=prodActual.stockMin&&(
                 <div style={{fontSize:11,color:prodActual.stock===0?C.red:C.orange,fontWeight:700,marginTop:4}}>
-                  {prodActual.stock===0?"🚫 AGOTADO":`⚠️ Stock mínimo: ${prodActual.stockMin} ${prodActual.unidad}`}
+                  {prodActual.stock===0?"Agotado":`Stock mínimo: ${prodActual.stockMin} ${prodActual.unidad}`}
                 </div>
               )}
             </div>
@@ -195,13 +196,13 @@ export function ModuloInventario({sesion,usuarios}){
         {movsProd.map(m=>{
           const u=getUser(m.usuarioId);
           return(
-            <div key={m.id} style={{...S.card,borderLeft:`3px solid ${m.tipo==="entrada"?C.green:C.orange}`}}>
+            <div key={m.id} style={{...S.card}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:16}}>{m.tipo==="entrada"?"⬆":"⬇"}</span>
                   <div>
                     <span style={{fontSize:13,fontWeight:700,color:m.tipo==="entrada"?C.green:C.orange}}>{m.tipo==="entrada"?"+":"-"}{m.cantidad} {prodActual.unidad}</span>
-                    {m.vehiculo&&<span style={{fontSize:11,color:C.muted,marginLeft:8}}>🚛 {m.vehiculo.split("·")[0].trim()}</span>}
+                    {m.vehiculo&&<span style={{fontSize:11,color:C.muted,marginLeft:8}}><Truck size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.vehiculo.split("·")[0].trim()}</span>}
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
@@ -210,7 +211,7 @@ export function ModuloInventario({sesion,usuarios}){
                 </div>
               </div>
               {m.motivo&&<div style={{fontSize:11,color:C.muted,marginBottom:2}}>{m.motivo}</div>}
-              {m.nota&&<div style={{fontSize:11,color:"#8b5cf6"}}>📝 {m.nota}</div>}
+              {m.nota&&<div style={{fontSize:11.5,color:"#a78bfa"}}><StickyNote size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.nota}</div>}
               <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
                 <div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div>
                 <span style={{fontSize:10,color:C.dim}}>{u.nombre}</span>
@@ -231,9 +232,9 @@ export function ModuloInventario({sesion,usuarios}){
   // ── VISTA MOVIMIENTO ──
   if(vista==="movimiento"&&prodActual) return(
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("detalle")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>← Volver</button></div>
+      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("detalle")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{padding:"10px 14px"}}>
-        <div style={{...S.card,borderLeft:`3px solid ${formMov.tipo==="entrada"?C.green:C.orange}`,marginBottom:14}}>
+        <div style={{...S.card,marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{prodActual.nombre}</div>
           <div style={{fontSize:11,color:C.muted}}>Stock actual: <span style={{color:stockColor(prodActual),fontWeight:700}}>{prodActual.stock} {prodActual.unidad}</span></div>
         </div>
@@ -291,7 +292,7 @@ export function ModuloInventario({sesion,usuarios}){
   // ── VISTA NUEVO PRODUCTO ──
   if(vista==="nuevo") return(
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("lista")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>← Volver</button></div>
+      <div style={{padding:"10px 14px 0"}}><button onClick={()=>setVista("lista")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{padding:"10px 14px"}}>
         <div style={{marginBottom:14}}><label style={S.label}>Nombre *</label><input value={formProd.nombre} onChange={e=>setFormProd({...formProd,nombre:e.target.value})} placeholder="Ej: Filtro de aceite Mann W713" style={S.input}/></div>
         <div style={{marginBottom:14}}><label style={S.label}>Referencia *</label><input value={formProd.referencia} onChange={e=>setFormProd({...formProd,referencia:e.target.value})} placeholder="Ej: FO-4521" style={S.input}/></div>
@@ -307,7 +308,7 @@ export function ModuloInventario({sesion,usuarios}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
           <div><label style={S.label}>Stock inicial</label><input type="number" min="0" value={formProd.stock} onChange={e=>setFormProd({...formProd,stock:e.target.value})} style={S.input}/></div>
-          <div><label style={S.label}>Stock mínimo ⚠️</label><input type="number" min="0" value={formProd.stockMin} onChange={e=>setFormProd({...formProd,stockMin:e.target.value})} style={S.input}/></div>
+          <div><label style={S.label}>Stock mínimo</label><input type="number" min="0" value={formProd.stockMin} onChange={e=>setFormProd({...formProd,stockMin:e.target.value})} style={S.input}/></div>
         </div>
         {errForm&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
         <button onClick={guardarProducto} style={{...S.btn,width:"100%",padding:13,fontSize:14}}>AÑADIR PRODUCTO</button>

@@ -1,4 +1,5 @@
 // App del conductor → Rutas: el detalle de una ruta (paradas, inspección, mapa).
+import { Printer, Save, Scale } from "lucide-react";
 import { Check, CheckCheck, ChevronLeft, ClipboardCheck, ClipboardList, Map as MapIcon, Navigation, StickyNote } from "lucide-react";
 import { useRef, useState } from "react";
 import { C, PUNTOS_INSPECCION, S, timeAgo } from "./comun.js";
@@ -60,7 +61,7 @@ function ApuntarPesada({plan,sesion}){
     }catch(e){setAviso({ok:false,t:e.message||String(e)});}
   }
   const inp={background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
-  if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}>⚖️ Apuntar pesada de báscula</button>;
+  if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}><Scale size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Apuntar pesada de báscula</button>;
   return(
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",marginBottom:10}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -84,7 +85,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
   const tieneParteIniciado = ub.parte && Object.values(ub.parte.checks||{}).some(Boolean);
   const parteFirmado = ub.parte?.firmado;
   return (
-    <div id={"u-"+ub.id} style={{...S.card,borderLeft:`3px solid ${done?C.green:isSel?C.orange:C.border}`,opacity:done?0.85:1}}>
+    <div id={"u-"+ub.id} style={{...S.card,opacity:done?0.85:1}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
         <div onClick={onSelect} style={{width:30,height:30,borderRadius:"50%",flexShrink:0,cursor:"pointer",background:done?C.greenDim:isSel?"#2a1f00":C.blueDim,border:`2px solid ${done?C.green:isSel?C.orange:C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:done?C.green:isSel?C.orange:C.blueText}}>
           {ub.orden}
@@ -198,7 +199,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
       <div>Fecha: <b>${new Date().toLocaleDateString("es-ES")}</b></div>
       <div>Firma: _______________</div>
     </div>
-    <br/><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    <br/><button onclick="window.print()">Imprimir / Guardar PDF</button>
     </body></html>`;
     const w=window.open("","_blank");
     w.document.write(html);
@@ -219,7 +220,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
 
       <div style={{padding:"10px 14px 0"}}>
         {/* Info PA */}
-        <div style={{...S.card,marginBottom:10,borderLeft:`3px solid ${C.blue}`}}>
+        <div style={{...S.card,marginBottom:10}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
             <div><div style={S.label}>Punto de aportación</div><div style={{fontSize:13,fontWeight:700,color:C.blueText}}>{ub.pa}</div></div>
             <div><div style={S.label}>Dirección</div><div style={{fontSize:12,color:C.text}}>{ub.calle} {ub.num}</div></div>
@@ -290,11 +291,11 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         {/* Botones */}
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           <button onClick={()=>guardar(false)} style={{...S.btn,width:"100%",padding:12,fontSize:13}}>
-            💾 Guardar borrador
+            <Save size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Guardar borrador
           </button>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button onClick={generarPDF} style={{...S.btnGhost,padding:12,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              🖨️ Generar PDF
+              <Printer size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Generar PDF
             </button>
             <button onClick={()=>guardar(true)} style={{...S.btn,padding:12,fontSize:12,background:C.greenDim,borderColor:C.green,color:C.green,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
               ✓ Finalizar y firmar
@@ -380,7 +381,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
         <button onClick={onBack} style={{...S.btnGhost,fontSize:12,padding:"5px 10px 5px 6px",display:"inline-flex",alignItems:"center",gap:2}}><ChevronLeft size={16}/> Volver</button>
         <div style={{flex:1,minWidth:0,padding:"0 10px"}}>
           <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
-          <div style={{fontSize:10,color:C.muted}}>{plan.turno} · {plan.diaServicio} · {realizadas}/{ubicaciones.length}</div>
+          <div style={{fontSize:12.5,color:C.muted}}>{[plan.turno,plan.diaServicio,`${realizadas}/${ubicaciones.length}`].filter(Boolean).join(" · ")}</div>
         </div>
         <div style={{fontSize:18,fontWeight:800,color:tasaColor}}>{tasa}%</div>
       </div>
@@ -389,7 +390,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
           {[{l:"Paradas",v:ubicaciones.length,c:C.blueText},{l:"Hechas",v:realizadas,c:C.green},{l:"Pendient.",v:ubicaciones.length-realizadas,c:tasaColor},{l:"QR",v:`${realizadosQR}/${totalQR}`,c:"#8b5cf6"}].map(s=>(
             <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
               <div style={{fontSize:15,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing: 0.5}}>{s.l}</div>
+              <div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -400,7 +401,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
           <div style={{background:"#151a26",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:C.blueDim,border:`2px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.blueText,flexShrink:0}}>{proxima.orden}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:10,color:C.muted,marginBottom:1}}>PRÓXIMA PARADA</div>
+              <div style={{fontSize:12,color:C.muted,marginBottom:1}}>Próxima parada</div>
               <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proxima.calle} {proxima.num}</div>
               <div style={{fontSize:10,color:C.dim}}>{proxima.barri} · {proxima.elementos.length} elementos</div>
             </div>
@@ -425,8 +426,8 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             {ubics.every(u=>u.realizado)?"Desmarcar todas":<><CheckCheck size={14} style={{verticalAlign:"-3px",marginRight:4}}/>Marcar todas</>}
           </button>
         </div>
-        {pendientes.length>0&&<><div style={{fontSize: 10.5,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:6,paddingLeft:4}}>PENDIENTES ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
-        {hechas.length>0&&<><div style={{fontSize: 10.5,color:C.green,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:6,marginTop:12,paddingLeft:4}}>✓ COMPLETADAS ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
+        {pendientes.length>0&&<><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:6,paddingLeft:4}}>Pendientes ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
+        {hechas.length>0&&<><div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:12,paddingLeft:4}}>Completadas ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
       </div>
       {notaId&&(
         <div style={{position:"fixed",inset:0,background:"#000b",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setNotaId(null)}>

@@ -1,4 +1,5 @@
 // App del conductor → Incidencias.
+import { BarChart3, ChevronLeft, Plus, Truck, Users } from "lucide-react";
 import { useState } from "react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { arrayUnion } from "firebase/firestore";
@@ -47,14 +48,14 @@ export function ModuloIncidencias({sesion,usuarios}){
   return(
     <div style={{paddingBottom:80}}>
       {/* Sub-header con vistas */}
-      {vista!=="feed"&&<div style={{padding:"10px 16px 0"}}><button onClick={()=>setVista("feed")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>← Volver</button></div>}
+      {vista!=="feed"&&<div style={{padding:"10px 16px 0"}}><button onClick={()=>setVista("feed")} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>}
       {vista==="feed"&&(
         <>
           <div style={{padding:"10px 16px 0",display:"flex",gap:8,alignItems:"center"}}>
-            {esAdmin&&<><button onClick={()=>setShowStats(true)} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>📊 Stats</button><button onClick={()=>setShowAdmin(true)} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>⚙️ Usuarios</button></>}
+            {esAdmin&&<><button onClick={()=>setShowStats(true)} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><BarChart3 size={14} style={{verticalAlign:"-2px",marginRight:5}}/>Estadísticas</button><button onClick={()=>setShowAdmin(true)} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}><Users size={14} style={{verticalAlign:"-2px",marginRight:5}}/>Usuarios</button></>}
           </div>
           <div style={{padding:"8px 16px 0",display:"flex",gap:6,overflowX:"auto"}}>
-            {[["todas","Todas"],["alta","🔴 Urgentes"],["abierta","Abiertas"],["en revisión","En revisión"],["mias","Mis reportes"]].map(([k,l])=>(
+            {[["todas","Todas"],["alta","Urgentes"],["abierta","Abiertas"],["en revisión","En revisión"],["mias","Mis reportes"]].map(([k,l])=>(
               <button key={k} onClick={()=>setFiltro(k)} style={{background:filtro===k?C.blueDim:"none",border:`1px solid ${filtro===k?C.blue:C.border}`,color:filtro===k?C.blueText:C.muted,padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",fontFamily:mono}}>{l}</button>
             ))}
           </div>
@@ -62,7 +63,7 @@ export function ModuloIncidencias({sesion,usuarios}){
             {[{l:"Abiertas",v:incidencias.filter(i=>i.estado==="abierta").length,c:C.red},{l:"En revisión",v:incidencias.filter(i=>i.estado==="en revisión").length,c:C.orange},{l:"Cerradas",v:incidencias.filter(i=>i.estado==="cerrada").length,c:C.green}].map(s=>(
               <div key={s.l} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",textAlign:"center"}}>
                 <div style={{fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div>
-                <div style={{fontSize: 10.5,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase"}}>{s.l}</div>
+                <div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>{s.l}</div>
               </div>
             ))}
           </div>
@@ -74,16 +75,16 @@ export function ModuloIncidencias({sesion,usuarios}){
           {incFilt.map(inc=>{
             const cat=CATS[inc.categoria]||CATS[0];const autor=getUser(inc.usuarioId);
             return(
-              <div key={inc._id} onClick={()=>{setSelId(inc._id);setVista("detalle");}} style={{...S.card,borderLeft:`3px solid ${cat.color}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=cat.color}>
+              <div key={inc._id} onClick={()=>{setSelId(inc._id);setVista("detalle");}} style={{...S.card,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText} onMouseLeave={e=>e.currentTarget.style.borderColor=cat.color}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}><span>{cat.icon}</span><span style={{fontSize:10,color:cat.color,letterSpacing: 0.5,textTransform:"uppercase"}}>{cat.label}</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><cat.Icono size={14} color={cat.color}/><span style={{fontSize:12,color:cat.color,letterSpacing:0,textTransform:"none"}}>{cat.label}</span></div>
                   <div style={{display:"flex",gap:5}}>
-                    <span style={{fontSize:9,padding:"2px 7px",borderRadius:20,background:`${PC[inc.prioridad]}22`,color:PC[inc.prioridad],border:`1px solid ${PC[inc.prioridad]}44`,textTransform:"uppercase"}}>{inc.prioridad}</span>
-                    <span style={{fontSize:9,padding:"2px 7px",borderRadius:20,background:"#1d222d",color:C.muted,border:`1px solid ${C.border}`,textTransform:"uppercase"}}>{inc.estado}</span>
+                    <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:`${PC[inc.prioridad]}22`,color:PC[inc.prioridad],border:`1px solid ${PC[inc.prioridad]}44`,textTransform:"capitalize"}}>{inc.prioridad}</span>
+                    <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:"#1d222d",color:C.muted,border:`1px solid ${C.border}`,textTransform:"capitalize"}}>{inc.estado}</span>
                   </div>
                 </div>
                 <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{inc.titulo}</div>
-                {inc.vehiculo&&<div style={{fontSize:11,color:C.muted,marginBottom:6}}>🚛 {inc.vehiculo}</div>}
+                {inc.vehiculo&&<div style={{fontSize:11,color:C.muted,marginBottom:6}}><Truck size={13} style={{verticalAlign:"-2px",marginRight:5}}/>{inc.vehiculo}</div>}
                 <div style={{fontSize:12,color:C.muted,lineHeight:1.5,marginBottom:8,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{inc.descripcion}</div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:22,height:22,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:C.blueText,fontWeight:700}}>{avatarOf(autor)}</div><span style={{fontSize:11,color:C.muted}}>{autor.nombre}</span></div>
@@ -96,7 +97,7 @@ export function ModuloIncidencias({sesion,usuarios}){
       )}
       {vista==="nueva"&&(
         <div style={{padding:"14px 16px"}}>
-          <div style={{marginBottom:14}}><label style={S.label}>Categoría</label><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{CATS.map((c,i)=><button key={i} onClick={()=>setForm({...form,categoria:i})} style={{background:parseInt(form.categoria)===i?`${c.color}22`:"none",border:`1px solid ${parseInt(form.categoria)===i?c.color:C.border}`,color:parseInt(form.categoria)===i?c.color:C.muted,padding:"6px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:mono}}>{c.icon} {c.label}</button>)}</div></div>
+          <div style={{marginBottom:14}}><label style={S.label}>Categoría</label><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{CATS.map((c,i)=><button key={i} onClick={()=>setForm({...form,categoria:i})} style={{background:parseInt(form.categoria)===i?`${c.color}22`:"none",border:`1px solid ${parseInt(form.categoria)===i?c.color:C.border}`,color:parseInt(form.categoria)===i?c.color:C.muted,padding:"6px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:mono}}><c.Icono size={13} style={{verticalAlign:"-2px",marginRight:5}}/>{c.label}</button>)}</div></div>
           <div style={{marginBottom:14}}><label style={S.label}>Vehículo</label><select value={form.vehiculo} onChange={e=>setForm({...form,vehiculo:e.target.value})} style={S.input}><option value="">— Sin vehículo —</option>{VEHICULOS.map(v=><option key={v} value={v}>{v}</option>)}</select></div>
           <div style={{marginBottom:14}}><label style={S.label}>Prioridad</label><div style={{display:"flex",gap:8}}>{["baja","media","alta"].map(p=><button key={p} onClick={()=>setForm({...form,prioridad:p})} style={{flex:1,padding:"8px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:mono,background:form.prioridad===p?`${PC[p]}22`:"none",border:`1px solid ${form.prioridad===p?PC[p]:C.border}`,color:form.prioridad===p?PC[p]:C.muted,textTransform:"capitalize"}}>{p}</button>)}</div></div>
           <div style={{marginBottom:14}}><label style={S.label}>Título *</label><input value={form.titulo} onChange={e=>setForm({...form,titulo:e.target.value})} placeholder="Resumen breve" style={S.input}/></div>
@@ -108,13 +109,13 @@ export function ModuloIncidencias({sesion,usuarios}){
         const cat=CATS[incActual.categoria]||CATS[0];const autor=getUser(incActual.usuarioId);
         return(
           <div style={{padding:"0 0 20px"}}>
-            <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"14px 16px",borderLeft:`4px solid ${cat.color}`}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span>{cat.icon}</span><span style={{fontSize:10,color:cat.color,letterSpacing: 0.5,textTransform:"uppercase"}}>{cat.label}</span></div>
+            <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"14px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><cat.Icono size={14} color={cat.color}/><span style={{fontSize:12,color:cat.color,letterSpacing:0,textTransform:"none"}}>{cat.label}</span></div>
               <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>{incActual.titulo}</div>
-              {incActual.vehiculo&&<div style={{fontSize:12,color:C.muted,marginBottom:8}}>🚛 {incActual.vehiculo}</div>}
+              {incActual.vehiculo&&<div style={{fontSize:12,color:C.muted,marginBottom:8}}><Truck size={14} style={{verticalAlign:"-2px",marginRight:5}}/>{incActual.vehiculo}</div>}
               <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:14}}>{incActual.descripcion}</div>
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:esAdmin?14:0}}>
-                <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:`${PC[incActual.prioridad]}22`,color:PC[incActual.prioridad],border:`1px solid ${PC[incActual.prioridad]}44`,textTransform:"uppercase"}}>Prioridad {incActual.prioridad}</span>
+                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:`${PC[incActual.prioridad]}22`,color:PC[incActual.prioridad],border:`1px solid ${PC[incActual.prioridad]}44`,textTransform:"none"}}>Prioridad {incActual.prioridad}</span>
                 <span style={{fontSize:11,color:C.muted}}>{autor.nombre} · {timeAgo(incActual.fecha)}</span>
               </div>
               {esAdmin&&<div><label style={{...S.label,marginBottom:8}}>Estado</label><div style={{display:"flex",gap:6}}>{["abierta","en revisión","cerrada"].map(est=><button key={est} onClick={()=>cambiarEstado(incActual,est)} style={{flex:1,padding:"7px 4px",borderRadius:6,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",background:incActual.estado===est?"#1d222d":"none",border:`1px solid ${incActual.estado===est?C.blue:C.border}`,color:incActual.estado===est?C.blueText:C.muted}}>{est}</button>)}</div></div>}
@@ -128,8 +129,8 @@ export function ModuloIncidencias({sesion,usuarios}){
         );
       })()}
       {vista==="feed"&&(
-        <button onClick={()=>setVista("nueva")} style={{position:"fixed",bottom:72,left:"50%",transform:"translateX(-50%)",...S.btn,padding:"12px 28px",borderRadius:40,fontSize:13,boxShadow:"0 4px 24px #3b82f644",fontFamily:mono,zIndex:100}}>
-          + NUEVA INCIDENCIA
+        <button onClick={()=>setVista("nueva")} className="op-btn op-primario" style={{position:"fixed",bottom:"calc(78px + env(safe-area-inset-bottom))",left:"50%",transform:"translateX(-50%)",height:46,padding:"0 22px",borderRadius:999,fontSize:14,zIndex:100,boxShadow:"0 10px 30px rgba(91,124,250,0.35)"}}>
+          <Plus size={17}/> Nueva incidencia
         </button>
       )}
     </div>
@@ -145,10 +146,10 @@ function PanelStats({incidencias,onClose}){
   const pie=[{name:"Abiertas",value:ab,color:C.red},{name:"En revisión",value:rev,color:C.orange},{name:"Cerradas",value:cer,color:C.green}].filter(x=>x.value>0);
   return(
     <div style={S.page}>
-      <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase"}}>Estadísticas</div><div style={{fontSize:17,fontWeight:700}}>Incidencias</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
+      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Estadísticas</div><div style={{fontSize:17,fontWeight:700}}>Incidencias</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{padding:"12px 16px 0",display:"flex",gap:8}}>{[["7d","7d"],["30d","30d"],["todo","Todo"]].map(([k,l])=><button key={k} onClick={()=>setPeriodo(k)} style={{...S.btnGhost,fontSize:11,padding:"5px 12px",borderColor:periodo===k?C.blue:C.border,color:periodo===k?C.blueText:C.muted,background:periodo===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>{[{l:"Total",v:f.length,c:C.blueText},{l:"Abiertas",v:ab,c:C.red},{l:"Revisión",v:rev,c:C.orange},{l:"Urgentes",v:urg,c:"#f59e0b"}].map(k=><div key={k.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div><div style={{fontSize:8,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginTop:2}}>{k.l}</div></div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>{[{l:"Total",v:f.length,c:C.blueText},{l:"Abiertas",v:ab,c:C.red},{l:"Revisión",v:rev,c:C.orange},{l:"Urgentes",v:urg,c:"#f59e0b"}].map(k=><div key={k.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginTop:2}}>{k.l}</div></div>)}</div>
         <div style={{...S.card,marginBottom:12}}><label style={S.label}>Últimos 7 días</label><ResponsiveContainer width="100%" height={130}><BarChart data={evol} barGap={2}><XAxis dataKey="dia" tick={{fontSize:10,fill:C.dim}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:10,fill:C.dim}} axisLine={false} tickLine={false} allowDecimals={false} width={18}/><Tooltip content={<CTip/>} cursor={{fill:"#ffffff08"}}/><Bar dataKey="total" name="Total" fill={C.blue} radius={[4,4,0,0]}/><Bar dataKey="cerradas" name="Cerradas" fill={C.green} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>
         <div style={S.card}><label style={S.label}>Por estado</label><ResponsiveContainer width="100%" height={120}><PieChart><Pie data={pie} cx="50%" cy="50%" innerRadius={30} outerRadius={48} paddingAngle={3} dataKey="value">{pie.map((e,i)=><Cell key={i} fill={e.color}/>)}</Pie><Tooltip content={<CTip/>}/></PieChart></ResponsiveContainer>{pie.map(d=><div key={d.name} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><div style={{width:8,height:8,borderRadius:"50%",background:d.color}}/><span style={{fontSize:11,color:C.muted}}>{d.name}</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:"auto"}}>{d.value}</span></div>)}</div>
       </div>

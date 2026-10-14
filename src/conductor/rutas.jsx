@@ -1,5 +1,5 @@
 // App del conductor → Rutas: portada, fichaje, tareas correctivas y su cuadrante.
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronLeft, Loader2, Plus, TriangleAlert, Upload, WifiOff, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, orderBy, limit, setDoc } from "firebase/firestore";
@@ -33,10 +33,10 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:700,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tarea.titulo}</div>
-          <div style={{fontSize:10,color:C.muted,marginBottom:4}}>{tarea.vehiculo||"Sin vehículo"} · {tarea.fecha?new Date(tarea.fecha).toLocaleDateString("es-ES"):"—"}</div>
+          <div style={{fontSize:10,color:C.muted,marginBottom:4}}>{tarea.vehiculo||"Sin vehículo"} · {tarea.fecha?(tarea.fecha.toDate?tarea.fecha.toDate():new Date(tarea.fecha)).toLocaleDateString("es-ES"):"—"}</div>
           {tarea.descripcion&&<div style={{fontSize:11,color:C.muted,lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:expandida?99:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{tarea.descripcion}</div>}
         </div>
-        <span style={{fontSize:9,padding:"3px 8px",borderRadius:12,background:`${statusColor}22`,color:statusColor,border:`1px solid ${statusColor}44`,textTransform:"uppercase",flexShrink:0,marginLeft:8}}>{tarea.estado}</span>
+        <span style={{fontSize:12,padding:"3px 8px",borderRadius:12,background:`${statusColor}22`,color:statusColor,border:`1px solid ${statusColor}44`,textTransform:"capitalize",flexShrink:0,marginLeft:8}}>{tarea.estado}</span>
       </div>
       {/* Estado */}
       <div style={{display:"flex",gap:5,marginBottom:8}}>
@@ -166,7 +166,7 @@ function FichajeWidget({ sesion }){
         <input
           type="text" placeholder="Matrícula del vehículo"
           value={matricula} onChange={e=>setMatricula(e.target.value)}
-          style={{...S.input, marginBottom:8, textTransform:"uppercase"}}
+          style={{...S.input, marginBottom:8, textTransform:"none"}}
         />
       )}
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -223,7 +223,7 @@ export function AvisoCobertura({estado}){
     :sin
       ?`Sin cobertura${n?` · ${n} cambio${n===1?"":"s"} guardado${n===1?"":"s"} en el móvil, se enviarán solos`:" · puedes seguir marcando paradas"}`
       :`Enviando ${n} cambio${n===1?"":"s"}…`;
-  return <div data-testid="aviso-cobertura" style={{background:`${color}1f`,border:`1px solid ${color}55`,color,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,margin:"8px 14px 0"}}>{sin?"📶 ":"⏳ "}{texto}</div>;
+  return <div data-testid="aviso-cobertura" style={{background:`${color}1f`,border:`1px solid ${color}55`,color,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,margin:"8px 14px 0"}}>{sin?<WifiOff size={14} style={{verticalAlign:"-2px",marginRight:6}}/>:<Loader2 size={14} className="op-girando" style={{verticalAlign:"-2px",marginRight:6}}/>}{texto}</div>;
 }
 
 function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
@@ -341,7 +341,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
           </div>
         </div>
         <AvisosMovil sesion={sesion}/>
-        <div style={{fontSize:10,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:14}}>Selecciona tipo de trabajo</div>
+        <div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:14}}>Selecciona tipo de trabajo</div>
         {TIPOS_TRABAJO.map(t=>{
           const planesTipo=planes.filter(p=>p.tipo===t.key);
           const total=planesTipo.length;
@@ -409,26 +409,26 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
     return(
       <div style={{paddingBottom:80}}>
         {/* Sub-header tipo */}
-        <div style={{background:`${tipo.color}12`,borderBottom:`1px solid ${tipo.color}33`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={()=>{setTipoActivo(null);setShowUpload(false);setErrorMsg("");setDebugInfo([]);setMesFilter(null);}} style={{...S.btnGhost,fontSize:11,padding:"5px 10px",flexShrink:0}}>← Volver</button>
-          <tipo.Icono size={18} color={tipo.color}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:tipo.color}}>{tipo.label}</div>
-            <div style={{fontSize:10,color:C.muted}}>{planesT.length} planes cargados</div>
+        <div style={{borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>{setTipoActivo(null);setShowUpload(false);setErrorMsg("");setDebugInfo([]);setMesFilter(null);}} style={{...S.btnGhost,padding:"7px 10px",flexShrink:0}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
+          <div style={{width:36,height:36,borderRadius:10,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
+            <div style={{fontSize:12.5,color:C.muted}}>{planesT.length} {planesT.length===1?"plan":"planes"}</div>
           </div>
         </div>
 
         <div style={{padding:"12px 14px 0"}}>
           {esAdmin&&(
             <>
-              <button onClick={()=>{setShowUpload(v=>!v);setErrorMsg("");setDebugInfo([]);}} style={{...S.btn,width:"100%",marginBottom:10,background:showUpload?"none":tipo.color+"22",borderColor:showUpload?C.border:tipo.color,color:showUpload?C.muted:tipo.color}}>
-                {showUpload?"✕ Cancelar":"⬆ Subir KML"}
+              <button onClick={()=>{setShowUpload(v=>!v);setErrorMsg("");setDebugInfo([]);}} style={{...S.btnGhost,width:"100%",marginBottom:10,padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                {showUpload?<><X size={16}/> Cancelar</>:<><Upload size={16}/> Subir KML</>}
               </button>
               {showUpload&&(
                 <div style={{...S.card,marginBottom:10}}>
                   <div style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.7}}>Sube archivos KML de {tipo.label.toLowerCase()}. La app detecta turno, fecha y paradas automáticamente.</div>
-                  {errorMsg&&<div style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}>⚠️ {errorMsg}</div>}
-                  {debugInfo.length>0&&<div style={{background:"#080f1a",border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>🔍 Debug:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
+                  {errorMsg&&<div style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
+                  {debugInfo.length>0&&<div style={{background:"#080f1a",border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
                   <div onClick={()=>fileRef.current.click()} style={{background:"#080f1a",border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
                     <div style={{marginBottom:8,color:tipo.color}}><tipo.Icono size={30} strokeWidth={1.6}/></div>
                     <div style={{fontSize:13,color:tipo.color,fontWeight:600,marginBottom:4}}>{subiendo?"Procesando…":"Seleccionar KML"}</div>
@@ -481,12 +481,12 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 
   return(
     <div style={{paddingBottom:80}}>
-      <div style={{background:`${tipo.color}12`,borderBottom:`1px solid ${tipo.color}33`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={()=>setTipoActivo(null)} style={{...S.btnGhost,fontSize:11,padding:"5px 10px",flexShrink:0}}>← Volver</button>
-        <tipo.Icono size={18} color={tipo.color}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:700,color:tipo.color}}>{tipo.label}</div>
-          <div style={{fontSize:10,color:C.muted}}>{tareasT.length} tareas · {tareasT.filter(t=>t.estado==="cerrada").length} cerradas</div>
+      <div style={{borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
+        <button onClick={()=>setTipoActivo(null)} style={{...S.btnGhost,padding:"7px 10px",flexShrink:0}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
+        <div style={{width:36,height:36,borderRadius:10,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
+          <div style={{fontSize:12.5,color:C.muted}}>{tareasT.length} tareas · {tareasT.filter(t=>t.estado==="cerrada").length} cerradas</div>
         </div>
       </div>
       <div style={{padding:"12px 14px 0"}}>
@@ -496,12 +496,12 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             {l:"Pendientes",v:tareasT.filter(t=>t.estado==="pendiente").length,c:C.red},
             {l:"En curso",v:tareasT.filter(t=>t.estado==="en curso").length,c:C.orange},
             {l:"Cerradas",v:tareasT.filter(t=>t.estado==="cerrada").length,c:C.green},
-          ].map(s=><div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div><div style={{fontSize: 10.5,color:C.dim,textTransform:"uppercase",letterSpacing: 0.5}}>{s.l}</div></div>)}
+          ].map(s=><div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div><div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div></div>)}
         </div>
 
         {/* Nueva tarea */}
-        <button onClick={()=>setShowNT(v=>!v)} style={{...S.btn,width:"100%",marginBottom:10,background:showNuevaTarea?"none":tipo.color+"22",borderColor:showNuevaTarea?C.border:tipo.color,color:showNuevaTarea?C.muted:tipo.color}}>
-          {showNuevaTarea?"✕ Cancelar":"+ Nueva tarea correctiva"}
+        <button onClick={()=>setShowNT(v=>!v)} className={showNuevaTarea?undefined:"op-btn op-primario"} style={showNuevaTarea?{...S.btnGhost,width:"100%",marginBottom:10,padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}:{width:"100%",height:44,marginBottom:12,fontSize:14,borderRadius:12}}>
+          {showNuevaTarea?<><X size={16}/> Cancelar</>:<><Plus size={17}/> Nueva tarea correctiva</>}
         </button>
         {showNuevaTarea&&(
           <div style={{...S.card,marginBottom:12}}>
@@ -521,7 +521,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
         ))}
         {tareasT.filter(t=>t.estado==="cerrada").length>0&&(
           <>
-            <div style={{fontSize: 10.5,color:C.green,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:6,marginTop:10,paddingLeft:4}}>✓ CERRADAS ({tareasT.filter(t=>t.estado==="cerrada").length})</div>
+            <div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:10,paddingLeft:4}}>Cerradas ({tareasT.filter(t=>t.estado==="cerrada").length})</div>
             {tareasT.filter(t=>t.estado==="cerrada").map(t=>(
               <TarjetaCorrectivo key={t._id||t.id} tarea={t} sesion={sesion} usuarios={usuarios}
                 onUpdate={upd=>updatePlan(upd)}
@@ -552,8 +552,8 @@ function MiCuadrante({sesion,onBack}){
 
   const header=(
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer",padding:0}}>‹</button>
-      <div style={{fontSize:15,fontWeight:700}}>Mi cuadrante</div>
+      <button onClick={onBack} style={{...S.btnGhost,padding:"7px 10px"}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
+      <div style={{fontSize:16,fontWeight:650,letterSpacing:"-0.01em"}}>Mi cuadrante</div>
       {docs?.length>1&&(
         <select value={actual?.mes||""} onChange={e=>{setSel(e.target.value);setDiaSel(null);}}
           style={{marginLeft:"auto",background:C.surface2,border:`1px solid ${C.border}`,color:C.text,borderRadius:6,padding:"4px 8px",fontSize:12,fontFamily:font}}>

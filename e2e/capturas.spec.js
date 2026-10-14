@@ -51,3 +51,32 @@ test("capturas", async ({ browser }) => {
     await movil.getByText("Ruta de prueba").first().click(); await shot(movil, "11-conductor-ruta");
   } catch (e) { console.log("conductor:", e.message); }
 });
+
+// Todas las pantallas de la app del conductor (/rutas)
+test("capturas rutas", async ({ browser }) => {
+  await sembrar();
+  const ctx = await browser.newContext({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2 });
+  const p = await ctx.newPage();
+  p.on("dialog", d => d.accept());
+  const shot = async n => { await p.waitForTimeout(900); await p.screenshot({ path: `${DIR}/r-${n}.png`, fullPage: true }); };
+  const paso = async (n, f) => { try { await f(); await shot(n); } catch (e) { console.log(n, e.message.split("\n")[0]); } };
+  await p.goto("/rutas"); await shot("00-login");
+  await entrarCampo(p, "cond1@demo.test"); await shot("01-portada");
+  await paso("02-lista", () => p.getByText("Mantenimiento Preventivo").click());
+  await paso("03-ruta", () => p.getByText("Ruta de prueba").first().click());
+  await paso("04-parte", async () => { await p.getByRole("button", { name: /Parte/ }).first().click(); });
+  await p.goto("/rutas"); await p.waitForTimeout(1500);
+  await paso("05-correctivo", () => p.getByText("Mantenimiento Correctivo").click());
+  await p.goto("/rutas"); await p.waitForTimeout(1500);
+  await paso("06-cuadrante", () => p.getByText("Mi cuadrante").first().click());
+  await p.goto("/rutas"); await p.waitForTimeout(1500);
+  await paso("07-incidencias", () => p.getByRole("button", { name: /incidencias/i }).click());
+  await paso("08-incidencia", () => p.getByText("Pinchazo").first().click());
+  await paso("09-inventario", () => p.getByRole("button", { name: /inventario/i }).click());
+  await paso("10-producto", () => p.getByText("Filtro de aceite").first().click());
+  // administrador en la app
+  const a = await (await browser.newContext({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2 })).newPage();
+  await entrarCampo(a, "admin@demo.test");
+  await a.screenshot({ path: `${DIR}/r-11-portada-admin.png`, fullPage: true });
+  try { await a.getByRole("button", { name: /admin/i }).last().click(); await a.waitForTimeout(1200); await a.screenshot({ path: `${DIR}/r-12-admin.png`, fullPage: true }); } catch (e) { console.log("admin", e.message); }
+});

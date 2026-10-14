@@ -3,6 +3,7 @@
 // conduce el móvil (con la pantalla encendida) va mirando el GPS: marca solo
 // cuándo sale y llega cada expedición y calcula si va a su hora. Control lo
 // ve en vivo. No hace falta tocar nada mientras se conduce.
+import { Coffee } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { watchMisTurnos, cogerTurno, dejarTurno, empezarTurno, terminarTurno, guardarReal, escribirPosicion } from "./lineas-servicio-store.js";
 import { minutosDesde, hhmm, avanzar, retrasoActual, viajeActual, estadoPuntualidad, COLOR_PUNTUALIDAD, textoRetraso, servicioVigente, fechaLocal } from "./lineas-servicio.js";
@@ -166,7 +167,7 @@ function HojaTurno({ servicio, turno, sesion }) {
       )}
       {terminado && <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: C.card, border: `1px solid ${C.border2}`, fontSize: 14, color: C.green }}>✓ Turno terminado a las {hhmm(turno.finReal)}.</div>}
 
-      <div style={{ marginTop: 18, fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Hoja del turno</div>
+      <div style={{ marginTop: 18, fontSize: 11, color: C.dim, letterSpacing:0, textTransform:"none", fontWeight: 700 }}>Hoja del turno</div>
       <div style={{ marginTop: 6 }}>
         {turno.viajes.map((x, i) => {
           const s = real.salidas?.[x.k], l = real.llegadas?.[x.k];
@@ -176,7 +177,7 @@ function HojaTurno({ servicio, turno, sesion }) {
           return (
             <div key={x.k}>
               {prev && prev.bus !== x.bus && <div style={{ padding: "6px 8px", fontSize: 12, color: C.amber }}>↔ Relevo en {x.on}: pasas al Bus {x.bus}</div>}
-              {hueco >= 15 && <div style={{ padding: "6px 8px", fontSize: 12, color: C.muted }}>☕ Pausa de {hueco >= 60 ? `${Math.floor(hueco / 60)} h ${hueco % 60 ? `${hueco % 60} min` : ""}` : `${hueco} min`} ({hhmm(prev.arr)}–{hhmm(x.dep)})</div>}
+              {hueco >= 15 && <div style={{ padding: "6px 8px", fontSize: 12, color: C.muted }}><Coffee size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Pausa de {hueco >= 60 ? `${Math.floor(hueco / 60)} h ${hueco % 60 ? `${hueco % 60} min` : ""}` : `${hueco} min`} ({hhmm(prev.arr)}–{hhmm(x.dep)})</div>}
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderRadius: 8, background: esActual ? C.blueDim : "none", opacity: l != null || salt.has(x.k) ? 0.5 : x.v ? 0.65 : 1 }}>
                 <span style={{ width: 46, fontFamily: mono, fontSize: 14, color: C.text }}>{hhmm(x.dep)}</span>
                 {!x.v ? <span style={{ minWidth: 26, padding: "2px 6px", borderRadius: 6, background: x.color, color: "#0d0f14", fontWeight: 800, fontSize: 12, textAlign: "center" }}>{x.l}</span> : <span style={{ minWidth: 26, fontSize: 11, color: C.dim }}>vacío</span>}
@@ -199,7 +200,7 @@ function ProximosDias({ cuadrantes, desdeManana }) {
   if (!dias.some(x => x.c)) return null;
   return (
     <div style={{ padding: "4px 16px 16px" }}>
-      <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, margin: "10px 0 6px" }}>Próximos días</div>
+      <div style={{ fontSize: 11, color: C.dim, letterSpacing:0, textTransform:"none", fontWeight: 700, margin: "10px 0 6px" }}>Próximos días</div>
       {dias.map(x => {
         const d = new Date(x.fecha + "T12:00:00");
         const libre = !x.c || ["L", "B"].includes(x.c);

@@ -40,7 +40,7 @@ export const CTip = ({active,payload,label}) => {
   if(!active||!payload?.length) return null;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border2}`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.text,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
-      {label&&<div style={{color:C.muted,marginBottom:5,fontSize:10,letterSpacing: 0.5,textTransform:"uppercase"}}>{label}</div>}
+      {label&&<div style={{color:C.muted,marginBottom:5,fontSize:12,letterSpacing:0,textTransform:"none"}}>{label}</div>}
       {payload.map((p,i)=><div key={i} style={{color:p.color||C.blueText,fontWeight:600}}>{p.name}: {p.value}</div>)}
     </div>
   );
