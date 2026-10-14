@@ -14,6 +14,8 @@ const etiqueta = t => t.nombre || Object.entries(t.campos || {}).find(([k]) => C
 
 // Medidas iguales a las de los bloques (gantt.jsx)
 const ALTO = ROW_H - 10;
+// Un vacío de 1-2 min a zoom 1× medía 1-2 px: nunca menos de esto (para verlo y pincharlo)
+export const MIN_VACIO = 6;
 
 function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }) {
   const dpr = window.devicePixelRatio || 1;
@@ -22,7 +24,8 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
   const g = cv.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, ROW_H);
-  for (const t of tareas) {
+  const orden = [...tareas.filter(t => !t._travel), ...tareas.filter(t => t._travel)];
+  for (const t of orden) {
     const x = (t._start - dayOffset) * pxPerMin;
     const dur = t.duracion || 15;
     const bw = Math.max(dur * pxPerMin - 2, 3);
@@ -31,10 +34,18 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
       g.fillStyle = `rgba(${c},0.15)`; g.strokeStyle = `rgba(${c},0.5)`;
       g.fillRect(x, ROW_H * 0.3, bw, ROW_H * 0.4); g.strokeRect(x + 0.5, ROW_H * 0.3 + 0.5, bw - 1, ROW_H * 0.4 - 1);
     } else if (t._travel) {
+      // vacío: barra clara y bien visible (ámbar si sale o vuelve a cochera), con flecha si cabe
       const deposito = t._depot_exit || t._depot_return;
-      const h = ROW_H * 0.38;
-      g.fillStyle = deposito ? "#b45309" : "#7a1010";
-      g.fillRect(x, (ROW_H - h) / 2, Math.max(bw, 4), h);
+      const h = 10, y = (ROW_H - h) / 2, ww = Math.max(bw, MIN_VACIO);
+      const on = activa === t;
+      g.fillStyle = deposito ? (on ? "#f5b84a" : "rgba(245,184,74,0.8)") : (on ? "#e2e8f0" : "rgba(203,213,225,0.55)");
+      g.beginPath(); (g.roundRect ? g.roundRect(x, y, ww, h, 3) : g.rect(x, y, ww, h)); g.fill();
+      g.strokeStyle = "#0b0d12"; g.lineWidth = 1.5; g.stroke(); g.lineWidth = 1;
+      if (ww >= 14) {
+        g.strokeStyle = "#0b0d12"; g.lineWidth = 1.6; g.beginPath();
+        const cx = x + ww / 2, cy = ROW_H / 2;
+        g.moveTo(cx - 3, cy - 3); g.lineTo(cx + 1, cy); g.lineTo(cx - 3, cy + 3); g.stroke(); g.lineWidth = 1;
+      }
     } else {
       const color = barrioColor(t.barrio);
       g.globalAlpha = arrastrada === t ? 0.4 : 1;
@@ -62,17 +73,20 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
   }
 }
 
-/** La parada (no tramos ni pausas) que hay en la posición x (px dentro de la fila). */
-function paradaEn(tareas, dayOffset, pxPerMin, x) {
-  let mejor = null, dist = Infinity;
-  for (const t of tareas) {
-    if (t._travel || t._break || t._wait) continue;
-    const x0 = (t._start - dayOffset) * pxPerMin;
-    const x1 = x0 + Math.max((t.duracion || 15) * pxPerMin - 2, 3);
-    const d = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
-    if (d < dist) { dist = d; mejor = t; }
-  }
-  return dist <= 2 ? mejor : null; // 2 px de margen: las paradas son finas
+/** Lo que hay en la posición x (px dentro de la fila): primero las paradas; si no, un vacío (con más margen). */
+function elementoEn(tareas, dayOffset, pxPerMin, x) {
+  const cerca = (filtro, minW, margen) => {
+    let mejor = null, dist = Infinity;
+    for (const t of tareas) {
+      if (!filtro(t)) continue;
+      const x0 = (t._start - dayOffset) * pxPerMin;
+      const x1 = x0 + Math.max((t.duracion || 15) * pxPerMin - 2, minW);
+      const d = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+      if (d < dist) { dist = d; mejor = t; }
+    }
+    return dist <= margen ? mejor : null;
+  };
+  return cerca(t => !t._travel && !t._break && !t._wait, 3, 2) || cerca(t => t._travel, MIN_VACIO, 4);
 }
 
 export function FilaLienzo({ tareas, dayOffset, pxPerMin, chartW, activa, arrastrada, onAbrir, onTooltip, onArrastrar, onSoltar }) {
@@ -80,20 +94,25 @@ export function FilaLienzo({ tareas, dayOffset, pxPerMin, chartW, activa, arrast
   useEffect(() => {
     if (ref.current) dibujar(ref.current, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada });
   }, [tareas, dayOffset, pxPerMin, chartW, activa, arrastrada]);
-  const bajo = e => paradaEn(tareas, dayOffset, pxPerMin, e.clientX - e.currentTarget.getBoundingClientRect().left);
+  const bajo = e => elementoEn(tareas, dayOffset, pxPerMin, e.clientX - e.currentTarget.getBoundingClientRect().left);
   return (
     <canvas ref={ref} draggable
       style={{ position: "absolute", left: 0, top: 0, width: Math.ceil(chartW), height: ROW_H, zIndex: 4 }}
       onMouseMove={e => {
         const t = bajo(e);
-        e.currentTarget.style.cursor = t ? "grab" : "default";
+        e.currentTarget.style.cursor = t ? (t._travel ? "pointer" : "grab") : "default";
         onTooltip(t ? { task: t, x: e.clientX, y: e.clientY } : null);
       }}
       onMouseLeave={() => onTooltip(null)}
-      onClick={e => { const t = bajo(e); if (!t) return; e.stopPropagation(); onTooltip(null); onAbrir(t); }}
+      onClick={e => {
+        const t = bajo(e); if (!t) return; e.stopPropagation();
+        // un vacío no tiene panel: se enseña su detalle (también sirve en pantallas táctiles)
+        if (t._travel) { onTooltip({ task: t, x: e.clientX, y: e.clientY }); return; }
+        onTooltip(null); onAbrir(t);
+      }}
       onDragStart={e => {
         const t = bajo(e);
-        if (!t) { e.preventDefault(); return; }
+        if (!t || t._travel) { e.preventDefault(); return; }
         e.dataTransfer.effectAllowed = "move";
         onTooltip(null);
         onArrastrar(t);

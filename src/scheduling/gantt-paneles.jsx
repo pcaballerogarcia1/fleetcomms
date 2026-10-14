@@ -92,6 +92,28 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
           fontSize: 12, color: C.text, minWidth: 190, maxWidth: 270,
           pointerEvents: "none", animation: "sched-fadein .1s ease both",
         }}>
+          {tooltip.task._travel ? (() => {
+            // vacío: de dónde a dónde, cuándo, cuántos km y minutos
+            const t = tooltip.task, lista = tooltip.row?.assignments || [];
+            const i = lista.indexOf(t);
+            const esParada = a => a && !a._travel && !a._break && !a._wait;
+            const nombre = a => a ? (a.nombre || Object.entries(a.campos || {}).find(([k]) => ["pa", "idsap", "id_sap", "codigopoint", "codigo"].includes(k.toLowerCase()))?.[1] || a.barrio || "parada") : null;
+            const antes = i > 0 ? [...lista.slice(0, i)].reverse().find(esParada) : null;
+            const despues = i >= 0 ? lista.slice(i + 1).find(esParada) : null;
+            const desde = t._depot_exit ? "Cochera" : nombre(antes) || "—";
+            const hasta = t._depot_return ? "Cochera" : nombre(despues) || "—";
+            return (
+              <>
+                <div style={{ fontSize: 11, color: t._depot_exit || t._depot_return ? C.amber : C.muted, marginBottom: 4, fontWeight: 600 }}>
+                  {t._depot_exit ? "Salida de cochera" : t._depot_return ? "Vuelta a cochera" : t._a_planta ? "Viaje a descargar" : "Vacío entre paradas"}
+                </div>
+                <div style={{ fontWeight: 650, color: C.text, fontSize: 13, marginBottom: 4 }}>{desde} → {hasta}</div>
+                <div style={{ color: C.muted, fontSize: 11.5 }}>
+                  {minToTime(t._start % 1440)} → {minToTime(t._end % 1440)} · {t.duracion || 0} min{t.km != null ? ` · ${t.km.toFixed(1).replace(".", ",")} km` : ""}
+                </div>
+              </>
+            );
+          })() : <>
           {tooltip.task.barrio && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: barrioColor(tooltip.task.barrio), flexShrink: 0 }} />
@@ -113,6 +135,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
             const num    = Object.entries(campos).find(([k]) => ["num","num.","número","numero"].includes(k.toLowerCase()))?.[1];
             return calle ? <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{calle}{num ? ` ${num}` : ""}</div> : null;
           })()}
+          </>}
           {(() => {
             const row = tooltip.row;
             if (!row) return null;

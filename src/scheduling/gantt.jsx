@@ -1,5 +1,7 @@
 // Diagrama de Gantt del escenario y barra de KPIs.
 // (Separado de scheduling.jsx sin cambiar su comportamiento.)
+import { ArrowRight, Home } from "lucide-react";
+import { MIN_VACIO } from "./gantt-lienzo.jsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { dayIssues, dayMetrics } from "../scenario-metrics.js";
 import { applyTaskMove, computeCandidateSlots, minToTime, turnoWindow } from "../vrp-engine.js";
@@ -665,51 +667,26 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
 
                   // Travel block
                   if (task._travel) {
-                    const tH = ROW_H * 0.38;
-                    const tTop = (ROW_H - tH) / 2;
-                    const kmLabel = task.km != null ? `${task.km.toFixed(2)} km` : "";
-                    const minLabel = `${dur} min`;
+                    // vacío: barra clara bien visible (ámbar si sale o vuelve a cochera); se ve y se pincha aunque dure 1 min
                     const isDepotMove = task._depot_exit || task._depot_return;
-                    const depotLabel = task._depot_exit ? "Salida depot" : "Vuelta depot";
-                    const bg = isDepotMove
-                      ? "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #f59e5b99 6px, #f59e5b99 12px)"
-                      : "repeating-linear-gradient(135deg, #111 0px, #111 6px, #c0000099 6px, #c0000099 12px)";
-                    const borderColor = isDepotMove ? "#f59e5bbb" : "#c00000bb";
+                    const ww = Math.max(w, MIN_VACIO);
+                    const kmLabel = task.km != null ? `${task.km.toFixed(1).replace(".", ",")} km` : "";
+                    const verTip = e => !dragging && setTooltip({ task, row, x: e.clientX, y: e.clientY });
                     return (
                       <div key={`tr${ti}`}
-                        title={isDepotMove ? `${depotLabel}: ${kmLabel} · ${minLabel}` : `Km en vacío: ${kmLabel} · ${minLabel}`}
+                        onMouseEnter={verTip} onClick={e => { e.stopPropagation(); verTip(e); }}
+                        onMouseMove={e => !dragging && setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                        onMouseLeave={() => setTooltip(null)}
                         style={{
-                          position: "absolute", left, top: tTop,
-                          width: Math.max(w, 4), height: tH,
-                          background: bg,
-                          border: `1px solid ${borderColor}`,
-                          borderRadius: 3,
-                          display: "flex", alignItems: "center", gap: 3,
-                          overflow: "hidden", zIndex: 3, boxSizing: "border-box",
-                          paddingLeft: 4,
+                          position: "absolute", left, top: (ROW_H - 12) / 2,
+                          width: ww, height: 12, borderRadius: 4, cursor: "pointer",
+                          background: isDepotMove ? "rgba(245,184,74,0.8)" : "rgba(203,213,225,0.55)",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+                          overflow: "hidden", zIndex: 6, boxSizing: "border-box", color: "#0b0d12", border: "1.5px solid #0b0d12",
                         }}
                       >
-                        {w > 14 && (
-                          isDepotMove ? (
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="#f59e5b" stroke="none" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
-                              <path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/>
-                            </svg>
-                          ) : (
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
-                              <path d="M5 12h14M13 6l6 6-6 6"/>
-                            </svg>
-                          )
-                        )}
-                        {w > 36 && kmLabel && (
-                          <span style={{ fontSize: 9, color: "#fff", whiteSpace: "nowrap", fontWeight: 700, fontFamily: "monospace", textShadow: "0 0 4px #000, 0 0 4px #000" }}>
-                            {kmLabel}
-                          </span>
-                        )}
-                        {w > 72 && (
-                          <span style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", textShadow: "0 0 3px #000" }}>
-                            · {isDepotMove ? depotLabel : minLabel}
-                          </span>
-                        )}
+                        {ww > 16 && (isDepotMove ? <Home size={9} strokeWidth={2.6} /> : <ArrowRight size={9} strokeWidth={2.8} />)}
+                        {ww > 44 && kmLabel && <span style={{ fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>{kmLabel}</span>}
                       </div>
                     );
                   }

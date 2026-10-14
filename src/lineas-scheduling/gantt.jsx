@@ -137,14 +137,16 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                     onMouseEnter={e => !arr && setTip({ x, r, cx: e.clientX, cy: e.clientY })}
                     onMouseMove={e => setTip(t => (t ? { ...t, cx: e.clientX, cy: e.clientY } : t))}
                     onMouseLeave={() => setTip(null)}
-                    style={{ ...(!x.vacio && sel.has(claveViaje(x)) ? { outline: "2px solid #fff", boxShadow: `0 0 0 4px ${C.blue}aa`, zIndex: 2 } : {}), ...(arr && !x.vacio && (arr.claves ? arr.claves.includes(claveViaje(x)) : claveDe(x, r) === arr.clave) ? { opacity: 0.4, outline: "2px solid #fff" } : {}), cursor: onMover && !x.vacio ? "grab" : "default", ...(x.vacio ? {
+                    style={{ ...(!x.vacio && sel.has(claveViaje(x)) ? { boxShadow: "inset 0 0 0 2px #fff", filter: "brightness(1.25)", zIndex: 2 } : {}), ...(arr && !x.vacio && (arr.claves ? arr.claves.includes(claveViaje(x)) : claveDe(x, r) === arr.clave) ? { opacity: 0.4, boxShadow: "inset 0 0 0 2px #fff" } : {}), cursor: onMover && !x.vacio ? "grab" : "default", ...(x.vacio ? {
                       position: "absolute", left: X(x.dep), width: w, top: 9, height: ROW_H - 18, borderRadius: 3,
                       background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
                       color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
                     } : {
-                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
-                      background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0d0f14", fontSize: 9.5, fontWeight: 800,
-                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
+                      // como en Optibus: recta al salir y en punta al llegar (el sentido del tiempo)
+                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: "4px 0 0 4px",
+                      clipPath: `polygon(0 0, calc(100% - ${Math.min(9, w * 0.45)}px) 0, 100% 50%, calc(100% - ${Math.min(9, w * 0.45)}px) 100%, 0 100%)`,
+                      background: x.color + (x.dir === 1 ? "c8" : "f0"), color: "#0d0f14", fontSize: 9.5, fontWeight: 800,
+                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 4, lineHeight: `${ROW_H - 12}px`,
                     }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
               })}
