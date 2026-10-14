@@ -11,6 +11,7 @@ import { logAudit } from "./audit.js";
 import { enviarAvisos } from "./avisos.js";
 import { nombre } from "./despacho.js";
 import { db } from "./firebase.js";
+import { DEFAULT_ROSTER_RULES } from "./roster-optimizer.js";
 
 const mesId = (orgId, y, m) => `${orgId}_${y}_${String(m).padStart(2, "0")}`;
 const mesTxt = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
@@ -24,7 +25,8 @@ export function escucharMes(orgId, y, m, cb, onError) {
     s => cb(Object.fromEntries(s.docs.map(d => [d.id, d.data()]))), e => { cb({}); onError?.(e); });
 }
 export function escucharReglas(orgId, cb) {
-  return onSnapshot(doc(db, "rostering", `${orgId}_reglas`), s => cb(s.exists() ? s.data().rules || {} : {}), () => cb({}));
+  // sin reglas guardadas valen las de por defecto (las mismas que usa Rostering)
+  return onSnapshot(doc(db, "rostering", `${orgId}_reglas`), s => cb({ ...DEFAULT_ROSTER_RULES, ...(s.exists() ? s.data().rules || {} : {}) }), () => cb({ ...DEFAULT_ROSTER_RULES }));
 }
 export function escucharGridVehiculos(orgId, y, m, cb) {
   return onSnapshot(doc(db, "rostering_vehicles", mesId(orgId, y, m)), s => cb(s.exists() ? s.data().grid || {} : {}), () => cb({}));
