@@ -2,7 +2,7 @@
 
 
 import { TIPOS_VEHICULO } from "../lineas-store.js";
-import { clavePieza, PARAMS_DEFECTO, costeDia, OBJETIVOS, CAMPOS_VEHICULOS } from "../lineas-sched.js";
+import { clavePieza, PARAMS_DEFECTO, costeDia, OBJETIVOS, CAMPOS_VEHICULOS, CAMPOS_PRECIO, hayPrecios, minutosCoste, costeDeMinutos } from "../lineas-sched.js";
 import { minToHHMM } from "../gtfs-parse.js";
 
 
@@ -126,7 +126,7 @@ export const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Nu
 // si solo se ha hecho el paso 1.
 export const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm"]; // entreLineas además es restricción
 
-const CAMPOS_COSTE = ["costeHora", "costeKm", "costeVehiculoDia"];
+const CAMPOS_COSTE = CAMPOS_PRECIO; // los precios no cambian el escenario: el coste se recalcula al verlo
 
 // lo que cambia los vehículos (el resto solo cambia los turnos)
 const CLAVES_VEHICULOS = ["dia", "lineas", "regulacion", "margenVacio", "margenCochera", "amplitudBusMax", "esperaMaxCabecera", "gruposLineas", "mezclaBuses", "vacioMaxKm", "factorRodeo", "velocidadVacio", "entreLineas", ...CAMPOS_VEHICULOS];
@@ -158,7 +158,7 @@ export function kpisBarra(res, p) {
   const turnos = res.turnos || [];
   const conduccion = turnos.reduce((s, t) => s + t.conduccion, 0);
   const pagado = turnos.reduce((s, t) => s + t.trabajo, 0);
-  const coste = res.turnos ? costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses }, p) : null;
+  const coste = res.turnos ? costeDia({ horasPagadas: pagado / 60, km: k.km, autobuses: k.autobuses, costeMin: minutosCoste(turnos, p) }, p) : null;
   return {
     vehiculos: k.autobuses, pvr: k.pico, turnos: k.turnos, paradas: k.viajes, km: k.km, kmVacio: k.kmVacio || 0,
     conduccion, trabajo: 0, pagado, eficVehiculo: k.km ? (k.km - (k.kmVacio || 0)) / k.km : null, eficPersonal: k.eficienciaPersonal, coste,
@@ -184,7 +184,8 @@ export function kpisDetalle(res, p = res.params) {
   const enPartido = suma(t => t.piezas.slice(1).filter((pz, i) => (pz.autobus ?? pz.vehiculo) !== (t.piezas[i].autobus ?? t.piezas[i].vehiculo) && pz.inicio - t.piezas[i].fin >= (p.huecoNoPagado ?? 60)).length);
   const n = turnos.length || 1;
   const eur = v => v.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-  const hayPrecio = p.costeHora > 0 || p.costeVehiculoDia > 0 || p.costeKm > 0;
+  const hayPrecio = hayPrecios(p);
+  const cp = costeDeMinutos(minutosCoste(turnos, p), p);
   const tramo = m => (m < 300 ? "<5 h" : m < 420 ? "5-7 h" : m < 480 ? "7-8 h" : m <= 540 ? "8-9 h" : ">9 h");
   const cuenta = (lista, f, orden) => { const o = {}; for (const x of lista) { const c = f(x); o[c] = (o[c] || 0) + 1; } return (orden || Object.keys(o)).filter(c => o[c]).map(c => ({ n: c, v: o[c] })); };
   return [
@@ -198,7 +199,7 @@ export function kpisDetalle(res, p = res.params) {
     { l: "Tiempo parado", v: hmT(Math.max(0, plataforma - conduccion)), sub: "con el autobús, sin conducir (regulación)" },
     { l: "Desplazamientos", v: desp.length ? hmT(desp.reduce((s, d) => s + (d.fin - d.inicio), 0)) : "—", sub: desp.length ? `${num(desp.length)} a otra cabecera · ${num(desp.reduce((s, d) => s + (d.km || 0), 0))} km` : "ninguno" },
     ...(hayPrecio ? [
-      { l: "Coste de personal", v: eur((pagado / 60) * (p.costeHora || 0)), sub: `${num(pagado / 60)} h × ${p.costeHora || 0} €/h` },
+      { l: "Coste de personal", v: eur(cp.total), sub: [`ordinario ${eur(cp.ordinario)}`, cp.extra && `extras ${eur(cp.extra)}`, cp.nocturnidad && `nocturnidad ${eur(cp.nocturnidad)}`, cp.partido && `partidos ${eur(cp.partido)}`, cp.festivo && `festivo ${eur(cp.festivo)}`, cp.fijo && `fijo ${eur(cp.fijo)}`].filter(Boolean).join(" · ") },
       { l: "Coste de autobuses", v: eur(k.autobuses * (p.costeVehiculoDia || 0) + k.km * (p.costeKm || 0)), sub: `${num(k.autobuses)} × ${p.costeVehiculoDia || 0} € + ${num(k.km)} km × ${String(p.costeKm || 0).replace(".", ",")} €` },
     ] : []),
     { l: "Tipos de turno", barras: Object.entries(k.turnosPorTipo || {}).sort((a, b) => b[1] - a[1]).map(([n2, v]) => ({ n: n2, v })) },
@@ -218,7 +219,7 @@ export function cambiosKpi(res, p = res.params) {
     "Km": { sub: `${num(k.kmVacio || 0)} en vacío · ${num(k.vacios || 0)} vacíos`, ayuda: "Kilómetros del día: los de los viajes y los vacíos (salida y vuelta a cochera, y entre cabeceras)." },
     "Paradas": { l: "Viajes", sub: res.diaNombre, subColor: C.dim, ayuda: "Viajes del calendario elegido en las líneas del escenario." },
     "Avisos": { ayuda: "Turnos que incumplen la conducción UE 561/2006 o el descanso del Estatuto (art. 34.4)." },
-    ...(!res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { v: "—", sub: "falta el paso 2 (turnos)" } }),
-    ...(res.turnos && costeDia({ horasPagadas: 0, km: 0, autobuses: 0 }, p) != null && { "Coste estimado": { sub: "personal + autobuses + km", ayuda: "Horas pagadas × €/h + autobuses × €/autobús·día + km × €/km, con los precios de Restricciones." } }),
+    ...(!res.turnos && hayPrecios(p) && { "Coste estimado": { v: "—", sub: "falta el paso 2 (turnos)" } }),
+    ...(res.turnos && hayPrecios(p) && { "Coste estimado": { sub: "personal (convenio) + autobuses + km", ayuda: "Personal según el convenio de Restricciones (horas, pluses, extras, mínimo pagado) + autobuses × €/autobús·día + km × €/km." } }),
   };
 }

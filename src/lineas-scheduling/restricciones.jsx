@@ -147,6 +147,7 @@ function GruposLineas({ red, grupos, onChange }) {
 const AL_ENCENDER = {
   flotaMax: 100, amplitudBusMax: 960, esperaMaxCabecera: 120, conductoresMax: 300, maxCambiosBus: 1, maxCambiosBusTotal: 100,
   jornadaSinPausaMax: 360, costeVehiculoDia: 250, costeKm: 0.9, costeHora: 22, costeCambioBus: 5,
+  plusNocturnidad: 2, plusPartido: 10, horaExtraDesde: 480, costeHoraExtra: 30, minimoPagado: 360, costeFijoTurno: 10, plusFestivoPct: 25,
 };
 
 export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
@@ -251,10 +252,19 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["pausaConduccionMin", "Pausa de conducción", numero("pausaConduccionMin", "min (se puede partir 15 + 30)")],
         ["conduccionDiariaMax", "Conducción diaria máxima", numero("conduccionDiariaMax", "min")],
       ] },
-      { id: "plantilla", nombre: "Plantilla y coste", items: [
+      { id: "plantilla", nombre: "Plantilla", items: [
         ["conductoresMax", "Conductores disponibles", limite("conductoresMax", "turnos")],
-        ["costeHora", "Coste por hora de conductor", limite("costeHora", "€/h", { decimal: true })],
       ] },
+      { id: "costes", nombre: "Costes del convenio", items: [
+        ["costeHora", "Hora ordinaria", limite("costeHora", "€/h", { decimal: true }), "Lo que cuesta a la empresa una hora de conductor (con la Seguridad Social)."],
+        ["plusNocturnidad", "Plus de nocturnidad", limite("plusNocturnidad", "€ por hora trabajada entre las 22:00 y las 6:00", { decimal: true })],
+        ["plusPartido", "Plus por turno partido", limite("plusPartido", "€ por turno", { decimal: true })],
+        ["horaExtraDesde", "Horas extra a partir de", limite("horaExtraDesde", "min de trabajo en el turno"), "Lo que pase de aquí se paga como hora extra."],
+        ["costeHoraExtra", "Hora extra", limite("costeHoraExtra", "€/h", { decimal: true }), "Apagado: como la hora ordinaria."],
+        ["minimoPagado", "Mínimo pagado por turno", limite("minimoPagado", "min"), "Si un turno tiene menos trabajo, se paga este mínimo (garantía del convenio)."],
+        ["costeFijoTurno", "Coste fijo por turno", limite("costeFijoTurno", "€ por turno (dietas, quebranto…)", { decimal: true })],
+        ["plusFestivoPct", "Recargo de domingos y festivos", limite("plusFestivoPct", "% sobre las horas", { decimal: true }), "Se aplica al tipo de día «Domingo / festivo»."],
+      ], nota: "Con estos precios se calcula el coste estimado, su desglose en «Todos los indicadores», «Optimizar todo junto» y el objetivo «Menor coste» al optimizar turnos. Cambiarlos no obliga a recalcular el escenario." },
     ] },
     { id: "lineas", nombre: "Líneas", icono: <IconoCategoria tipo="lineas" />, secs: [
       { id: "grupos", nombre: "Grupos de líneas", usado: (p.gruposLineas || []).length > 0, buscar: "grupos de lineas agrupar mezclar", contenido: <GruposLineas red={red} grupos={p.gruposLineas} onChange={v => set("gruposLineas", v)} /> },

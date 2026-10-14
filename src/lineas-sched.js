@@ -44,6 +44,8 @@ import { PARAMS_DEFECTO, geografia, nombreDia, viajesDelDia } from "./lineas-sch
 import { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";
 import { programarTurnos } from "./lineas-sched/turnos.js";
 import { seguirConductores } from "./lineas-sched/seguir.js";
+import { minutosCoste, costeDeMinutos, hayPrecios } from "./lineas-sched/costes.js";
+export { minutosCoste, costeDeMinutos, hayPrecios, CAMPOS_PRECIO } from "./lineas-sched/costes.js";
 import { vehiculosYAutobuses } from "./lineas-sched/vehiculos.js";
 // Lo de cada paso vive en src/lineas-sched/; desde aquí se sigue ofreciendo todo
 export { ID_COCHERA, PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, cabecerasDeRed, claveSalidas, duracionViaje, esCalendario, nombreDia, pasosPorParada, salidasDe, viajesDia } from "./lineas-sched/base.js";
@@ -105,13 +107,16 @@ export function resumenServicio(res) {
     piezasMedias: Math.round((k.piezasMedias || 0) * 10) / 10,
     horasPagadas: k.horasPagadas == null ? null : r1(k.horasPagadas), horasServicio: r1(k.horasServicio), km: r1(k.km), kmVacio: r1(k.kmVacio || 0), avisos: k.turnosConAviso,
     eficienciaPersonal: k.eficienciaPersonal == null ? null : Math.round(k.eficienciaPersonal * 1000) / 1000,
+    // minutos que se pagan por concepto (el coste se saca con los precios de ahora)
+    costeMin: res.turnos ? minutosCoste(res.turnos, res.params) : null,
   };
 }
 
-/** Coste del día con los precios de Restricciones (null si no hay ninguno) */
-export function costeDia({ horasPagadas, km, autobuses }, p) {
-  if (!(p.costeHora > 0 || p.costeKm > 0 || p.costeVehiculoDia > 0)) return null;
-  return horasPagadas * (p.costeHora || 0) + km * (p.costeKm || 0) + autobuses * (p.costeVehiculoDia || 0);
+/** Coste del día con los precios de Restricciones (null si no hay ninguno). Con costeMin, según el convenio */
+export function costeDia({ horasPagadas, km, autobuses, costeMin }, p) {
+  if (!hayPrecios(p)) return null;
+  const personal = costeMin ? costeDeMinutos(costeMin, p).total : (horasPagadas || 0) * (p.costeHora || 0);
+  return personal + (km || 0) * (p.costeKm || 0) + (autobuses || 0) * (p.costeVehiculoDia || 0);
 }
 
 export const OBJETIVOS_VEHICULOS = [
@@ -123,6 +128,7 @@ export const OBJETIVOS_VEHICULOS = [
 export const OBJETIVOS_TURNOS = [
   { id: "conductores", nombre: "Menos conductores", ayuda: "Primero los turnos; a igualdad, menos horas pagadas." },
   { id: "horas", nombre: "Menos horas pagadas", ayuda: "Primero las horas pagadas (el coste de personal); a igualdad, menos turnos." },
+  { id: "coste", nombre: "Menor coste", ayuda: "El coste de personal según el convenio de Restricciones (horas, pluses, extras, mínimo pagado).", precios: ["costeHora"] },
 ];
 
 export const OBJETIVOS = [...OBJETIVOS_VEHICULOS, ...OBJETIVOS_TURNOS, { id: "total", nombre: "Menor coste total", ayuda: "Autobuses, conductores, km y cambios de autobús juntos." }];
@@ -199,13 +205,13 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
   const variantes = [...cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]), { corte: "flexible", metodo: "particion" }];
   const probadas = [];
   for (const dt of variantes) {
-    const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" ? "horas" : "conductores", ...dt }, base.find, null, base.ctx?.geo);
+    const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" || objetivo === "coste" ? objetivo : "conductores", ...dt }, base.find, null, base.ctx?.geo);
     const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
     const r = {
       estrategia: dt, turnos: turnos.length, horasPagadas,
       avisos: turnos.filter(t => t.avisos.length).length,
       piezasMedias: turnos.length ? turnos.reduce((s, t) => s + t.piezas.length, 0) / turnos.length : 0,
-      coste: p.costeHora > 0 ? horasPagadas * p.costeHora : null,
+      coste: hayPrecios(p) ? costeDeMinutos(minutosCoste(turnos, p), p).total : null,
     };
     r.cumple = !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
     r.nombre = nombreEstrategia(dt, p.piezaMax);
@@ -213,7 +219,7 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
     onProgreso?.(probadas.length, variantes.length);
   }
   const exceso = r => Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
-  ordenarPor(probadas, r => [exceso(r), r.avisos, ...(objetivo === "horas" ? [r.horasPagadas, r.turnos] : [r.turnos, r.horasPagadas])]);
+  ordenarPor(probadas, r => [exceso(r), r.avisos, ...(objetivo === "horas" ? [r.horasPagadas, r.turnos] : objetivo === "coste" && r.coste != null ? [r.coste, r.turnos] : [r.turnos, r.horasPagadas])]);
   return { probadas, objetivo };
 }
 
@@ -259,7 +265,7 @@ export function optimizarConjunto(red, cfg = {}, opciones = {}, { onProgreso, co
         estrategia: { ...dv, ...dt }, autobuses: buses.length, turnos: turnos.length, horasPagadas, km: kmReales + kmVacio, kmVacio, cambiosBus,
         desplazamientos: turnos.reduce((s, t) => s + (t.desplazamientos?.length || 0), 0),
         avisos: turnos.filter(t => t.avisos.length).length,
-        coste: buses.length * precios.costeVehiculoDia + horasPagadas * precios.costeHora + (kmReales + kmVacio) * precios.costeKm + cambiosBus * precios.costeCambioBus,
+        coste: buses.length * precios.costeVehiculoDia + costeDeMinutos(minutosCoste(turnos, q), { ...q, ...precios }).total + (kmReales + kmVacio) * precios.costeKm + cambiosBus * precios.costeCambioBus,
       };
       r.cumple = !(p.flotaMax > 0 && r.autobuses > p.flotaMax) && !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
       r.nombre = nombreEstrategia(r.estrategia, p.piezaMax);

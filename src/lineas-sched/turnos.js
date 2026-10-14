@@ -3,6 +3,7 @@
 
 import { particionTurnos } from "../lineas-particion.js";
 import { hm, reloj, kmRecta, claveMezclaTurno } from "./base.js";
+import { costeTurnoEuros, hayPrecios } from "./costes.js";
 import { clavePieza } from "./manual.js";
 
 // 2) Turnos de conductor
@@ -314,7 +315,8 @@ export function asignarTipos(turnos, pOriginal) {
 // ningún tipo, muchísimo (solo se usa si no hay otra forma de cubrir la pieza).
 function costeTurno(e, piezas, p) {
   const porConductor = p.objetivoTurnos === "horas" ? 60 : 600;
-  let c = porConductor + e.trabajo + piezas.length * 5 + (e.cambios || 0) * 5;
+  // «Menor coste»: los € del convenio (× 10, para que pese como un conductor)
+  let c = (p.objetivoTurnos === "coste" && hayPrecios(p) ? costeTurnoEuros({ ...e, piezas }, p) * 10 : porConductor + e.trabajo) + piezas.length * 5 + (e.cambios || 0) * 5;
   if (e.sinValidar) c += 5000;
   else if (p._tipos && !tipoDeTurno(e, p)) c += 900;
   return c;

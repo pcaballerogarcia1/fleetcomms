@@ -1,7 +1,7 @@
 // Scheduling de líneas: Optimizar, el resumen de calendarios y el selector de líneas.
 import { useState } from "react";
 import { TIPOS_DIA } from "../gtfs-red.js";
-import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstrategia, porQueSinTipo } from "../lineas-sched.js";
+import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstrategia, porQueSinTipo, hayPrecios as hayPreciosP } from "../lineas-sched.js";
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lineas-horarios-util.js";
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
 
@@ -190,14 +190,14 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
     if (r.resumen.turnos == null) return r.claveV === claveVDe(id) ? "sinTurnos" : "viejo";
     return r.clave !== claveDe(id) ? "viejo" : "ok";
   };
-  const hayPrecios = precios.costeHora > 0 || precios.costeKm > 0 || precios.costeVehiculoDia > 0;
+  const hayPrecios = hayPreciosP(precios);
   const todas = [...filasTipo, ...filasCal];
   const pendientesCalc = todas.filter(f => estadoDe(f.id) !== "ok").map(f => f.id);
   const bloqueo = lote ? "Ya hay un cálculo en marcha" : ocupado ? "Hay una optimización en marcha" : pendientes ? "Genera primero el escenario con los cambios de Restricciones" : null;
   // totales del periodo (solo calendarios del GTFS, que no se solapan)
   const calc = filasCal.filter(f => porCalendario[f.id]?.resumen);
   const tot = calc.reduce((a, f) => {
-    const r = porCalendario[f.id].resumen, c = r.turnos == null ? null : costeDia(r, precios);
+    const r = porCalendario[f.id].resumen, c = r.turnos == null ? null : costeDia(r, { ...precios, dia: f.id }); // (el recargo de festivo, según el día)
     return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + (r.horasPagadas || 0) * f.dias, km: a.km + r.km * f.dias, kmVacio: a.kmVacio + (r.kmVacio || 0) * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos ?? 0) };
   }, { dias: 0, viajes: 0, horas: 0, km: 0, kmVacio: 0, coste: null, buses: 0, turnos: 0 });
   const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "7px 10px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.card, zIndex: 1 };
@@ -208,7 +208,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
   const fila = f => {
     const r = porCalendario[f.id], est = estadoDe(f.id), x = r?.resumen;
     const viejo = est === "viejo";
-    const c = x && x.turnos != null ? costeDia(x, precios) : null;
+    const c = x && x.turnos != null ? costeDia(x, { ...precios, dia: f.id }) : null;
     const enCurso = lote?.dia === f.id;
     const col = viejo ? C.dim : C.text;
     return (

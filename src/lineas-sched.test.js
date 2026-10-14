@@ -701,3 +701,23 @@ describe("tabla de vacíos por carretera", () => {
     expect(con.tramo("b", "a")).toBeNull(); // cada sentido, el suyo
   });
 });
+
+describe("costes del convenio", () => {
+  it("ordinario, extras, nocturnidad, partido, mínimo, fijo y festivo", async () => {
+    const { minutosTurno, costeDeMinutos } = await import("./lineas-sched/costes.js");
+    const p = { huecoNoPagado: 60, costeHora: 20, costeHoraExtra: 30, horaExtraDesde: 480, plusNocturnidad: 3, plusPartido: 12, costeFijoTurno: 5 };
+    // turno de 21:00 a 06:00 seguido (540 min): 60 de extra, 480 de noche
+    const noche = { inicio: 1260, fin: 1800, trabajo: 540, partidos: 0, piezas: [{ inicio: 1260, fin: 1800 }] };
+    const m = minutosTurno(noche, p);
+    expect(m).toMatchObject({ ordinario: 480, extra: 60, noche: 480 });
+    const c = costeDeMinutos(m, p);
+    expect(c.ordinario).toBe(160); expect(c.extra).toBe(30); expect(c.nocturnidad).toBe(24); expect(c.fijo).toBe(5);
+    // partido de 4 h + 4 h con 5 h de hueco: el hueco no cuenta de noche ni se paga
+    const partido = { inicio: 360, fin: 1080, trabajo: 480, partidos: 1, piezas: [{ inicio: 360, fin: 600 }, { inicio: 900, fin: 1080 }] };
+    expect(costeDeMinutos(minutosTurno(partido, p), p).partido).toBe(12);
+    // mínimo pagado y recargo de festivo
+    const corto = { inicio: 600, fin: 780, trabajo: 180, partidos: 0, piezas: [] };
+    expect(minutosTurno(corto, { ...p, minimoPagado: 360 }).ordinario).toBe(360);
+    expect(costeDeMinutos(minutosTurno(corto, p), { ...p, dia: "festivo", plusFestivoPct: 25 }).festivo).toBe(15);
+  });
+});

@@ -52,6 +52,9 @@ export const PARAMS_DEFECTO = {
   busSigueConductor: true, // después de los turnos: intercambiar autobuses en cabecera para que el conductor no cambie // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado
+  // convenio: plus de nocturnidad (€/h 22–6), plus por partido (€/turno), horas extra (desde X min de trabajo, a €/h),
+  // mínimo pagado por turno (min), coste fijo por turno (€) y recargo de festivo (%)
+  plusNocturnidad: null, plusPartido: null, horaExtraDesde: null, costeHoraExtra: null, minimoPagado: null, costeFijoTurno: null, plusFestivoPct: null,
   flotaMax: null,       // autobuses disponibles (límite del optimizador)
   conductoresMax: null, // conductores disponibles ese día
   // Estrategia (la cambia Optimizar; todas cumplen las restricciones)
