@@ -113,7 +113,7 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
             disabled={delMes.length === 0}
             style={{
               display: "flex", alignItems: "center", gap: 6,
-              background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)",
+              background: "rgba(63,207,142,0.08)", border: "1px solid rgba(63,207,142,0.25)",
               color: C.green, borderRadius: 7, padding: "5px 12px",
               fontSize: 12, fontWeight: 600, cursor: delMes.length === 0 ? "not-allowed" : "pointer",
               opacity: delMes.length === 0 ? 0.4 : 1, fontFamily: font,
@@ -178,7 +178,7 @@ function TablaFichajes({ rows, nombreDe }) {
       <thead>
         <tr style={{ position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
           {["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", ""].map(h => (
-            <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: C.dim, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
+            <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: C.dim, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
           ))}
         </tr>
       </thead>
@@ -196,7 +196,7 @@ function TablaFichajes({ rows, nombreDe }) {
             <td style={{ padding: "8px 14px", color: C.orange, fontFamily: mono, fontWeight: 600 }}>{f.kmRecorridos ?? "—"}</td>
             <td style={{ padding: "8px 14px" }}>
               {f.estado === "abierto" && (
-                <span style={{ fontSize: 10, color: C.green, background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "2px 7px" }}>en curso</span>
+                <span style={{ fontSize: 10, color: C.green, background: "rgba(63,207,142,0.1)", border: "1px solid rgba(63,207,142,0.3)", borderRadius: 4, padding: "2px 7px" }}>en curso</span>
               )}
             </td>
           </tr>

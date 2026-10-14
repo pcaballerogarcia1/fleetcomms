@@ -10,10 +10,10 @@ import { logAudit } from "./audit.js";
 import { COLORES_CAL } from "./lineas-horarios-util.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", green: "#34d399", amber: "#fbbf24", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const irARostering = () => { window.history.pushState({}, "", "/rostering"); window.dispatchEvent(new PopStateEvent("popstate")); };
 
@@ -57,7 +57,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
     }
   }
 
-  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : "#16306a") : "transparent", color: fuerte ? "#cfe0ff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : "#222c58") : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
   const trabajando = !!estado?.trabajando;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => !trabajando && onCerrar()}>
@@ -67,7 +67,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
           Cada día del mes se cubre con los turnos del calendario que circula ese día (laborables, sábados, festivos…). En Rostering, <b style={{ color: C.text }}>Optimizar</b> reparte la plantilla con sus reglas, sin cambiar ningún turno de día.
         </div>
         {estado?.ok ? (
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(52,211,153,.08)", border: `1px solid ${C.green}55` }}>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Enviados {estado.n.toLocaleString("es-ES")} turnos de {estado.dias} días de {MESES[month - 1]}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>En Rostering, ve a {MESES[month - 1]} de {year} y pulsa «Optimizar».</div>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>

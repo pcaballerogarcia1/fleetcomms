@@ -8,11 +8,11 @@ import { useMemo, useState } from "react";
 import { cabecerasDeRed, ID_COCHERA, PARAMS_DEFECTO } from "./lineas-sched.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueText: "#b0ccff", green: "#34d399", amber: "#fbbf24", red: "#f87171", text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = "'Inter',system-ui,sans-serif";
-const mono = "'JetBrains Mono','Courier New',monospace";
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const VECINAS = 12;       // cabeceras más cercanas de cada una
 const RADIO_KM = 25;      // en línea recta
@@ -98,7 +98,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
     await onGuardar({ [r.clave]: [Math.round(km * 10) / 10, min, "m"] });
   };
 
-  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "6px 10px", fontSize: 12, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px" }}>
@@ -126,7 +126,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
             <tbody>
               {vis.slice(0, 600).map(r => {
                 const v = pares[r.clave], est = estimado(r), ed = editando?.clave === r.clave;
-                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 9.5, fontWeight: 700, color: "#fb923c", border: "1px solid #fb923c88", borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
+                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 9.5, fontWeight: 700, color: "#f59e5b", border: "1px solid #f59e5b88", borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
                 return (
                   <tr key={r.clave}>
                     <td style={td}>{pinta(r.a)}</td>

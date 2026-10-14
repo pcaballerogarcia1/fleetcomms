@@ -9,12 +9,12 @@ import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas, pasosP
 import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff", green: "#34d399", orange: "#fb923c", red: "#f87171", amber: "#fbbf24",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = "'Inter',system-ui,sans-serif";
-const mono = "'JetBrains Mono','Courier New',monospace";
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const num = n => Math.round(n).toLocaleString("es-ES");
 
@@ -50,7 +50,7 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
       </span>
     </button>
   );
-  const titulo = { fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, padding: "8px 8px 4px", textTransform: "uppercase" };
+  const titulo = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, fontWeight: 700, padding: "8px 8px 4px", textTransform: "uppercase" };
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
       <button onClick={() => setAbierto(a => !a)} title="Calendario del escenario" style={{ display: "flex", alignItems: "center", gap: 6, maxWidth: ancho, padding: "5px 10px", borderRadius: 6, background: C.surface2, border: `1px solid ${abierto ? C.blue : C.border2}`, color: C.text, fontSize: 11.5, cursor: "pointer", fontFamily: font }}>
@@ -93,7 +93,7 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
                         return (
                           <button key={f} disabled={!c} onClick={() => elegir(c.id)} title={c ? `${fechaLarga(f)} · ${c.nombre}` : `${fechaLarga(f)} · sin servicio en el GTFS`}
                             style={{ height: 20, borderRadius: 4, border: sel ? "1.5px solid #fff" : "1px solid transparent", padding: 0, fontSize: 9.5, fontFamily: mono, cursor: c ? "pointer" : "default",
-                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? "#0b1220" : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
+                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? "#0d0f14" : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
                         );
                       })}
                     </div>
@@ -189,7 +189,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
           {grupos.slice(0, 400).map(g => {
             const fila = (l, variante) => (
               <button key={l.id} onClick={() => { setSel(l.id); setEditando(null); }} style={{ display: "flex", alignItems: "center", gap: 8, width: variante ? "calc(100% - 20px)" : "100%", marginLeft: variante ? 20 : 0, textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
-                {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+                {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
                 <span style={{ flex: 1, fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(x => x.cabecera).join(" ↔ ")}</span>
                 {editadaEn(l) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
               </button>
@@ -201,7 +201,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
               <div key={g.clave}>
                 <button onClick={() => setAbiertos(prev => { const n = new Set(prev); if (n.has(g.clave)) n.delete(g.clave); else n.add(g.clave); return n; })}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
-                  <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
+                  <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
                   <span style={{ flex: 1, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes</span>
                   {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
                 </button>
@@ -276,7 +276,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
               return (
                 <div key={s.dir} style={{ background: C.card, border: `1px solid ${editado ? C.amber + "88" : C.border}`, borderRadius: 10, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ minWidth: 34, padding: "2px 6px", borderRadius: 5, background: linea.color, color: "#0b1220", fontSize: 12, fontWeight: 800, textAlign: "center" }}>{linea.nombre}</span>
+                    <span style={{ minWidth: 34, padding: "2px 6px", borderRadius: 5, background: linea.color, color: "#0d0f14", fontSize: 12, fontWeight: 800, textAlign: "center" }}>{linea.nombre}</span>
                     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.dir === 0 ? C.green : C.amber }}>{s.dir === 0 ? "IDA" : "VUELTA"}</span>
                     <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>→ {s.cabecera}</span>
                     <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, fontFamily: mono }}>{salidas.length} salidas</span>
@@ -309,7 +309,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
                               </span>
                             ) : (
                               <button key={m} onClick={() => setEditando({ clave, m, texto: hhmmTxt(m) })} title={`${hhmmTxt(m)} · pincha para cambiarla o quitarla`}
-                                style={{ background: gtfs && !gtfs.has(m) ? "rgba(52,211,153,0.15)" : "none", border: `1px solid ${gtfs && !gtfs.has(m) ? C.green + "88" : "transparent"}`, color: gtfs && !gtfs.has(m) ? C.green : C.muted, borderRadius: 4, padding: "0 4px", marginRight: 4, fontSize: 12, fontFamily: mono, cursor: "pointer" }}>
+                                style={{ background: gtfs && !gtfs.has(m) ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${gtfs && !gtfs.has(m) ? C.green + "88" : "transparent"}`, color: gtfs && !gtfs.has(m) ? C.green : C.muted, borderRadius: 4, padding: "0 4px", marginRight: 4, fontSize: 12, fontFamily: mono, cursor: "pointer" }}>
                                 {String(m % 60).padStart(2, "0")}
                               </button>
                             )))}

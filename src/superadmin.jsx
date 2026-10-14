@@ -9,16 +9,15 @@ import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { PanelSalud } from "./superadmin-salud.jsx";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
-  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff",
-  green: "#34d399", greenDim: "#082a18",
-  orange: "#fb923c", red: "#f87171", amber: "#fbbf24",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
+  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff",
+  green: "#3fcf8e", greenDim: "#0f2a1f",
+  orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = '"Inter", system-ui, sans-serif';
-const mono = '"JetBrains Mono", monospace';
-
+const font = "var(--font)";
+const mono = "var(--mono)";
 const S = {
   input: {
     width: "100%", background: "rgba(255,255,255,0.04)",
@@ -62,7 +61,7 @@ function PlanBadge({ plan }) {
       fontSize: 9, padding: "2px 8px", borderRadius: 10,
       background: `${color}22`, color,
       border: `1px solid ${color}44`,
-      textTransform: "uppercase", letterSpacing: 1,
+      textTransform: "uppercase", letterSpacing: 0.5,
     }}>{plan ?? "basic"}</span>
   );
 }
@@ -96,7 +95,7 @@ function LoginSA({ onLogin }) {
     <div style={{ background: C.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: font }}>
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Operanzia</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>Operanzia</div>
           <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>Panel de Control</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso restringido — superadmin</div>
         </div>
@@ -112,7 +111,7 @@ function LoginSA({ onLogin }) {
               onKeyDown={e => e.key === "Enter" && go()} style={S.input} autoComplete="current-password" />
           </div>
           {err && (
-            <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16 }}>
+            <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16 }}>
               ⚠ {err}
             </div>
           )}
@@ -511,13 +510,13 @@ function SuperAdminPanel({ sesion }) {
       {/* Header */}
       <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase" }}>Operanzia</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase" }}>Operanzia</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Panel de Control</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 12, color: C.text }}>{sesion.nombre}</div>
-            <div style={{ fontSize: 10, color: C.blue, letterSpacing: 1, textTransform: "uppercase" }}>Superadmin</div>
+            <div style={{ fontSize: 10, color: C.blue, letterSpacing: 0.5, textTransform: "uppercase" }}>Superadmin</div>
           </div>
           <button onClick={() => signOut(auth)} style={{ ...S.btnGhost, fontSize: 11, padding: "5px 12px" }}>
             Cerrar sesión
@@ -600,13 +599,13 @@ function SuperAdminPanel({ sesion }) {
         )}
 
         {err && (
-          <div style={{ background: "#3b0000", border: "1px solid #f87171", borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: "#f87171", fontSize: 13, wordBreak: "break-all" }}>
+          <div style={{ background: "#3b0000", border: "1px solid #f26d6d", borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: "#f26d6d", fontSize: 13, wordBreak: "break-all" }}>
             ⚠ {err}
           </div>
         )}
 
         {/* Lista de orgs */}
-        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 }}>
           Organizaciones ({orgs.length})
         </div>
 

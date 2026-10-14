@@ -3,26 +3,20 @@
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 export const C = {
-  bg:"#0f1623", card:"#172035", surface2:"#1e2d48",
-  border:"rgba(88,130,225,0.22)", border2:"rgba(88,130,225,0.40)",
-  blue:"#5c9bff", blueDim:"#0d2550", blueText:"#b0ccff",
-  green:"#34d399", greenDim:"#082a18",
-  orange:"#fb923c", red:"#f87171", amber:"#fbbf24",
-  text:"#e2eeff", muted:"#8aa5cc", dim:"#4a5f82",
+  bg:"#0b0d12", card:"#12151c", surface2:"#181c25",
+  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.14)",
+  blue:"#5b7cfa", blueDim:"#1a2142", blueText:"#b4c3ff",
+  green:"#3fcf8e", greenDim:"#0f2a1f",
+  orange:"#f59e5b", red:"#f26d6d", amber:"#f5b84a",
+  text:"#e6e8ee", muted:"#9aa3b2", dim:"#5d6574",
 };
-export const font = "'Inter',system-ui,sans-serif";
-export const mono = "'JetBrains Mono','Courier New',monospace";
-
+export const font = "var(--font)";
+export const mono = "var(--mono)";
 if (typeof document !== "undefined" && !document.getElementById("sched-styles")) {
   const s = document.createElement("style");
   s.id = "sched-styles";
   s.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     *,*::before,*::after{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
-    body{margin:0;background:#0f1117;color:#f0f4f8;font-family:'Inter',system-ui,sans-serif;}
-    ::-webkit-scrollbar{width:5px;height:5px;}
-    ::-webkit-scrollbar-track{background:#161b27;}
-    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
     @keyframes sched-fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
     @keyframes sched-spin{to{transform:rotate(360deg)}}
     @keyframes sched-shimmer{0%,100%{opacity:1}50%{opacity:.6}}
@@ -35,12 +29,12 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
 
 
 const BARRIO_PALETTE = [
-  "#4f8ef7","#34d399","#fb923c","#f87171",
-  "#a78bfa","#fbbf24","#f472b6","#22d3ee","#818cf8","#4ade80",
+  "#5b7cfa","#3fcf8e","#f59e5b","#f26d6d",
+  "#a78bfa","#f5b84a","#f472b6","#22d3ee","#818cf8","#4ade80",
 ];
 const _barrioCache = {};
 export function barrioColor(b) {
-  if (!b) return "#8b95a5";
+  if (!b) return "#9aa3b2";
   if (_barrioCache[b]) return _barrioCache[b];
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;

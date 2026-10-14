@@ -87,7 +87,7 @@ export function TabInventario({ layers, projectId, orgId }) {
   const res = useMemo(() => resumenInventario(lista), [lista]);
 
   const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 9.5, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 8px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
+  const th = { fontSize: 10.5, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 8px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
   const td = { padding: "4px 8px", borderTop: `1px solid ${C.border}` };
   const btn = (principal) => ({ padding: "7px 13px", borderRadius: 7, border: principal ? "none" : `1px solid ${C.border2}`, background: principal ? C.blue : "none", color: principal ? "#fff" : C.text, fontSize: 12, fontWeight: principal ? 600 : 400, cursor: "pointer", fontFamily: font });
   const editable = (c, campo, ancho, tipo = "text") => (
@@ -133,7 +133,7 @@ export function TabInventario({ layers, projectId, orgId }) {
             <thead><tr>{["Código", "RFID", "Tipo", "Litros", "Fracción", "Estado", "Instalado", "Revisado", "Lavado", "Notas", "Dónde", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {vis.slice(0, paginas * POR_PAGINA).map(c => (
-                <tr key={c.id} style={cambiados.has(c.id) ? { background: "rgba(92,155,255,0.06)" } : undefined}>
+                <tr key={c.id} style={cambiados.has(c.id) ? { background: "rgba(91,124,250,0.06)" } : undefined}>
                   <td style={td}>{editable(c, "codigo", 100)}</td>
                   <td style={td}>{editable(c, "rfid", 140)}</td>
                   <td style={td}>{editable(c, "tipo", 120)}</td>

@@ -129,7 +129,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
       style={{ ...inputStyle, width }} />
   );
   const sectionTitle = t => (
-    <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, margin: "14px 0 6px" }}>{t}</div>
+    <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, margin: "14px 0 6px" }}>{t}</div>
   );
 
   return (
@@ -177,7 +177,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
           {lectura && (
             <div style={{ border: `1px solid ${C.blue}55`, background: `${C.blue}10`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
               {lectura.sinTexto ? (
-                <div style={{ fontSize: 12, color: C.amber || "#fbbf24", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: C.amber || "#f5b84a", lineHeight: 1.5 }}>
                   Este PDF es una imagen escaneada: no tiene texto que leer. Rellena las reglas a mano con el PDF al lado, o
                   busca la versión en texto del convenio en el BOE o el boletín de tu provincia.
                 </div>
@@ -336,7 +336,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
     <ModalShell title="Resultado de la optimización" onClose={onClose} width={560}>
       <div style={{
         fontSize: 13, fontWeight: 600, marginBottom: 12,
-        color: allCovered ? "#34d399" : "#fbbf24",
+        color: allCovered ? "#3fcf8e" : "#f5b84a",
       }}>
         {result.covered} de {result.total} turnos cubiertos
         {result.outOfMonth > 0 && <span style={{ color: C.dim, fontWeight: 400, fontSize: 11 }}> · {result.outOfMonth} fuera de este mes (no se optimizan)</span>}
@@ -344,7 +344,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
 
       {result.moves?.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
             Movidos de día para cumplir las reglas ({result.moves.length})
           </div>
           <div style={{ maxHeight: 140, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
@@ -363,7 +363,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
 
       {result.uncovered.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
             Sin cubrir
           </div>
           <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 14 }}>
@@ -381,7 +381,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
         </>
       )}
 
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
         Carga por trabajador
       </div>
       <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6 }}>
@@ -401,7 +401,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
                 <td style={{ padding: "3px 8px" }}>{nameOf(s.id)}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.hours} / {s.maxHoras || "—"}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.days}</td>
-                <td style={{ padding: "3px 8px", textAlign: "right", color: rules.maxDiasSeguidos && s.maxRun > rules.maxDiasSeguidos ? "#f87171" : C.text }}>{s.maxRun}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right", color: rules.maxDiasSeguidos && s.maxRun > rules.maxDiasSeguidos ? "#f26d6d" : C.text }}>{s.maxRun}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.weekends}</td>
               </tr>
             ))}

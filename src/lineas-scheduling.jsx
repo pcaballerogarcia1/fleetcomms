@@ -450,7 +450,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const nLineas = params.lineas ? params.lineas.length : red.lineas.length;
   const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + viajesDia(x, params.dia, red, cfg[l.id]), 0), 0);
   const btnSec = { padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
-  const btnExcel = { padding: "5px 10px", background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.3)", color: "#34d399", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
+  const btnExcel = { padding: "5px 10px", background: "rgba(63,207,142,.08)", border: "1px solid rgba(63,207,142,.3)", color: "#3fcf8e", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
   const icoDescarga = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
   const sep = <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />;
   const infoCal = porCalendario[dia];
@@ -502,7 +502,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
                   <div onMouseLeave={() => setMenuExportar(false)} style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: 6, minWidth: 250, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
                     {[["t", "Excel"], ["autobuses", "Autobuses (con los vacíos)"], ["turnos", "Turnos (viaje a viaje)", true], ["resumen", "Resumen de turnos", true], ["nomina", "Nómina (horas y €)", true], ["todo", "Todo en un libro"],
                       ["t", "PDF para imprimir"], ["pdf-turnos", "Hojas de servicio (una por turno)", true], ["pdf-autobuses", "Hojas de autobús (una por autobús)"]].map(([k, t, conTurnos]) => k === "t"
-                      ? <div key={t} style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, padding: "6px 8px 3px" }}>{t}</div>
+                      ? <div key={t} style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, padding: "6px 8px 3px" }}>{t}</div>
                       : <button key={k} onClick={() => exportar(k)} disabled={conTurnos && !res.turnos} title={conTurnos && !res.turnos ? "Primero hay que hacer los turnos (paso 2)" : undefined}
                         style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 5, border: "none", background: "none", color: conTurnos && !res.turnos ? C.dim : C.text, fontSize: 12, cursor: conTurnos && !res.turnos ? "not-allowed" : "pointer", fontFamily: font }}>{t}</button>)}
                   </div>
@@ -525,19 +525,19 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
             <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} style={{
-              padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0b1220" : "#fff",
+              padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0d0f14" : "#fff",
               fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0, whiteSpace: "nowrap",
             }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
           {avisoPlanning && (
-            <div style={{ padding: "7px 16px", fontSize: 12, color: "#0b1220", background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+            <div style={{ padding: "7px 16px", fontSize: 12, color: "#0d0f14", background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
               <span>⚠ <b>Se ha modificado el Planning</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
-              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: "#0b1220", border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
+              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: "#0d0f14", border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
             </div>
           )}
           {manualesActuales.length > 0 && (
-            <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(92,155,255,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(91,124,250,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
               <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
               <button onClick={deshacer} disabled={calculando} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 5, padding: "2px 9px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Deshacer el último</button>
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
@@ -552,7 +552,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             optJunto={optJunto} onOptimizarJunto={optimizarJunto} onAplicarJunto={aplicarJunto}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
           {res && ((params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax) || (params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax)) && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(242,109,109,0.08)", borderBottom: "1px solid rgba(242,109,109,0.3)" }}>
               El escenario no cabe en los recursos disponibles:
               {params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax && ` necesita ${num(res.kpis.autobuses)} autobuses y hay ${num(params.flotaMax)}.`}
               {params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax && ` Necesita ${num(res.kpis.turnos)} conductores y hay ${num(params.conductoresMax)}.`}
@@ -562,12 +562,12 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
           {res?.turnos && <PorQueSinTipo res={res} p={params} onRestricciones={() => setShowC(true)} />}
 
           {res && !res.conCocheras && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(251,191,36,0.08)", borderBottom: "1px solid rgba(251,191,36,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
               Sin cocheras: no se calculan las salidas ni las vueltas a cochera ni sus km en vacío. Añádelas en Planning («Cocheras»).
             </div>
           )}
           {res?.aproximado && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(251,191,36,0.08)", borderBottom: "1px solid rgba(251,191,36,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
               Esta red se importó sin las horas de salida de cada viaje: se han repartido entre la primera y la última de cada sentido. Vuelve a importar el GTFS en Planning («Sustituir red») para usar los horarios exactos.
             </div>
           )}

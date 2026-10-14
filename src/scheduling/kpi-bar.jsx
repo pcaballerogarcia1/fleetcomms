@@ -61,9 +61,9 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
       ))}
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
         {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
-        <button onClick={() => setAbierto(a => !a)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 7, border: `1px solid ${abierto ? C.blue : C.border2}`, background: abierto ? "rgba(92,155,255,0.12)" : "none", color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
+        <button onClick={() => setAbierto(a => !a)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 7, border: `1px solid ${abierto ? C.blue : C.border2}`, background: abierto ? "rgba(91,124,250,0.12)" : "none", color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
           Todos los indicadores {abierto ? "▴" : "▾"}
-          {avisos > 0 && <span style={{ background: "rgba(248,113,113,0.18)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10.5, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
+          {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10.5, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
         </button>
       </div>
     </div>
@@ -115,7 +115,7 @@ export function ClockBadge({ size = 11 }) {
   return (
     <div title="Tiene franja horaria / hora fija" style={{
       position: "absolute", top: -4, right: -4, width: size, height: size, borderRadius: "50%",
-      background: "#fbbf24", border: "1.5px solid #000", zIndex: 6,
+      background: "#f5b84a", border: "1.5px solid #000", zIndex: 6,
       display: "flex", alignItems: "center", justifyContent: "center",
       boxShadow: "0 1px 3px rgba(0,0,0,.7)", pointerEvents: "none",
     }}>

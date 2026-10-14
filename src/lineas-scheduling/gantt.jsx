@@ -66,7 +66,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
       style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 4, fontSize: 10, opacity: anclados.includes(r.id) ? 1 : 0.28, filter: anclados.includes(r.id) ? "none" : "grayscale(1)" }}>📌</button>
   );
   const pintarFila = (r, ri) => (
-          <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(92,155,255,0.18)" : ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
+          <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(91,124,250,0.18)" : ri % 2 ? "rgba(23,32,53,0.45)" : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
             <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 4, background: ri % 2 ? "#141d30" : C.bg, display: "flex", alignItems: "center", padding: "0 4px", borderRight: `1px solid ${C.border}` }}>
               {vista === "tabla" ? COLS.map(col => (
                 <div key={col.k} title={col.k === "avisos" && r.avisos.length ? r.avisos.map(a => `• ${a}`).join("\n") : col.k === "nombre" && r.detalle ? r.detalle : undefined}
@@ -83,10 +83,10 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
               )}
             </div>
             <div style={{ position: "relative", width: ancho, flexShrink: 0 }}>
-              {horas.map(h => <div key={h} style={{ position: "absolute", left: X(h), top: 0, bottom: 0, width: 1, background: "rgba(88,130,225,0.07)" }} />)}
+              {horas.map(h => <div key={h} style={{ position: "absolute", left: X(h), top: 0, bottom: 0, width: 1, background: "rgba(148,163,184,0.07)" }} />)}
               {r.vacios.map((x, i) => (
                 <div key={`v${i}`} title={`Sin servicio (en cochera) ${hhmm(x.inicio)}–${hhmm(x.fin)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.36, height: ROW_H * 0.28,
-                  background: "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c55 6px, #fb923c55 12px)", borderRadius: 3, opacity: 0.6 }} />
+                  background: "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #f59e5b55 6px, #f59e5b55 12px)", borderRadius: 3, opacity: 0.6 }} />
               ))}
               {r.tramosPausa.map((x, i) => (
                 <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
@@ -143,7 +143,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                       color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
                     } : {
                       position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: 4,
-                      background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0b1220", fontSize: 9.5, fontWeight: 800,
+                      background: x.color + (x.dir === 1 ? "b0" : "e0"), border: `1px solid ${x.color}`, color: "#0d0f14", fontSize: 9.5, fontWeight: 800,
                       overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 3, lineHeight: `${ROW_H - 14}px`,
                     }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
@@ -191,7 +191,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
           <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 6, background: C.card, display: "flex", alignItems: "center", padding: "0 4px", height: 30, borderRight: `1px solid ${C.border}` }}>
             {vista === "tabla" ? COLS.map(col => (
               <div key={col.k} title={col.t} onClick={() => col.k !== "avisos" && setOrden(o => (o?.k === col.k ? (o.dir === 1 ? { k: col.k, dir: -1 } : null) : { k: col.k, dir: 1 }))}
-                style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontSize: 9, color: orden?.k === col.k ? C.blue : C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, cursor: col.k !== "avisos" ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden" }}>
+                style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontSize: 10.5, color: orden?.k === col.k ? C.blue : C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, cursor: col.k !== "avisos" ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden" }}>
                 {col.k === "avisos" ? "!" : col.l}{orden?.k === col.k ? (orden.dir === 1 ? " ↑" : " ↓") : ""}
               </div>
             )) : <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, paddingLeft: 8 }}>{modo === "vehicles" ? "AUTOBÚS" : "TURNO"}</span>}
@@ -203,7 +203,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
 
         {arr && (
           <div {...zonaDe("nuevo")} style={{ position: "sticky", top: 30, left: 0, zIndex: 6, width: "100%", maxWidth: "100vw", height: 30, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 600,
-            background: sobre === "nuevo" ? "rgba(52,211,153,0.25)" : "rgba(52,211,153,0.10)", color: C.green, border: `1px dashed ${C.green}`, boxSizing: "border-box" }}>
+            background: sobre === "nuevo" ? "rgba(63,207,142,0.25)" : "rgba(63,207,142,0.10)", color: C.green, border: `1px dashed ${C.green}`, boxSizing: "border-box" }}>
             Suelta aquí para {modo === "vehicles" ? "un autobús nuevo" : "un turno nuevo"} · o sobre {modo === "vehicles" ? "otro autobús" : "otro turno"}
           </div>
         )}
@@ -245,7 +245,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
       {tip && (
         <div style={{ position: "fixed", left: Math.min(tip.cx + 14, window.innerWidth - 280), top: Math.max(tip.cy - 80, 8), background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "11px 14px", zIndex: 2000, boxShadow: "0 8px 28px rgba(0,0,0,.6)", fontSize: 12, color: C.text, minWidth: 200, maxWidth: 280, pointerEvents: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <span style={{ minWidth: 30, padding: "1px 5px", borderRadius: 4, background: tip.x.color, color: tip.x.vacio ? "#fff" : "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{tip.x.nombre}</span>
+            <span style={{ minWidth: 30, padding: "1px 5px", borderRadius: 4, background: tip.x.color, color: tip.x.vacio ? "#fff" : "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{tip.x.nombre}</span>
             <span style={{ fontSize: 10.5, color: C.muted }}>{tip.x.sentido}</span>
           </div>
           <div style={{ fontFamily: mono, fontSize: 11, color: C.text }}>{hhmm(tip.x.dep)} {nombre(tip.x.o)}</div>

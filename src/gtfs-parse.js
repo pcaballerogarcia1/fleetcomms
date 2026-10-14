@@ -119,7 +119,7 @@ export async function leerCsv(blob, entries, file, onRow, onBytes) {
 }
 
 // ── Utilidades ───────────────────────────────────────────────────────
-export const PALETA = ["#5c9bff", "#34d399", "#fb923c", "#f87171", "#a78bfa", "#fbbf24", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
+export const PALETA = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f26d6d", "#a78bfa", "#f5b84a", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
 
 export function tipoRuta(t) {
   const n = Number(t);

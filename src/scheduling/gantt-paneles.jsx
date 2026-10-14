@@ -2,122 +2,74 @@
 // tooltip, panel de detalle y reasignación, jornada media y tareas sin asignar).
 
 
+import { ChevronLeft, ChevronRight, Minus, Plus, Rows2, Rows3, TriangleAlert } from "lucide-react";
 import { minToTime } from "../vrp-engine.js";
-import { C, barrioColor, fmtDurHM, font, mono } from "./estilo.js";
+import { C, barrioColor, fmtDurHM, mono } from "./estilo.js";
 import { ROW_H, UNASSIGNED_RENDER_CAP, ZOOM_STEPS } from "./gantt-comun.js";
 import { ClockBadge } from "./kpi-bar.jsx";
 
 export function BarraGantt({ cambiarVista, compactDayNav, days, nombreDia = d => `Día ${d + 1}`, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }) {
+  const etiqueta = txt => <span style={{ fontSize: 12, color: C.dim, marginRight: 2 }}>{txt}</span>;
+  const pequeno = { height: 26, fontSize: 12 };
   return (
     <>
       {/* ── Toolbar ── */}
       <div style={{
-        flexShrink: 0, background: C.surface2, borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "center", gap: 6, padding: "5px 16px", flexWrap: "wrap",
+        flexShrink: 0, background: C.bg, borderBottom: `1px solid ${C.border}`,
+        display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", flexWrap: "wrap",
       }}>
-        {/* Vista */}
-        <div style={{ display: "flex", gap: 2, background: C.card, borderRadius: 6, padding: 2, marginRight: 8 }}>
+        <div className="op-seg">
           {[["tabla", "Tabla"], ["compacta", "Compacta"]].map(([v, l]) => (
-            <button key={v} onClick={() => cambiarVista(v)} style={{ padding: "2px 9px", borderRadius: 4, border: "none", fontSize: 10, fontFamily: font, cursor: "pointer", fontWeight: 600, background: vista === v ? C.blue : "transparent", color: vista === v ? "#fff" : C.dim }}>{l}</button>
+            <button key={v} onClick={() => cambiarVista(v)} className={vista === v ? "op-on" : ""}>{l}</button>
           ))}
         </div>
-        {/* Zoom */}
-        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginRight: 4 }}>Zoom</span>
-        <button onClick={zoomOut} style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: C.muted, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <span style={{ fontSize: 11, color: C.text, fontFamily: mono, minWidth: 28, textAlign: "center" }}>{zoomLabel}</span>
-        <button onClick={zoomIn}  style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: C.muted, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <div style={{ width: 1, height: 16, background: C.border, margin: "0 4px" }} />
-        {ZOOM_STEPS.map(z => (
-          <button key={z} onClick={() => setZoom(z)} style={{
-            padding: "2px 8px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
-            border: `1px solid ${pxPerMin === z ? C.blue : C.border}`,
-            background: pxPerMin === z ? C.blueDim : "none",
-            color: pxPerMin === z ? C.blueText : C.dim,
-            transition: "all .1s",
-          }}>{z}×</button>
-        ))}
-
-        {/* Sort */}
-        <div style={{ width: 1, height: 16, background: C.border, margin: "0 4px" }} />
-        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginRight: 2 }}>Ordenar</span>
-        {[
-          { key: "salida_asc",    label: "Salida ↑" },
-          { key: "salida_desc",   label: "Salida ↓" },
-          { key: "servicio_asc",  label: "1ª parada ↑" },
-          { key: "servicio_desc", label: "1ª parada ↓" },
-        ].map(({ key, label }) => (
-          <button key={key} onClick={() => setGanttSort(s => s === key ? "default" : key)} style={{
-            padding: "2px 8px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
-            border: `1px solid ${ganttSort === key ? C.blue : C.border}`,
-            background: ganttSort === key ? C.blueDim : "none",
-            color: ganttSort === key ? C.blueText : C.dim,
-            transition: "all .1s",
-          }}>{label}</button>
-        ))}
+        <div className="op-sep" />
+        {etiqueta("Zoom")}
+        <div className="op-seg">
+          <button onClick={zoomOut} title="Alejar"><Minus size={13} style={{ verticalAlign: "-2px" }} /></button>
+          {ZOOM_STEPS.map(z => <button key={z} onClick={() => setZoom(z)} className={pxPerMin === z ? "op-on" : ""}>{z}×</button>)}
+          <button onClick={zoomIn} title="Acercar"><Plus size={13} style={{ verticalAlign: "-2px" }} /></button>
+        </div>
+        <span style={{ fontSize: 12, color: C.muted, minWidth: 30 }}>{zoomLabel}</span>
+        <div className="op-sep" />
+        {etiqueta("Ordenar")}
+        <div className="op-seg">
+          {[
+            { key: "salida_asc", label: "Salida ↑" },
+            { key: "salida_desc", label: "Salida ↓" },
+            { key: "servicio_asc", label: "1ª parada ↑" },
+            { key: "servicio_desc", label: "1ª parada ↓" },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setGanttSort(s => s === key ? "default" : key)} className={ganttSort === key ? "op-on" : ""}>{label}</button>
+          ))}
+        </div>
 
         {totals.conAviso > 0 && (
-          <span title="Filas del día con avisos de reglas — mira la columna ! de la tabla" style={{ marginLeft: 8, fontSize: 10, fontFamily: mono, color: C.red, fontWeight: 700 }}>
-            ! {totals.conAviso} con avisos
+          <span title="Filas del día con avisos de reglas — mira la columna ! de la tabla" style={{ marginLeft: 4, fontSize: 12, color: C.red, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <TriangleAlert size={13} /> {totals.conAviso} con avisos
           </span>
         )}
 
-        {/* Day navigation */}
         {days > 1 && <>
-          <div style={{ width: 1, height: 16, background: C.border, margin: "0 8px" }} />
-          <button onClick={() => setSelectedDay(d => Math.max(0, d - 1))} disabled={selectedDay === 0}
-            style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: selectedDay === 0 ? C.dim : C.muted, cursor: selectedDay === 0 ? "default" : "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-
+          <div className="op-sep" style={{ marginLeft: "auto" }} />
+          <button onClick={() => setSelectedDay(d => Math.max(0, d - 1))} disabled={selectedDay === 0} className="op-btn op-fantasma op-icono" style={{ ...pequeno, width: 26 }} title="Día anterior"><ChevronLeft size={15} /></button>
           {compactDayNav ? (
-            /* Compact: input + total */
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <input
-                type="number" min="1" max={days} value={selectedDay + 1}
+              <input type="number" min="1" max={days} value={selectedDay + 1}
                 onChange={e => { const v = parseInt(e.target.value, 10) - 1; if (v >= 0 && v < days) setSelectedDay(v); }}
-                style={{
-                  width: 48, background: C.card, border: `1px solid ${C.green}55`,
-                  color: C.green, borderRadius: 5, padding: "1px 6px",
-                  fontSize: 11, fontFamily: mono, fontWeight: 700,
-                  textAlign: "center", outline: "none",
-                }}
-              />
-              <span style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>/ {days}</span>
+                className="op-input" style={{ width: 56, height: 26, padding: "0 6px", textAlign: "center", fontSize: 12, fontWeight: 600 }} />
+              <span style={{ fontSize: 12, color: C.dim }}>de {days}</span>
             </div>
           ) : (
-            /* Expanded: all day pills */
-            Array.from({ length: days }, (_, d) => (
-              <button key={d} onClick={() => setSelectedDay(d)} style={{
-                padding: "2px 10px", borderRadius: 4, fontSize: 10, fontFamily: mono, cursor: "pointer",
-                border: `1px solid ${selectedDay === d ? C.green : C.border}`,
-                background: selectedDay === d ? C.greenDim : "none",
-                color: selectedDay === d ? C.green : C.dim,
-                fontWeight: selectedDay === d ? 700 : 400,
-                transition: "all .1s",
-              }}>{nombreDia(d)}</button>
-            ))
+            <div className="op-seg">
+              {Array.from({ length: days }, (_, d) => (
+                <button key={d} onClick={() => setSelectedDay(d)} className={selectedDay === d ? "op-on" : ""}>{nombreDia(d)}</button>
+              ))}
+            </div>
           )}
-
-          <button onClick={() => setSelectedDay(d => Math.min(days - 1, d + 1))} disabled={selectedDay === days - 1}
-            style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`, background: "none", color: selectedDay === days - 1 ? C.dim : C.muted, cursor: selectedDay === days - 1 ? "default" : "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
-
-          {/* Toggle compact/expanded */}
-          <button
-            onClick={() => setCompactDayNav(v => !v)}
-            title={compactDayNav ? "Mostrar todos los días" : "Ocultar días"}
-            style={{
-              width: 22, height: 22, borderRadius: 5, border: `1px solid ${C.border}`,
-              background: "none", color: C.dim, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all .12s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              {compactDayNav
-                ? <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
-                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>
-              }
-            </svg>
+          <button onClick={() => setSelectedDay(d => Math.min(days - 1, d + 1))} disabled={selectedDay === days - 1} className="op-btn op-fantasma op-icono" style={{ ...pequeno, width: 26 }} title="Día siguiente"><ChevronRight size={15} /></button>
+          <button onClick={() => setCompactDayNav(v => !v)} title={compactDayNav ? "Mostrar todos los días" : "Ocultar días"} className="op-btn op-fantasma op-icono" style={{ ...pequeno, width: 26 }}>
+            {compactDayNav ? <Rows3 size={14} /> : <Rows2 size={14} />}
           </button>
         </>}
       </div>
@@ -257,7 +209,7 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
               pueden ver y elegir directamente sobre el Gantt (resaltado). */}
           {onScheduleChange && rows.length > 1 && (
             <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Mover a</div>
+              <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Mover a</div>
               <div style={{ fontSize: 9.5, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>
                 Los huecos válidos también se resaltan en el Gantt — haz clic ahí para elegir un momento concreto.
               </div>
@@ -301,7 +253,7 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
           {/* All campos */}
           {Object.keys(stackPanel.task.campos || {}).length > 0 && (
             <div style={{ padding: "10px 16px" }}>
-              <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Datos</div>
+              <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>Datos</div>
               {Object.entries(stackPanel.task.campos).filter(([, v]) => v != null && String(v).trim()).map(([k, v]) => (
                 <div key={k} style={{ display: "flex", gap: 8, marginBottom: 5, fontSize: 11 }}>
                   <span style={{ color: C.dim, minWidth: 80, flexShrink: 0, textOverflow: "ellipsis", overflow: "hidden" }}>{k}</span>
@@ -333,7 +285,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
           flexShrink: 0, background: C.card, borderTop: `1px solid ${C.border}`,
           padding: "8px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Jornada media</span>
+          <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Jornada media</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.blueText, fontFamily: mono }}>{fmtDurHM(jornadaStats.avg)}</span>
           <span style={{ fontSize: 11, color: C.dim, fontFamily: mono }}>
             mín {fmtDurHM(jornadaStats.min)} · máx {fmtDurHM(jornadaStats.max)}
@@ -356,8 +308,8 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
             width: "100%", display: "flex", alignItems: "center", gap: 8,
             padding: "6px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
           }}>
-            <span style={{ fontSize: 9, color: C.red, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
-            <span style={{ background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
+            <span style={{ fontSize: 10.5, color: C.red, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
+            <span style={{ background: "rgba(242,109,109,0.12)", border: "1px solid rgba(242,109,109,0.3)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
             <span style={{ fontSize: 10, color: C.dim }}>arrastra una parada a una fila para colocarla</span>
             <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{unassignedOpen ? "▲" : "▼"}</span>
           </button>

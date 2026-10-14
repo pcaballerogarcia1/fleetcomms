@@ -10,11 +10,11 @@ import { watchRed, watchCfg, guardarCfgLinea, tiempoEfectivo } from "./lineas-st
 import { logAudit } from "./audit.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueText: "#b0ccff", green: "#34d399", amber: "#fbbf24", red: "#f87171", text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = "'Inter',system-ui,sans-serif";
-const mono = "'JetBrains Mono','Courier New',monospace";
+const font = "var(--font)";
+const mono = "var(--mono)";
 const MIN_VIAJES = 5; // para «usar todos»: franjas con al menos estos viajes medidos
 const fechaLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const pct = x => (x == null ? "—" : `${Math.round(x * 100)} %`);
@@ -56,7 +56,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
     logAudit({ modulo: "Analytics", accion: "Aplicó tiempos reales a Planning", detalle: `${n} franjas` });
   };
 
-  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "right", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "right", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
   const td = { padding: "6px 10px", fontSize: 12, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap", textAlign: "right", fontFamily: mono, color: C.text };
   const tarjeta = (v, l, sub, color) => (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", minWidth: 170 }}>
@@ -94,7 +94,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <label style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><input type="checkbox" checked={soloDesvio} onChange={e => setSoloDesvio(e.target.checked)} style={{ accentColor: C.blue }} />Solo las que se desvían 2 min o más</label>
           <button onClick={() => window.confirm(`¿Usar el tiempo real en ${aplicables.length} franjas (con ${MIN_VIAJES} viajes medidos o más)?`) && usar(aplicables)} disabled={!aplicables.length}
-            style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.green}88`, background: "rgba(52,211,153,.1)", color: C.green, fontSize: 11.5, fontWeight: 600, cursor: aplicables.length ? "pointer" : "not-allowed", opacity: aplicables.length ? 1 : 0.5, fontFamily: font }}>
+            style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.green}88`, background: "rgba(63,207,142,.1)", color: C.green, fontSize: 11.5, fontWeight: 600, cursor: aplicables.length ? "pointer" : "not-allowed", opacity: aplicables.length ? 1 : 0.5, fontFamily: font }}>
             Usar el tiempo real en todas ({aplicables.length})
           </button>
         </div>

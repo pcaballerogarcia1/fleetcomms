@@ -10,14 +10,13 @@ import {
 } from "recharts";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
-  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
-  blue: "#5c9bff", green: "#34d399", orange: "#fb923c", red: "#f87171", purple: "#a78bfa",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
+  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
+  blue: "#5b7cfa", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d", purple: "#a78bfa",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
-
+const font = "var(--font)";
+const mono = "var(--mono)";
 const CATS_INCIDENCIA = [
   { label: "Avería mecánica", color: "#ef4444" },
   { label: "Accidente / Golpe", color: "#f97316" },
@@ -75,7 +74,7 @@ function KpiCard({ label, value, sub, color = C.blue }) {
 function Panel({ title, height = 260, children, empty }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 320 }}>
-      <div style={{ fontSize: 11, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>{title}</div>
+      <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>{title}</div>
       {empty ? (
         <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: C.dim, fontSize: 12 }}>
           Sin datos suficientes todavía
@@ -310,7 +309,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       {/* Header */}
       <div style={{ padding: "14px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>
             Analytics · cuadros de mando
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

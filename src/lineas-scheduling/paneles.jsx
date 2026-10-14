@@ -12,7 +12,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
   const hayPrecio = o => !o.precios || o.precios.some(k => p[k] > 0);
   const corriendo = opt.estado === "corriendo";
   const lim = veh ? (p.flotaMax > 0 ? `flota ${p.flotaMax} autobuses` : null) : (p.conductoresMax > 0 ? `${p.conductoresMax} conductores` : null);
-  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
   const td = { padding: "5px 8px", fontFamily: mono, fontSize: 11.5, textAlign: "right", color: C.text };
   const mejor = opt.probadas?.[0];
   const conCoste = opt.probadas?.some(r => r.coste != null);
@@ -21,7 +21,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
     : [["Turnos", r => num(r.turnos), r => r.turnos === mejor.turnos], ["Piezas/turno", r => r.piezasMedias.toFixed(1).replace(".", ",")], ["Horas pagadas", r => num(r.horasPagadas), r => r.horasPagadas === mejor.horasPagadas], ["Avisos", r => r.avisos], ...(conCoste ? [["Coste personal", r => (r.coste != null ? `${num(r.coste)} €` : "—")]] : [])];
   return (
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", flexShrink: 0, animation: "sched-fadein .15s ease both", maxHeight: "45vh", overflowY: "auto" }}>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>
         Optimizar {veh ? "paso 1 · vehículos" : "paso 2 · turnos"} <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· {diaNombre} · {veh ? "después se rehacen los turnos en el paso 2" : "sobre los vehículos del paso 1, sin cambiarlos"}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -64,7 +64,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
             </tr></thead>
             <tbody>
               {opt.probadas.slice(0, 8).map((r, i) => (
-                <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(52,211,153,0.07)" : "none" }}>
+                <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(63,207,142,0.07)" : "none" }}>
                   <td style={{ ...td, textAlign: "left", color: i === 0 ? C.green : C.dim }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "left", fontFamily: font, fontSize: 11.5, color: C.muted }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa del límite</span>}</td>
                   {columnas.map(([t, f, igual]) => <td key={t} style={{ ...td, color: igual ? (igual(r) ? C.text : C.muted) : C.muted }}>{f(r)}</td>)}
@@ -90,7 +90,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
 function OptimizarJunto({ p, opt, ocupado, bloqueado, onOptimizar, onAplicar, onRestricciones }) {
   const corriendo = opt.estado === "corriendo";
   const mejor = opt.probadas?.[0];
-  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, fontWeight: 700, padding: "5px 8px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap" };
   const td = { padding: "5px 8px", fontFamily: mono, fontSize: 11.5, textAlign: "right", color: C.muted };
   const pr = opt.precios;
   const orientativos = pr && !(p.costeVehiculoDia > 0 && p.costeHora > 0);
@@ -101,10 +101,10 @@ function OptimizarJunto({ p, opt, ocupado, bloqueado, onOptimizar, onAplicar, on
   return (
     <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+        <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
           Optimizar todo junto <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· vehículos y turnos a la vez, por el coste del día entero</span>
         </div>
-        <button onClick={onOptimizar} disabled={corriendo || ocupado || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: `1px solid ${C.green}`, background: "rgba(52,211,153,0.12)", color: C.green, fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
+        <button onClick={onOptimizar} disabled={corriendo || ocupado || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: `1px solid ${C.green}`, background: "rgba(63,207,142,0.12)", color: C.green, fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
           {corriendo ? `Probando ${opt.progreso[0]} de ${opt.progreso[1] || "…"}` : "Optimizar todo junto"}
         </button>
       </div>
@@ -129,7 +129,7 @@ function OptimizarJunto({ p, opt, ocupado, bloqueado, onOptimizar, onAplicar, on
             </tr></thead>
             <tbody>
               {opt.probadas.slice(0, 8).map((r, i) => (
-                <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(52,211,153,0.07)" : "none" }}>
+                <tr key={r.nombre + i} style={{ borderTop: `1px solid ${C.border}`, background: i === 0 ? "rgba(63,207,142,0.07)" : "none" }}>
                   <td style={{ ...td, textAlign: "left", color: i === 0 ? C.green : C.dim }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "left", fontFamily: font }}>{r.nombre}{!r.cumple && <span style={{ color: C.red }}> · pasa del límite</span>}{r.avisos > 0 && <span style={{ color: C.amber }}> · {r.avisos} turnos con aviso</span>}</td>
                   {cols.map(([t, f]) => <td key={t} style={{ ...td, color: i === 0 ? C.text : C.muted }}>{f(r)}</td>)}
@@ -158,7 +158,7 @@ export function PorQueSinTipo({ res, p, onRestricciones }) {
   const d = res?.turnos ? porQueSinTipo(res.turnos, p, res.kpis) : null;
   if (!d) return null;
   return (
-    <div style={{ padding: "7px 16px", fontSize: 11.5, color: C.text, background: "rgba(251,191,36,0.07)", borderBottom: "1px solid rgba(251,191,36,0.3)", flexShrink: 0 }}>
+    <div style={{ padding: "7px 16px", fontSize: 11.5, color: C.text, background: "rgba(245,184,74,0.07)", borderBottom: "1px solid rgba(245,184,74,0.3)", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ color: C.amber, fontWeight: 700 }}>⚠ {num(d.total)} turno{d.total > 1 ? "s" : ""} sin tipo</span>
         <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11.5, fontFamily: font }}>{abierto ? "ocultar por qué" : "ver por qué"}</button>
@@ -200,7 +200,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
     const r = porCalendario[f.id].resumen, c = r.turnos == null ? null : costeDia(r, { ...precios, dia: f.id }); // (el recargo de festivo, según el día)
     return { dias: a.dias + f.dias, viajes: a.viajes + r.viajes * f.dias, horas: a.horas + (r.horasPagadas || 0) * f.dias, km: a.km + r.km * f.dias, kmVacio: a.kmVacio + (r.kmVacio || 0) * f.dias, coste: c == null ? a.coste : (a.coste ?? 0) + c * f.dias, buses: Math.max(a.buses, r.autobuses), turnos: Math.max(a.turnos, r.turnos ?? 0) };
   }, { dias: 0, viajes: 0, horas: 0, km: 0, kmVacio: 0, coste: null, buses: 0, turnos: 0 });
-  const th = { fontSize: 9, color: C.dim, letterSpacing: 1, fontWeight: 700, padding: "7px 10px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.card, zIndex: 1 };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, fontWeight: 700, padding: "7px 10px", textAlign: "right", textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "6px 10px", fontFamily: mono, fontSize: 11.5, textAlign: "right", whiteSpace: "nowrap" };
   const boton = (texto, onClick, principal, titulo) => (
     <button onClick={onClick} disabled={!!bloqueo} title={bloqueo || titulo} style={{ padding: "6px 12px", borderRadius: 7, border: principal ? "none" : `1px solid ${C.border2}`, background: principal ? C.blue : "none", color: principal ? "#fff" : C.text, fontSize: 12, fontWeight: 600, cursor: bloqueo ? "not-allowed" : "pointer", opacity: bloqueo ? 0.5 : 1, fontFamily: font, flexShrink: 0 }}>{texto}</button>
@@ -212,7 +212,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
     const enCurso = lote?.dia === f.id;
     const col = viejo ? C.dim : C.text;
     return (
-      <tr key={f.id} style={{ borderTop: `1px solid ${C.border}`, background: f.id === diaActual ? "rgba(92,155,255,0.07)" : enCurso ? "rgba(251,191,36,0.06)" : "none" }}>
+      <tr key={f.id} style={{ borderTop: `1px solid ${C.border}`, background: f.id === diaActual ? "rgba(91,124,250,0.07)" : enCurso ? "rgba(245,184,74,0.06)" : "none" }}>
         <td style={{ ...td, textAlign: "left", fontFamily: font, maxWidth: 340 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: f.color || "transparent", border: f.color ? "none" : `1px solid ${C.dim}`, flexShrink: 0 }} />
@@ -340,7 +340,7 @@ export function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
           const fila = (l, variante) => (
             <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: variante ? "3px 4px 3px 26px" : "4px 4px", cursor: "pointer" }}>
               <input type="checkbox" checked={set.has(l.id)} onChange={() => poner(set.has(l.id) ? [...set].filter(x => x !== l.id) : [...set, l.id])} />
-              {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+              {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
               <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(s => s.cabecera).join(" ↔ ")}</span>
             </label>
           );
@@ -353,7 +353,7 @@ export function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px" }}>
                 <input type="checkbox" checked={n === ids.length} ref={el => { if (el) el.indeterminate = n > 0 && n < ids.length; }}
                   onChange={() => poner(n < ids.length ? [...new Set([...set, ...ids])] : [...set].filter(id => !ids.includes(id)))} />
-                <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: g.lineas[0].color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{g.nombre}</span>
+                <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: g.lineas[0].color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{g.nombre}</span>
                 <button onClick={() => setAbiertos(prev => { const x = new Set(prev); if (x.has(g.clave)) x.delete(g.clave); else x.add(g.clave); return x; })}
                   style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: font }}>{abierto ? "▾" : "▸"} {n < ids.length ? `${n} de ` : ""}{ids.length} variantes</button>
               </div>

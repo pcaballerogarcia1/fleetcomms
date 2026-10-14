@@ -7,11 +7,11 @@ import { useRef, useState } from "react";
 import { TIPOS_VEHICULO } from "./lineas-store.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueText: "#b0ccff", green: "#34d399", amber: "#fbbf24", red: "#f87171", text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = "'Inter',system-ui,sans-serif";
-const mono = "'JetBrains Mono','Courier New',monospace";
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const nuevoId = () => `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
@@ -70,7 +70,7 @@ export function FlotaLineas({ cfg, onGuardar }) {
   const vis = lista.filter(b => !q.trim() || norm(`${b.matricula} ${b.nota} ${TIPOS_VEHICULO.find(t => t.id === b.tipo)?.nombre || ""}`).includes(norm(q)));
   const conAut = lista.filter(b => Number(b.autonomiaKm) > 0).length;
   const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "5px 10px", borderTop: `1px solid ${C.border}` };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px" }}>

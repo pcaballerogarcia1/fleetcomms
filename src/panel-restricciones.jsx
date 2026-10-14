@@ -5,12 +5,12 @@
 import { useState } from "react";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
-  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", green: "#34d399", red: "#f87171", amber: "#fbbf24",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
+  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", green: "#3fcf8e", red: "#f26d6d", amber: "#f5b84a",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = "'Inter',system-ui,sans-serif";
+const font = "var(--font)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 export function Interruptor({ on, onCambiar, titulo }) {
@@ -65,7 +65,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
   );
   const apartado = (s, conTitulo) => (
     <div key={s.id} style={{ marginBottom: 18 }}>
-      {conTitulo && <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>}
+      {conTitulo && <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>}
       {s.nota && <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 6px", lineHeight: 1.5 }}>{s.nota}</div>}
       {s.contenido ?? (q ? s.items.filter(coincide) : s.items).map(fila)}
     </div>
@@ -74,7 +74,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
   return (
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, flexShrink: 0, height: alto, display: "flex", flexDirection: "column", animation: "sched-fadein .15s ease both" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>{titulo}</span>
+        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{titulo}</span>
         {cabecera}
         <span style={{ flex: 1 }} />
         {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar ✕</button>}

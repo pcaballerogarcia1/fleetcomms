@@ -246,7 +246,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   {v.capacidad > 0 && <span>{v.capacidad} m³</span>}
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
                   {v.depotLat && v.depotLng && (
-                    <span style={{ color: "#fb923c", display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ color: "#f59e5b", display: "flex", alignItems: "center", gap: 3 }}>
                       🏠 {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
                     </span>
                   )}
@@ -454,7 +454,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                       : <span style={{ color: C.red, fontSize: 10 }}>Sin vehículo</span>;
                   })()}
                   {w.depotLat && w.depotLng && (
-                    <span style={{ color: "#fb923c", display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ color: "#f59e5b", display: "flex", alignItems: "center", gap: 3 }}>
                       🏠 {(+w.depotLat).toFixed(4)}, {(+w.depotLng).toFixed(4)}
                     </span>
                   )}

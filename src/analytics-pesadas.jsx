@@ -7,11 +7,11 @@ import { leerKg, resumenPesadas } from "./pesadas.js";
 import { apuntarPesada, borrarPesada, escucharPesadas } from "./pesadas-store.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", green: "#34d399", orange: "#fb923c", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const tooltipStyle = { background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, fontSize: 12, color: C.text };
 const axisStyle = { fill: C.muted, fontSize: 10 };
@@ -20,7 +20,7 @@ const kgTxt = kg => (kg >= 10000 ? `${(kg / 1000).toLocaleString("es-ES", { maxi
 function Kpi({ label, value, sub }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", minWidth: 150, flex: "1 1 150px" }}>
-      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginTop: 4, fontFamily: mono }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{sub}</div>}
     </div>
@@ -107,7 +107,7 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
   }
 
   const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 8px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card };
   const td = { padding: "6px 10px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.text };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: font }}>

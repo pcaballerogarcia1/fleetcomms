@@ -10,9 +10,9 @@ import { auth } from "./firebase.js";
 import { resumenSalud } from "./salud.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  blue: "#5c9bff", blueText: "#b0ccff", green: "#34d399", red: "#f87171", amber: "#fbbf24",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface: "#181c25", border: "rgba(255,255,255,0.08)",
+  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", red: "#f26d6d", amber: "#f5b84a",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
 const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 14 };
 const titulo = { fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 };

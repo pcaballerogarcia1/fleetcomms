@@ -12,16 +12,16 @@ import { leerHora } from "./lineas-horarios-util.js";
 import { logAudit } from "./audit.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff", green: "#34d399", amber: "#fbbf24", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
+const font = "var(--font)";
+const mono = "var(--mono)";
 const SEMANA = [[1, "L"], [2, "M"], [3, "X"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
 const fechaCorta = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "2-digit" });
 const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", boxSizing: "border-box" };
-const btn = (fuerte = false) => ({ padding: "5px 10px", borderRadius: 6, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? "#16306a" : "none", color: fuerte ? "#cfe0ff" : C.muted, fontSize: 11.5, fontWeight: fuerte ? 600 : 500, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" });
-const titulo = { fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, margin: "14px 0 6px" };
+const btn = (fuerte = false) => ({ padding: "5px 10px", borderRadius: 6, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? "#222c58" : "none", color: fuerte ? "#d6deff" : C.muted, fontSize: 11.5, fontWeight: fuerte ? 600 : 500, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" });
+const titulo = { fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, margin: "14px 0 6px" };
 
 // Campo de hora (hh:mm) que solo guarda al terminar de escribir
 function CampoHora({ valor, onCambiar, ancho = 56 }) {
@@ -80,8 +80,8 @@ function MapaDiseno({ d, linea, dir, anadiendo, onPinchar, onMoverParada, onEleg
     for (const p of d.paradas) {
       const n = orden.get(p.id);
       const html = n
-        ? `<div style="transform:translate(-50%,-50%);min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:${linea.color};color:#0b1220;font:800 11px ${font};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #0b1220">${n}</div>`
-        : `<div style="transform:translate(-50%,-50%);width:11px;height:11px;border-radius:6px;background:#e2eeff;box-shadow:0 0 0 2px #0b1220"></div>`;
+        ? `<div style="transform:translate(-50%,-50%);min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:${linea.color};color:#0d0f14;font:800 11px ${font};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #0d0f14">${n}</div>`
+        : `<div style="transform:translate(-50%,-50%);width:11px;height:11px;border-radius:6px;background:#e6e8ee;box-shadow:0 0 0 2px #0d0f14"></div>`;
       const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html, iconSize: null }), draggable: true, zIndexOffset: n ? 500 : 0 })
         .bindTooltip(p.nombre, { direction: "top", offset: [0, -8] }).addTo(g);
       m.on("click", () => cb.current.onElegirParada(p.id));
@@ -196,7 +196,7 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
               const p = paradaPorId.get(id);
               return (
                 <div key={`${id}-${i}`} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 0" }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 10, background: linea.color, color: "#0b1220", fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ width: 20, height: 20, borderRadius: 10, background: linea.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nombre || id}</span>
                   <button disabled={i === 0} onClick={() => mover(i, -1)} title="Subir" style={{ ...btn(), padding: "1px 6px", opacity: i === 0 ? 0.3 : 1 }}>↑</button>
                   <button disabled={i === s.paradas.length - 1} onClick={() => mover(i, 1)} title="Bajar" style={{ ...btn(), padding: "1px 6px", opacity: i === s.paradas.length - 1 ? 0.3 : 1 }}>↓</button>
@@ -265,8 +265,8 @@ function EditorCalendarios({ d, cambiar }) {
             </div>
             <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Días sin servicio (festivos…) y días que se añaden:</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-              {(c.sin || []).map(f => <span key={`s${f}`} style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(248,113,113,.12)", color: C.red, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { sin: c.sin.filter(x => x !== f) })}>sin {fechaCorta(f)} ×</span>)}
-              {(c.con || []).map(f => <span key={`c${f}`} style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(52,211,153,.12)", color: C.green, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { con: c.con.filter(x => x !== f) })}>+ {fechaCorta(f)} ×</span>)}
+              {(c.sin || []).map(f => <span key={`s${f}`} style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(242,109,109,.12)", color: C.red, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { sin: c.sin.filter(x => x !== f) })}>sin {fechaCorta(f)} ×</span>)}
+              {(c.con || []).map(f => <span key={`c${f}`} style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(63,207,142,.12)", color: C.green, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { con: c.con.filter(x => x !== f) })}>+ {fechaCorta(f)} ×</span>)}
             </div>
             <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
               <input type="date" value={nuevaFecha[c.id] || ""} onChange={e => setNuevaFecha(n => ({ ...n, [c.id]: e.target.value }))} style={{ ...inp, colorScheme: "dark", flex: 1 }} />
@@ -417,7 +417,7 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
             <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
                 {d.lineas.map(l => (
-                  <button key={l.id} onClick={() => { setSelLinea(l.id); setDir(0); setAnadiendo(false); }} style={{ minWidth: 34, padding: "3px 8px", borderRadius: 6, background: l.color, color: "#0b1220", fontSize: 12, fontWeight: 800, border: `2px solid ${l.id === selLinea ? "#fff" : "transparent"}`, cursor: "pointer", fontFamily: font }}>{l.nombre || "?"}</button>
+                  <button key={l.id} onClick={() => { setSelLinea(l.id); setDir(0); setAnadiendo(false); }} style={{ minWidth: 34, padding: "3px 8px", borderRadius: 6, background: l.color, color: "#0d0f14", fontSize: 12, fontWeight: 800, border: `2px solid ${l.id === selLinea ? "#fff" : "transparent"}`, cursor: "pointer", fontFamily: font }}>{l.nombre || "?"}</button>
                 ))}
                 <button onClick={nuevaLinea} style={btn(true)}>+ Nueva línea</button>
               </div>
@@ -446,7 +446,7 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
             {error && <span style={{ fontSize: 11, color: C.amber }}>{error}</span>}
           </div>
         )}
-        {anadiendo && linea && <div style={{ position: "absolute", left: "50%", bottom: 16, transform: "translateX(-50%)", zIndex: 600, background: linea.color, color: "#0b1220", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>Línea {linea.nombre} · {dir === 0 ? "ida" : "vuelta"}: pincha en el mapa para añadir la siguiente parada</div>}
+        {anadiendo && linea && <div style={{ position: "absolute", left: "50%", bottom: 16, transform: "translateX(-50%)", zIndex: 600, background: linea.color, color: "#0d0f14", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>Línea {linea.nombre} · {dir === 0 ? "ida" : "vuelta"}: pincha en el mapa para añadir la siguiente parada</div>}
       </div>
     </div>
   );

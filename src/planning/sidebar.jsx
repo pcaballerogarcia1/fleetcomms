@@ -1,4 +1,5 @@
 // Planning de rutas por puntos: el panel lateral (capas, filtros, precios).
+import { Loader2, Upload, Warehouse } from "lucide-react";
 import { useState, useRef } from "react";
 import { db } from "../firebase.js";
 import { doc, deleteDoc, updateDoc } from "firebase/firestore";
@@ -7,7 +8,6 @@ import { LineasPanel } from "../gtfs-lineas.jsx";
 import { logAudit } from "../audit.js";
 import { barrioColor, cambiarDepots, coordQuality, getBarrio, getContenedor, getFraccion, idbDel } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
-import { DepotIcon } from "./mapa.jsx";
 
 // Flecha y cabecera plegable de cada sección del panel
 const Chevron = ({ open }) => (
@@ -24,7 +24,7 @@ const SecBtn = ({ label, badge, open, onToggle, extra }) => (
   }}>
     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <Chevron open={open} />
-      <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+      <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
         {label}{badge != null ? ` (${badge})` : ""}
       </span>
     </span>
@@ -136,14 +136,14 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
               onClick={e => { e.stopPropagation(); setShowManual(s => !s); if (!openDepots) setOpenDepots(true); }}
               title="Añadir depot manualmente"
               style={{
-                background: showManual ? "rgba(251,146,60,0.15)" : "none",
-                border: `1px solid ${showManual ? "rgba(251,146,60,0.5)" : C.border}`,
+                background: showManual ? "rgba(245,158,91,0.15)" : "none",
+                border: `1px solid ${showManual ? "rgba(245,158,91,0.5)" : C.border}`,
                 borderRadius: 5,
-                color: showManual ? "#fb923c" : C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
+                color: showManual ? "#f59e5b" : C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
                 width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "all .12s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = "#fb923c"; e.currentTarget.style.borderColor = "#fb923c55"; }}
+              onMouseEnter={e => { e.currentTarget.style.color = "#f59e5b"; e.currentTarget.style.borderColor = "#f59e5b55"; }}
               onMouseLeave={e => { if (!showManual) { e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border; } }}
             >+</button>
           } />
@@ -152,7 +152,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
         {/* Manual add form */}
         {showManual && (
           <div style={{ padding: "8px 12px 10px", borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 10, color: C.dim, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Nuevo depot</div>
+            <div style={{ fontSize: 10, color: C.dim, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Nuevo depot</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input
                 placeholder="Latitud"
@@ -221,13 +221,13 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                   setManualLat(""); setManualLng(""); setManualName(""); setShowManual(false);
                 }}
                 style={{
-                  flex: 1, padding: "6px", background: "rgba(251,146,60,0.12)",
-                  border: "1px solid rgba(251,146,60,0.35)", color: "#fb923c",
+                  flex: 1, padding: "6px", background: "rgba(245,158,91,0.12)",
+                  border: "1px solid rgba(245,158,91,0.35)", color: "#f59e5b",
                   borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: savingManualDepot ? "wait" : "pointer",
                   fontFamily: font, transition: "all .12s", opacity: savingManualDepot ? 0.6 : 1,
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(251,146,60,0.22)"}
-                onMouseLeave={e => e.currentTarget.style.background = "rgba(251,146,60,0.12)"}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,91,0.22)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(245,158,91,0.12)"}
               >{savingManualDepot ? "Guardando…" : "Añadir"}</button>
               <button
                 disabled={savingManualDepot}
@@ -255,20 +255,11 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
           <button
             onClick={() => depotFileRef.current?.click()}
             disabled={depotUploading}
-            style={{
-              width: "100%", padding: "7px 10px",
-              background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.25)",
-              color: "#fb923c", borderRadius: 7, fontSize: 11, fontWeight: 600,
-              cursor: depotUploading ? "wait" : "pointer", fontFamily: font,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              transition: "all .15s",
-            }}
-            onMouseEnter={e => { if (!depotUploading) e.currentTarget.style.background = "rgba(251,146,60,0.16)"; }}
-            onMouseLeave={e => { if (!depotUploading) e.currentTarget.style.background = "rgba(251,146,60,0.08)"; }}
+            className="op-btn" style={{ width: "100%" }}
           >
             {depotUploading
-              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(251,146,60,0.2)", borderTopColor: "#fb923c", borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
-              : <><DepotIcon size={11} /> Importar CSV / KML / Excel</>
+              ? <><Loader2 size={14} className="op-girando" /> Procesando…</>
+              : <><Warehouse size={14} /> Importar depósitos (CSV / KML / Excel)</>
             }
           </button>
         </div>
@@ -279,11 +270,11 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
             {depots.map((d, i) => (
               <div key={d.id} style={{
                 display: "flex", alignItems: "center", gap: 8,
-                background: C.surface2, border: "1px solid rgba(251,146,60,0.2)",
-                borderLeft: "3px solid #fb923c",
+                background: C.surface2, border: "1px solid rgba(245,158,91,0.2)",
+                borderLeft: "3px solid #f59e5b",
                 borderRadius: 7, padding: "7px 10px", marginBottom: 4,
               }}>
-                <span style={{ fontSize: 9, color: "#fb923c", fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ fontSize: 9, color: "#f59e5b", fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
@@ -296,7 +287,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                     if (projectId) cambiarDepots(projectId, orgId, cambio).catch(e => window.alert("No se ha podido cambiar: " + (e.message || "error desconocido")));
                     else setDepots(cambio);
                   }}
-                  style={{ background: d.planta ? "rgba(52,211,153,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(52,211,153,0.5)" : C.border}`, color: d.planta ? "#34d399" : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? "#3fcf8e" : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
                   {d.planta ? "Planta" : "Depósito"}
                 </button>
                 <button
@@ -331,19 +322,10 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
           <div style={{ padding: "4px 12px 12px" }}>
             <input ref={fileRef} type="file" accept="*" multiple style={{ display: "none" }}
               onChange={e => { const files = Array.from(e.target.files); e.target.value = ""; onUpload(files); }} />
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{
-              width: "100%", padding: "9px 14px",
-              background: uploading ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
-              color: C.blueText, borderRadius: 8, fontSize: 12, fontWeight: 600,
-              cursor: uploading ? "wait" : "pointer", fontFamily: font, transition: "all .15s",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}
-              onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "#1a3570"; }}
-              onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = C.blueDim; }}
-            >
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="op-btn op-primario" style={{ width: "100%", height: 34 }}>
               {uploading
-                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(163,196,252,0.2)", borderTopColor: C.blueText, borderRadius: "50%", animation: "planning-spin .6s linear infinite" }} /> Procesando…</>
-                : "Subir CSV / KML / Excel"}
+                ? <><Loader2 size={14} className="op-girando" /> Procesando…</>
+                : <><Upload size={14} /> Subir CSV / KML / Excel</>}
             </button>
             <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.7 }}>
               <div>CSV: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
@@ -362,7 +344,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
               onClick={() => setAddPointMode(m => !m)}
               style={{
                 width: "100%", padding: "8px 12px", marginBottom: 8,
-                background: addPointMode ? "rgba(52,211,153,0.15)" : C.surface2,
+                background: addPointMode ? "rgba(63,207,142,0.15)" : C.surface2,
                 border: `1px solid ${addPointMode ? C.green : C.border2}`,
                 color: addPointMode ? C.green : C.muted,
                 borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
@@ -400,7 +382,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
               disabled={!manualForm.lat || !manualForm.lng}
               style={{
                 width: "100%", padding: "7px",
-                background: (!manualForm.lat || !manualForm.lng) ? C.surface2 : "rgba(92,155,255,0.15)",
+                background: (!manualForm.lat || !manualForm.lng) ? C.surface2 : "rgba(91,124,250,0.15)",
                 border: `1px solid ${(!manualForm.lat || !manualForm.lng) ? C.border : C.blue}44`,
                 color: (!manualForm.lat || !manualForm.lng) ? C.dim : C.blueText,
                 borderRadius: 7, fontSize: 12, fontWeight: 600,
@@ -478,7 +460,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                       const q = coordQuality(layer.markers);
                       if (!q.invalid && !q.far) return null;
                       return (
-                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#fbbf24", marginTop: 2 }}
+                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f5b84a", marginTop: 2 }}
                           title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Scheduling. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
                           ⚠ {[
                             q.invalid && `${q.invalid.toLocaleString()} sin coordenadas válidas`,
@@ -488,13 +470,13 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                       );
                     })()}
                     {layer._missing && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#fbbf24", marginTop: 2 }}
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f5b84a", marginTop: 2 }}
                         title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planning, se sube sola y aparece aquí.">
                         ⚠ {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
                       </div>
                     )}
                     {layer._loadError && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f87171", marginTop: 2 }}>
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f26d6d", marginTop: 2 }}>
                         No se pudieron cargar los puntos: {layer._loadError}
                       </div>
                     )}
@@ -627,7 +609,7 @@ function FilterChipsSection({ label, layers, getValue, active, onSelect }) {
             style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
             <polyline points="6 9 12 15 18 9"/>
           </svg>
-          <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+          <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
             {label} ({values.length})
           </span>
         </span>

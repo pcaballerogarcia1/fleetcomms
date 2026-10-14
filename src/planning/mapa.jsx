@@ -16,16 +16,16 @@ function makePopupHtml(marker, color) {
     .filter(([k]) => !["nombre","name"].includes(k.toLowerCase()))
     .map(([k,v]) => `
       <tr>
-        <td style="color:#8b95a5;padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
-        <td style="color:#f0f4f8;font-size:11px;word-break:break-word;">${v ?? "—"}</td>
+        <td style="color:#9aa3b2;padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
+        <td style="color:#e6e8ee;font-size:11px;word-break:break-word;">${v ?? "—"}</td>
       </tr>`)
     .join("");
 
   return `
     <div style="font-family:'Inter',sans-serif;min-width:180px;max-width:300px;padding:12px 14px;">
       ${title ? `<div style="font-size:13px;font-weight:600;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.08);">${title}</div>` : ""}
-      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<div style="color:#8b95a5;font-size:12px;">Sin campos adicionales</div>'}
-      <div style="font-size:10px;color:#3d4d63;margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
+      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<div style="color:#9aa3b2;font-size:12px;">Sin campos adicionales</div>'}
+      <div style="font-size:10px;color:#5d6574;margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
     </div>`;
 }
 
@@ -118,7 +118,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
           const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
           if (isJunkCoord(lat, lng)) return;
           const barrio = getBarrio(m);
-          const color = barrio ? barrioColor(barrio, barrioColors) : (layer.color || '#4f8ef7');
+          const color = barrio ? barrioColor(barrio, barrioColors) : (layer.color || '#5b7cfa');
           allPts.push(lat, lng, color); // packed flat for cache efficiency
           ptMarkers.push(m);
           if (!q.isFar(lat, lng)) allPoints.push([lat, lng]); // los muy lejanos no mueven el encuadre
@@ -276,21 +276,21 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
         className: "",
         html: `<div title="${d.nombre}" style="
           width:36px;height:36px;border-radius:8px;
-          background:#fb923c;border:2.5px solid rgba(255,255,255,0.95);
-          box-shadow:0 3px 14px rgba(251,146,60,0.7);
+          background:#f59e5b;border:2.5px solid rgba(255,255,255,0.95);
+          box-shadow:0 3px 14px rgba(245,158,91,0.7);
           display:flex;align-items:center;justify-content:center;
           cursor:pointer;
         "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>`,
         iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -20],
       });
       const fields = Object.entries(d.fields || {}).map(([k, v]) =>
-        `<tr><td style="color:#8b95a5;padding:2px 10px 2px 0;font-size:11px;">${k}</td><td style="color:#f0f4f8;font-size:11px;">${v}</td></tr>`
+        `<tr><td style="color:#9aa3b2;padding:2px 10px 2px 0;font-size:11px;">${k}</td><td style="color:#e6e8ee;font-size:11px;">${v}</td></tr>`
       ).join("");
       const popupHtml = `<div style="font-family:'Inter',sans-serif;min-width:160px;padding:10px 12px;">
-        <div style="font-size:11px;font-weight:700;color:#fb923c;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Depot ${i + 1}</div>
-        <div style="font-size:13px;font-weight:600;color:#f0f4f8;margin-bottom:6px;">${d.nombre}</div>
+        <div style="font-size:11px;font-weight:700;color:#f59e5b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Depot ${i + 1}</div>
+        <div style="font-size:13px;font-weight:600;color:#e6e8ee;margin-bottom:6px;">${d.nombre}</div>
         ${fields ? `<table style="width:100%;border-collapse:collapse;">${fields}</table>` : ""}
-        <div style="font-size:10px;color:#3d4d63;margin-top:6px;font-family:monospace;">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
+        <div style="font-size:10px;color:#5d6574;margin-top:6px;font-family:monospace;">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
       </div>`;
       const dm = L.marker([d.lat, d.lng], { icon: dIcon, zIndexOffset: 500 })
         .bindPopup(popupHtml, { maxWidth: 280 });
@@ -344,7 +344,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
       const pin = L.marker([pt.lat, pt.lng], {
         icon: L.divIcon({
           className: "",
-          html: `<div style="width:22px;height:22px;border-radius:50%;background:#4f8ef7;border:2px solid #fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);">${i + 1}</div>`,
+          html: `<div style="width:22px;height:22px;border-radius:50%;background:#5b7cfa;border:2px solid #fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);">${i + 1}</div>`,
           iconSize: [22, 22], iconAnchor: [11, 11],
         }),
         zIndexOffset: 1000,
@@ -356,12 +356,12 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     if (selected.length > 1) {
       if (routeData?.geometry) {
         selPolyRef.current = L.geoJSON(routeData.geometry, {
-          style: { color: "#4f8ef7", weight: 3.5, opacity: 0.9 },
+          style: { color: "#5b7cfa", weight: 3.5, opacity: 0.9 },
         }).addTo(map);
       } else {
         selPolyRef.current = L.polyline(
           selected.map(p => [p.lat, p.lng]),
-          { color: "#4f8ef7", weight: 2, dashArray: "6 4", opacity: 0.5 }
+          { color: "#5b7cfa", weight: 2, dashArray: "6 4", opacity: 0.5 }
         ).addTo(map);
       }
     }
@@ -464,7 +464,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
   return (
     <div style={{ flex: 1, position: "relative", height: "100%" }}>
       {/* Map container */}
-      <div ref={divRef} className="planning-map" style={{ width: "100%", height: "100%", background: "#1c2333" }} />
+      <div ref={divRef} className="planning-map" style={{ width: "100%", height: "100%", background: "#181c25" }} />
 
       {/* Selection mode toggle */}
       <button
@@ -591,12 +591,12 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
               ) : routeData ? (
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Por carretera</div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Por carretera</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{routeData.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
                   </div>
                   <div style={{ width: 1, height: 36, background: C.border }} />
                   <div>
-                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Tiempo estimado</div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Tiempo estimado</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>
                       {routeData.minutes >= 60
                         ? `${Math.floor(routeData.minutes / 60)}h ${routeData.minutes % 60}min`
@@ -616,7 +616,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
               ) : (
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Línea recta (aprox.)</div>
+                    <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Línea recta (aprox.)</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{haversineStats.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
                   </div>
                   <div style={{ flex: 1 }} />

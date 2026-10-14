@@ -258,7 +258,7 @@ export function retrasoActual(turno, real, actual, frac, ahora) {
   return Math.round(ahora - esperado);
 }
 export const estadoPuntualidad = r => (r == null ? "sin" : r < -ADELANTO_OK ? "adelantado" : r > 10 ? "muy" : r > RETRASO_OK ? "tarde" : "ok");
-export const COLOR_PUNTUALIDAD = { ok: "#34d399", tarde: "#fbbf24", muy: "#f87171", adelantado: "#a78bfa", sin: "#8aa5cc" };
+export const COLOR_PUNTUALIDAD = { ok: "#3fcf8e", tarde: "#f5b84a", muy: "#f26d6d", adelantado: "#a78bfa", sin: "#9aa3b2" };
 export const textoRetraso = r => (r == null ? "—" : r === 0 ? "en hora" : r > 0 ? `+${r} min` : `${r} min`);
 
 // ── El día en cifras (Control y el informe) ──

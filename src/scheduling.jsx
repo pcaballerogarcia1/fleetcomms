@@ -163,7 +163,7 @@ function SchedulingPage({ sesion, onLogout }) {
           padding: "0 20px", zIndex: 10,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
+            <a href="/planning" style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, textDecoration: "none", transition: "color .12s" }}
               onMouseEnter={e => e.currentTarget.style.color = C.muted}
               onMouseLeave={e => e.currentTarget.style.color = C.dim}>
               Operanzia

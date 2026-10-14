@@ -11,34 +11,32 @@
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
 export const C = {
-  bg:      "#0f1623",
-  card:    "#172035",
-  surface2:"#1e2d48",
-  border:  "rgba(88,130,225,0.22)",
-  border2: "rgba(88,130,225,0.40)",
-  blue:    "#5c9bff",
-  blueDim: "#0d2550",
-  blueText:"#b0ccff",
-  cyan:    "#5c9bff",
-  cyanDim: "#0d2550",
-  cyanText:"#b0ccff",
-  green:   "#34d399",
-  greenDim:"#072015",
-  orange:  "#fb923c",
-  red:     "#f87171",
-  amber:   "#fbbf24",
-  text:    "#f0f4f8",
-  muted:   "#8b95a5",
-  dim:     "#3d4d63",
+  bg:      "#0b0d12",
+  card:    "#12151c",
+  surface2:"#181c25",
+  border:  "rgba(255,255,255,0.08)",
+  border2: "rgba(255,255,255,0.14)",
+  blue:    "#5b7cfa",
+  blueDim: "#1a2142",
+  blueText:"#b4c3ff",
+  cyan:    "#5b7cfa",
+  cyanDim: "#1a2142",
+  cyanText:"#b4c3ff",
+  green:   "#3fcf8e",
+  greenDim:"#0f2a1f",
+  orange:  "#f59e5b",
+  red:     "#f26d6d",
+  amber:   "#f5b84a",
+  text:    "#e6e8ee",
+  muted:   "#9aa3b2",
+  dim:     "#5d6574",
 };
 
-export const font = "'Inter',system-ui,sans-serif";
-
-export const mono = "'JetBrains Mono','Courier New',monospace";
-
+export const font = "var(--font)";
+export const mono = "var(--mono)";
 export const LAYER_COLORS = [
-  "#4f8ef7","#fb923c","#34d399","#f87171",
-  "#a78bfa","#fbbf24","#f472b6","#22d3ee",
+  "#5b7cfa","#f59e5b","#3fcf8e","#f26d6d",
+  "#a78bfa","#f5b84a","#f472b6","#22d3ee",
 ];
 
 // ── MAP STYLES ────────────────────────────────────────────────────

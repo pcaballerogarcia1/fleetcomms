@@ -6,17 +6,17 @@ import { watchAudit } from "./audit.js";
 import { watchErrors, groupErrors } from "./error-report.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 // Se abren las 100 últimas y se piden más a mano (antes 300 en cada apertura:
 // ver e2e/informe-lecturas.md)
 const LIMIT = 100;
 const MAS = 200;
 const MOD_COLOR = {
-  Scheduling: "#5c9bff", Rostering: "#a78bfa", Planning: "#34d399", Proyectos: "#fbbf24",
-  Flota: "#fb923c", Plantilla: "#f472b6",
+  Scheduling: "#5b7cfa", Rostering: "#a78bfa", Planning: "#3fcf8e", Proyectos: "#f5b84a",
+  Flota: "#f59e5b", Plantilla: "#f472b6",
 };
 
 function cuando(ms, now) {
@@ -127,7 +127,7 @@ function AuditPanel({ sesion, activeProject, onClose }) {
         {tab === "errores" ? <ErrorList now={now} /> : (
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px 16px" }}>
           {error ? (
-            <div style={{ padding: 20, fontSize: 12, color: "#f87171" }}>No se pudo cargar el historial ({error.code || String(error)}).</div>
+            <div style={{ padding: 20, fontSize: 12, color: "#f26d6d" }}>No se pudo cargar el historial ({error.code || String(error)}).</div>
           ) : rows === null ? (
             <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Cargando…</div>
           ) : visibles.length === 0 ? (
@@ -167,7 +167,7 @@ function ErrorList({ now }) {
   const [abierto, setAbierto] = useState(null);
   useEffect(() => watchErrors(LIMIT, (l, err) => { if (err) setError(err); else setList(l); }), []);
   const grupos = useMemo(() => groupErrors(list), [list]);
-  if (error) return <div style={{ padding: 20, fontSize: 12, color: "#f87171" }}>No se pudieron cargar los errores ({error.code || String(error)}).</div>;
+  if (error) return <div style={{ padding: 20, fontSize: 12, color: "#f26d6d" }}>No se pudieron cargar los errores ({error.code || String(error)}).</div>;
   if (list === null) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Cargando…</div>;
   if (!grupos.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>No hay errores registrados. 👍</div>;
   return (
@@ -175,7 +175,7 @@ function ErrorList({ now }) {
       {grupos.map(g => (
         <div key={g.key} onClick={() => setAbierto(a => a === g.key ? null : g.key)} style={{ padding: "9px 8px", borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171", flexShrink: 0 }}>×{g.veces}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#f26d6d", flexShrink: 0 }}>×{g.veces}</span>
             <span style={{ fontSize: 12, color: C.text, wordBreak: "break-word" }}>{g.mensaje?.slice(0, 220)}</span>
           </div>
           <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>

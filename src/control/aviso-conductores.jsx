@@ -24,7 +24,7 @@ export function AvisoConductores({ orgId, usuarios }) {
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAbierto(a => !a); setEstado(null); }} title="Mandar un aviso al móvil de los conductores"
-        style={{ background: "rgba(92,155,255,0.10)", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+        style={{ background: "rgba(91,124,250,0.10)", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
         📣 Aviso al móvil
       </button>
       {abierto && (

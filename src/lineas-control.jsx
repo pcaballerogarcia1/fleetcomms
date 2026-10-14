@@ -14,11 +14,11 @@ import {
 } from "./lineas-servicio.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff", green: "#34d399", amber: "#fbbf24", red: "#f87171", violet: "#a78bfa",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", violet: "#a78bfa",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const pct = x => (x == null ? "—" : `${Math.round(x * 100)}%`);
 const fechaTxt = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
@@ -79,7 +79,7 @@ function MapaFlota({ red, posiciones, ahoraMs, foco, onElegir }) {
       const viejo = ahoraMs - (u.updatedAt || 0) > SENAL_MS;
       const color = viejo ? "#64748b" : COLOR_PUNTUALIDAD[estadoPuntualidad(u.retraso)];
       const sel = foco === u.turnoId;
-      const html = `<div style="transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:9px;background:${color};color:#0b1220;font:800 10.5px ${font};white-space:nowrap;box-shadow:0 0 0 ${sel ? 3 : 1.5}px ${sel ? "#fff" : "#0b1220"}">${u.linea ? `<span style="opacity:.7">L${String(u.linea).replace(/</g, "")} ·</span>` : ""}${u.bus ?? "?"}</div>`;
+      const html = `<div style="transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:9px;background:${color};color:#0d0f14;font:800 10.5px ${font};white-space:nowrap;box-shadow:0 0 0 ${sel ? 3 : 1.5}px ${sel ? "#fff" : "#0d0f14"}">${u.linea ? `<span style="opacity:.7">L${String(u.linea).replace(/</g, "")} ·</span>` : ""}${u.bus ?? "?"}</div>`;
       const tip = `${u.turnoId} · Bus ${u.bus ?? "?"} · línea ${u.linea ?? "—"}<br>${u.nombre || ""}<br>${viejo ? "sin señal" : textoRetraso(u.retraso)}${u.viaje ? `<br>${String(u.viaje).replace(/</g, "")}` : ""}`;
       let m = busesRef.current.get(u._id);
       if (!m) {
@@ -128,12 +128,12 @@ function DetalleTurno({ t, u, ahora, onCerrar }) {
           const cambioBus = i > 0 && t.viajes[i - 1].bus !== v.bus;
           return (
             <div key={v.k}>
-              {cambioBus && <div style={{ padding: "3px 14px", fontSize: 10.5, color: C.amber, background: "rgba(251,191,36,.06)" }}>↔ Relevo: pasa al Bus {v.bus} en {v.on || "cabecera"}</div>}
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", gap: 8, alignItems: "center", padding: "6px 14px", borderBottom: `1px solid ${C.border}`, opacity: v.v ? 0.55 : 1, background: enCurso ? "rgba(92,155,255,.08)" : "none" }}>
+              {cambioBus && <div style={{ padding: "3px 14px", fontSize: 10.5, color: C.amber, background: "rgba(245,184,74,.06)" }}>↔ Relevo: pasa al Bus {v.bus} en {v.on || "cabecera"}</div>}
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", gap: 8, alignItems: "center", padding: "6px 14px", borderBottom: `1px solid ${C.border}`, opacity: v.v ? 0.55 : 1, background: enCurso ? "rgba(91,124,250,.08)" : "none" }}>
                 <span style={{ fontFamily: mono, fontSize: 11.5, color: C.text }}>{hhmm(v.dep)}</span>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {!v.v && <span style={{ display: "inline-block", minWidth: 22, padding: "0 4px", marginRight: 6, borderRadius: 4, background: v.color, color: "#0b1220", fontSize: 10, fontWeight: 800, textAlign: "center" }}>{v.l}</span>}
+                    {!v.v && <span style={{ display: "inline-block", minWidth: 22, padding: "0 4px", marginRight: 6, borderRadius: 4, background: v.color, color: "#0d0f14", fontSize: 10, fontWeight: 800, textAlign: "center" }}>{v.l}</span>}
                     {v.v ? v.s || "Vacío" : `${v.on} → ${v.dn}`}
                   </span>
                   <span style={{ display: "block", fontSize: 10, color: C.dim }}>Bus {v.bus} · llega {hhmm(v.arr)}{l != null ? ` · llegó ${hhmm(l)}` : ""}</span>
@@ -171,7 +171,7 @@ function Informe({ c, servicio, turnos }) {
   const td = { padding: "7px 10px", fontSize: 12, color: C.text, textAlign: "right", borderBottom: `1px solid ${C.border}`, fontFamily: mono };
   const filaTabla = (x, total) => (
     <tr key={total ? "_total" : x.linea} style={{ background: total ? C.surface2 : "none", fontWeight: total ? 700 : 400 }}>
-      <td style={{ ...td, textAlign: "left", fontFamily: font }}>{total ? "Total" : <span style={{ display: "inline-block", minWidth: 26, padding: "1px 5px", borderRadius: 5, background: x.color, color: "#0b1220", fontSize: 11, fontWeight: 800, textAlign: "center" }}>{x.linea}</span>}</td>
+      <td style={{ ...td, textAlign: "left", fontFamily: font }}>{total ? "Total" : <span style={{ display: "inline-block", minWidth: 26, padding: "1px 5px", borderRadius: 5, background: x.color, color: "#0d0f14", fontSize: 11, fontWeight: 800, textAlign: "center" }}>{x.linea}</span>}</td>
       <td style={td}>{x.totalDia}</td><td style={td}>{x.programadas}</td>
       <td style={{ ...td, color: x.realizadas < x.programadas - x.enCurso ? C.amber : C.green }}>{x.realizadas}</td>
       <td style={td}>{x.enCurso || ""}</td><td style={{ ...td, color: x.sinHacer ? C.red : C.dim }}>{x.sinHacer || "—"}</td>
@@ -185,7 +185,7 @@ function Informe({ c, servicio, turnos }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Informe del {fechaTxt(servicio.fecha)}</div>
         <span style={{ fontSize: 11.5, color: C.muted }}>Programadas = las que ya tenían que haber salido. Puntual = sale entre {ADELANTO_OK} min antes y {RETRASO_OK} min después de su hora.</span>
-        <button onClick={excel} style={{ marginLeft: "auto", padding: "6px 12px", background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.3)", color: C.green, borderRadius: 6, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Descargar Excel</button>
+        <button onClick={excel} style={{ marginLeft: "auto", padding: "6px 12px", background: "rgba(63,207,142,.08)", border: "1px solid rgba(63,207,142,.3)", color: C.green, borderRadius: 6, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Descargar Excel</button>
       </div>
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -254,7 +254,7 @@ export function ControlLineasPage({ projectId, orgId }) {
 
   const kpi = (titulo, valor, sub, color) => (
     <div style={{ padding: "0 14px", borderLeft: `1px solid ${C.border}`, minWidth: 0 }}>
-      <div style={{ fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, whiteSpace: "nowrap" }}>{titulo}</div>
+      <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, whiteSpace: "nowrap" }}>{titulo}</div>
       <div style={{ fontSize: 17, fontWeight: 700, color: color || C.text, fontFamily: mono, marginTop: 1, whiteSpace: "nowrap" }}>{valor}</div>
       {sub && <div style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{sub}</div>}
     </div>
@@ -298,7 +298,7 @@ export function ControlLineasPage({ projectId, orgId }) {
               <>
                 {avisos.length > 0 && (
                   <div style={{ maxHeight: "38%", overflowY: "auto", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-                    <div style={{ padding: "9px 14px 4px", fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700 }}>Avisos ({avisos.length})</div>
+                    <div style={{ padding: "9px 14px 4px", fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Avisos ({avisos.length})</div>
                     {avisos.slice(0, 60).map((a, i) => (
                       <button key={i} onClick={() => setFoco(a.turno)} style={{ display: "flex", gap: 8, alignItems: "flex-start", width: "100%", textAlign: "left", padding: "6px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
                         <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 4, flexShrink: 0, background: a.grave ? C.red : a.tipo === "adelantado" ? C.violet : a.tipo === "sin_senal" ? C.muted : C.amber }} />

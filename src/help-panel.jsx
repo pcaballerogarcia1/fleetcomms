@@ -5,10 +5,10 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { TITULO, buscarAyuda } from "./help-content.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 const RUTAS = { "/planning": "planning", "/scheduling": "scheduling", "/rostering": "rostering", "/control": "control", "/analytics": "analytics" };
 
 export function HelpButton({ sesion, path, tipo }) {

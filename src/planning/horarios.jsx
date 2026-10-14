@@ -563,7 +563,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
 
   const thS = {
     padding: "8px 14px", fontSize: 10, color: C.dim, fontWeight: 600,
-    letterSpacing: 1, textTransform: "uppercase",
+    letterSpacing: 0.5, textTransform: "uppercase",
     borderBottom: `1px solid ${C.border}`, textAlign: "left",
     background: C.card, position: "sticky", top: 0, zIndex: 5,
   };
@@ -624,8 +624,8 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 7, cursor: "pointer",
-                  background: showPricePanel ? "rgba(52,211,153,0.15)" : "rgba(52,211,153,0.07)",
-                  border: `1px solid ${showPricePanel ? "rgba(52,211,153,0.5)" : "rgba(52,211,153,0.22)"}`,
+                  background: showPricePanel ? "rgba(63,207,142,0.15)" : "rgba(63,207,142,0.07)",
+                  border: `1px solid ${showPricePanel ? "rgba(63,207,142,0.5)" : "rgba(63,207,142,0.22)"}`,
                   color: C.green, fontSize: 12, fontWeight: 500, fontFamily: font, transition: "all .15s",
                 }}
               >
@@ -639,13 +639,13 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 12px", borderRadius: 7, cursor: "pointer",
-                background: showDurPanel ? "rgba(251,191,36,0.15)" : "rgba(251,191,36,0.07)",
-                border: `1px solid ${showDurPanel ? "rgba(251,191,36,0.5)" : "rgba(251,191,36,0.22)"}`,
-                color: "#fbbf24", fontSize: 12, fontWeight: 500,
+                background: showDurPanel ? "rgba(245,184,74,0.15)" : "rgba(245,184,74,0.07)",
+                border: `1px solid ${showDurPanel ? "rgba(245,184,74,0.5)" : "rgba(245,184,74,0.22)"}`,
+                color: "#f5b84a", fontSize: 12, fontWeight: 500,
                 fontFamily: font, transition: "all .15s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = "rgba(251,191,36,0.15)"; }}
-              onMouseLeave={e => { if (!showDurPanel) e.currentTarget.style.background = "rgba(251,191,36,0.07)"; }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(245,184,74,0.15)"; }}
+              onMouseLeave={e => { if (!showDurPanel) e.currentTarget.style.background = "rgba(245,184,74,0.07)"; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -658,12 +658,12 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 12px", borderRadius: 7, cursor: "pointer",
-                background: "rgba(52,211,153,0.08)", border: `1px solid rgba(52,211,153,0.25)`,
+                background: "rgba(63,207,142,0.08)", border: `1px solid rgba(63,207,142,0.25)`,
                 color: C.green, fontSize: 12, fontWeight: 500,
                 fontFamily: font, transition: "all .15s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = "rgba(52,211,153,0.14)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "rgba(52,211,153,0.08)"; }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(63,207,142,0.14)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(63,207,142,0.08)"; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -707,7 +707,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               color: C.blueText, fontSize: 12, fontWeight: 500,
               fontFamily: font, transition: "all .15s", textDecoration: "none",
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = "#1a3570"; }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#263166"; }}
               onMouseLeave={e => { e.currentTarget.style.background = C.blueDim; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -723,7 +723,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
       {canPrice && showPricePanel && (
         <div style={{
           padding: "14px 20px", borderBottom: `1px solid ${C.border}`,
-          background: "rgba(52,211,153,0.05)", flexShrink: 0,
+          background: "rgba(63,207,142,0.05)", flexShrink: 0,
           display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
         }}>
           <span style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>€ Precio por punto</span>
@@ -732,13 +732,13 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
             <span style={{ fontSize: 12, color: C.muted }}>Por defecto</span>
             <input type="number" min="0" step="0.01" value={priceInput}
               onChange={e => setPriceInput(e.target.value)} placeholder="€"
-              style={{ width: 80, background: C.surface2, border: "1px solid rgba(52,211,153,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+              style={{ width: 80, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
             <button disabled={savingPrice}
               onClick={() => withSaving(async () => {
                 await saveDefaultPrice(ttProjectId, orgId, parsePrice(priceInput));
                 logAudit({ modulo: "Planning", accion: "Cambió el precio por defecto", detalle: parsePrice(priceInput) == null ? "sin precio" : fmtEur(parsePrice(priceInput)) });
               })}
-              style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+              style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
               {savingPrice ? "Guardando…" : "Guardar"}
             </button>
             {barrioFiltro && (
@@ -747,7 +747,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 <span style={{ fontSize: 12, color: C.muted }}>Todos los de {barrioFiltro}</span>
                 <input type="number" min="0" step="0.01" value={barrioPriceInput}
                   onChange={e => setBarrioPriceInput(e.target.value)} placeholder="€ (vacío = quitar)"
-                  style={{ width: 120, background: C.surface2, border: "1px solid rgba(52,211,153,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+                  style={{ width: 120, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
                 <button disabled={savingPrice}
                   onClick={() => {
                     const p = parsePrice(barrioPriceInput);
@@ -760,7 +760,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                       logAudit({ modulo: "Planning", accion: "Cambió el precio de un barrio", detalle: `${barrioFiltro} · ${list.length} puntos · ${p == null ? "precio por defecto" : fmtEur(p)}` });
                     });
                   }}
-                  style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+                  style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
                   Aplicar a {(grouped[barrioFiltro] || []).length} puntos
                 </button>
               </>
@@ -773,13 +773,13 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
       {showDurPanel && (
         <div style={{
           padding: "14px 20px", borderBottom: `1px solid ${C.border}`,
-          background: "rgba(251,191,36,0.05)", flexShrink: 0,
+          background: "rgba(245,184,74,0.05)", flexShrink: 0,
           display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
         }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" style={{ flexShrink: 0 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f5b84a" strokeWidth="2" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          <span style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: "#f5b84a", fontWeight: 600 }}>
             Duración por parada
           </span>
           <span style={{ fontSize: 12, color: C.muted }}>
@@ -795,7 +795,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               placeholder="min"
               style={{
                 width: 72, background: C.surface2,
-                border: `1px solid rgba(251,191,36,0.35)`,
+                border: `1px solid rgba(245,184,74,0.35)`,
                 color: C.text, borderRadius: 7, padding: "7px 10px",
                 fontSize: 13, fontFamily: font, outline: "none",
                 textAlign: "center",
@@ -807,9 +807,9 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               disabled={applyingDur || !durInput || parseInt(durInput, 10) < 1}
               style={{
                 padding: "7px 16px", borderRadius: 7, cursor: "pointer",
-                background: applyingDur ? C.surface2 : "rgba(251,191,36,0.15)",
-                border: `1px solid rgba(251,191,36,0.4)`,
-                color: "#fbbf24", fontSize: 12, fontWeight: 600,
+                background: applyingDur ? C.surface2 : "rgba(245,184,74,0.15)",
+                border: `1px solid rgba(245,184,74,0.4)`,
+                color: "#f5b84a", fontSize: 12, fontWeight: 600,
                 fontFamily: font, transition: "all .15s",
                 opacity: applyingDur ? 0.6 : 1,
               }}

@@ -1,5 +1,6 @@
 // App del conductor (Rutas, Incidencias, Inventario, Admin): datos, colores,
 // estilos y utilidades que comparten todas sus pantallas.
+import { Droplets, Hammer, Sparkles, Wrench } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore";
@@ -18,7 +19,7 @@ export const CATS = [
   {label:"Comunicado general",color:"#8b5cf6",icon:"📢"},
 ];
 
-export const PC = {alta:"#f87171",media:"#fb923c",baja:"#34d399"};
+export const PC = {alta:"#f26d6d",media:"#f59e5b",baja:"#3fcf8e"};
 
 // Haversine distance in km — usado para detectar si el conductor se ha
 // movido de verdad entre dos lecturas de GPS (no solo ruido del sensor).
@@ -82,14 +83,14 @@ export async function fbDelete(colName, id) {
 
 // ── BARRIO COLOR (misma paleta que scheduling) ────────────────────
 const BARRIO_PALETTE = [
-  "#4f8ef7","#34d399","#fb923c","#f87171",
-  "#a78bfa","#fbbf24","#f472b6","#22d3ee","#818cf8","#4ade80",
+  "#5b7cfa","#3fcf8e","#f59e5b","#f26d6d",
+  "#a78bfa","#f5b84a","#f472b6","#22d3ee","#818cf8","#4ade80",
 ];
 
 const _barrioCache = {};
 
 export function barrioColor(b) {
-  if (!b) return "#8b95a5";
+  if (!b) return "#9aa3b2";
   if (_barrioCache[b]) return _barrioCache[b];
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
@@ -99,32 +100,31 @@ export function barrioColor(b) {
 // ── DESIGN SYSTEM ─────────────────────────────────────────────────
 
 const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 :root {
-  --bg:       #0f1623;
-  --surface:  #172035;
-  --surface2: #1e2d48;
-  --border:   rgba(88,130,225,0.22);
-  --border2:  rgba(88,130,225,0.40);
-  --blue:     #5c9bff;
-  --blueDim:  #0d2550;
-  --blueText: #b0ccff;
-  --cyan:     #5c9bff;
-  --cyanDim:  #0d2550;
-  --cyanText: #b0ccff;
-  --green:    #34d399;
-  --greenDim: #082a18;
-  --orange:   #fb923c;
-  --red:      #f87171;
-  --amber:    #fbbf24;
-  --text:     #e2eeff;
-  --muted:    #8aa5cc;
-  --dim:      #4a5f82;
-  --font:     'Inter', system-ui, sans-serif;
-  --mono:     'JetBrains Mono', 'Courier New', monospace;
+  --bg:       #0b0d12;
+  --surface:  #12151c;
+  --surface2: #181c25;
+  --border:   rgba(255,255,255,0.08);
+  --border2:  rgba(255,255,255,0.14);
+  --blue:     #5b7cfa;
+  --blueDim:  #1a2142;
+  --blueText: #b4c3ff;
+  --cyan:     #5b7cfa;
+  --cyanDim:  #1a2142;
+  --cyanText: #b4c3ff;
+  --green:    #3fcf8e;
+  --greenDim: #0f2a1f;
+  --orange:   #f59e5b;
+  --red:      #f26d6d;
+  --amber:    #f5b84a;
+  --text:     #e6e8ee;
+  --muted:    #9aa3b2;
+  --dim:      #5d6574;
+  --font:     'Inter Variable', 'Inter', system-ui, sans-serif;
+  --mono:     var(--font);
   --radius:   8px;
   --shadow:   0 2px 16px rgba(0,0,0,.4);
 }
@@ -162,25 +162,25 @@ export const mono = "var(--mono)";
 export const font = "var(--font)";
 
 export const C = {
-  bg:"#0f1623", card:"#172035", surface2:"#1e2d48",
-  border:"rgba(88,130,225,0.22)", border2:"rgba(88,130,225,0.40)",
-  cyan:"#5c9bff", cyanDim:"#0d2550", cyanText:"#b0ccff",
-  green:"#34d399", greenDim:"#082a18",
-  orange:"#fb923c", red:"#f87171", amber:"#fbbf24",
-  text:"#e2eeff", muted:"#8aa5cc", dim:"#4a5f82",
-  blue:"#5c9bff", blueDim:"#0d2550", blueText:"#b0ccff",
+  bg:"#0b0d12", card:"#12151c", surface2:"#181c25",
+  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.14)",
+  cyan:"#5b7cfa", cyanDim:"#1a2142", cyanText:"#b4c3ff",
+  green:"#3fcf8e", greenDim:"#0f2a1f",
+  orange:"#f59e5b", red:"#f26d6d", amber:"#f5b84a",
+  text:"#e6e8ee", muted:"#9aa3b2", dim:"#5d6574",
+  blue:"#5b7cfa", blueDim:"#1a2142", blueText:"#b4c3ff",
 };
 
 export const S = {
-  page:   {fontFamily:font, background:C.bg, minHeight:"100vh", maxWidth:520, margin:"0 auto", color:C.text},
-  input:  {width:"100%", background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}`, color:C.text, padding:"10px 13px", borderRadius:7, fontSize:13, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
-  label:  {fontSize:10, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
+  page:   {fontFamily:font, background:C.bg, minHeight:"100vh", width:"100%", maxWidth:520, margin:"0 auto", color:C.text},
+  input:  {width:"100%", background:"#0d0f14", border:"1px solid rgba(255,255,255,0.1)", color:C.text, padding:"10px 13px", borderRadius:10, fontSize:14, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
+  label:  {fontSize:12.5, color:"#c9ced8", display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
   btn:    {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"10px 18px", borderRadius:7, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnGhost:{background:"none", border:`1px solid ${C.border}`, color:C.muted, padding:"7px 14px", borderRadius:7, fontSize:12, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnSm:  {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"5px 11px", borderRadius:6, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnOk:  {background:C.greenDim, border:`1px solid ${C.green}44`, color:C.green, padding:"5px 11px", borderRadius:6, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 16px", marginBottom:8},
-  header: {background:"rgba(22,27,39,0.95)", borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
+  btnGhost:{background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.1)", color:"#c9ced8", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnSm:  {background:"rgba(91,124,250,0.16)", border:"1px solid rgba(91,124,250,0.4)", color:"#d6deff", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnOk:  {background:"rgba(63,207,142,0.12)", border:"1px solid rgba(63,207,142,0.35)", color:C.green, padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 2px rgba(0,0,0,.3)"},
+  header: {background:"rgba(11,13,18,0.86)", borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────
@@ -369,10 +369,10 @@ export const PUNTOS_INSPECCION = [
 
 // ── TIPOS DE TRABAJO ──────────────────────────────────────────────
 export const TIPOS_TRABAJO = [
-  { key:"prev",   label:"Mantenimiento Preventivo", icon:"🛠️", color:"#3b82f6", kml:true  },
-  { key:"corr",   label:"Mantenimiento Correctivo", icon:"🔩", color:"#f97316", kml:false },
-  { key:"ext",    label:"Limpieza Exterior",         icon:"🚿", color:"#22c55e", kml:true  },
-  { key:"int",    label:"Limpieza Interior",          icon:"🧹", color:"#8b5cf6", kml:true  },
+  { key:"prev",   label:"Mantenimiento Preventivo", icon:"🛠️", Icono:Wrench,   color:"#5b7cfa", kml:true  },
+  { key:"corr",   label:"Mantenimiento Correctivo", icon:"🔩", Icono:Hammer,   color:"#f59e5b", kml:false },
+  { key:"ext",    label:"Limpieza Exterior",         icon:"🚿", Icono:Droplets, color:"#3fcf8e", kml:true  },
+  { key:"int",    label:"Limpieza Interior",          icon:"🧹", Icono:Sparkles, color:"#a78bfa", kml:true  },
 ];
 
 // ── FICHAJE (entrada/salida + kms de la jornada) ────────────────────
@@ -390,13 +390,13 @@ export function fmtDuracion(desde, hasta){
 // (colección cuadrantes, un doc por usuario y mes: solo lo leen él y los
 // gestores).
 export const CUADRANTE_META={
-  M:{label:"Mañana",bg:"#0d2248",text:"#4f8ef7"},
-  T:{label:"Tarde",bg:"#3d1a00",text:"#fb923c"},
+  M:{label:"Mañana",bg:"#0d2248",text:"#5b7cfa"},
+  T:{label:"Tarde",bg:"#3d1a00",text:"#f59e5b"},
   N:{label:"Noche",bg:"#1a0d3d",text:"#a78bfa"},
-  L:{label:"Libre",bg:"#1c2a3a",text:"#64748b"},
-  G:{label:"Guardia",bg:"#2d2200",text:"#fbbf24"},
-  B:{label:"Baja",bg:"#3d0d0d",text:"#f87171"},
-  D:{label:"Disponible",bg:"#072015",text:"#34d399"},
+  L:{label:"Libre",bg:"#1a1f2a",text:"#64748b"},
+  G:{label:"Guardia",bg:"#2d2200",text:"#f5b84a"},
+  B:{label:"Baja",bg:"#3d0d0d",text:"#f26d6d"},
+  D:{label:"Disponible",bg:"#0f2a1f",text:"#3fcf8e"},
 };
 
 export const MESES_ES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

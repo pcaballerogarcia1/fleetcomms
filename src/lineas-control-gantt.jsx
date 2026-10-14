@@ -7,11 +7,11 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { hhmm, textoRetraso, COLOR_PUNTUALIDAD, ADELANTO_OK, RETRASO_OK } from "./lineas-servicio.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const ROW = 34, ETIQ = 190, ESCALAS = [1, 2, 4, 8];
 const GRIS = "#3b4a66", GRIS_VACIO = "#2a3550";
@@ -100,7 +100,7 @@ export function GanttVivo({ turnos, ahora, esHoy, onElegirTurno }) {
           <div style={{ position: "relative" }}>
             {/* rejilla de horas y la línea de ahora, por detrás */}
             <div style={{ position: "absolute", left: ETIQ, top: 0, bottom: 0, width: ancho, pointerEvents: "none" }}>
-              {horas.map(m => <div key={m} style={{ position: "absolute", left: x(m), top: 0, bottom: 0, width: 1, background: "rgba(88,130,225,0.10)" }} />)}
+              {horas.map(m => <div key={m} style={{ position: "absolute", left: x(m), top: 0, bottom: 0, width: 1, background: "rgba(148,163,184,0.10)" }} />)}
               {esHoy && ahora >= desde && ahora <= hasta && <div style={{ position: "absolute", left: x(ahora), top: 0, bottom: 0, width: 2, background: C.blue, boxShadow: `0 0 8px ${C.blue}`, zIndex: 2 }} />}
             </div>
             {vis.map(f => (

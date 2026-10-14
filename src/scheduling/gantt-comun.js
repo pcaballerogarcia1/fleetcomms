@@ -36,7 +36,7 @@ export const TABLE_COLS = [
 
 export const TABLE_W = TABLE_COLS.reduce((sum, c) => sum + c.w, 0) + 8;
 
-export const COL_COLOR = { amplitud: "#34d399", km: "#fb923c", kmVacio: "#fb923c" };
+export const COL_COLOR = { amplitud: "#3fcf8e", km: "#f59e5b", kmVacio: "#f59e5b" };
 
 export const rowName = r => [r?.nombre, r?.apellidos].filter(Boolean).join(" ") || r?.name || r?.matricula || "?";
 

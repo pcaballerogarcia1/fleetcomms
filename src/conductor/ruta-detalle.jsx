@@ -1,4 +1,5 @@
 // App del conductor → Rutas: el detalle de una ruta (paradas, inspección, mapa).
+import { Check, CheckCheck, ChevronLeft, ClipboardCheck, ClipboardList, Map as MapIcon, Navigation, StickyNote } from "lucide-react";
 import { useRef, useState } from "react";
 import { C, PUNTOS_INSPECCION, S, timeAgo } from "./comun.js";
 import { buscarEtiqueta, hayNfc } from "./rfid.js";
@@ -36,7 +37,7 @@ function LectorRfid({ubicaciones,onLeido}){
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Leer RFID / código del contenedor"
           onKeyDown={e=>{if(e.key==="Enter"&&texto.trim()){leer(texto.trim());setTexto("");}}}
-          style={{flex:1,minWidth:0,background:"#0d1c34",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
+          style={{flex:1,minWidth:0,background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
         {hayNfc()&&<button onClick={activarNfc} style={{...(nfc?S.btnOk:S.btnGhost),fontSize:11,padding:"7px 10px",flexShrink:0}}>{nfc?"NFC activo":"NFC"}</button>}
       </div>
       {aviso&&<div style={{fontSize:11,marginTop:6,color:aviso.ok?C.green:C.red}}>{aviso.t}</div>}
@@ -58,7 +59,7 @@ function ApuntarPesada({plan,sesion}){
       setF({kg:"",planta:f.planta,fraccion:f.fraccion,ticket:""});setAviso({ok:true,t:`✓ ${kg.toLocaleString("es-ES")} kg apuntados`});
     }catch(e){setAviso({ok:false,t:e.message||String(e)});}
   }
-  const inp={background:"#0d1c34",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
+  const inp={background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
   if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}>⚖️ Apuntar pesada de báscula</button>;
   return(
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",marginBottom:10}}>
@@ -93,27 +94,27 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           <div style={{fontSize:10,color:C.muted}}>{ub.barri}{ub.districte?" · "+ub.districte:""}</div>
           {ub.comentari&&<div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.comentari}</div>}
           {done&&ub.realizadoEn&&<div style={{fontSize:10,color:C.green,marginTop:2}}>✓ {timeAgo(ub.realizadoEn)}</div>}
-          {ub.nota&&<div style={{fontSize:10,color:"#8b5cf6",marginTop:2}}>📝 {ub.nota}</div>}
+          {ub.nota&&<div style={{fontSize:11,color:"#a78bfa",marginTop:2,display:"flex",alignItems:"center",gap:4}}><StickyNote size={12}/> {ub.nota}</div>}
           <div style={{fontSize:10,color:C.dim,marginTop:2}}>{ub.pa}</div>
           {onParte&&(
             <div style={{marginTop:4}}>
               {parteFirmado
-                ? <span style={{fontSize:9,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:10,padding:"2px 7px"}}>📋 Parte firmado</span>
+                ? <span style={{fontSize:9,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardCheck size={11} style={{verticalAlign:"-2px"}}/> Parte firmado</span>
                 : tieneParteIniciado
-                  ? <span style={{fontSize:9,color:C.orange,background:"#2a1500",border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}>📋 Parte en curso</span>
-                  : <span style={{fontSize:9,color:C.dim,background:"#0d1c34",border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}>📋 Sin parte</span>
+                  ? <span style={{fontSize:9,color:C.orange,background:"#2a1500",border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Parte en curso</span>
+                  : <span style={{fontSize:9,color:C.dim,background:"#0d0f14",border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Sin parte</span>
               }
             </div>
           )}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
           <div style={{display:"flex",gap:4}}>
-            <button onClick={onNavegar} style={{...S.btnOk}} title="Navegar">🧭</button>
-            <button onClick={onMarcar} style={done?S.btnOk:S.btnSm}>{done?"✓":"Marcar"}</button>
+            <button onClick={onNavegar} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Navegar"><Navigation size={15}/></button>
+            <button onClick={onMarcar} style={{...(done?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{done?<Check size={16}/>:"Marcar"}</button>
           </div>
           <div style={{display:"flex",gap:4}}>
-            {onParte&&<button onClick={onParte} style={{...S.btnGhost,fontSize:10,padding:"4px 6px",flex:1,borderColor:parteFirmado?C.green:tieneParteIniciado?C.orange:C.border,color:parteFirmado?C.green:tieneParteIniciado?C.orange:C.muted}}>📋 Parte</button>}
-            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?"#8b5cf6":C.border,color:ub.nota?"#8b5cf6":C.muted}}>📝</button>
+            {onParte&&<button onClick={onParte} style={{...S.btnGhost,fontSize:10,padding:"4px 6px",flex:1,borderColor:parteFirmado?C.green:tieneParteIniciado?C.orange:C.border,color:parteFirmado?C.green:tieneParteIniciado?C.orange:C.muted}}><ClipboardList size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Parte</button>}
+            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?"#8b5cf6":C.border,color:ub.nota?"#a78bfa":C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Nota"><StickyNote size={14}/></button>
           </div>
         </div>
       </div>
@@ -125,9 +126,9 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           {isExp&&(
             <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
               {ub.elementos.map(el=>(
-                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:"#0d1c34",border:`1px solid ${el.realizado?C.green+"44":"#1c2d45"}`,borderRadius:6,padding:"7px 10px"}}>
+                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:"#0d0f14",border:`1px solid ${el.realizado?C.green+"44":"#1c2d45"}`,borderRadius:6,padding:"7px 10px"}}>
                   <div><span style={{fontSize:12,color:el.realizado?C.green:C.blueText,fontWeight:700}}>{el.codiQR}</span><span style={{fontSize:10,color:C.dim,marginLeft:8}}>{el.model}</span></div>
-                  <button onClick={()=>onMarcarQR(el.codiQR,!el.realizado)} style={el.realizado?S.btnOk:S.btnSm}>{el.realizado?"✓":"Marcar"}</button>
+                  <button onClick={()=>onMarcarQR(el.codiQR,!el.realizado)} style={{...(el.realizado?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{el.realizado?<Check size={15}/>:"Marcar"}</button>
                 </div>
               ))}
             </div>
@@ -208,7 +209,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
     <div style={{...S.page,paddingBottom:100}}>
       {/* Header */}
       <div style={{...S.header}}>
-        <button onClick={onClose} style={{...S.btnGhost,fontSize:11,padding:"5px 10px",flexShrink:0}}>← Volver</button>
+        <button onClick={onClose} style={{...S.btnGhost,fontSize:12,padding:"5px 10px 5px 6px",flexShrink:0,display:"inline-flex",alignItems:"center",gap:2}}><ChevronLeft size={16}/> Volver</button>
         <div style={{flex:1,minWidth:0,padding:"0 8px"}}>
           <div style={{fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Parte — {ub.pa}</div>
           <div style={{fontSize:10,color:C.muted}}>{ub.calle} {ub.num} · {marcados}/{total} puntos</div>
@@ -236,7 +237,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         </div>
 
         {/* Barra progreso */}
-        <div style={{height:6,background:"#0f1117",borderRadius:3,overflow:"hidden",marginBottom:14}}>
+        <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden",marginBottom:14}}>
           <div style={{height:"100%",background:pct===100?C.green:pct>50?C.orange:C.red,borderRadius:3,width:`${pct}%`,transition:"width 0.3s"}}/>
         </div>
 
@@ -244,7 +245,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         {PUNTOS_INSPECCION.map(g=>(
           <div key={g.grupo} style={{marginBottom:12}}>
             {/* Cabecera grupo */}
-            <div style={{background:"#162038",borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{background:"#151a26",borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
               {g.grupo}
             </div>
             {/* Puntos */}
@@ -259,7 +260,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
               }}>
                 <div style={{
                   width:22,height:22,borderRadius:4,flexShrink:0,
-                  background:checks[pt]?C.green:"#0d1c34",
+                  background:checks[pt]?C.green:"#0d0f14",
                   border:`2px solid ${checks[pt]?C.green:C.border}`,
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:13,color:"white",fontWeight:800,
@@ -376,7 +377,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
   return(
     <div style={{...S.page,paddingBottom:90}}>
       <div style={{...S.header}}>
-        <button onClick={onBack} style={{...S.btnGhost,fontSize:11,padding:"5px 10px"}}>← Volver</button>
+        <button onClick={onBack} style={{...S.btnGhost,fontSize:12,padding:"5px 10px 5px 6px",display:"inline-flex",alignItems:"center",gap:2}}><ChevronLeft size={16}/> Volver</button>
         <div style={{flex:1,minWidth:0,padding:"0 10px"}}>
           <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
           <div style={{fontSize:10,color:C.muted}}>{plan.turno} · {plan.diaServicio} · {realizadas}/{ubicaciones.length}</div>
@@ -388,28 +389,28 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
           {[{l:"Paradas",v:ubicaciones.length,c:C.blueText},{l:"Hechas",v:realizadas,c:C.green},{l:"Pendient.",v:ubicaciones.length-realizadas,c:tasaColor},{l:"QR",v:`${realizadosQR}/${totalQR}`,c:"#8b5cf6"}].map(s=>(
             <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
               <div style={{fontSize:15,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing:1}}>{s.l}</div>
+              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing: 0.5}}>{s.l}</div>
             </div>
           ))}
         </div>
-        <div style={{height:6,background:"#0f1117",borderRadius:3,overflow:"hidden",marginBottom:10}}>
+        <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden",marginBottom:10}}>
           <div style={{height:"100%",background:tasaColor,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/>
         </div>
         {proxima&&(
-          <div style={{background:"#162038",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:"#151a26",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:C.blueDim,border:`2px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.blueText,flexShrink:0}}>{proxima.orden}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,color:C.muted,marginBottom:1}}>PRÓXIMA PARADA</div>
               <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proxima.calle} {proxima.num}</div>
               <div style={{fontSize:10,color:C.dim}}>{proxima.barri} · {proxima.elementos.length} elementos</div>
             </div>
-            <button onClick={()=>window.open(`https://maps.google.com/maps?daddr=${proxima.lat},${proxima.lng}&dirflg=d`,"_blank")} style={{...S.btnOk,flexShrink:0}}>🧭 IR</button>
+            <button onClick={()=>window.open(`https://maps.google.com/maps?daddr=${proxima.lat},${proxima.lng}&dirflg=d`,"_blank")} style={{...S.btnOk,flexShrink:0,display:"inline-flex",alignItems:"center",gap:6}}><Navigation size={15}/> Ir</button>
           </div>
         )}
         {plan.origenVRP&&<ApuntarPesada plan={plan} sesion={sesion}/>}
         {totalQR>0&&<LectorRfid ubicaciones={ubicaciones} onLeido={(ubicId,qr)=>marcarQR(ubicId,qr,true)}/>}
         <button onClick={()=>setVerMapa(v=>!v)} style={{...S.btnGhost,width:"100%",marginBottom:8,borderColor:verMapa?C.blue:C.border,color:verMapa?C.blueText:C.muted}}>
-          🗺️ {verMapa?"Ocultar mapa":"Ver mapa del recorrido"}
+          <MapIcon size={15} style={{verticalAlign:"-3px",marginRight:6}}/>{verMapa?"Ocultar mapa":"Ver mapa del recorrido"}
         </button>
         {verMapa&&<div style={{marginBottom:10}}><MapaLeaflet ubicaciones={ubicaciones} recorrido={recorrido} selId={selId} onSelect={sel} height={260}/></div>}
         {barrios.length>1&&(
@@ -421,16 +422,16 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div style={{...S.label,marginBottom:0}}>Paradas ({ubics.length})</div>
           <button onClick={()=>{const t=ubics.every(u=>u.realizado);ubics.forEach(u=>marcarUbic(u.id,!t));}} style={{...S.btnGhost,fontSize:10,padding:"4px 10px"}}>
-            {ubics.every(u=>u.realizado)?"✗ Desmarcar todas":"✓ Marcar todas"}
+            {ubics.every(u=>u.realizado)?"Desmarcar todas":<><CheckCheck size={14} style={{verticalAlign:"-3px",marginRight:4}}/>Marcar todas</>}
           </button>
         </div>
-        {pendientes.length>0&&<><div style={{fontSize:9,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:6,paddingLeft:4}}>PENDIENTES ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
-        {hechas.length>0&&<><div style={{fontSize:9,color:C.green,letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:12,paddingLeft:4}}>✓ COMPLETADAS ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
+        {pendientes.length>0&&<><div style={{fontSize: 10.5,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:6,paddingLeft:4}}>PENDIENTES ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
+        {hechas.length>0&&<><div style={{fontSize: 10.5,color:C.green,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:6,marginTop:12,paddingLeft:4}}>✓ COMPLETADAS ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
       </div>
       {notaId&&(
         <div style={{position:"fixed",inset:0,background:"#000b",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setNotaId(null)}>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxWidth:520}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>📝 Nota de la parada</div>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:12}}><StickyNote size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Nota de la parada</div>
             <textarea value={notaText} onChange={e=>setNotaText(e.target.value)} rows={4} placeholder="Observaciones, incidencias..." style={{...S.input,resize:"none",marginBottom:12}}/>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setNotaId(null)} style={{...S.btnGhost,flex:1}}>Cancelar</button>

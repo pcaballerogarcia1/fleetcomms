@@ -131,7 +131,7 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
     <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
       <div ref={divRef} style={{ height, background: "#131e35" }} />
       <div style={{ background: C.card, padding: "6px 12px", display: "flex", gap: 14, borderTop: `1px solid ${C.border}` }}>
-        {[[C.green, "Realizada"], ["#8b95a5", "Pendiente"]].map(([color, label]) => (
+        {[[C.green, "Realizada"], ["#9aa3b2", "Pendiente"]].map(([color, label]) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
             <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
@@ -216,7 +216,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
 
       const html = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none;">
         <div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5);${pulse}"></div>
-        <div style="margin-top:3px;padding:2px 7px;border-radius:5px;background:${alerted ? "rgba(248,113,113,0.15)" : C.card};border:1px solid ${alerted ? C.red : C.border};color:${alerted ? "#fff" : C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${label}</div>
+        <div style="margin-top:3px;padding:2px 7px;border-radius:5px;background:${alerted ? "rgba(242,109,109,0.15)" : C.card};border:1px solid ${alerted ? C.red : C.border};color:${alerted ? "#fff" : C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${label}</div>
       </div>`;
       const icon = L.divIcon({ className: "", html, iconSize: [16, 16], iconAnchor: [8, 8] });
 
@@ -280,7 +280,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
       </div>
 
       {alertedDrivers.length > 0 && (
-        <div style={{ padding: "8px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0, background: "rgba(248,113,113,0.05)" }}>
+        <div style={{ padding: "8px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0, background: "rgba(242,109,109,0.05)" }}>
           {alertedDrivers.map(({ d, alerts }) => {
             const stationaryMin = Math.round((now - (d.lastMovedAt || d.updatedAt || now)) / 60000);
             const motivos = [

@@ -95,7 +95,7 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
               {DIAS.map(d => {
                 const on = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio).includes(d);
                 return <button key={d} onClick={() => { const act = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio); const nuevo = DIAS.filter(x => (x === d ? !on : act.includes(x))).join(""); if (nuevo) set("diasServicio", nuevo); }}
-                  style={{ width: 26, height: 24, borderRadius: 5, border: `1px solid ${on ? C.blue : C.border}`, background: on ? "rgba(92,155,255,0.18)" : "none", color: on ? C.blueText : C.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>{d}</button>;
+                  style={{ width: 26, height: 24, borderRadius: 5, border: `1px solid ${on ? C.blue : C.border}`, background: on ? "rgba(91,124,250,0.18)" : "none", color: on ? C.blueText : C.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>{d}</button>;
               })}
             </span>
           ), "Día 1 del escenario es el primero de estos (normalmente el lunes)."],
@@ -157,9 +157,9 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
         ["optimizeWeight", "Kilómetros o turnos", (
           <div style={{ maxWidth: 420 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>Kilómetros</span>
+              <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", flexShrink: 0 }}>Kilómetros</span>
               <input type="range" min={0} max={100} step={5} value={c.optimizeWeight || 0} onChange={e => set("optimizeWeight", parseInt(e.target.value))} style={{ flex: 1, accentColor: C.blue, cursor: "pointer" }} />
-              <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>Turnos</span>
+              <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", flexShrink: 0 }}>Turnos</span>
             </div>
             <div style={{ fontSize: 11, color: C.blueText, fontFamily: mono, marginTop: 4 }}>{c.optimizeWeight > 0 ? `${c.optimizeWeight}% turnos` : "kilómetros"}</div>
           </div>
@@ -172,7 +172,7 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
   // plantillas (arriba, junto al título)
   const plantillas = (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{ fontSize: 10, color: C.dim, letterSpacing: 1, textTransform: "uppercase" }}>{t("plantillas", lang)}</span>
+      <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("plantillas", lang)}</span>
       <select value={selectedTpl} onChange={e => e.target.value ? cargarPlantilla(e.target.value) : setSelectedTpl("")}
         style={{ background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 8px", fontSize: 11, fontFamily: font, cursor: "pointer", outline: "none", maxWidth: 180 }}>
         <option value="">— ninguna —</option>

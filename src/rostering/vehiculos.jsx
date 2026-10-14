@@ -282,15 +282,15 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                     <th key={d} style={{
                       width: CELL_W, minWidth: CELL_W,
                       position: "sticky", top: 0, zIndex: 3,
-                      background: today ? "#0e2248" : weekend ? "#161e34" : C.card,
+                      background: today ? "#1a2142" : weekend ? "#151922" : C.card,
                       borderBottom: `2px solid ${today ? C.blue : C.border}`,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#fb923c" : C.dim }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#f59e5b" : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#fb923c88" : C.muted }}>
+                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#f59e5b88" : C.muted }}>
                         {d}
                       </div>
                     </th>
@@ -373,7 +373,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
-                              boxShadow: "inset 0 0 0 2px #4f8ef7",
+                              boxShadow: "inset 0 0 0 2px #5b7cfa",
                               background: "rgba(79,142,247,0.12)",
                             }} />
                           )}
@@ -408,7 +408,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                   borderTop: `2px solid ${C.border2}`,
                   padding: "0 12px", height: 38,
                   fontSize: 10, color: C.muted, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: 1,
+                  textTransform: "uppercase", letterSpacing: 0.5,
                 }}>
                   Totales día
                 </td>
@@ -418,7 +418,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                   return (
                     <td key={d} style={{
                       width: CELL_W, textAlign: "center", height: 38,
-                      background: today ? "#0e2248" : C.surface2,
+                      background: today ? "#1a2142" : C.surface2,
                       borderRight: `1px solid ${C.border}`,
                       borderTop: `2px solid ${C.border2}`,
                       verticalAlign: "middle", padding: "2px 0",

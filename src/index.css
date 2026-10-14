@@ -1,111 +1,140 @@
+/* ── Base visual de Operanzia (tema oscuro refinado, ver src/tema.js) ── */
+@import "@fontsource-variable/inter";
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --bg: #0b0d12;
+  --card: #12151c;
+  --surface: #181c25;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #e6e8ee;
+  --muted: #9aa3b2;
+  --dim: #5d6574;
+  --accent: #5b7cfa;
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: var(--font);
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: dark;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--text);
   background: var(--bg);
+  /* cifras del mismo ancho (tablas y horas alineadas) y la «a» y «l» más legibles */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv11", "ss01";
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
+  background: var(--bg);
 }
 
 #root {
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  text-align: left;
-  border-inline: none;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+h1, h2, h3 { margin: 0; letter-spacing: -0.01em; color: var(--text); }
+p { margin: 0; }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
+/* los controles heredan la letra (si no, cada navegador pone la suya) */
+button, input, select, textarea { font-family: inherit; font-feature-settings: inherit; }
+input::placeholder, textarea::placeholder { color: var(--dim); opacity: 1; }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+/* foco visible solo con teclado: un anillo del color de acento */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; border-radius: 4px; }
+
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: #fff; }
+
+/* barras de desplazamiento finas y discretas */
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); background-clip: padding-box; border: 2px solid transparent; }
+
+/* transiciones suaves por defecto en lo que se pulsa */
+button, a, [role="button"] { transition: background-color .12s ease, border-color .12s ease, color .12s ease, opacity .12s ease; }
 
 code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface);
 }
+
+/* Leaflet: controles con el mismo aspecto que la app */
+.leaflet-container { font-family: var(--font); background: var(--bg); }
+.leaflet-bar a { background: var(--card) !important; color: var(--text) !important; border-color: var(--border) !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--text); box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+
+/* Algunas pantallas antiguas meten sus propios estilos globales al cargar
+   (fondo, letra, barras): estas reglas pesan más y mandan siempre. */
+html body { background: var(--bg); color: var(--text); font-family: var(--font); }
+html ::-webkit-scrollbar { width: 10px; height: 10px; }
+html ::-webkit-scrollbar-track { background: transparent; }
+html ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+html .planning-map .leaflet-popup-content-wrapper, html .planning-map .leaflet-popup-tip { background: var(--card); color: var(--text); border-color: var(--border); }
+html .planning-map .leaflet-control-zoom a { background: var(--card) !important; color: var(--text) !important; border-color: var(--border) !important; }
+
+/* ── Botones comunes ──────────────────────────────────────────────────
+   op-btn: secundario (el normal) · op-btn op-primario: la acción principal
+   de la pantalla (una sola) · op-btn op-fantasma: sin borde · op-icono:
+   cuadrado, solo icono · op-seg: grupo de opciones (segmented control). */
+.op-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; padding: 0 11px; border-radius: 8px; flex-shrink: 0; white-space: nowrap;
+  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
+  color: #c9ced8; font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em; cursor: pointer;
+}
+.op-btn:hover:not(:disabled) { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); color: #fff; }
+.op-btn:active:not(:disabled) { background: rgba(255,255,255,0.1); }
+.op-btn:disabled { opacity: .45; cursor: not-allowed; }
+.op-btn svg { flex-shrink: 0; opacity: .85; }
+.op-btn.op-activo { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); color: #fff; }
+.op-btn.op-ok { color: #3fcf8e; }
+.op-primario {
+  background: linear-gradient(180deg, #6a88ff 0%, #5470f0 100%); border-color: rgba(255,255,255,0.12);
+  color: #fff; font-weight: 600; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px rgba(91,124,250,0.28);
+}
+.op-primario:hover:not(:disabled) { background: linear-gradient(180deg, #7893ff 0%, #5d79f5 100%); border-color: rgba(255,255,255,0.2); }
+.op-primario svg { opacity: 1; }
+.op-fantasma { background: transparent; border-color: transparent; color: #9aa3b2; }
+.op-fantasma:hover:not(:disabled) { background: rgba(255,255,255,0.06); border-color: transparent; }
+.op-icono { width: 30px; padding: 0; }
+.op-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
+.op-seg > button { height: 24px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #9aa3b2; font-size: 12px; font-weight: 500; cursor: pointer; }
+.op-seg > button:hover { color: #e6e8ee; }
+.op-seg > button.op-on { background: rgba(255,255,255,0.1); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.op-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+@keyframes op-spin { to { transform: rotate(360deg); } }
+.op-girando { animation: op-spin .7s linear infinite; }
+
+/* ── Campos de texto ────────────────────────────────────────────────── */
+.op-input {
+  width: 100%; height: 38px; padding: 0 12px; border-radius: 9px;
+  background: #0d0f14; border: 1px solid rgba(255,255,255,0.1); color: #e6e8ee;
+  font-size: 13.5px; outline: none; transition: border-color .12s, box-shadow .12s;
+}
+.op-input:hover { border-color: rgba(255,255,255,0.16); }
+.op-input:focus { border-color: rgba(91,124,250,0.7); box-shadow: 0 0 0 3px rgba(91,124,250,0.18); }
+.op-label { display: block; font-size: 12.5px; font-weight: 500; color: #c9ced8; margin-bottom: 6px; }
+
+/* ── Tarjetas ───────────────────────────────────────────────────────── */
+.op-tarjeta { background: #12151c; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: border-color .15s, box-shadow .15s; }
+.op-tarjeta:hover { border-color: rgba(255,255,255,0.14); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+.op-tarjeta.op-activa { border-color: rgba(91,124,250,0.55); box-shadow: 0 0 0 1px rgba(91,124,250,0.35), 0 8px 28px rgba(0,0,0,.35); }
+.op-pastilla { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap; }
+.op-btn-peligro:hover:not(:disabled) { color: #f26d6d !important; background: rgba(242,109,109,0.08) !important; }

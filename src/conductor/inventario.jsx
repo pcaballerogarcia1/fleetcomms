@@ -98,7 +98,7 @@ export function ModuloInventario({sesion,usuarios}){
             <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 8px",textAlign:"center",cursor:s.l.includes("Alertas")?"pointer":"default"}}
               onClick={()=>s.l.includes("Alertas")&&setSoloAlertas(v=>!v)}>
               <div style={{fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:9,color:soloAlertas&&s.l.includes("Alertas")?C.orange:C.dim,textTransform:"uppercase",letterSpacing:1}}>{s.l}</div>
+              <div style={{fontSize: 10.5,color:soloAlertas&&s.l.includes("Alertas")?C.orange:C.dim,textTransform:"uppercase",letterSpacing: 0.5}}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -171,7 +171,7 @@ export function ModuloInventario({sesion,usuarios}){
             </div>
           </div>
           {/* Barra stock */}
-          <div style={{height:6,background:"#0f1117",borderRadius:3,overflow:"hidden"}}>
+          <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden"}}>
             <div style={{height:"100%",background:stockColor(prodActual),borderRadius:3,width:`${Math.min(100,prodActual.stockMin>0?(prodActual.stock/Math.max(prodActual.stock,prodActual.stockMin*2))*100:prodActual.stock>0?100:0)}%`,transition:"width 0.4s"}}/>
           </div>
           <div style={{fontSize:10,color:C.dim,marginTop:4}}>Stock mínimo: {prodActual.stockMin} {prodActual.unidad}</div>
@@ -220,7 +220,7 @@ export function ModuloInventario({sesion,usuarios}){
         })}
 
         {esAdmin&&(
-          <button onClick={()=>eliminarProducto(prodActual.id)} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f87171",width:"100%",padding:"10px",borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:mono,marginTop:8}}>
+          <button onClick={()=>eliminarProducto(prodActual.id)} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",width:"100%",padding:"10px",borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:mono,marginTop:8}}>
             Eliminar producto
           </button>
         )}
@@ -280,7 +280,7 @@ export function ModuloInventario({sesion,usuarios}){
           <textarea value={formMov.nota} onChange={e=>setFormMov({...formMov,nota:e.target.value})} placeholder="Observaciones..." rows={2} style={{...S.input,resize:"none"}}/>
         </div>
 
-        {errForm&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
+        {errForm&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
         <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:14,background:formMov.tipo==="entrada"?C.greenDim:"#2a1500",borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
           {formMov.tipo==="entrada"?"⬆ REGISTRAR ENTRADA":"⬇ REGISTRAR SALIDA"}
         </button>
@@ -309,7 +309,7 @@ export function ModuloInventario({sesion,usuarios}){
           <div><label style={S.label}>Stock inicial</label><input type="number" min="0" value={formProd.stock} onChange={e=>setFormProd({...formProd,stock:e.target.value})} style={S.input}/></div>
           <div><label style={S.label}>Stock mínimo ⚠️</label><input type="number" min="0" value={formProd.stockMin} onChange={e=>setFormProd({...formProd,stockMin:e.target.value})} style={S.input}/></div>
         </div>
-        {errForm&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
+        {errForm&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
         <button onClick={guardarProducto} style={{...S.btn,width:"100%",padding:13,fontSize:14}}>AÑADIR PRODUCTO</button>
       </div>
     </div>

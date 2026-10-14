@@ -3,10 +3,10 @@
 import { useState, useMemo } from "react";
 
 const C = {
-  bg: "#0f1623", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff",
+  bg: "#0b0d12", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 const MAX_LISTA = 150;
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -32,7 +32,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}><polyline points="6 9 12 15 18 9" /></svg>
-          <span style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Líneas GTFS ({total})</span>
+          <span style={{ fontSize: 10.5, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Líneas GTFS ({total})</span>
         </span>
         {sel && <span onClick={e => { e.stopPropagation(); onSel(null); }} style={{ fontSize: 10, color: C.blue }}>quitar filtro</span>}
       </button>
@@ -56,7 +56,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
                   cursor: "pointer", fontFamily: font,
                 }}>
                   <span style={{
-                    minWidth: 34, padding: "2px 5px", borderRadius: 5, background: l.color, color: "#0b1220",
+                    minWidth: 34, padding: "2px 5px", borderRadius: 5, background: l.color, color: "#0d0f14",
                     fontSize: 11, fontWeight: 800, textAlign: "center", flexShrink: 0,
                   }}>{l.nombre}</span>
                   <span style={{ minWidth: 0, flex: 1 }}>

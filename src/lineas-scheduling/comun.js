@@ -15,18 +15,16 @@ import { minToHHMM } from "../gtfs-parse.js";
 
 // Mismos colores y tipografías que scheduling.jsx
 export const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
-  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  blue: "#5c9bff", blueDim: "#0d2550", blueText: "#b0ccff",
-  green: "#34d399", greenDim: "#082a18",
-  orange: "#fb923c", red: "#f87171", amber: "#fbbf24",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
+  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff",
+  green: "#3fcf8e", greenDim: "#0f2a1f",
+  orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
 
-export const font = "'Inter',system-ui,sans-serif";
-
-export const mono = "'JetBrains Mono','Courier New',monospace";
-
+export const font = "var(--font)";
+export const mono = "var(--mono)";
 export const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 export const hm = m => (m == null ? "—" : `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, "0")}`);

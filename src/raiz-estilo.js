@@ -1,8 +1,8 @@
 // Colores y fuente del armazón de la web (cabecera, cargando, avisos).
 export const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
-  border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
-  blue: "#5c9bff",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
+  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
+  blue: "#5b7cfa",
 };
-export const font = '"Inter","Segoe UI",system-ui,sans-serif';
+export const font = "var(--font)";

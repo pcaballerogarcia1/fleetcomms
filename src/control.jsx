@@ -179,7 +179,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
       {/* ── Header ── */}
       <div style={{ padding: "14px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>
             Control · tiempo real
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -213,13 +213,13 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
               title="Descargar actividad (.csv)"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)",
+                background: "rgba(63,207,142,0.08)", border: "1px solid rgba(63,207,142,0.25)",
                 color: C.green, borderRadius: 7, padding: "5px 12px",
                 fontSize: 12, fontWeight: 600, cursor: activityEvents.length === 0 ? "not-allowed" : "pointer",
                 opacity: activityEvents.length === 0 ? 0.4 : 1, fontFamily: font, transition: "all .15s",
               }}
-              onMouseEnter={e => { if (activityEvents.length > 0) e.currentTarget.style.background = "rgba(52,211,153,0.16)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "rgba(52,211,153,0.08)"; }}
+              onMouseEnter={e => { if (activityEvents.length > 0) e.currentTarget.style.background = "rgba(63,207,142,0.16)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(63,207,142,0.08)"; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -263,11 +263,11 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
           width: 290, flexShrink: 0, borderRight: `1px solid ${C.border}`,
           overflowY: "auto", padding: "12px 12px",
         }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
             {filteredPlanes.length}{planesCapped ? `+` : ""} planes
           </div>
           {planesCapped && (
-            <div style={{ fontSize: 10, color: C.orange, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.25)", borderRadius: 6, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 10, color: C.orange, background: "rgba(245,158,91,0.08)", border: "1px solid rgba(245,158,91,0.25)", borderRadius: 6, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
               Hay más de {PLANES_QUERY_LIMIT} planes este mes — se muestran los primeros {PLANES_QUERY_LIMIT}. Progreso global también es solo de estos.
             </div>
           )}
@@ -323,7 +323,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
 
           {/* Activity feed */}
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
-            <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
               {selectedId ? "Actividad del plan" : "Actividad global"} · {activityEvents.length} registros
             </div>
             <ActivityFeed events={activityEvents} usuarios={usuarios} />

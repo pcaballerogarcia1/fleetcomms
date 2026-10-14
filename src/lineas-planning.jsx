@@ -18,11 +18,11 @@ import { nombreDia, cabecerasDeRed } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", green: "#34d399", amber: "#fbbf24", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-const mono = '"JetBrains Mono","Fira Mono",monospace';
+const font = "var(--font)";
+const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const fmtFecha = d => (d ? new Date(d + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }) : "—");
 
@@ -74,7 +74,7 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
         if (!p || vistas.has(id)) return;
         vistas.add(id);
         const cab = k === 0 || k === s.paradas.length - 1;
-        L.circleMarker([p.lat, p.lng], { radius: cab ? 7 : 4, color: "#0b1220", weight: 1.5, fillColor: cab ? "#fff" : linea.color, fillOpacity: 1, renderer })
+        L.circleMarker([p.lat, p.lng], { radius: cab ? 7 : 4, color: "#0d0f14", weight: 1.5, fillColor: cab ? "#fff" : linea.color, fillOpacity: 1, renderer })
           .bindTooltip(`${p.nombre} · ${p.codigo}`, { direction: "top" }).addTo(g);
       }));
       const b = L.latLngBounds(linea.sentidos.flatMap(s => s.trazado));
@@ -103,7 +103,7 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
       if (!isFinite(c.lat) || !isFinite(c.lng)) continue;
       const icono = L.divIcon({
         className: "", iconSize: [26, 26], iconAnchor: [13, 13],
-        html: '<div style="width:26px;height:26px;border-radius:6px;background:#fb923c;border:2px solid #0b1220;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0b1220" stroke-width="2.4"><path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-8h10v8"/><line x1="7" y1="17" x2="17" y2="17"/></svg></div>',
+        html: '<div style="width:26px;height:26px;border-radius:6px;background:#f59e5b;border:2px solid #0d0f14;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0d0f14" stroke-width="2.4"><path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-8h10v8"/><line x1="7" y1="17" x2="17" y2="17"/></svg></div>',
       });
       const m = L.marker([c.lat, c.lng], { icon: icono, draggable: true, zIndexOffset: 1000 }).bindTooltip(`${c.nombre || "Cochera"} · arrastra para moverla`, { direction: "top" });
       m.on("dragend", () => { const p = m.getLatLng(); moverRef.current?.(c.id, p.lat, p.lng); });
@@ -126,7 +126,7 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
 function Insignia({ linea, grande }) {
   return (
     <span style={{
-      minWidth: grande ? 44 : 34, padding: grande ? "4px 8px" : "2px 5px", borderRadius: 6, background: linea.color, color: "#0b1220",
+      minWidth: grande ? 44 : 34, padding: grande ? "4px 8px" : "2px 5px", borderRadius: 6, background: linea.color, color: "#0d0f14",
       fontSize: grande ? 15 : 11, fontWeight: 800, textAlign: "center", flexShrink: 0, display: "inline-block",
     }}>{linea.nombre}</span>
   );
@@ -153,7 +153,7 @@ function NumeroEditable({ valor, placeholder, onGuardar, sufijo = "min", ancho =
 }
 
 // Colores para elegir rápido (y el selector libre al final)
-const COLORES_RAPIDOS = ["#5c9bff", "#34d399", "#fb923c", "#f87171", "#a78bfa", "#fbbf24", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#94a3b8", "#ffffff"];
+const COLORES_RAPIDOS = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f26d6d", "#a78bfa", "#f5b84a", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#94a3b8", "#ffffff"];
 
 function ElegirColor({ color, elegido, onColor }) {
   const [abierto, setAbierto] = useState(false);
@@ -305,7 +305,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
                   {on && (
                     <button onClick={e => { e.preventDefault(); onCfg({ preferente: cfg?.preferente === t.id ? null : t.id }); }} style={{
                       fontSize: 10.5, padding: "2px 7px", borderRadius: 5, cursor: "pointer", fontFamily: font,
-                      background: cfg?.preferente === t.id ? C.green : "none", color: cfg?.preferente === t.id ? "#0b1220" : C.muted,
+                      background: cfg?.preferente === t.id ? C.green : "none", color: cfg?.preferente === t.id ? "#0d0f14" : C.muted,
                       border: `1px solid ${cfg?.preferente === t.id ? C.green : C.border2}`, fontWeight: 700,
                     }}>{cfg?.preferente === t.id ? "Preferente" : "Marcar preferente"}</button>
                   )}
@@ -349,18 +349,18 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
   return (
     <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, fontFamily: font }}>
+        <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, fontFamily: font }}>
           {abierto ? "▾" : "▸"} Cocheras {cocheras.length ? `(${cocheras.length})` : ""}
         </button>
         <button onClick={() => setPoniendo(p => !p)} style={{ marginLeft: "auto", fontSize: 11, padding: "3px 9px", borderRadius: 6, cursor: "pointer", fontFamily: font, fontWeight: 600,
-          background: poniendo ? "#fb923c" : "none", color: poniendo ? "#0b1220" : "#fb923c", border: "1px solid #fb923c88" }}>{poniendo ? "Pincha en el mapa…" : "+ Añadir"}</button>
+          background: poniendo ? "#f59e5b" : "none", color: poniendo ? "#0d0f14" : "#f59e5b", border: "1px solid #f59e5b88" }}>{poniendo ? "Pincha en el mapa…" : "+ Añadir"}</button>
       </div>
       {abierto && (
         <div style={{ marginTop: 8 }}>
           {!cocheras.length && <div style={{ fontSize: 11, color: C.amber, lineHeight: 1.5 }}>Sin cochera, el Scheduling no puede calcular las salidas y vueltas a cochera ni sus km en vacío.</div>}
           {cocheras.map(c => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 4, background: "#fb923c", flexShrink: 0 }} />
+              <span style={{ width: 14, height: 14, borderRadius: 4, background: "#f59e5b", flexShrink: 0 }} />
               <input defaultValue={c.nombre || ""} placeholder="Nombre de la cochera" onBlur={e => { const n = e.target.value.trim(); if (n && n !== c.nombre) onCambiar(l => l.map(x => (x.id === c.id ? { ...x, nombre: n } : x))); }}
                 onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "4px 7px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
@@ -446,7 +446,7 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
   const puede = lineas.size > 0 && (!hayCals || cals.size > 0);
   const casilla = (marcada, onClick) => <input type="checkbox" checked={marcada} onChange={onClick} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer", flexShrink: 0 }} />;
   const boton = (txt, onClick, fuerte = false, deshabilitado = false) => (
-    <button onClick={onClick} disabled={deshabilitado} style={{ padding: fuerte ? "9px 18px" : "5px 10px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border}`, background: fuerte ? (deshabilitado ? C.surface2 : "#16306a") : "transparent", color: fuerte ? "#cfe0ff" : C.muted, fontSize: fuerte ? 12.5 : 11, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font }}>{txt}</button>
+    <button onClick={onClick} disabled={deshabilitado} style={{ padding: fuerte ? "9px 18px" : "5px 10px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border}`, background: fuerte ? (deshabilitado ? C.surface2 : "#222c58") : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: fuerte ? 12.5 : 11, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font }}>{txt}</button>
   );
   const columna = { display: "flex", flexDirection: "column", minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 10, background: C.card };
   const cabeza = { display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" };
@@ -686,15 +686,15 @@ export function PlanningLineasPage({ projectId, orgId }) {
       {/* Lista de líneas */}
       <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.card, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "14px 14px 10px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Red de líneas</div>
+          <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Red de líneas</div>
           <input ref={fileRef} type="file" accept=".zip" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; importar(f); }} />
           <button onClick={() => fileRef.current?.click()} disabled={!!importando} style={{
-            width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.blue}55`, background: importando ? C.surface2 : "#16306a",
+            width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.blue}55`, background: importando ? C.surface2 : "#222c58",
             color: "#a3c4fc", fontSize: 12, fontWeight: 600, cursor: importando ? "wait" : "pointer", fontFamily: font,
           }}>{importando || (red ? "Sustituir red (GTFS .zip)" : "Importar red (GTFS .zip)")}</button>
           {red && (
             <button onClick={exportarGtfs} title="Un GTFS con la red tal y como está en Operanzia: calendarios, salidas (también las cambiadas a mano) y pasos por parada"
-              style={{ width: "100%", marginTop: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(52,211,153,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+              style={{ width: "100%", marginTop: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(63,207,142,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
               Exportar GTFS (.zip)
             </button>
           )}
@@ -725,7 +725,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
             <div style={{ fontSize: 12, color: C.muted, padding: 14, lineHeight: 1.6 }}>
               Este proyecto es de <b style={{ color: C.text }}>Líneas regulares</b>. Importa el GTFS de la red (el .zip que publica el operador o el consorcio) para ver las líneas con su ida y vuelta, los viajes por tipo de día y los tiempos de recorrido.
               <div style={{ margin: "12px 0 6px", color: C.dim }}>¿No tienes GTFS?</div>
-              <button onClick={() => setVista("diseno")} style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(52,211,153,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Crear la red a mano</button>
+              <button onClick={() => setVista("diseno")} style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(63,207,142,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Crear la red a mano</button>
               <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Paradas en el mapa, líneas con ida y vuelta, calendarios y horarios.</div>
             </div>
           )}
@@ -782,8 +782,8 @@ export function PlanningLineasPage({ projectId, orgId }) {
         <MapaRed red={red} linea={linea} paradasPorId={paradasPorId} cocheras={cocheras} poniendoCochera={poniendoCochera} onClickMapa={anadirCochera}
           onMoverCochera={(id, lat, lng) => cambiarListaCocheras(l => l.map(c => (c.id === id ? { ...c, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : c)))} />
         {poniendoCochera && (
-          <div style={{ position: "absolute", left: "50%", top: 12, transform: "translateX(-50%)", zIndex: 600, background: "#fb923c", color: "#0b1220", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>
-            Pincha en el mapa donde está la cochera · <button onClick={() => setPoniendoCochera(false)} style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontWeight: 700, color: "#0b1220", fontFamily: font }}>cancelar</button>
+          <div style={{ position: "absolute", left: "50%", top: 12, transform: "translateX(-50%)", zIndex: 600, background: "#f59e5b", color: "#0d0f14", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.5)" }}>
+            Pincha en el mapa donde está la cochera · <button onClick={() => setPoniendoCochera(false)} style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontWeight: 700, color: "#0d0f14", fontFamily: font }}>cancelar</button>
           </div>
         )}
         {red && !linea && (

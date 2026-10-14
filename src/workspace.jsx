@@ -1,5 +1,7 @@
 // El espacio de trabajo de la oficina: cabecera, rutas (/projects, /planning,
 // /scheduling, /rostering, /control, /analytics) y la sesión.
+import { MARCA } from "./tema.js";
+import { Marca } from "./ui/marca.jsx";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { LoginScheduling } from "./login-scheduling.jsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
@@ -58,11 +60,12 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
   const initials = ((sesion?.nombre?.[0] ?? "") + (sesion?.apellidos?.[0] ?? "")).toUpperCase();
   const crumb = (label, href, active) => (
     <button onClick={() => go(href)} style={{
-      background: active ? `${C.blue}18` : "none",
-      border: `1px solid ${active ? `${C.blue}44` : "transparent"}`,
+      background: active ? "rgba(255,255,255,0.07)" : "none",
+      border: "1px solid transparent",
+      boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.06)" : "none",
       cursor: "pointer", fontFamily: font, fontSize: 13,
-      color: active ? C.blue : C.muted, fontWeight: active ? 600 : 400,
-      padding: "3px 10px", borderRadius: 5, transition: "all .12s",
+      color: active ? C.text : C.muted, fontWeight: active ? 550 : 450,
+      padding: "5px 10px", borderRadius: 7, transition: "all .12s",
     }}
       onMouseEnter={e => { if (!active) { e.currentTarget.style.color = C.text; e.currentTarget.style.background = C.surface2; } }}
       onMouseLeave={e => { if (!active) { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = "none"; } }}
@@ -71,20 +74,20 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
 
   return (
     <div style={{
-      height: 46, flexShrink: 0, background: C.card,
+      height: 52, flexShrink: 0, background: C.bg,
       borderBottom: `1px solid ${C.border}`,
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "0 16px", fontFamily: font, gap: 6,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Operanzia</span>
-        <span style={{ color: C.dim, margin: "0 4px" }}>/</span>
+        <button onClick={() => go("/projects")} title="Proyectos" style={{ background: "none", border: "none", padding: "0 6px 0 0", cursor: "pointer", display: "flex" }}><Marca size={22} /></button>
+        <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 6px", fontSize: 18, fontWeight: 300 }}>/</span>
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
         {activeProject && <>
-          <span style={{ color: C.dim, fontSize: 12 }}>/</span>
+          <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
           {/* Nombre del proyecto: al pincharlo, menú con "Duplicar proyecto" */}
           <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} />
-          <span style={{ color: C.dim, fontSize: 12 }}>/</span>
+          <span style={{ width: 1, height: 18, background: C.border, margin: "0 8px" }} />
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
           {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
@@ -101,7 +104,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         <HelpButton sesion={sesion} path={path} tipo={activeProject?.tipo} />
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
-          <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{roleLabel(sesion?.rol)}</div>
+          <div style={{ fontSize: 11, color: C.dim }}>{roleLabel(sesion?.rol)}</div>
         </div>
         <button
           onClick={() => setLang(lang === "es" ? "en" : "es")}
@@ -131,8 +134,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           </button>
         )}
         <button onClick={onLogout} title={t("logout", lang)} style={{
-          width: 30, height: 30, borderRadius: "50%", background: C.surface2,
-          border: `1px solid ${C.border}`, color: C.muted, fontSize: 10, fontWeight: 700,
+          width: 30, height: 30, borderRadius: "50%", background: MARCA.degradado,
+          border: "1px solid rgba(255,255,255,0.18)", color: "#fff", fontSize: 11, fontWeight: 650,
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
           transition: "all .15s",
         }}

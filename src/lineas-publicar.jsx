@@ -11,10 +11,10 @@ import { nombreDia } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)", border2: "rgba(88,130,225,0.40)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", green: "#34d399", amber: "#fbbf24", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 const fechaTxt = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 const irAControl = () => { window.history.pushState({}, "", "/control"); window.dispatchEvent(new PopStateEvent("popstate")); };
 
@@ -57,7 +57,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
     } catch (e) { alert("No se pudo quitar: " + (e.message || e)); }
   }
 
-  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : "#16306a") : "transparent", color: fuerte ? "#cfe0ff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : "#222c58") : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
   const r = servicio.resumen;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCerrar}>
@@ -68,7 +68,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
         </div>
         {avisoManual && <div style={{ fontSize: 11.5, color: C.amber, marginTop: 8 }}>{avisoManual}</div>}
         {estado?.ok ? (
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(52,211,153,.08)", border: `1px solid ${C.green}55` }}>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Publicado el {fechaTxt(fecha)}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
               {estado.roster?.error ? <span style={{ color: C.amber }}>No se pudo leer el Rostering ({estado.roster.error}): los conductores cogerán su turno en el móvil.</span>
@@ -96,7 +96,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
               {yaHay ? " · ya publicado: se sustituye" : ""}
             </div>
             {diaDelRoster && diaDelRoster !== dia && (
-              <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 8, background: "rgba(251,191,36,.08)", border: `1px solid ${C.amber}55`, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+              <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 8, background: "rgba(245,184,74,.08)", border: `1px solid ${C.amber}55`, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
                 Ese día circula <b>«{nombreDiaRoster(red, diaDelRoster)}»</b>, que es lo que usa el Rostering. Si publicas «{nombreDia(dia, red)}», sus turnos no casan con los del Rostering y no llegarán con su trabajador.
                 {onCambiarDia && <div style={{ marginTop: 7 }}><button onClick={() => { onCambiarDia(diaDelRoster); onCerrar(); }} style={btn(false)}>Cambiar a «{nombreDiaRoster(red, diaDelRoster)}» para publicarlo</button></div>}
               </div>
@@ -110,7 +110,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
         )}
         {publicados.length > 0 && (
           <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-            <div style={{ fontSize: 11, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Días publicados</div>
+            <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Días publicados</div>
             {publicados.slice(-12).reverse().map(p => (
               <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12, color: p.fecha < hoy ? C.dim : C.text }}>
                 <span style={{ flex: 1 }}>{fechaTxt(p.fecha)}{p.fecha === hoy ? " · hoy" : ""} <span style={{ color: C.dim }}>· {p.nombreDia} · {p.resumen?.turnos} turnos</span></span>

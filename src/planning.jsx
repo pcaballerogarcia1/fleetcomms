@@ -468,7 +468,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             fontSize: 11, fontWeight: 700, color: C.muted,
-            letterSpacing: 2, textTransform: "uppercase",
+            letterSpacing: 0.5, textTransform: "uppercase",
           }}>
             Operanzia
           </div>
@@ -505,7 +505,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         <div style={{ position: "absolute", top: 60, right: 16, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
           {errors.map((err, i) => (
             <div key={i} style={{
-              background: C.card, border: `1px solid rgba(248,113,113,0.3)`,
+              background: C.card, border: `1px solid rgba(242,109,109,0.3)`,
               color: C.red, borderRadius: 8, padding: "10px 14px",
               fontSize: 12, display: "flex", alignItems: "center", gap: 8,
               maxWidth: 380, boxShadow: "0 4px 20px rgba(0,0,0,.4)",

@@ -672,7 +672,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       {/* Warnings */}
       {!focusMode && !!tasks.length && vehicles.length === 0 && workers.length === 0 && (
-        <div style={{ padding: "7px 16px", background: "rgba(251,146,60,0.08)", borderBottom: `1px solid rgba(251,146,60,0.2)`, fontSize: 11, color: C.orange, flexShrink: 0 }}>
+        <div style={{ padding: "7px 16px", background: "rgba(245,158,91,0.08)", borderBottom: `1px solid rgba(245,158,91,0.2)`, fontSize: 11, color: C.orange, flexShrink: 0 }}>
           No hay vehículos ni trabajadores registrados. Añade recursos en las pestañas correspondientes.
         </div>
       )}
@@ -681,7 +681,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         if (!sinVehiculo.length) return null;
         const nombres = sinVehiculo.map(w => w.nombre).join(", ");
         return (
-          <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, fontSize: 11, color: C.red, flexShrink: 0 }}>
+          <div style={{ padding: "5px 16px", background: "rgba(242,109,109,0.08)", borderBottom: `1px solid rgba(242,109,109,0.25)`, fontSize: 11, color: C.red, flexShrink: 0 }}>
             <strong>Sin vehículo asignado:</strong> {nombres}. Ve a Trabajadores y asigna un vehículo.
           </div>
         );
@@ -705,7 +705,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             display: "flex", alignItems: "center", gap: 4,
             background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
           }}>
-            <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
+            <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
             <span style={{ fontSize: 9, color: C.dim, fontFamily: mono }}>({activeDays})</span>
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
               style={{ transform: showDayStrip ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>

@@ -4,12 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { watchPresence, onlineFrom, orgNames, initialsOf, haceCuanto } from "./presence.js";
 import { roleLabel } from "./roles.js";
 
-const GREEN = "#34d399";
+const GREEN = "#3fcf8e";
 const C = {
-  card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82",
+  card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
+const font = "var(--font)";
 const MAX_VISIBLE = 5;
 
 const PAGINAS = {
@@ -24,7 +24,7 @@ function Avatar({ p, size = 28, ring = C.card, style }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: "rgba(52,211,153,0.16)", border: `1.5px solid ${GREEN}`,
+      background: "rgba(63,207,142,0.16)", border: `1.5px solid ${GREEN}`,
       boxShadow: `0 0 0 2px ${ring}`, color: GREEN,
       fontSize: size <= 28 ? 10 : 11, fontWeight: 700, fontFamily: font,
       display: "flex", alignItems: "center", justifyContent: "center", ...style,

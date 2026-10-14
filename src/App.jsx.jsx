@@ -1,3 +1,6 @@
+import { Bus, Map as MapIcon, MessageSquareWarning, Package, Settings } from "lucide-react";
+import { Logo } from "./ui/marca.jsx";
+import { Loader2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, query, where, orderBy, limit } from "firebase/firestore";
@@ -26,32 +29,25 @@ function Login(){
     catch(e){ setErr(mensajeAuth(e)); setLoading(false); }
   };
   return(
-    <div style={{fontFamily:font,background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"hidden"}}>
+    <div style={{fontFamily:font,background:`radial-gradient(600px 420px at 50% -8%, rgba(91,124,250,0.18), transparent 70%), ${C.bg}`,minHeight:"100vh",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:24,overflow:"hidden"}}>
       <div style={{width:"100%",maxWidth:360,animation:"fadeUp .3s ease both"}}>
-        <div style={{marginBottom:32}}>
-          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:8,fontWeight:500}}>Fleet Management</div>
-          <div style={{fontSize:26,fontWeight:700,color:C.text,letterSpacing:-.5,lineHeight:1}}>Operanzia</div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:26}}>
+          <Logo size={48}/>
+          <div style={{fontSize:24,fontWeight:650,color:C.text,letterSpacing:"-0.02em",marginTop:16}}>Operanzia</div>
+          <div style={{fontSize:13.5,color:C.muted,marginTop:6}}>Tus rutas, tu turno y tus avisos</div>
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:24,boxShadow:"0 16px 48px rgba(0,0,0,.5)"}}>
+        <div style={{background:"rgba(18,21,28,0.85)",border:`1px solid ${C.border}`,borderRadius:16,padding:22,boxShadow:"0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04)"}}>
           <div style={{marginBottom:14}}>
-            <label style={S.label}>Email</label>
-            <input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="tu@empresa.com" autoComplete="email"
-              onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input,borderColor:email?`${C.blue}44`:C.border}}
-              onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
-              onBlur={e=>e.target.style.borderColor=email?`${C.blue}44`:C.border}/>
+            <label className="op-label">Email</label>
+            <input className="op-input" style={{height:44,fontSize:15}} value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="tu@empresa.com" autoComplete="email" onKeyDown={e=>e.key==="Enter"&&go()}/>
           </div>
           <div style={{marginBottom:20}}>
-            <label style={S.label}>Contraseña</label>
-            <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="••••••••" autoComplete="current-password"
-              onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{...S.input,borderColor:pw?`${C.blue}44`:C.border}}
-              onFocus={e=>e.target.style.borderColor=`${C.blue}66`}
-              onBlur={e=>e.target.style.borderColor=pw?`${C.blue}44`:C.border}/>
+            <label className="op-label">Contraseña</label>
+            <input className="op-input" style={{height:44,fontSize:15}} value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="••••••••" autoComplete="current-password" onKeyDown={e=>e.key==="Enter"&&go()}/>
           </div>
-          {err&&<div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.25)",color:C.red,borderRadius:7,padding:"9px 13px",fontSize:12,marginBottom:16}}>⚠ {err}</div>}
-          <button onClick={go} disabled={loading} style={{...S.btn,width:"100%",padding:"12px",fontSize:13,fontWeight:600,background:loading?C.blueDim:C.blue,borderColor:"transparent",color:loading?C.blueText:"#fff"}}>
-            {loading?<span style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><span style={{display:"inline-block",width:13,height:13,border:"2px solid rgba(163,196,252,0.3)",borderTopColor:C.blueText,borderRadius:"50%",animation:"spin .6s linear infinite"}}/>Accediendo…</span>:"Acceder"}
+          {err&&<div style={{background:"rgba(242,109,109,0.08)",border:"1px solid rgba(242,109,109,0.25)",color:C.red,borderRadius:10,padding:"10px 12px",fontSize:13,marginBottom:16}}>{err}</div>}
+          <button onClick={go} disabled={loading} className="op-btn op-primario" style={{width:"100%",height:46,fontSize:15}}>
+            {loading?<><Loader2 size={16} className="op-girando"/> Accediendo…</>:"Acceder"}
           </button>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}`}</style>
         </div>
@@ -191,30 +187,29 @@ export default function App(){
   // alcance (roles.js). Field/Admin/Superadmin siguen viendo esas dos tal
   // cual las veían antes de este cambio.
   const TABS=[
-    ...(hayBus?[{key:"turno",icon:"🚌",label:"Mi turno"}]:[]),
-    {key:"rutas",      icon:"🗺️", label:"Rutas"},
+    ...(hayBus?[{key:"turno",Icono:Bus,label:"Mi turno"}]:[]),
+    {key:"rutas",      Icono:MapIcon, label:"Rutas"},
     ...(esIntermedio ? [] : [
-      {key:"incidencias",icon:"📋", label:"Incidencias"},
-      {key:"inventario", icon:"📦", label:"Inventario"},
+      {key:"incidencias",Icono:MessageSquareWarning, label:"Incidencias"},
+      {key:"inventario", Icono:Package, label:"Inventario"},
     ]),
-    ...(esAdmin?[{key:"admin",icon:"⚙️",label:"Admin"}]:[]),
+    ...(esAdmin?[{key:"admin",Icono:Settings,label:"Admin"}]:[]),
   ];
   const TAB_TITLES={turno:"Mi turno",rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
-      <div style={{...S.header,background:"rgba(22,27,39,0.96)",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:11,color:C.dim,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>Operanzia</div>
-          <div style={{width:1,height:16,background:C.border2}}/>
-          <div style={{fontSize:14,fontWeight:600,color:C.text}}>{TAB_TITLES[tab]||tab}</div>
+      <div style={{...S.header,background:"rgba(11,13,18,0.86)",borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <Logo size={26}/>
+          <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[tab]||tab}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
-            <div style={{fontSize:9,color:C.dim,letterSpacing:.5,textTransform:"uppercase"}}>{roleLabel(sesion.rol)}</div>
+            <div style={{fontSize:11,color:C.dim}}>{roleLabel(sesion.rol)}</div>
           </div>
-          <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:C.surface2,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:C.muted,transition:"all .15s"}}
+          <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:"linear-gradient(135deg,#2563eb,#6d28d9)",border:"1px solid rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:650,color:"#fff",transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
             {avatarOf(sesion)}
@@ -228,14 +223,14 @@ export default function App(){
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
       {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan} sesion={sesion}/>}
 
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(22,27,39,0.97)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)"}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(11,13,18,0.9)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)",paddingBottom:"env(safe-area-inset-bottom)"}}>
         {TABS.map(t=>{
           const active=tab===t.key;
           return(
             <button key={t.key} onClick={()=>setTab(t.key)} style={{flex:1,padding:"10px 0 9px",background:"none",border:"none",cursor:"pointer",fontFamily:font,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",transition:"all .15s"}}>
-              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:24,height:2,background:C.blue,borderRadius:1}}/>}
-              <span style={{fontSize:19,lineHeight:1,filter:active?"none":"grayscale(1) opacity(.4)",transition:"filter .15s"}}>{t.icon}</span>
-              <span style={{fontSize:9,letterSpacing:.5,textTransform:"uppercase",fontWeight:600,color:active?C.blueText:C.dim,transition:"color .15s"}}>{t.label}</span>
+              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:2,background:"linear-gradient(90deg,#2563eb,#6d28d9)",borderRadius:2}}/>}
+              <t.Icono size={21} strokeWidth={active?2.1:1.7} color={active?C.text:C.dim}/>
+              <span style={{fontSize:11,fontWeight:active?600:500,color:active?C.text:C.dim,transition:"color .15s"}}>{t.label}</span>
             </button>
           );
         })}

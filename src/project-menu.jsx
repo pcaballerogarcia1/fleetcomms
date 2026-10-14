@@ -5,11 +5,10 @@ import { duplicarProyecto, nombreCopia } from "./project-copy.js";
 import { logAudit } from "./audit.js";
 
 const C = {
-  bg: "#0f1623", card: "#172035", surface2: "#1e2d48", border: "rgba(88,130,225,0.22)",
-  text: "#e2eeff", muted: "#8aa5cc", dim: "#4a5f82", blue: "#5c9bff", red: "#f87171",
+  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
+  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", red: "#f26d6d",
 };
-const font = '"Inter","Segoe UI",system-ui,sans-serif';
-
+const font = "var(--font)";
 export function ProjectMenu({ activeProject, onOpenProject }) {
   const [open, setOpen] = useState(false);
   const [modo, setModo] = useState("menu"); // menu | duplicar

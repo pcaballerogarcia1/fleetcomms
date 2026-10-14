@@ -54,7 +54,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
 
   return(
     <div style={S.page}>
-      <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing:3,textTransform:"uppercase"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
+      <div style={S.header}><div><div style={{fontSize:10,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}>← Volver</button></div>
       <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>{[["lista","Usuarios"],["nuevo","+ Nuevo"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...S.btnGhost,borderColor:tab===k?C.blue:C.border,color:tab===k?C.blueText:C.muted,background:tab===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
         {tab==="lista"&&usuariosVisibles.map(u=>(
@@ -74,7 +74,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
               <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input} autoComplete={type==="password"?"new-password":"off"}/></div>
             ))}
             <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{rolesCreables.map(v=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{roleLabel(v)}</button>)}</div></div>
-            {err&&<div style={{background:"#2d1515",color:"#f87171",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
+            {err&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
             <button onClick={crear} disabled={saving} style={{...S.btn,width:"100%",opacity:saving?0.6:1}}>{saving?"Creando…":"CREAR USUARIO"}</button>
           </div>
         )}
@@ -142,7 +142,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
           ].map(s=>(
             <div key={s.l} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
               <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{s.l}</div>
+              <div style={{fontSize:8,color:C.dim,textTransform:"uppercase",letterSpacing: 0.5,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -221,7 +221,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                     {isExp?"▲":"▼"}
                   </button>
                   <button onClick={()=>{if(window.confirm("¿Eliminar este plan?"))deletePlan(plan._id);}}
-                    style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f87171",padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
+                    style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
                     ✕
                   </button>
                 </div>
@@ -230,7 +230,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
               {/* Detalle expandido — lista de paradas */}
               {isExp && ubs.length > 0 && (
                 <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-                  <div style={{fontSize:9,color:C.dim,letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>
+                  <div style={{fontSize: 10.5,color:C.dim,letterSpacing: 0.5,textTransform:"uppercase",marginBottom:8}}>
                     Paradas ({ubs.length})
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>

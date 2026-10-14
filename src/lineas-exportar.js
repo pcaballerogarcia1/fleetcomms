@@ -25,7 +25,7 @@ const ESTILO = `
   .datos b { font-weight: 700; }
   .vacio td { color: #777; font-style: italic; }
   .aviso { color: #b00; font-size: 9pt; margin-top: 2mm; }
-  .barra { background: #1e2d48; color: #fff; padding: 2mm 3mm; margin: -1mm 0 3mm; display: flex; justify-content: space-between; }
+  .barra { background: #181c25; color: #fff; padding: 2mm 3mm; margin: -1mm 0 3mm; display: flex; justify-content: space-between; }
   .firma { margin-top: 8mm; display: flex; gap: 20mm; font-size: 9pt; color: #555; } .firma div { border-top: 0.3mm solid #999; padding-top: 1mm; width: 60mm; }
   .horas td { font-variant-numeric: tabular-nums; }
   @media screen { body { background: #e5e7eb; } .hoja { background: #fff; width: 210mm; min-height: 297mm; margin: 6mm auto; padding: 12mm; box-shadow: 0 2px 8px rgba(0,0,0,.2); } }

@@ -342,7 +342,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
     const off = selectedDay * 1440;
     return new Map(rows.map(r => [r._id || r.id, (r.assignments || []).filter(a => a._start >= off && a._start < off + maxShiftEnd)]));
   }, [rows, selectedDay, maxShiftEnd]);
-  const gridBg = `repeating-linear-gradient(90deg, rgba(88,130,225,0.11) 0 1px, transparent 1px ${hourPx}px), repeating-linear-gradient(90deg, rgba(88,130,225,0.035) 0 1px, transparent 1px ${subPx}px)`;
+  const gridBg = `repeating-linear-gradient(90deg, rgba(148,163,184,0.11) 0 1px, transparent 1px ${hourPx}px), repeating-linear-gradient(90deg, rgba(148,163,184,0.035) 0 1px, transparent 1px ${subPx}px)`;
 
   const leftW = vista === "tabla" ? TABLE_W : labelW;
   const fmtCell = (k, m) => {
@@ -439,7 +439,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", cursor: "pointer", fontSize: 9, letterSpacing: .6, textTransform: "uppercase", fontWeight: 700, color: colSort?.key === col.k ? C.blueText : C.dim, whiteSpace: "nowrap", userSelect: "none" }}>
                   {col.k === "avisos" ? "!" : col.l}{colSort?.key === col.k ? (colSort.dir === 1 ? " ▲" : " ▼") : ""}
                 </div>
-              )) : <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>}
+              )) : <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>}
               {/* Asa de redimensión — arrastrar para ensanchar la columna */}
               {vista !== "tabla" && <div
                 onMouseDown={startResizeLabel}
@@ -541,9 +541,9 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                         </div>
                         {/* Stats en línea propia — no hay overflow */}
                         <div style={{ fontSize: 10, fontFamily: mono, display: "flex", gap: 5, alignItems: "center", marginTop: 2 }}>
-                          {durLabel && <span style={{ color: "#34d399", fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
+                          {durLabel && <span style={{ color: "#3fcf8e", fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
                           {stopCount > 0 && <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{stopCount}p</span>}
-                          {dayKm > 0 && <span style={{ color: "#fb923c", fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
+                          {dayKm > 0 && <span style={{ color: "#f59e5b", fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
                           {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}>🏠</span>}
                         </div>
                       </div>
@@ -641,8 +641,8 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   if (task._break) return (
                     <div key={`b${ti}`} title={`Pausa · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
-                      background: "repeating-linear-gradient(45deg,rgba(251,146,60,0.15) 0,rgba(251,146,60,0.15) 4px,transparent 4px,transparent 8px)",
-                      border: "1px dashed rgba(251,146,60,0.4)", borderRadius: 3,
+                      background: "repeating-linear-gradient(45deg,rgba(245,158,91,0.15) 0,rgba(245,158,91,0.15) 4px,transparent 4px,transparent 8px)",
+                      border: "1px dashed rgba(245,158,91,0.4)", borderRadius: 3,
                     }} />
                   );
 
@@ -652,7 +652,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   if (task._descarga) return (
                     <div key={`d${ti}`} title={`Descarga en ${task.planta || "planta"} · ${task.carga ?? "?"} m³ · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.25, width: w, height: ROW_H * 0.5, zIndex: 3,
-                      background: "rgba(52,211,153,0.18)", border: "1px solid rgba(52,211,153,0.55)", borderRadius: 3,
+                      background: "rgba(63,207,142,0.18)", border: "1px solid rgba(63,207,142,0.55)", borderRadius: 3,
                     }} />
                   );
                   if (task._wait) return (
@@ -672,9 +672,9 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                     const isDepotMove = task._depot_exit || task._depot_return;
                     const depotLabel = task._depot_exit ? "Salida depot" : "Vuelta depot";
                     const bg = isDepotMove
-                      ? "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #fb923c99 6px, #fb923c99 12px)"
+                      ? "repeating-linear-gradient(135deg, #92400e 0px, #92400e 6px, #f59e5b99 6px, #f59e5b99 12px)"
                       : "repeating-linear-gradient(135deg, #111 0px, #111 6px, #c0000099 6px, #c0000099 12px)";
-                    const borderColor = isDepotMove ? "#fb923cbb" : "#c00000bb";
+                    const borderColor = isDepotMove ? "#f59e5bbb" : "#c00000bb";
                     return (
                       <div key={`tr${ti}`}
                         title={isDepotMove ? `${depotLabel}: ${kmLabel} · ${minLabel}` : `Km en vacío: ${kmLabel} · ${minLabel}`}
@@ -691,7 +691,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                       >
                         {w > 14 && (
                           isDepotMove ? (
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="#fb923c" stroke="none" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="#f59e5b" stroke="none" style={{ flexShrink: 0, filter: "drop-shadow(0 0 2px #000)" }}>
                               <path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/>
                             </svg>
                           ) : (
@@ -769,7 +769,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                 {movePreview && movePreview.dayOffset === selectedDay * 1440 && movePreview.slotsByRowId.get(row._id || row.id)?.map((slot, si) => {
                   const left = (slot.arrival - selectedDay * 1440) * pxPerMin;
                   const w    = Math.max((slot.taskEnd - slot.arrival) * pxPerMin - 2, 6);
-                  const color = slot.wait > 0 ? "#f59e0b" : "#34d399";
+                  const color = slot.wait > 0 ? "#f59e0b" : "#3fcf8e";
                   return (
                     <div key={`slot${si}`}
                       title={`Colocar aquí a las ${minToTime(slot.arrival % 1440)} · ${slot.kmDelta >= 0 ? "+" : ""}${slot.kmDelta.toFixed(2)} km${slot.wait > 0 ? ` · espera ${slot.wait} min` : ""}`}

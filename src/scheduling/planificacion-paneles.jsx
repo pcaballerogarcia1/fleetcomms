@@ -5,6 +5,7 @@
 
 
 
+import { Check, Download, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { t } from "../i18n.js";
 import { C, font, mono } from "./estilo.js";
 
@@ -13,217 +14,70 @@ import { C, font, mono } from "./estilo.js";
 
 
 export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
+  const girando = <Loader2 size={13} className="op-girando" />;
+  const chip = (n, txt, color) => <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}><span style={{ fontWeight: 650, color }}>{n}</span><span style={{ color: C.dim }}>{txt}</span></span>;
   return (
     <>
       {/* ── TOOLBAR ──────────────────────────────────────────────── */}
       {!focusMode && <div style={{
-        padding: "0 16px", height: 46, borderBottom: `1px solid ${C.border}`,
-        background: C.card, flexShrink: 0,
+        padding: "0 16px", height: 50, borderBottom: `1px solid ${C.border}`,
+        background: C.bg, flexShrink: 0,
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        {/* Import */}
-        <button onClick={importFromPlanning} disabled={importing} style={{
-          padding: "5px 11px", background: importing ? C.surface2 : tasks.length ? C.greenDim : C.surface2,
-          border: `1px solid ${tasks.length ? C.green + "44" : C.border}`,
-          color: tasks.length ? C.green : C.muted,
-          borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: importing ? "wait" : "pointer",
-          fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-        }}>
-          {importing
-            ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(52,211,153,.2)", borderTopColor: C.green, borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Importando…</>
-            : tasks.length
-              ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {tasks.length.toLocaleString()} paradas</>
-              : "Importar desde Planning"
-          }
+        {/* Paradas importadas de Planning */}
+        <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planning">
+          {importing ? <>{girando} Importando…</>
+            : tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} paradas</>
+            : <><Download size={14} /> Importar desde Planning</>}
         </button>
 
-        <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
+        <div className="op-sep" />
 
-        {/* Mode toggle */}
-        <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
-          {[["vehicles",t("vehiculos", lang)],["workers",t("trabajadores", lang)]].map(([v, l]) => (
-            <button key={v} onClick={() => setMode(v)} style={{
-              padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer",
-              background: mode === v ? C.blue : "none",
-              color: mode === v ? "#fff" : C.muted,
-              fontSize: 11, fontWeight: mode === v ? 600 : 400, fontFamily: font,
-              transition: "all .12s",
-            }}>{l}</button>
+        <div className="op-seg">
+          {[["vehicles", t("vehiculos", lang)], ["workers", t("trabajadores", lang)]].map(([v, l]) => (
+            <button key={v} onClick={() => setMode(v)} className={mode === v ? "op-on" : ""}>{l}</button>
           ))}
         </div>
 
-        {/* Constraints toggle */}
-        <button onClick={() => setShowC(!showC)} title={t("restricciones", lang)} style={{
-          padding: "5px 10px", background: showC ? C.surface2 : "none",
-          border: `1px solid ${showC ? C.border2 : C.border}`, color: showC ? C.text : C.muted,
-          borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
-          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-        }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-          </svg>
-          {t("restricciones", lang)}
-        </button>
+        <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`}><SlidersHorizontal size={14} /> {t("restricciones", lang)}</button>
+        {activeProject && <button onClick={() => setShowHistorial(true)} className="op-btn" title="Historial de versiones del escenario"><History size={14} /> {t("historial", lang)}</button>}
+        {schedule && <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} className="op-btn" title="Simular +/- vehículos sin tocar el escenario actual"><FlaskConical size={14} /> {t("simulador", lang)}</button>}
 
-        {activeProject && (
-          <button onClick={() => setShowHistorial(true)} title="Historial de versiones del escenario" style={{
-            padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted,
-            borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
-            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l4 2"/>
-            </svg>
-            {t("historial", lang)}
-          </button>
-        )}
-
-        {schedule && (
-          <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} title="Simular +/- vehículos sin tocar el escenario actual" style={{
-            padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted,
-            borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, transition: "all .12s",
-            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18M3 9v10a2 2 0 0 0 2 2h4"/>
-            </svg>
-            {t("simulador", lang)}
-          </button>
-        )}
-
-        {/* Inline KPI chips — only when schedule exists */}
         {schedule && <>
-          <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
-            <span><span style={{ fontWeight: 700, color: C.green }}>{totalAssigned.toLocaleString()}</span> <span style={{ color: C.dim }}>asig.</span></span>
-            {unassigned.length > 0 && <span><span style={{ fontWeight: 700, color: C.red }}>{unassigned.length.toLocaleString()}</span> <span style={{ color: C.dim }}>sin asig.</span></span>}
-            <span><span style={{ fontWeight: 700, color: C.blue }}>{constraints.days || 1}</span> <span style={{ color: C.dim }}>días</span></span>
-            {totalKm > 0 && <span><span style={{ fontWeight: 700, color: C.amber }}>{totalKm.toFixed(0)}</span> <span style={{ color: C.dim }}>km∅</span></span>}
+          <div className="op-sep" />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12 }}>
+            {chip(totalAssigned.toLocaleString(), "asignadas", C.text)}
+            {unassigned.length > 0 && chip(unassigned.length.toLocaleString(), "sin asignar", C.red)}
+            {chip(constraints.days || 1, (constraints.days || 1) === 1 ? "día" : "días", C.text)}
+            {totalKm > 0 && chip(totalKm.toFixed(0), "km", C.text)}
           </div>
-          {schedules.vehicles && (
-            <>
-              <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-              {/* Excel export */}
-              <button onClick={downloadVehicleXLSX} title="Descargar vehicle scheduling en Excel"
-                style={{ padding: "5px 10px", background: "rgba(52,211,153,.08)", border: `1px solid rgba(52,211,153,.3)`, color: "#34d399", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Vehículos
-              </button>
-              {schedules.workers && (
-                <button onClick={downloadCrewXLSX} title="Descargar crew scheduling en Excel"
-                  style={{ padding: "5px 10px", background: "rgba(52,211,153,.08)", border: `1px solid rgba(52,211,153,.3)`, color: "#34d399", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Trabajadores
-                </button>
-              )}
-              {/* Excel import */}
-              <input ref={xlsxUploadRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUploadXLSX} />
-              <button onClick={() => xlsxUploadRef.current?.click()} title="Importar vehicle scheduling o crew scheduling desde Excel"
-                style={{ padding: "5px 10px", background: "rgba(92,155,255,.08)", border: `1px solid rgba(92,155,255,.3)`, color: C.blue, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                {t("importar", lang)}
-              </button>
-              <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-              <button
-                onClick={() => { const now = new Date(); setPublishModal({ tipo: "prev", mes: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}` }); }}
-                style={{
-                  padding: "5px 10px", background: C.greenDim, border: `1px solid ${C.green}44`,
-                  color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                {t("publicarRutas", lang)}
-              </button>
-
-              {/* Deshacer / rehacer movimientos manuales del Gantt (tipo Excel) */}
-              <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <button
-                  onClick={undoMove} disabled={!canUndoMove}
-                  title={canUndoMove ? `Deshacer: ${moveHistory[historyIndex]?.label || "último movimiento"}` : "Nada que deshacer"}
-                  style={{
-                    width: 26, height: 26, borderRadius: 6, background: "transparent", border: "none",
-                    color: canUndoMove ? C.text : C.dim, cursor: canUndoMove ? "pointer" : "not-allowed",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    opacity: canUndoMove ? 1 : 0.35, flexShrink: 0,
-                  }}
-                  onMouseEnter={e => canUndoMove && (e.currentTarget.style.background = C.surface2)}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 7"/>
-                  </svg>
-                </button>
-                <button
-                  onClick={redoMove} disabled={!canRedoMove}
-                  title={canRedoMove ? `Rehacer: ${moveHistory[historyIndex + 1]?.label || "movimiento"}` : "Nada que rehacer"}
-                  style={{
-                    width: 26, height: 26, borderRadius: 6, background: "transparent", border: "none",
-                    color: canRedoMove ? C.text : C.dim, cursor: canRedoMove ? "pointer" : "not-allowed",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    opacity: canRedoMove ? 1 : 0.35, flexShrink: 0,
-                  }}
-                  onMouseEnter={e => canRedoMove && (e.currentTarget.style.background = C.surface2)}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 7"/>
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
+          {schedules.vehicles && <>
+            <div className="op-sep" />
+            <button onClick={downloadVehicleXLSX} className="op-btn op-fantasma" title="Descargar el escenario de vehículos en Excel"><FileDown size={14} /> Vehículos</button>
+            {schedules.workers && <button onClick={downloadCrewXLSX} className="op-btn op-fantasma" title="Descargar el escenario de trabajadores en Excel"><FileDown size={14} /> Trabajadores</button>}
+            <input ref={xlsxUploadRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUploadXLSX} />
+            <button onClick={() => xlsxUploadRef.current?.click()} className="op-btn op-fantasma" title="Importar un escenario de vehículos o de trabajadores desde Excel"><FileUp size={14} /> {t("importar", lang)}</button>
+            <div className="op-sep" />
+            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "prev", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn"><Send size={14} /> {t("publicarRutas", lang)}</button>
+            {/* Deshacer / rehacer movimientos manuales del Gantt */}
+            <div style={{ display: "flex", gap: 2 }}>
+              <button onClick={undoMove} disabled={!canUndoMove} className="op-btn op-fantasma op-icono" title={canUndoMove ? `Deshacer: ${moveHistory[historyIndex]?.label || "último movimiento"}` : "Nada que deshacer"}><Undo2 size={15} /></button>
+              <button onClick={redoMove} disabled={!canRedoMove} className="op-btn op-fantasma op-icono" title={canRedoMove ? `Rehacer: ${moveHistory[historyIndex + 1]?.label || "movimiento"}` : "Nada que rehacer"}><Redo2 size={15} /></button>
+            </div>
+          </>}
         </>}
 
-        {/* Worker mode hint */}
         {mode === "workers" && !schedules.vehicles && (
-          <span style={{ fontSize: 11, color: C.amber, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <span>⚠</span> Genera primero el escenario de vehículos
-          </span>
+          <span style={{ fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}><TriangleAlert size={13} /> Genera primero el escenario de vehículos</span>
         )}
 
-        {/* Generate + Focus mode toggle */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <button onClick={runGenerate} disabled={!canGenerate} style={{
-            padding: "6px 14px", background: canGenerate ? C.blue : C.blueDim,
-            border: "none", color: canGenerate ? "#fff" : C.blueText,
-            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: canGenerate ? "pointer" : "not-allowed",
-            fontFamily: font, transition: "all .15s", display: "flex", alignItems: "center", gap: 6,
-            opacity: canGenerate ? 1 : .6,
-          }}>
-            {osrmRunning
-              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {t("calculandoKm", lang)}</>
-              : generating
-              ? <><span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> {t("generando", lang)}</>
-              : t("generarEscenario", lang)
-            }
+          <button onClick={runGenerate} disabled={!canGenerate} className="op-btn op-primario" style={{ height: 32, padding: "0 14px" }}>
+            {osrmRunning ? <>{girando} {t("calculandoKm", lang)}</>
+              : generating ? <>{girando} {t("generando", lang)}</>
+              : <><Sparkles size={14} /> {t("generarEscenario", lang)}</>}
           </button>
-          {schedule && (
-            <button
-              onClick={() => setFocusMode(true)}
-              title="Modo pantalla completa (Gantt)"
-              style={{
-                width: 30, height: 30, borderRadius: 6,
-                background: C.surface2, border: `1px solid ${C.border}`,
-                color: C.dim, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
-                <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-              </svg>
-            </button>
-          )}
+          {schedule && <button onClick={() => setFocusMode(true)} className="op-btn op-icono" title="Modo pantalla completa (Gantt)"><Maximize2 size={14} /></button>}
         </div>
       </div>}
     </>
@@ -244,7 +98,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(92,155,255,.3)", borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite", flexShrink: 0 }} />
+              <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid rgba(91,124,250,.3)", borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite", flexShrink: 0 }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
                 {GEN_PHASES[genPhase]?.label ?? "Preparando…"}
               </span>
@@ -309,7 +163,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
                 {scaleProgress.stage === "growth" ? `Ronda ${scaleProgress.round}` : `Afinando`}
               </span>
               <span>{scaleProgress.vehicles.toLocaleString()} vehículos</span>
-              <span style={{ color: scaleProgress.unassigned > 0 ? "#fbbf24" : C.green }}>
+              <span style={{ color: scaleProgress.unassigned > 0 ? "#f5b84a" : C.green }}>
                 {scaleProgress.unassigned.toLocaleString()} sin asignar
               </span>
               <span>{(scaleProgress.roundMs / 1000).toFixed(1)}s esta prueba</span>
@@ -326,7 +180,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
     <>
       {/* Error banner */}
       {genError && !focusMode && (
-        <div style={{ padding: "7px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: "7px 16px", background: "rgba(242,109,109,0.08)", borderBottom: `1px solid rgba(242,109,109,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>Error al generar: {genError}</span>
           <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
@@ -337,13 +191,13 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
           generado y usable igualmente; esto solo afecta a la tarjeta de
           Proyectos, el historial de versiones y Rostering. */}
       {savingSummary && !focusMode && (
-        <div style={{ padding: "5px 16px", background: "rgba(92,155,255,0.06)", borderBottom: `1px solid rgba(92,155,255,0.18)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: "5px 16px", background: "rgba(91,124,250,0.06)", borderBottom: `1px solid rgba(91,124,250,0.18)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ width: 10, height: 10, border: `2px solid ${C.blue}55`, borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite" }} />
           <span style={{ fontSize: 11, color: C.blueText }}>Guardando resumen del proyecto…</span>
         </div>
       )}
       {(cloudSync === "saving" || cloudSync === "loading") && !focusMode && (
-        <div style={{ padding: "4px 16px", background: "rgba(92,155,255,0.05)", borderBottom: `1px solid rgba(92,155,255,0.15)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: "4px 16px", background: "rgba(91,124,250,0.05)", borderBottom: `1px solid rgba(91,124,250,0.15)`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ width: 9, height: 9, border: `2px solid ${C.blue}55`, borderTopColor: C.blue, borderRadius: "50%", animation: "sched-spin .7s linear infinite" }} />
           <span style={{ fontSize: 11, color: C.blueText }}>
             {cloudSync === "saving" ? "Guardando el escenario en la nube…" : "Cargando la última versión del escenario…"}
@@ -351,22 +205,22 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
         </div>
       )}
       {cloudConflict && cloudConflict.projectId === activeProject?._id && !focusMode && (
-        <div style={{ padding: "8px 16px", background: "rgba(251,191,36,0.10)", borderBottom: `1px solid rgba(251,191,36,0.35)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12, color: "#fbbf24" }}>
+        <div style={{ padding: "8px 16px", background: "rgba(245,184,74,0.10)", borderBottom: `1px solid rgba(245,184,74,0.35)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#f5b84a" }}>
             {cloudConflict.meta?.savedBy?.nombre || "Otra persona"} ha guardado otra versión de este escenario mientras lo editabas. Tus cambios están a salvo en este navegador — elige con cuál te quedas.
           </span>
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
             <button onClick={takeTheirScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: C.surface2, border: `1px solid ${C.border}`, color: C.text }}>
               Ver su versión (descarta la mía)
             </button>
-            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.45)", color: "#fbbf24", fontWeight: 600 }}>
+            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(245,184,74,0.15)", border: "1px solid rgba(245,184,74,0.45)", color: "#f5b84a", fontWeight: 600 }}>
               Guardar la mía encima
             </button>
           </div>
         </div>
       )}
       {cloudSync === "error" && !focusMode && (
-        <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: "5px 16px", background: "rgba(242,109,109,0.08)", borderBottom: `1px solid rgba(242,109,109,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>
             No se pudo sincronizar el escenario con la nube. Está guardado en este navegador y se volverá a subir con el próximo cambio o al recargar.
           </span>
@@ -374,7 +228,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
         </div>
       )}
       {saveSummaryError && !focusMode && (
-        <div style={{ padding: "5px 16px", background: "rgba(248,113,113,0.08)", borderBottom: `1px solid rgba(248,113,113,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: "5px 16px", background: "rgba(242,109,109,0.08)", borderBottom: `1px solid rgba(242,109,109,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>
             No se pudo guardar el resumen del proyecto ({saveSummaryError}) — el escenario generado sigue intacto, pero la tarjeta de Proyectos y Rostering pueden no reflejarlo. Prueba a recargar.
           </span>
@@ -384,19 +238,19 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
 
       {/* Auto-scale (virtual fleet) banner */}
       {scaleInfo && !focusMode && (
-        <div style={{ padding: "7px 16px", background: "rgba(251,191,36,0.08)", borderBottom: `1px solid rgba(251,191,36,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: "#fbbf24" }}>⚙ {scaleInfo}</span>
+        <div style={{ padding: "7px 16px", background: "rgba(245,184,74,0.08)", borderBottom: `1px solid rgba(245,184,74,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "#f5b84a" }}>⚙ {scaleInfo}</span>
           <button onClick={() => setScaleInfo(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
 
       {/* Rostering conflict banner */}
       {rosterConflicts.length > 0 && !focusMode && (
-        <div style={{ padding: "5px 16px", background: "rgba(251,191,36,0.07)", borderBottom: `1px solid rgba(251,191,36,0.2)`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span style={{ fontSize: 11, color: "#fbbf24", fontWeight: 600 }}>Conflictos:</span>
+        <div style={{ padding: "5px 16px", background: "rgba(245,184,74,0.07)", borderBottom: `1px solid rgba(245,184,74,0.2)`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f5b84a" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style={{ fontSize: 11, color: "#f5b84a", fontWeight: 600 }}>Conflictos:</span>
           {rosterConflicts.map((c, i) => (
-            <span key={i} style={{ fontSize: 10, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 4, padding: "1px 6px" }}>
+            <span key={i} style={{ fontSize: 10, color: "#f5b84a", background: "rgba(245,184,74,0.1)", border: "1px solid rgba(245,184,74,0.2)", borderRadius: 4, padding: "1px 6px" }}>
               {c.name} — día {c.day} ({c.label})
             </span>
           ))}
@@ -427,7 +281,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
 
             {/* Tipo */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 6 }}>Tipo de plan</div>
+              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Tipo de plan</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {[["prev","Prev. Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
                   <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k }))} style={{
@@ -443,7 +297,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
 
             {/* Mes */}
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 6 }}>Mes</div>
+              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Mes</div>
               <input
                 type="month"
                 value={publishModal.mes}
@@ -522,7 +376,7 @@ export function VentanaHistorial({ cloudMeta, restorePoint, scenarioHistory, set
                       <div style={{ fontSize: 12, color: C.text }}>{p.motivo}</div>
                       <div style={{ fontSize: 10.5, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
                     </div>
-                    <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(92,155,255,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
+                    <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(91,124,250,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
                       Restaurar
                     </button>
                   </div>

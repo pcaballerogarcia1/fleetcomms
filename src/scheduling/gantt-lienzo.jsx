@@ -55,7 +55,7 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
         }
       }
       if (t.windowStart != null) { // con franja horaria: el puntito amarillo del reloj
-        g.fillStyle = "#fbbf24"; g.beginPath(); g.arc(x + bw, 5, 3.5, 0, 2 * Math.PI); g.fill();
+        g.fillStyle = "#f5b84a"; g.beginPath(); g.arc(x + bw, 5, 3.5, 0, 2 * Math.PI); g.fill();
       }
       g.globalAlpha = 1;
     }

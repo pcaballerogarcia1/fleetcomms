@@ -1,5 +1,6 @@
 // App del conductor · activar los avisos en este móvil (rutas nuevas,
 // mensajes de la oficina, incidencias). Ver src/avisos.js.
+import { Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { activarAvisos, avisoDePrueba, esIphoneSinInstalar, estadoAvisos } from "../avisos.js";
 import { C, S } from "./comun.js";
@@ -25,9 +26,9 @@ export function AvisosMovil({ sesion }) {
   }
   const activos = estado === "activos";
   return (
-    <div style={{ ...S.card, borderLeft: `4px solid ${activos ? C.green : C.orange}`, marginBottom: 14 }}>
+    <div style={{ ...S.card, marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ fontSize: 22 }}>{activos ? "🔔" : "🔕"}</div>
+        <div style={{ width: 46, height: 46, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: activos ? "rgba(63,207,142,0.1)" : "rgba(245,158,91,0.1)", color: activos ? C.green : C.orange }}>{activos ? <Bell size={21} /> : <BellOff size={21} />}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>{activos ? "Avisos activados en este móvil" : "Avisos en el móvil"}</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>

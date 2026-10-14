@@ -32,7 +32,7 @@ function TiposTurno({ tipos, onChange }) {
       onChange={e => cambiar(i, { [k]: vacio && !e.target.value ? null : deHHMM(e.target.value) })}
       style={{ ...estiloCampo, width: 84, opacity: deshabilitado ? 0.35 : 1 }} />
   );
-  const th = { fontSize: 9.5, color: C.dim, letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
+  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
   const td = { padding: "4px 6px", borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   return (
     <div style={{ marginBottom: 14 }}>
@@ -88,7 +88,7 @@ function TiposTurno({ tipos, onChange }) {
 }
 
 // ── Grupos de líneas ─────────────────────────────────────────────────────
-const COLORES_GRUPO = ["#5c9bff", "#34d399", "#fb923c", "#f472b6", "#a78bfa", "#fbbf24", "#22d3ee", "#f87171"];
+const COLORES_GRUPO = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f472b6", "#a78bfa", "#f5b84a", "#22d3ee", "#f26d6d"];
 function GruposLineas({ red, grupos, onChange }) {
   const lista = grupos || [];
   const nombres = [...new Set((red?.lineas || []).map(l => String(l.nombre)))].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
@@ -298,7 +298,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
     <PanelRestricciones categorias={CATS} usado={usado} onCerrar={onCerrar} seccionInicial="tipos"
       cabecera={<SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />}
       avisos={revision.length > 0 && (
-        <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(248,113,113,0.5)" : "rgba(251,191,36,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(248,113,113,0.08)" : "rgba(251,191,36,0.07)" }}>
+        <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(242,109,109,0.5)" : "rgba(245,184,74,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(242,109,109,0.08)" : "rgba(245,184,74,0.07)" }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
           {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
         </div>

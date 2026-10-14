@@ -55,7 +55,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
             Reglas
           </button>
 
-          {avisoServicio && <span style={{ fontSize: 11, color: "#34d399", borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
+          {avisoServicio && <span style={{ fontSize: 11, color: "#3fcf8e", borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
           {calsLineas && calsLineas.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10, flexWrap: "wrap" }} title="Calendarios de la red de líneas que circulan este mes">
               {calsLineas.map(c => (
@@ -71,8 +71,8 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
             <span title="Turnos del escenario (modo libre) con trabajador asignado"
               style={{
                 fontSize: 11, fontWeight: 600, borderRadius: 6, padding: "3px 8px",
-                color: coveredCount === libreShifts.length ? "#34d399" : "#fbbf24",
-                background: coveredCount === libreShifts.length ? "#34d39918" : "#fbbf2418",
+                color: coveredCount === libreShifts.length ? "#3fcf8e" : "#f5b84a",
+                background: coveredCount === libreShifts.length ? "#3fcf8e18" : "#f5b84a18",
               }}>
               {coveredCount}/{libreShifts.length} turnos cubiertos
             </span>
@@ -155,15 +155,15 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                     <th key={d} style={{
                       width: CELL_W, minWidth: CELL_W,
                       position: "sticky", top: 0, zIndex: 3,
-                      background: today ? "#0e2248" : weekend ? "#161e34" : C.card,
+                      background: today ? "#1a2142" : weekend ? "#151922" : C.card,
                       borderBottom: `2px solid ${today ? C.blue : C.border}`,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#fb923c" : C.dim }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#f59e5b" : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#fb923c88" : C.muted }}>
+                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#f59e5b88" : C.muted }}>
                         {d}
                       </div>
                       {calsLineas && (() => {
@@ -318,7 +318,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
-                              boxShadow: "inset 0 0 0 2px #4f8ef7",
+                              boxShadow: "inset 0 0 0 2px #5b7cfa",
                               background: "rgba(79,142,247,0.12)",
                             }} />
                           )}
@@ -338,8 +338,8 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           <span title={ruleIssues.length ? ruleIssues.join(" · ") : `${check.hours}h de ${check.cap}h · máx. ${check.maxRun} días seguidos`}
                             style={{
                               fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "0 4px",
-                              color: ruleIssues.length ? "#f87171" : C.muted,
-                              background: ruleIssues.length ? "#f8717122" : "transparent",
+                              color: ruleIssues.length ? "#f26d6d" : C.muted,
+                              background: ruleIssues.length ? "#f26d6d22" : "transparent",
                             }}>
                             {ruleIssues.length ? "⚠ " : ""}{Math.round(check.hours)}h
                           </span>
@@ -372,7 +372,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           </button>
                           {publicados[w.uid] && (
                             <span title={`Publicado ${new Date(publicados[w.uid]).toLocaleString()}`}
-                              style={{ fontSize: 10, color: "#34d399" }}>✓</span>
+                              style={{ fontSize: 10, color: "#3fcf8e" }}>✓</span>
                           )}
                           <button onClick={() => { if (confirm("¿Desvincular este trabajador de su usuario de la app?")) linkWorker(w._id, null); }}
                             title="Desvincular usuario" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 11, padding: 0 }}>×</button>
@@ -407,7 +407,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                   borderTop: `2px solid ${C.border2}`,
                   padding: "0 12px", height: 38,
                   fontSize: 10, color: C.muted, fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: 1,
+                  textTransform: "uppercase", letterSpacing: 0.5,
                 }}>
                   Totales día
                 </td>
@@ -417,7 +417,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                   return (
                     <td key={d} style={{
                       width: CELL_W, textAlign: "center", height: 38,
-                      background: today ? "#0e2248" : C.surface2,
+                      background: today ? "#1a2142" : C.surface2,
                       borderRight: `1px solid ${C.border}`,
                       borderTop: `2px solid ${C.border2}`,
                       verticalAlign: "middle", padding: "2px 0",
@@ -544,7 +544,7 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: C.dim }}>Horario</span>
-                      <span style={{ color: C.text, fontFamily: "'JetBrains Mono','Courier New',monospace" }}>
+                      <span style={{ color: C.text, fontFamily: "var(--mono)" }}>
                         {fmtClock(a.s)} – {fmtClock(a.e)}
                       </span>
                     </div>
@@ -561,7 +561,7 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: C.dim }}>Horario</span>
-                    <span style={{ color: C.text, fontFamily: "'JetBrains Mono','Courier New',monospace" }}>
+                    <span style={{ color: C.text, fontFamily: "var(--mono)" }}>
                       {fmtClock(detail.start)} – {fmtClock(detail.end)}
                     </span>
                   </div>
