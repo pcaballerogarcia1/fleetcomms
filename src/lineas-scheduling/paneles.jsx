@@ -6,7 +6,7 @@ import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lin
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
 
 
-export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado, optJunto, onOptimizarJunto, onAplicarJunto }) {
+export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado, optJunto, onOptimizarJunto, onAplicarJunto, aFondo, setAFondo }) {
   const veh = fase === "vehiculos";
   const objetivos = veh ? OBJETIVOS_VEHICULOS : OBJETIVOS_TURNOS;
   const hayPrecio = o => !o.precios || o.precios.some(k => p[k] > 0);
@@ -39,7 +39,14 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
           Límite: {lim || "ninguno"} ·{" "}
           <button onClick={onRestricciones} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11, fontFamily: font }}>cambiar en Restricciones</button>
         </span>
-        <button onClick={onOptimizar} disabled={corriendo || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
+        {!veh && setAFondo && (
+          <label title="Las dos mejores estrategias por partición se rehacen probando muchas más combinaciones de piezas. Suele quitar algún conductor más; tarda bastante más (de segundos a un par de minutos en redes muy grandes)."
+            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: aFondo ? C.text : C.muted, cursor: corriendo ? "default" : "pointer" }}>
+            <input type="checkbox" checked={!!aFondo} disabled={corriendo} onChange={e => setAFondo(e.target.checked)} style={{ accentColor: C.blue, margin: 0 }} />
+            A fondo <span style={{ color: C.dim }}>(tarda más)</span>
+          </label>
+        )}
+        <button onClick={onOptimizar} disabled={corriendo || !!bloqueado} title={bloqueado || undefined} style={{ marginLeft: !veh && setAFondo ? 0 : "auto", opacity: bloqueado ? 0.5 : 1, padding: "6px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: corriendo ? "wait" : "pointer", fontFamily: font }}>
           {corriendo ? `Probando ${opt.progreso[0]} de ${opt.progreso[1] || "…"}` : veh ? "Optimizar vehículos" : "Optimizar turnos"}
         </button>
       </div>
@@ -51,7 +58,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8 }}>
         {veh
           ? "Prueba distintas formas de encadenar los viajes en los autobuses: qué autobús coge cada viaje, hasta cuántos km se hacen vacíos entre cabeceras y si un autobús cambia de línea. Mandan la flota disponible y después el objetivo."
-          : "Prueba distintos largos de pieza y formas de repartirlas entre los conductores, sin tocar los autobuses. Todas respetan las Restricciones. Mandan los conductores disponibles, que no haya avisos legales y después el objetivo."}
+          : `Prueba distintos largos de pieza y formas de repartirlas entre los conductores, sin tocar los autobuses. Todas respetan las Restricciones. Mandan los conductores disponibles, que no haya avisos legales y después el objetivo.${aFondo ? " «A fondo»: las dos mejores se rehacen probando muchas más combinaciones." : ""}`}
       </div>
       {opt.error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 8 }}>No se ha podido optimizar: {opt.error}</div>}
       {opt.estado === "hecho" && mejor && (

@@ -4,6 +4,8 @@ export const RESTRICCIONES_DEFECTO = {
   startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
   optimizeWeight: 0, virtualShiftMin: 0, rosterMode: "cuadrante",
   costeHora: null, costeKm: null, sin561: false,
+  // mejora de las rutas después del motor (scheduling/mejora-rutas.js): «a fondo» busca 90 s en vez de 6
+  optimizarAFondo: false,
   // capacidad del camión y viajes a descargar (scheduling/capacidad.js)
   // ruta maestra semanal con frecuencias (scheduling/frecuencias.js)
   usarFrecuencias: false, diasServicio: "LMXJVS", frecuenciaDefecto: "diaria",

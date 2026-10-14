@@ -326,6 +326,16 @@ function estadoSuelto(pz) {
   return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, antes: 0, despues: 0, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0, lineas: pz.lineas || [] };
 }
 
+// «Optimizar a fondo»: muchas más combinaciones de piezas y refinado por
+// rondas. Medido con el GTFS del Consorcio (M9, 2.176 piezas): 686 → 659
+// conductores en 16 s. Con redes enormes (M89, ~10.000 piezas) lo completo
+// pedía casi 2 GB y 5 min; ahí se usa uno intermedio (3.047 → 3.001, ~1 min).
+export function esfuerzoParticion(p, nPiezas) {
+  if (!p.optimizarAFondo) return {};
+  if (nPiezas > 4000) return { porPrimera: 22, porPareja: 7, porTrio: 3, iteraciones: 250, rondas: 8, iteracionesRonda: 80 };
+  return { porPrimera: 30, porPareja: 10, porTrio: 4, iteraciones: 400, rondas: 20, iteracionesRonda: 100 };
+}
+
 function turnosPorParticion(piezas, p, unidades = null) {
   const topes = p._tipos ? p._tipos.map(x => (x.maximo > 0 ? x.maximo : Infinity)) : [];
   const conTope = topes.some(Number.isFinite);
@@ -336,10 +346,11 @@ function turnosPorParticion(piezas, p, unidades = null) {
     // cambios de autobús de todo el escenario, como mucho
     ...(conLimiteTotal(p) ? { recurso: { usa: e => e.cambios || 0, max: p.maxCambiosBusTotal } } : {}),
     ...(conTope ? { topes, tipoDe: e => p._tipos.findIndex(x => encajaTipo(e, x, true)) } : {}),
-    huecoMax: splitMax,
+    huecoMax: splitMax, ...esfuerzoParticion(p, piezas.length), ...(p._esfuerzo || {}),
     extiende: (e, pz) => { const x = anadir(e, pz, p); return x && { ...x, piezas: [...e.piezas, pz] }; },
     desplazamiento: p.desplazamiento, amplitudMax: p.amplitudMax, huecoNoPagado: p.huecoNoPagado, jornadaMax: p.jornadaMax,
     maxPiezas: Math.min(4, p.maxPiezas),
+    ...(p._onInfo ? { onInfo: p._onInfo } : {}), // (banco de pruebas)
     ...(unidades != null ? { unidades } : {}),
   });
   // (si un grupo no valiera, cada pieza en su turno: no se pierde ninguna)

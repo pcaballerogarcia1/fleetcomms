@@ -83,7 +83,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const genStartRef = useRef(null);
 
   const GEN_PHASES = {
-    vrp:     { label: "Calculando rutas VRP…",            pct: 20 },
+    vrp:     { label: constraints.optimizarAFondo ? "Calculando y mejorando rutas a fondo (hasta minuto y medio más)…" : "Calculando y mejorando rutas…", pct: 20 },
     osrm:    { label: "Calculando km reales por carretera…", pct: 55 },
     workers: { label: "Asignando trabajadores…",          pct: 78 },
   };
@@ -632,7 +632,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      <BarraHerramientas {...{ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
+      <BarraHerramientas {...{ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
 
       {/* Focus-mode mini bar — only when focusMode */}
       {focusMode && (

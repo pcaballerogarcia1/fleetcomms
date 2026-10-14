@@ -7,7 +7,7 @@
 //    como salen en la pantalla (con la partición y los cambios a mano), en pequeño, para el Rostering
 //  · { tipo: "lote", red, cfg, cocheras, params, dias: [{ dia, estrategia }], optimizar, objetivoVehiculos, objetivoTurnos }
 //    → calcula (u optimiza, los dos pasos) varios calendarios y manda el
-//      resumen de cada uno según termina
+//      resumen de cada uno según termina (aFondo: optimiza los turnos también «a fondo»)
 import { optimizarVehiculos, optimizarTurnos, optimizarConjunto, generarVehiculos, generarTurnos, gruposTurnos, aplicarCambios, resumenServicio, CAMPOS_ESTRATEGIA, PARAMS_DEFECTO, esCambioVehiculos, esCambioTurnos } from "./lineas-sched.js";
 import { turnosCompactos } from "./lineas-rostering.js";
 
@@ -33,12 +33,12 @@ self.onmessage = e => {
       // params.entreLineas es la restricción; la estrategia de cada calendario solo puede quitarlo
       dias.forEach(({ dia, estrategia = {}, manuales = [] }, i) => {
         self.postMessage({ progreso: [i, dias.length], dia });
-        let q = { ...params, ...estrategia, dia, entreLineas: params.entreLineas && (estrategia.entreLineas ?? true) };
+        let q = { ...params, optimizarAFondo: false, ...estrategia, dia, entreLineas: params.entreLineas && (estrategia.entreLineas ?? true) };
         let optimizado = false;
         if (optimizar) {
           const v = optimizarVehiculos(red, cfg, { ...params, dia }, { objetivo: objetivoVehiculos, cocheras }).probadas[0];
           q = { ...params, dia, ...(v?.estrategia || {}) };
-          const t = optimizarTurnos(red, cfg, q, { objetivo: objetivoTurnos, cocheras }).probadas[0];
+          const t = optimizarTurnos(red, cfg, q, { objetivo: objetivoTurnos, cocheras, aFondo: !!e.data.aFondo }).probadas[0];
           q = { ...q, ...(t?.estrategia || {}) };
           optimizado = true;
         }
@@ -56,11 +56,13 @@ self.onmessage = e => {
     }
     let ultimo = 0;
     const onProgreso = (k, n) => { const ahora = Date.now(); if (k === n || ahora - ultimo > 150) { ultimo = ahora; self.postMessage({ progreso: [k, n] }); } };
+    // las estrategias se prueban en rápido; con «a fondo», las mejores además a fondo
+    const rapido = { ...params, optimizarAFondo: false };
     const r = tipo === "turnos"
-      ? optimizarTurnos(red, cfg, params, { objetivo, cocheras, onProgreso })
+      ? optimizarTurnos(red, cfg, rapido, { objetivo, cocheras, onProgreso, aFondo: !!e.data.aFondo })
       : tipo === "conjunto"
-        ? optimizarConjunto(red, cfg, params, { cocheras, onProgreso })
-        : optimizarVehiculos(red, cfg, params, { objetivo, cocheras, onProgreso });
+        ? optimizarConjunto(red, cfg, rapido, { cocheras, onProgreso })
+        : optimizarVehiculos(red, cfg, rapido, { objetivo, cocheras, onProgreso });
     self.postMessage({ ok: r });
   } catch (err) {
     self.postMessage({ error: err?.message || String(err) });

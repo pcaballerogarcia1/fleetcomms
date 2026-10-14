@@ -67,6 +67,7 @@ export const PARAMS_DEFECTO = {
   vacios: true,         // vacíos entre cabeceras
   vacioKm: null,        // radio de los vacíos entre cabeceras (null = vacioMaxKm; nunca más)
   bloqueMax: null,      // min que un autobús está fuera de cochera, como mucho (null = lo que dé; ~ un turno: cada conductor hace el autobús entero)
+  optimizarAFondo: false, // turnos: muchas más combinaciones y refinado (tarda bastante más; lo marca Optimizar «a fondo»)
   costeCambioBus: null, // € que se le pone a cada cambio de autobús de un conductor (Optimizar todo junto; null = el orientativo)
 };
 

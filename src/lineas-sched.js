@@ -99,7 +99,7 @@ export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {
 // Campos de la estrategia: cada calendario guarda la suya (la elige Optimizar)
 export const CAMPOS_VEHICULOS = ["eleccion", "entreLineas", "vacios", "vacioKm", "bloqueMax"];
 
-export const CAMPOS_TURNOS = ["corte", "emparejar", "metodo"];
+export const CAMPOS_TURNOS = ["corte", "emparejar", "metodo", "optimizarAFondo"];
 
 export const CAMPOS_ESTRATEGIA = [...CAMPOS_VEHICULOS, ...CAMPOS_TURNOS];
 
@@ -154,6 +154,7 @@ export function nombreEstrategia(v, piezaMax = PARAMS_DEFECTO.piezaMax) {
     v.bloqueMax > 0 && `autobuses de hasta ${Math.floor(v.bloqueMax / 60)}h${String(v.bloqueMax % 60).padStart(2, "0")} fuera de cochera`,
     v.corte != null && corte,
     v.metodo === "particion" ? "turnos por partición (la mejor combinación)" : v.emparejar != null && (v.emparejar === "llena" ? "llenar turnos" : "menos espera entre piezas"),
+    v.optimizarAFondo && "a fondo",
   ].filter(Boolean).join(" · ");
 }
 
@@ -198,18 +199,22 @@ export function optimizarVehiculos(red, cfg = {}, opciones = {}, { objetivo = "a
 /**
  * Paso 2: con los vehículos fijados (los de `opciones`), prueba formas de
  * hacer los turnos: largo de pieza y a qué conductor va cada una.
+ * aFondo: además, las dos mejores por partición se rehacen «a fondo» (muchas
+ * más combinaciones y refinado; tarda bastante más) y entran en la lista.
  * @returns { probadas: [{ estrategia, turnos, horasPagadas, avisos, piezasMedias, coste, cumple, nombre }], objetivo }
  */
-export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "conductores", onProgreso, cocheras = [], resVehiculos = null } = {}) {
+export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "conductores", onProgreso, cocheras = [], resVehiculos = null, aFondo = false } = {}) {
   const base = resVehiculos || generarVehiculos(red, cfg, opciones, { cocheras });
   const p = { ...base.params, ...opciones };
   // 3h30–3h45: dos piezas + la pausa de 45 min caben en 8 h (dos de 4 h no)
   const cortes = ["max", 225, 210, 180, 150, 120].filter(c => typeof c !== "number" || c < p.piezaMax);
   // por cada corte: la partición (como Optibus/GoalSystem) y las dos voraces de antes; y los cortes
   // flexibles (la partición elige también dónde relevar); se queda la mejor
-  const variantes = [...cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]), { corte: "flexible", metodo: "particion" }];
+  const variantes = [...cortes.flatMap(corte => [{ corte, metodo: "particion" }, ...["primera", "llena"].map(emparejar => ({ corte, emparejar, metodo: "voraz" }))]), { corte: "flexible", metodo: "particion" }]
+    .map(dt => ({ ...dt, optimizarAFondo: false }));
   const probadas = [];
-  for (const dt of variantes) {
+  const total = variantes.length + (aFondo ? 2 : 0);
+  const probar = dt => {
     const { turnos } = programarTurnos(base.vehiculos, { ...p, objetivoTurnos: objetivo === "horas" || objetivo === "coste" ? objetivo : "conductores", ...dt }, base.find, null, base.ctx?.geo);
     const horasPagadas = turnos.reduce((s, t) => s + t.trabajo, 0) / 60;
     const r = {
@@ -221,10 +226,16 @@ export function optimizarTurnos(red, cfg = {}, opciones = {}, { objetivo = "cond
     r.cumple = !(p.conductoresMax > 0 && r.turnos > p.conductoresMax);
     r.nombre = nombreEstrategia(dt, p.piezaMax);
     probadas.push(r);
-    onProgreso?.(probadas.length, variantes.length);
-  }
+    onProgreso?.(probadas.length, total);
+  };
+  variantes.forEach(probar);
   const exceso = r => Math.max(0, p.conductoresMax > 0 ? r.turnos - p.conductoresMax : 0);
-  ordenarPor(probadas, r => [exceso(r), r.avisos, ...(objetivo === "horas" ? [r.horasPagadas, r.turnos] : objetivo === "coste" && r.coste != null ? [r.coste, r.turnos] : [r.turnos, r.horasPagadas])]);
+  const ordenar = () => ordenarPor(probadas, r => [exceso(r), r.avisos, ...(objetivo === "horas" ? [r.horasPagadas, r.turnos] : objetivo === "coste" && r.coste != null ? [r.coste, r.turnos] : [r.turnos, r.horasPagadas])]);
+  ordenar();
+  if (aFondo) {
+    for (const r of probadas.filter(x => x.estrategia.metodo === "particion").slice(0, 2)) probar({ ...r.estrategia, optimizarAFondo: true });
+    ordenar();
+  }
   return { probadas, objetivo };
 }
 

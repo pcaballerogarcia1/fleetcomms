@@ -25,12 +25,13 @@
 /**
  * @param piezas   [{ inicio, fin, o, d }] ordenadas o no
  * @param opciones { valida, extiende, coste, desplazamiento, amplitudMax, huecoNoPagado, jornadaMax,
- *                   porPrimera, porPareja, porTrio, maxPiezas = 4, iteraciones = 120, onProgreso, onInfo }
+ *                   porPrimera, porPareja, porTrio, maxPiezas = 4, iteraciones = 120,
+ *                   rondas = 0, iteracionesRonda = 60 (refinado, «a fondo»), onProgreso, onInfo }
  */
 export function particionTurnos(piezas, opciones) {
   const { valida, extiende = (e, pz, lista) => valida(lista), coste, desplazamiento = 20, amplitudMax = 540, huecoNoPagado = 60, jornadaMax = Infinity,
     huecoMax = Infinity, tipoDe = null, topes = [], recurso = null,
-    porPrimera = 16, porPareja = 5, porTrio = 2, iteraciones = 120, onProgreso, maxPiezas = 4 } = opciones;
+    porPrimera = 16, porPareja = 5, porTrio = 2, iteraciones = 120, rondas = 0, iteracionesRonda = 60, onProgreso, maxPiezas = 4 } = opciones;
   const n = piezas.length;
   if (!n) return [];
   const nU = opciones.unidades ?? n; // lo que hay que cubrir una vez: las piezas, o sus unidades
@@ -141,8 +142,12 @@ export function particionTurnos(piezas, opciones) {
   const u = new Float64Array(nU);
   for (let i = 0; i < nU; i++) { let mejor = Infinity; for (const j of deLaPieza[i]) mejor = Math.min(mejor, coste_[j] / (ini[j + 1] - ini[j])); u[i] = mejor; }
   const rc = new Float64Array(m);
+  // activa: columnas que se pueden elegir · libre: piezas aún por cubrir (las
+  // demás ya las cubren los turnos fijados al refinar). Al principio, todo.
+  const activa = new Uint8Array(m).fill(1), libre = new Uint8Array(nU).fill(1);
   const reducidos = () => {
     for (let j = 0; j < m; j++) {
+      if (!activa[j]) { rc[j] = Infinity; continue; }
       let s = coste_[j] + (tipoCol[j] >= 0 ? v[tipoCol[j]] : 0) + w * usoCol[j];
       for (let q = ini[j]; q < ini[j + 1]; q++) s -= u[elem[q]];
       rc[j] = s;
@@ -153,12 +158,14 @@ export function particionTurnos(piezas, opciones) {
   // peor); se coge una si todas sus piezas están libres (partición); las piezas
   // que queden, cada una en su turno de una pieza. Ordenadas por bits (radix):
   // con cientos de miles de columnas, la ordenación normal era lo más lento.
+  // `fijo`: los turnos ya fijados (se parte de ellos).
   const clave = new Float64Array(m);
-  function construir() {
-    for (let j = 0; j < m; j++) clave[j] = rc[j] / (ini[j + 1] - ini[j]);
+  function construir(fijo) {
+    for (let j = 0; j < m; j++) clave[j] = activa[j] ? rc[j] / (ini[j + 1] - ini[j]) : Infinity;
     const cand = ordenPorClave(clave);
-    const usada = new Uint8Array(nU), elegidas = [], cuenta = new Int32Array(K);
-    let valor = 0, gastado = 0;
+    const usada = new Uint8Array(nU), elegidas = [...fijo.elegidas], cuenta = Int32Array.from(fijo.cuenta);
+    for (let i = 0; i < nU; i++) usada[i] = libre[i] ? 0 : 1;
+    let valor = fijo.valor, gastado = fijo.gastado;
     const coger = (j, forzar = false) => {
       const k = tipoCol[j];
       if (!forzar && k >= 0 && conTope[k] && cuenta[k] >= topes[k]) return; // ese tipo ya está lleno
@@ -169,48 +176,97 @@ export function particionTurnos(piezas, opciones) {
       gastado += usoCol[j];
       elegidas.push(j); valor += coste_[j];
     };
-    for (const j of cand) coger(j);
+    for (const j of cand) { if (!activa[j]) break; coger(j); } // las no activas van al final
     for (let i = 0; i < nU; i++) if (!usada[i] && sola[i] >= 0) coger(sola[i], true);
     return { elegidas, valor };
   }
 
-  let mejor = null, paso = 2, mejorCota = -Infinity, sinMejora = 0;
-  for (let it = 0; it < iteraciones; it++) {
-    reducidos();
-    // cota inferior y subgradiente: g_i = 1 - columnas elegidas (rc < 0) que cubren i
-    let cota = 0;
-    const g = new Float64Array(nU).fill(1), gv = new Float64Array(K);
-    for (let i = 0; i < nU; i++) cota += u[i];
-    for (let k = 0; k < K; k++) if (conTope[k]) { cota -= v[k] * topes[k]; gv[k] = -topes[k]; }
-    let gw = conR ? -R : 0;
-    if (conR) cota -= w * R;
-    for (let j = 0; j < m; j++) if (rc[j] < 0) {
-      cota += rc[j];
-      for (let q = ini[j]; q < ini[j + 1]; q++) g[elem[q]] -= 1;
-      if (tipoCol[j] >= 0) gv[tipoCol[j]] += 1;
-      gw += usoCol[j];
+  // Subgradiente sobre lo que queda libre, partiendo de los turnos fijados
+  function subgradiente(iters, fijo, progreso) {
+    let mejor = null, paso = 2, mejorCota = -Infinity, sinMejora = 0;
+    const g = new Float64Array(nU), gv = new Float64Array(K);
+    for (let it = 0; it < iters; it++) {
+      reducidos();
+      // cota inferior y subgradiente: g_i = 1 - columnas elegidas (rc < 0) que cubren i
+      let cota = fijo.valor;
+      for (let i = 0; i < nU; i++) { g[i] = libre[i]; if (libre[i]) cota += u[i]; }
+      for (let k = 0; k < K; k++) { gv[k] = 0; if (conTope[k]) { const queda = topes[k] - fijo.cuenta[k]; cota -= v[k] * queda; gv[k] = -queda; } }
+      const quedaR = R - fijo.gastado;
+      let gw = conR ? -quedaR : 0;
+      if (conR) cota -= w * quedaR;
+      for (let j = 0; j < m; j++) if (rc[j] < 0) {
+        cota += rc[j];
+        for (let q = ini[j]; q < ini[j + 1]; q++) g[elem[q]] -= 1;
+        if (tipoCol[j] >= 0) gv[tipoCol[j]] += 1;
+        gw += usoCol[j];
+      }
+      if (cota > mejorCota + 1e-6) { mejorCota = cota; sinMejora = 0; } else if (++sinMejora >= 8) { paso /= 2; sinMejora = 0; }
+      if (it % 5 === 0 || it === iters - 1) {
+        const s = construir(fijo);
+        if (!mejor || s.valor < mejor.valor) mejor = s;
+      }
+      let norma = 0;
+      for (let i = 0; i < nU; i++) norma += g[i] * g[i];
+      for (let k = 0; k < K; k++) if (conTope[k] && (v[k] > 0 || gv[k] > 0)) norma += gv[k] * gv[k];
+      if (conR && (w > 0 || gw > 0)) norma += gw * gw;
+      if (norma === 0 || paso < 1e-4) break;
+      const objetivo = mejor ? mejor.valor : cota * 1.1;
+      const t = paso * Math.max(objetivo - cota, 1e-6) / norma;
+      for (let i = 0; i < nU; i++) if (libre[i]) u[i] = Math.max(u[i] + t * g[i], -1e9);
+      for (let k = 0; k < K; k++) if (conTope[k]) v[k] = Math.max(0, v[k] + t * gv[k]);
+      if (conR) w = Math.max(0, w + t * gw);
+      if (progreso && it % 5 === 0) progreso(it / iters);
     }
-    if (cota > mejorCota + 1e-6) { mejorCota = cota; sinMejora = 0; } else if (++sinMejora >= 8) { paso /= 2; sinMejora = 0; }
-    if (it % 5 === 0 || it === iteraciones - 1) {
-      const s = construir();
-      if (!mejor || s.valor < mejor.valor) mejor = s;
+    return { mejor: mejor || construir(fijo), cota: mejorCota };
+  }
+
+  const vacio = { elegidas: [], valor: 0, cuenta: new Int32Array(K), gastado: 0 };
+  const conRondas = rondas > 0 && n > 1;
+  const parteInicial = conRondas ? 0.3 : 0.6;
+  const primera = subgradiente(iteraciones, vacio, onProgreso && (x => onProgreso(0.4 + parteInicial * x)));
+  let mejor = primera.mejor;
+  const valorInicial = mejor.valor;
+
+  // 3) Refinar (como Caprara-Fischetti-Toth): se fijan los turnos más claros
+  // de la mejor solución (los de menor coste reducido) y se vuelve a resolver
+  // solo lo que queda, con su propia relajación. La heurística voraz se
+  // equivoca sobre todo al final, con las piezas que sobran; resolviendo de
+  // nuevo ese resto con los precios ajustados a él salen turnos más llenos.
+  // Cada ronda fija una parte distinta de la mejor solución hasta ahora.
+  if (conRondas) {
+    const uBase = Float64Array.from(u), vBase = Float64Array.from(v), wBase = w;
+    for (let ronda = 0; ronda < rondas; ronda++) {
+      const fraccion = FRACCIONES[ronda % FRACCIONES.length];
+      u.set(uBase); v.set(vBase); w = wBase;
+      activa.fill(1); libre.fill(1);
+      reducidos();
+      const orden = [...mejor.elegidas].sort((a, b) => rc[a] - rc[b]);
+      const fijo = { elegidas: [], valor: 0, cuenta: new Int32Array(K), gastado: 0 };
+      let cubiertas = 0;
+      for (const j of orden) {
+        if (cubiertas >= fraccion * nU) break;
+        fijo.elegidas.push(j); fijo.valor += coste_[j]; fijo.gastado += usoCol[j];
+        if (tipoCol[j] >= 0) fijo.cuenta[tipoCol[j]]++;
+        for (let q = ini[j]; q < ini[j + 1]; q++) libre[elem[q]] = 0;
+        cubiertas += ini[j + 1] - ini[j];
+      }
+      for (let j = 0; j < m; j++) {
+        let ok = 1;
+        for (let q = ini[j]; q < ini[j + 1]; q++) if (!libre[elem[q]]) { ok = 0; break; }
+        activa[j] = ok;
+      }
+      const r = subgradiente(iteracionesRonda, fijo);
+      if (r.mejor.valor < mejor.valor - 1e-9) mejor = r.mejor;
+      onProgreso?.(0.4 + parteInicial + (0.6 - parteInicial) * (ronda + 1) / rondas);
     }
-    let norma = 0;
-    for (let i = 0; i < nU; i++) norma += g[i] * g[i];
-    for (let k = 0; k < K; k++) if (conTope[k] && (v[k] > 0 || gv[k] > 0)) norma += gv[k] * gv[k];
-    if (conR && (w > 0 || gw > 0)) norma += gw * gw;
-    if (norma === 0 || paso < 1e-4) break;
-    const objetivo = mejor ? mejor.valor : cota * 1.1;
-    const t = paso * Math.max(objetivo - cota, 1e-6) / norma;
-    for (let i = 0; i < nU; i++) u[i] = Math.max(u[i] + t * g[i], -1e9);
-    for (let k = 0; k < K; k++) if (conTope[k]) v[k] = Math.max(0, v[k] + t * gv[k]);
-    if (conR) w = Math.max(0, w + t * gw);
-    if (onProgreso && it % 5 === 0) onProgreso(0.4 + 0.6 * it / iteraciones);
   }
   onProgreso?.(1);
-  opciones.onInfo?.({ columnas: m, cota: mejorCota, valor: mejor.valor });
+  opciones.onInfo?.({ piezas: n, columnas: m, cota: primera.cota, valor: mejor.valor, valorInicial });
   return mejor.elegidas.map(j => cols[j].p.slice());
 }
+
+// qué parte de la mejor solución se fija en cada ronda del refinado
+const FRACCIONES = [0.3, 0.5, 0.7, 0.4, 0.6, 0.8, 0.2, 0.9];
 
 // Índices ordenados por clave ascendente, por bits (LSD radix de 4 pasadas de
 // 8 bits sobre la clave en float32): lineal, mucho más rápido que sort().

@@ -13,7 +13,7 @@ import { C, font, mono } from "./estilo.js";
 
 
 
-export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
+export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
   const chip = (n, txt, color) => <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}><span style={{ fontWeight: 650, color }}>{n}</span><span style={{ color: C.dim }}>{txt}</span></span>;
   return (
@@ -72,6 +72,13 @@ export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, can
         )}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+          {setConstraints && !constraints.usarFrecuencias && (
+            <label title="Después de repartir las paradas, sigue mejorando las rutas hasta minuto y medio (menos días, turnos y km). Sin marcar, unos segundos."
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: constraints.optimizarAFondo ? C.text : C.muted, cursor: generating ? "default" : "pointer", marginRight: 4 }}>
+              <input type="checkbox" checked={!!constraints.optimizarAFondo} disabled={generating} onChange={e => setConstraints(c => ({ ...c, optimizarAFondo: e.target.checked }))} style={{ accentColor: C.blue, margin: 0 }} />
+              A fondo
+            </label>
+          )}
           <button onClick={runGenerate} disabled={!canGenerate} className="op-btn op-primario" style={{ height: 32, padding: "0 14px" }}>
             {osrmRunning ? <>{girando} {t("calculandoKm", lang)}</>
               : generating ? <>{girando} {t("generando", lang)}</>

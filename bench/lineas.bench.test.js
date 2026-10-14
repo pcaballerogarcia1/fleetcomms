@@ -7,12 +7,12 @@
 //
 //   npx vitest run -c bench/vitest.config.js bench/lineas.bench.test.js
 //   BENCH_ETIQUETA="nombre" para guardar la pasada con nombre en bench/resultados/lineas.json
+//   BENCH_A_FONDO=1 los turnos «a fondo» (tarda varios minutos con la red entera de M89)
 /* global process */
 import { test } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseGtfsRed } from "../src/gtfs-red.js";
 import { generarVehiculos, generarTurnos, gruposTurnos, resumenServicio, costeDia, preciosTotal, PARAMS_DEFECTO } from "../src/lineas-sched.js";
-import { perfilVehiculos } from "../src/lineas-sched/kpis.js";
 
 const DESCARGAS = "C:/Users/Usuario/Downloads/";
 const REDES = [["M9", "google_transit_M9.zip"], ["M89", "google_transit_M89.zip"]];
@@ -33,6 +33,14 @@ function grupos(red, prefijos) {
 }
 const nombreAgencia = (red, a) => red.agencias?.find?.(x => x.id === a)?.nombre || red.agencias?.[a]?.nombre || a;
 
+// cuántos viajes hay en marcha a la vez como mucho (ningún reparto baja de ahí)
+function picoExacto(viajes) {
+  const ev = viajes.flatMap(v => [[v.dep, 1], [v.arr, -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let c = 0, max = 0;
+  for (const [, d] of ev) { c += d; if (c > max) max = c; }
+  return max;
+}
+
 export function medir(red, ids, extra = {}) {
   const p = { ...PARAMS_DEFECTO, lineas: ids, ...extra };
   const t0 = performance.now();
@@ -43,7 +51,7 @@ export function medir(red, ids, extra = {}) {
   const t2 = performance.now();
   const res = resumenServicio(r);
   const precios = { ...p, ...preciosTotal(p) };
-  const picoViajes = Math.max(0, ...perfilVehiculos(r.viajes.map(v => ({ inicio: v.dep, fin: v.arr }))).map(x => x.vehiculos));
+  const picoViajes = picoExacto(r.viajes);
   const minEnLinea = r.vehiculos.reduce((s, v) => s + (v.fin - v.inicio), 0);
   return {
     viajes: res.viajes, autobuses: res.autobuses, cotaAutobuses: picoViajes,
@@ -60,7 +68,7 @@ test("motor de líneas con redes reales", async () => {
     if (!existsSync(DESCARGAS + archivo)) { console.log(`(sin ${archivo})`); continue; }
     const red = await parseGtfsRed(new Blob([readFileSync(DESCARGAS + archivo)]));
     for (const e of grupos(red, nombre === "M89" ? ["48", "46", "52", "62"] : [])) {
-      const m = medir(red, e.ids);
+      const m = medir(red, e.ids, process.env.BENCH_A_FONDO ? { optimizarAFondo: true } : {});
       filas.push({ red: nombre, grupo: String(nombreAgencia(red, e.a)).slice(0, 28), lineas: e.ids.length, ...m });
       console.log(JSON.stringify(filas.at(-1)));
     }

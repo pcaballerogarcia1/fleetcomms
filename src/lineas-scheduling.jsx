@@ -46,6 +46,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const [showOpt, setShowOpt] = useState(false);
   const [objetivoV, setObjetivoV] = useState("autobuses");
   const [objetivoT, setObjetivoT] = useState("conductores");
+  const [aFondo, setAFondo] = useState(false); // Optimizar turnos «a fondo» (tarda más)
   const [optPorDia, setOptPorDia] = useState({}); // "dia|fase" → estado de la optimización
   const [lote, setLote] = useState(null); // { optimizar, progreso: [i, n], dia }
   const [nota, setNota] = useState(null); // { texto, error } abajo, unos segundos
@@ -298,7 +299,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
     w.onerror = e => { w.terminate(); workerRef.current = null; setO({ estado: "nada", progreso: [0, 0], error: e.message || "error en el cálculo" }); };
     // vehículos: puede probar a no cambiar de línea solo si la restricción lo permite;
     // turnos: con los vehículos tal cual están
-    w.postMessage({ tipo: f, red, cfg, cocheras, params: f === "vehiculos" ? { ...p, entreLineas: p.entreLineasGlobal } : p, objetivo: obj });
+    w.postMessage({ tipo: f, red, cfg, cocheras, params: f === "vehiculos" ? { ...p, entreLineas: p.entreLineasGlobal } : p, objetivo: obj, aFondo: f !== "vehiculos" && aFondo });
   }
   // Optimizar todo junto (vehículos y turnos a la vez, por el coste total)
   const optJunto = optDe(dia, "conjunto");
@@ -370,7 +371,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
       if (hechos[dia]) calcular(paramsPara(dia, {}, hechos[dia]), "ambos", { conservar: !optimizarTodos });
     };
     w.onerror = e => { w.terminate(); workerRef.current = null; setLote(null); alert(`No se ha podido terminar: ${e.message || "error en el cálculo"}`); };
-    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {}, manuales: optimizarTodos ? [] : (cache[d]?.manuales ?? porCalendario[d]?.manuales ?? []) })) });
+    w.postMessage({ tipo: "lote", red, cfg, cocheras, params: base, objetivoVehiculos: objV, objetivoTurnos: objT, optimizar: optimizarTodos, aFondo, dias: dias.map(d => ({ dia: d, estrategia: optimizarTodos ? {} : porCalendario[d]?.estrategia || {}, manuales: optimizarTodos ? [] : (cache[d]?.manuales ?? porCalendario[d]?.manuales ?? []) })) });
   }
   function pararLote() { workerRef.current?.terminate(); workerRef.current = null; setLote(null); }
 
@@ -543,7 +544,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             avisoManual={calculando || opt.estado === "corriendo" ? "Hay un cálculo en marcha: espera a que termine para publicar lo último." : null} onCerrar={() => setPublicando(false)} />}
           {showC && <Restricciones p={restriccionesUI} red={red} onCambiarDia={cambiarDia} onChange={ch => setCambios(c => ({ ...c, ...ch }))} onCerrar={() => setShowC(false)} />}
           {showOpt && <PanelOptimizar fase={fase} p={params} diaNombre={nombreDia(dia, red)} objetivo={fase === "vehiculos" ? objetivoV : objetivoT} setObjetivo={fase === "vehiculos" ? setObjetivoV : setObjetivoT}
-            opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)}
+            opt={opt} onOptimizar={optimizar} onAplicar={aplicarOpt} onRestricciones={() => setShowC(true)} aFondo={aFondo} setAFondo={setAFondo}
             optJunto={optJunto} onOptimizarJunto={optimizarJunto} onAplicarJunto={aplicarJunto}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
           {res && ((params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax) || (params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax)) && (

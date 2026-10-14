@@ -125,7 +125,7 @@ export const deHHMM = v => { const [a, b] = String(v || "0:0").split(":").map(Nu
 // claveV resume con qué se hicieron los vehículos y clave, todo (también los
 // turnos): si ya no coinciden, está desactualizado. resumen.turnos es null
 // si solo se ha hecho el paso 1.
-export const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm"]; // entreLineas además es restricción
+export const ESTRATEGIA_UI = ["eleccion", "corte", "emparejar", "metodo", "vacios", "vacioKm", "optimizarAFondo"]; // entreLineas además es restricción
 
 const CAMPOS_COSTE = CAMPOS_PRECIO; // los precios no cambian el escenario: el coste se recalcula al verlo
 

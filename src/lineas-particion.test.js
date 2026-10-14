@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { particionTurnos, ordenPorClave } from "./lineas-particion.js";
-import { generarServicio, generarVehiculos, generarTurnos, gruposTurnos, clavePieza } from "./lineas-sched.js";
+import { generarServicio, generarVehiculos, generarTurnos, gruposTurnos, clavePieza, optimizarTurnos } from "./lineas-sched.js";
 
 const h = (hh, mm = 0) => hh * 60 + mm;
 
@@ -79,5 +79,35 @@ describe("turnos por partición de conjuntos", () => {
     const conTope = particionTurnos(piezas, { ...opciones, tipoDe: e => (e.n === 2 ? 0 : 1), topes: [1, Infinity] });
     expect(conTope.filter(g => g.length === 2).length).toBeLessThanOrEqual(1);
     expect(conTope.flat().sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+  it("refinado por rondas («a fondo»): lo cubre todo una vez y nunca sale más caro", () => {
+    // muchas piezas que encajan de varias formas: la voraz guiada se equivoca a veces
+    const piezas = Array.from({ length: 60 }, (_, k) => ({ inicio: h(5) + (k % 20) * 37, fin: h(5) + (k % 20) * 37 + 150 + (k % 7) * 10, o: k % 3 ? "X" : "Y", d: k % 2 ? "X" : "Y" }));
+    const valida = l => {
+      const o = [...l].sort((a, b) => a.inicio - b.inicio);
+      for (let i = 1; i < o.length; i++) if (o[i].inicio < o[i - 1].fin + (o[i].o === o[i - 1].d ? 5 : 20)) return null;
+      const trabajo = o.reduce((s, x) => s + x.fin - x.inicio, 0);
+      return o.at(-1).fin - o[0].inicio <= 540 && trabajo <= 480 ? { trabajo } : null;
+    };
+    const coste = (e, l) => 600 + e.trabajo + l.length;
+    const valor = gs => gs.reduce((s, g) => s + coste(valida(g.map(i => piezas[i])), g), 0);
+    const opciones = { valida, coste, desplazamiento: 20, amplitudMax: 540, huecoNoPagado: 60 };
+    const normal = particionTurnos(piezas, opciones);
+    const fondo = particionTurnos(piezas, { ...opciones, rondas: 8, iteracionesRonda: 60, porPrimera: 30, porPareja: 10, porTrio: 4 });
+    expect(fondo.flat().sort((a, b) => a - b)).toEqual([...piezas.keys()]);
+    for (const g of fondo) expect(valida(g.map(i => piezas[i]))).not.toBeNull();
+    expect(valor(fondo)).toBeLessThanOrEqual(valor(normal));
+  });
+
+  it("Optimizar turnos «a fondo» añade las dos mejores por partición rehechas a fondo", () => {
+    const salidas = Array.from({ length: 40 }, (_, k) => h(5, 30) + k * 25);
+    const sentido = dir => ({ dir, nombre: dir ? "Vuelta" : "Ida", paradas: dir ? ["B", "A"] : ["A", "B"], km: 8, viajes: { laborable: salidas.length }, salidas: { laborable: salidas.map(x => x + dir * 9), sabado: [], festivo: [] }, tiempos: ["00-06", "06-09", "09-13", "13-16", "16-20", "20-24"].map(f => ({ franja: f, min: 40, viajes: 1 })) });
+    const red = { lineas: [{ id: "M", nombre: "M", color: "#f0f", sentidos: [sentido(0), sentido(1)] }] };
+    const normal = optimizarTurnos(red, {}, { dia: "laborable" });
+    const fondo = optimizarTurnos(red, {}, { dia: "laborable" }, { aFondo: true });
+    expect(fondo.probadas).toHaveLength(normal.probadas.length + 2);
+    expect(fondo.probadas.filter(r => r.estrategia.optimizarAFondo)).toHaveLength(2);
+    expect(fondo.probadas.find(r => r.estrategia.optimizarAFondo).nombre).toMatch(/a fondo$/);
+    expect(fondo.probadas[0].turnos).toBeLessThanOrEqual(normal.probadas[0].turnos);
   });
 });
