@@ -117,3 +117,30 @@ describe("grupos de líneas", async () => {
     expect(cerrarTurno({ piezas: [a, conLinea(pieza(2, 490, 600, "A", "A", A, A), "491")] }, p).avisos.some(x => /distintos grupos/.test(x))).toBe(true);
   });
 });
+
+describe("toma y deje de servicio", () => {
+  const K = [40.30, -3.76]; // cochera a ~3,3 km de A (≈ 11 min a 25 km/h)
+  const conCochera = pz => ({ ...pz, cocheraLL: K });
+  it("los minutos de toma y deje son trabajo y amplitud", () => {
+    const p = { ...P, tomaServicio: 10, dejeServicio: 15 };
+    const t = cerrarTurno({ piezas: [pieza(1, 360, 600, "A", "A", A, A)] }, p);
+    expect(t.trabajo).toBe(240 + 25);
+    expect(t.duracion).toBe(240 + 25);
+    expect(t.toma).toMatchObject({ inicio: 350, fin: 360 });
+    expect(t.deje).toMatchObject({ inicio: 600, fin: 615 });
+  });
+  it("presentándose en cochera, el viaje hasta la cabecera también cuenta", () => {
+    const p = { ...P, presentacionEnCochera: true };
+    const t = cerrarTurno({ piezas: [conCochera(pieza(1, 360, 600, "A", "A", A, A))] }, p);
+    expect(t.toma.viaje).toBeGreaterThan(5);
+    expect(t.trabajo).toBe(240 + t.toma.viaje + t.deje.viaje);
+    // si la pieza ya sale de cochera, no hay viaje
+    const sale = { ...conCochera(pieza(1, 360, 600, "A", "A", A, A)), saleDeCochera: true, vuelveACochera: true };
+    expect(cerrarTurno({ piezas: [sale] }, p).trabajo).toBe(240);
+  });
+  it("si con la toma y el deje pasa de la jornada máxima, no cabe", () => {
+    const p = { ...P, tiposTurno: [], aplicar561: false, jornadaMax: 480, tomaServicio: 15, dejeServicio: 15 };
+    expect(validar([pieza(1, 360, 820, "A", "A", A, A)], p)).toBeNull(); // 460 + 30 > 480
+    expect(validar([pieza(1, 360, 800, "A", "A", A, A)], p)).not.toBeNull();
+  });
+});

@@ -223,6 +223,11 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ]),
         ["huecoNoPagado", "Hueco que ya no se paga", numero("huecoNoPagado", "min o más (jornada partida)")],
       ], nota: conTipos ? "Amplitud, trabajo mínimo y máximo y partidos: los marca cada tipo de turno." : null },
+      { id: "toma", nombre: "Toma y deje de servicio", items: [
+        ["tomaServicio", "Toma de servicio", numero("tomaServicio", "min al empezar"), "Presentarse, coger el autobús y prepararlo. Es trabajo pagado."],
+        ["dejeServicio", "Deje de servicio", numero("dejeServicio", "min al acabar"), "Liquidar y dejar el autobús. Es trabajo pagado."],
+        ["presentacionEnCochera", "El conductor se presenta en cochera", sino("presentacionEnCochera"), "Si coge el autobús en una cabecera (relevo en la calle), se cuenta además el viaje de la cochera hasta allí, y al revés al acabar."],
+      ] },
       { id: "piezas", nombre: "Piezas y relevos", items: [
         ["piezaMax", "Pieza máxima", numero("piezaMax", "min de relevo a relevo")],
         ["piezaMin", "Pieza mínima", numero("piezaMin", "min (no se releva antes)")],

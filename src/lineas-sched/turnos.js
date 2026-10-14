@@ -13,6 +13,13 @@ export const relevoPermitido = (p, find) => {
   return loc => !no.size || !no.has(find ? find(loc) : loc);
 };
 
+// De la pieza: si sale de cochera, si vuelve y dónde está la cochera de su autobús
+const datosCochera = (veh, viajes, geo) => ({
+  saleDeCochera: viajes[0]?.vacio && viajes[0].tipo === "salida",
+  vuelveACochera: viajes.at(-1)?.vacio && viajes.at(-1).tipo === "vuelta",
+  cocheraLL: veh.cochera != null ? geo?.coord?.get(veh.cochera) || null : null,
+});
+
 // La cabecera donde acaba un trozo de autobús (la llegada de su último viaje con viajeros)
 export const dondeAcaba = viajes => { for (let i = viajes.length - 1; i >= 0; i--) if (!viajes[i].vacio) return viajes[i].d; return viajes.at(-1)?.d; };
 
@@ -38,6 +45,20 @@ export function entrePiezas(a, b, p) {
   }
   return { sigue, cambio, viaje, hace: viaje, km };
 }
+// ── Toma y deje de servicio ──
+// Minutos de presentación al empezar y de liquidación al acabar (convenio) y,
+// si el conductor se presenta en cochera y coge el autobús en una cabecera
+// (relevo en la calle), el viaje de la cochera hasta allí (y al revés al
+// acabar). Todo es trabajo pagado: cuenta para jornada, amplitud y tipo.
+const kmEntre = (a, b, p) => (a && b ? Math.round(kmRecta(a, b) * (p.factorRodeo || 1.35) * 10) / 10 : 0);
+const minViaje = (km, p) => (km > 0.3 ? Math.ceil((km / Math.max(1, p.velocidadVacio || 25)) * 60) : 0);
+export function tomaYDeje(primera, ultima, p) {
+  const enCochera = !!p.presentacionEnCochera;
+  const ida = enCochera && !primera.saleDeCochera && primera.cocheraLL ? minViaje(kmEntre(primera.cocheraLL, primera.oLL, p), p) : 0;
+  const vuelta = enCochera && !ultima.vuelveACochera && ultima.cocheraLL ? minViaje(kmEntre(ultima.dLL, ultima.cocheraLL, p), p) : 0;
+  return { antes: (p.tomaServicio || 0) + ida, despues: (p.dejeServicio || 0) + vuelta, ida, vuelta };
+}
+
 const conLimiteCambios = p => p.maxCambiosBus != null && p.maxCambiosBus !== "" && p.maxCambiosBus >= 0;
 const conLimiteTotal = p => p.maxCambiosBusTotal != null && p.maxCambiosBusTotal !== "" && p.maxCambiosBusTotal >= 0;
 
@@ -100,6 +121,7 @@ function cortarPiezas(vehiculos, p, find, geo = null) {
         o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
         // dónde coge y deja el autobús el conductor (para lo que tarda en ir de una pieza a otra)
         oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,
+        ...datosCochera(veh, viajes, geo),
         lineas: lineasDe(viajes),
       };
       piezas.push(pz); previa = pz;
@@ -163,6 +185,7 @@ function cortarCandidatas(vehiculos, p, find, geo = null) {
           conduccion: viajes.reduce((a, v) => a + v.arr - v.dep, 0), viajes,
           o: find ? find(viajes[0].o) : viajes[0].o, d: find ? find(viajes.at(-1).d) : viajes.at(-1).d,
           oLL: geo?.coord?.get(viajes[0].o) || null, dLL: geo?.coord?.get(viajes.at(-1).d) || null,
+          ...datosCochera(veh, viajes, geo),
           lineas: lineasDe(viajes), u: Array.from({ length: j - i + 1 }, (_, k) => base + i + k), uIni: base + i, uFin: base + j,
         });
       }
@@ -178,8 +201,8 @@ const enFranja = (min, desde, hasta) => { const m = ((min % 1440) + 1440) % 1440
 
 /** ¿Cabe el turno (inicio, fin, trabajo, partidos) en el tipo? final: además llega al trabajo mínimo */
 export function encajaTipo(t, tipo, final = false) {
-  if (!enFranja(t.inicio, tipo.desde, tipo.hasta)) return false;
-  if (t.fin - t.inicio > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
+  if (!enFranja(t.inicio - (t.antes || 0), tipo.desde, tipo.hasta)) return false;
+  if (t.fin - t.inicio + (t.antes || 0) + (t.despues || 0) > tipo.amplitudMax || t.trabajo > tipo.trabajoMax) return false;
   if (t.partidos > (tipo.partido ? 1 : 0)) return false;
   if (t.partidos && tipo.splitMax > 0 && (t.split || 0) > tipo.splitMax) return false; // hueco del partido demasiado largo
   if (tipo.cambiosBus != null && (t.cambios || 0) > tipo.cambiosBus) return false; // este tipo no permite (tantos) cambios de autobús
@@ -230,8 +253,12 @@ function anadir(t, pz, p) {
     if (e.cambio) { cambios++; if (!p._tipos && conLimiteCambios(p) && cambios > p.maxCambiosBus) return null; }
   }
   const inicio = t ? t.inicio : pz.inicio;
-  if (pz.fin - inicio > p.amplitudMax) return null;
-  const trabajo = (t ? t.trabajo : 0) + (partido ? viaje : hueco) + (pz.fin - pz.inicio);
+  // toma (de la primera pieza) y deje (de la última, la que se añade): trabajo y amplitud
+  const td = tomaYDeje(t ? t.piezas[0] : pz, pz, p);
+  const antes = t ? t.antes ?? td.antes : td.antes, despues = td.despues;
+  if (pz.fin - inicio + antes + despues > p.amplitudMax) return null;
+  const trabajoBase = (t ? t.trabajoBase ?? t.trabajo : 0) + (partido ? viaje : hueco) + (pz.fin - pz.inicio);
+  const trabajo = trabajoBase + antes + despues;
   if (trabajo > p.jornadaMax) return null;
   const conduccion = (t ? t.conduccion : 0) + pz.conduccion;
   if (p.aplicar561 && conduccion > p.conduccionDiariaMax) return null;
@@ -248,8 +275,8 @@ function anadir(t, pz, p) {
     if (p.aplicar561 && seguido > p.conduccionContinuaMax) return null;
     finPrev = v.arr;
   }
-  if (p.jornadaSinPausaMax > 0 && pz.fin - inicio > p.jornadaSinPausaMax && !hay15) return null; // descanso si la jornada pasa de X (sin valor: no se exige)
-  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, conduccion, seguido, pausaAcum, hay15, cambios, lineas: t ? [...new Set([...lineas, ...(pz.lineas || [])])] : lineas, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco - viaje : 0) };
+  if (p.jornadaSinPausaMax > 0 && pz.fin - inicio + antes + despues > p.jornadaSinPausaMax && !hay15) return null; // descanso si la jornada pasa de X (sin valor: no se exige)
+  const estado = { inicio, fin: pz.fin, d: pz.d, trabajo, trabajoBase, antes, despues, conduccion, seguido, pausaAcum, hay15, cambios, lineas: t ? [...new Set([...lineas, ...(pz.lineas || [])])] : lineas, partidos: (t ? t.partidos : 0) + (partido ? 1 : 0), split: Math.max(t ? t.split || 0 : 0, partido ? hueco - viaje : 0) };
   if (p._tipos && !p._tipos.some(x => encajaTipo(estado, x))) return null; // ningún tipo de turno lo admite
   return estado;
 }
@@ -290,7 +317,7 @@ function costeTurno(e, piezas, p) {
 }
 
 function estadoSuelto(pz) {
-  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0, lineas: pz.lineas || [] };
+  return { piezas: [pz], inicio: pz.inicio, fin: pz.fin, d: pz.d, trabajo: pz.fin - pz.inicio, antes: 0, despues: 0, conduccion: pz.conduccion, seguido: 0, pausaAcum: 0, hay15: true, partidos: 0, cambios: 0, lineas: pz.lineas || [] };
 }
 
 function turnosPorParticion(piezas, p, unidades = null) {
@@ -445,7 +472,11 @@ export function cerrarTurno(t, pOriginal) {
   const viajes = t.piezas.flatMap(pz => pz.viajes);
   t.inicio = t.piezas[0].inicio;
   t.fin = t.piezas.at(-1).fin;
-  t.duracion = t.fin - t.inicio; // amplitud
+  const td = tomaYDeje(t.piezas[0], t.piezas.at(-1), p);
+  t.antes = td.antes; t.despues = td.despues;
+  t.toma = td.antes ? { que: "Toma", inicio: t.inicio - td.antes, fin: t.inicio, min: td.antes, viaje: td.ida } : null;
+  t.deje = td.despues ? { que: "Deje", inicio: t.fin, fin: t.fin + td.despues, min: td.despues, viaje: td.vuelta } : null;
+  t.duracion = t.fin - t.inicio + td.antes + td.despues; // amplitud (con la toma y el deje)
   // entre cada dos piezas: el cambio de autobús y lo que se tarda en ir a la otra cabecera
   const entre = t.piezas.slice(1).map((pz, i) => ({ ...entrePiezas(t.piezas[i], pz, p), hueco: pz.inicio - t.piezas[i].fin, a: t.piezas[i], b: pz }));
   const sinPagar = entre.map(e => e.hueco - e.viaje).filter(h => h >= p.huecoNoPagado);

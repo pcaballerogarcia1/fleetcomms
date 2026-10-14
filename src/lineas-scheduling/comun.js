@@ -71,7 +71,7 @@ export function filasDe(res, modo) {
     const splits = tramosPausa.filter(x => x.fin - x.inicio >= (res.params?.huecoNoPagado ?? 60));
     const buses = t.piezas.map(pz => res.vehiculos.find(v => v.id === pz.vehiculo)?.autobus);
     return fila(`T${t.id}`, `${t.tipoNombre ? `${t.tipoNombre} · ` : t.tipo === null ? "Sin tipo · " : ""}${t.piezas.length} pieza${t.piezas.length > 1 ? "s" : ""}${t.partidos && t.tipo !== "partido" ? " · partido" : ""}`, viajes, {
-      id: t.id, tramosPausa, splits, desplazamientos, cambiosBus: t.cambiosBus || 0, avisos: t.avisos, trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}${t.desplazamientos?.length ? ` · ${t.desplazamientos.length} desplaz.` : ""}`, manual: !!t.manual,
+      id: t.id, tramosPausa, splits, desplazamientos, cambiosBus: t.cambiosBus || 0, avisos: t.avisos, tomaDeje: [t.toma, t.deje].filter(Boolean), trabajo: t.trabajo, detalle: `Bus ${[...new Set(buses)].join(" + ")}${t.desplazamientos?.length ? ` · ${t.desplazamientos.length} desplaz.` : ""}`, manual: !!t.manual,
       relevos: t.piezas.map(pz => ({ inicio: pz.inicio, turno: t.id })),
       piezaDe: new Map(t.piezas.flatMap(pz => pz.viajes.map(v => [v, clavePieza(pz)]))),
     });

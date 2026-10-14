@@ -46,6 +46,9 @@ export const PARAMS_DEFECTO = {
   mezclaBuses: "libre",  // con entreLineas: "libre" (cualquier línea) · "grupo" (solo dentro de su grupo)
   mezclaTurnos: "libre", // "libre" · "grupo" (un conductor, solo líneas de un grupo) · "linea" (una sola línea; o turnoUnaLinea)  // cada turno, de una sola línea (no se mezclan líneas; las variantes de una línea cuentan como la misma)
   maxCambiosBusTotal: null,
+  tomaServicio: 0,      // min de presentación al empezar el turno (convenio)
+  dejeServicio: 0,      // min de liquidación al acabar
+  presentacionEnCochera: false, // si coge el autobús en una cabecera, cuenta el viaje desde la cochera (y al revés)
   busSigueConductor: true, // después de los turnos: intercambiar autobuses en cabecera para que el conductor no cambie // cambios de autobús de todos los turnos del escenario, como mucho (null = sin límite)
   aplicar561: true,     // avisos de conducción UE 561/2006
   costeHora: null, costeKm: null, costeVehiculoDia: null, // € para el coste estimado

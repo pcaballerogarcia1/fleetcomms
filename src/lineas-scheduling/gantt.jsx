@@ -92,6 +92,12 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                 <div key={`p${i}`} title={`Pausa ${hm(x.fin - x.inicio)}`} style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.3, height: ROW_H * 0.4,
                   background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)", border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3 }} />
               ))}
+              {(r.tomaDeje || []).map((x, i) => (
+                // toma o deje de servicio (con el viaje desde o hasta la cochera, si lo hay)
+                <div key={`td${i}`} title={`${x.que} de servicio ${hhmm(x.inicio)}–${hhmm(x.fin)} · ${x.min} min${x.viaje ? ` (${x.viaje} de viaje desde/hasta la cochera)` : ""}`}
+                  style={{ position: "absolute", left: X(x.inicio), width: Math.max(2, X(x.fin) - X(x.inicio)), top: ROW_H * 0.32, height: ROW_H * 0.36, zIndex: 1,
+                    background: "repeating-linear-gradient(90deg,rgba(148,163,184,0.35) 0,rgba(148,163,184,0.35) 2px,transparent 2px,transparent 5px)", border: "1px solid rgba(148,163,184,0.6)", borderRadius: 3 }} />
+              ))}
               {(r.desplazamientos || []).map((x, i) => (
                 // el conductor va de una cabecera a otra para coger el siguiente autobús (trabajo, no pausa)
                 <div key={`d${i}`} title={`Desplazamiento a otra cabecera ${hhmm(x.inicio)}–${hhmm(x.fin)} · ${x.fin - x.inicio} min${x.km ? ` · ${String(x.km).replace(".", ",")} km` : ""}`}
