@@ -3,6 +3,7 @@
 
 
 import { PEGADAS_KM, admite, hm, tipoDeLinea, vacio, autobusPuedeSeguir } from "./base.js";
+import { flotaDe, autonomiaPorTipo, limiteKm } from "./flota.js";
 import { montarBloque } from "./manual.js";
 
 // Lo que puede estar un autobús fuera de cochera: la restricción (amplitud
@@ -43,7 +44,16 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     return v.dep - ultimo.arr >= ida;
   };
   const sigue = autobusPuedeSeguir(p);
-  const vale = (veh, v, c) => (veh.linea === v.linea || sigue(veh.nombreLinea, v.nombre)) && admite(c, veh.tipo) && cabe(veh, v) && !aCochera(veh, v);
+  // autonomía de la flota (Planning → Flota): km como mucho por salida de cochera
+  const porTipoKm = autonomiaPorTipo(flotaDe(cfg));
+  const kmCochera = (a, b) => (geo?.hayCocheras && a && b ? geo.km(a, b) || 0 : 0);
+  const cabeKm = (veh, v) => {
+    const lim = limiteKm(porTipoKm, veh.tipo);
+    if (lim === Infinity) return true;
+    const ult = veh.viajes.at(-1), hasta = find(ult.d) === find(v.o) ? 0 : geo?.km(ult.d, v.o) || 0;
+    return (veh.km || 0) + hasta + (v.km || 0) + kmCochera(v.d, veh.cocheraEst || cocheraDe(v)) <= lim;
+  };
+  const vale = (veh, v, c) => (veh.linea === v.linea || sigue(veh.nombreLinea, v.nombre)) && admite(c, veh.tipo) && cabe(veh, v) && !aCochera(veh, v) && cabeKm(veh, v);
   for (const v of viajes) {
     const c = cfg[v.linea];
     const donde = find(v.o);
@@ -76,9 +86,11 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     }
     if (!veh) {
       const cochera = ampMax < Infinity ? cocheraDe(v) : null;
-      veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea, cocheraEst: cochera, salida0: v.dep - (cochera ? minCochera(cochera, v.o) : 0) };
+      veh = { id: vehiculos.length + 1, tipo: tipoDeLinea(c), viajes: [], libre: 0, linea: v.linea, cocheraEst: cochera, salida0: v.dep - (cochera ? minCochera(cochera, v.o) : 0), km: kmCochera(cocheraDe(v), v.o) };
       vehiculos.push(veh);
     }
+    if (veh.viajes.length) { const u = veh.viajes.at(-1); veh.km = (veh.km || 0) + (u.vacio ? u.km || 0 : 0); }
+    veh.km = (veh.km || 0) + (v.km || 0);
     veh.viajes.push(v);
     veh.linea = v.linea; veh.nombreLinea = v.nombre;
     veh.libre = v.arr + (c?.regulacion ?? p.regulacion);
@@ -102,7 +114,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
     veh.kmVacio = Math.round(veh.viajes.reduce((s, x) => s + (x.vacio ? x.km : 0), 0) * 10) / 10;
     // un solo viaje (con la salida y la vuelta) ya más largo que el máximo: no se puede partir, se avisa
     if (ampMax < Infinity && veh.fin - veh.inicio > ampMax) veh.avisos = [`Amplitud del autobús de ${hm(veh.fin - veh.inicio)}: supera ${hm(ampMax)}`];
-    delete veh.libre; delete veh.linea; delete veh.nombreLinea; delete veh.cocheraEst; delete veh.salida0;
+    delete veh.libre; delete veh.linea; delete veh.nombreLinea; delete veh.cocheraEst; delete veh.salida0; delete veh.km;
   }
   return vehiculos;
 }
@@ -284,11 +296,22 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   };
   const ampMax = amplitudBus(p);
   const caminos = [];
+  const porTipoKm = autonomiaPorTipo(flotaDe(cfg));
   for (let i = 0; i < n; i++) {
     if (mR[i] >= 0) continue;
-    let actual = [];
+    let actual = [], km = 0;
     for (let j = i; j >= 0; j = mL[j]) {
       const v = viajes[j];
+      // autonomía de la flota: km de esta salida de cochera (si pasa por cochera, vuelve a empezar)
+      const lim = limiteKm(porTipoKm, tipoDe(v));
+      if (lim < Infinity) {
+        const ant = actual.length ? viajes[actual.at(-1)] : null;
+        const ci = cocheraDe(v);
+        if (!ant || !enLinea(ant, v)) km = ci ? geo.km(ci, v.o) || 0 : 0;
+        else km += find(ant.d) === find(v.o) ? 0 : geo?.km(ant.d, v.o) || 0;
+        if (ant && enLinea(ant, v) && km + (v.km || 0) + (ci ? geo.km(v.d, ci) || 0 : 0) > lim) { caminos.push(actual); actual = []; km = ci ? geo.km(ci, v.o) || 0 : 0; }
+        km += v.km || 0;
+      }
       // amplitud máxima del autobús: si el siguiente viaje la pasa, empieza otro autobús
       if (actual.length && ampMax < Infinity) {
         const ci = cocheraDe(viajes[actual[0]]);

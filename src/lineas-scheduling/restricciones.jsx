@@ -200,6 +200,9 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["costeVehiculoDia", "Coste por autobús y día", limite("costeVehiculoDia", "€/autobús·día", { decimal: true }), "Para el coste estimado y «Menor coste»."],
         ["costeKm", "Coste por km", limite("costeKm", "€/km (con los vacíos)", { decimal: true, step: 0.01 })],
       ] },
+      { id: "autonomia", nombre: "Autonomía", items: [
+        ["cargaEntreSalidas", "Se cargan en cochera entre una salida y otra", sino("cargaEntreSalidas"), "Para los autobuses con autonomía (Planning → Flota). Encendido: cada salida de cochera tiene que caber en la autonomía. Apagado: solo cargan de noche, así que cuenta el día entero."],
+      ], nota: "La autonomía de cada autobús se pone en Planning → Flota. Ninguna salida de cochera pasa de los km que aguanta la flota de su tipo; si no llega, entra otro autobús." },
       { id: "cochera", nombre: "Cochera", items: [
         ["margenCochera", "Rato mínimo en cochera entre dos salidas", numero("margenCochera", "min")],
         ["amplitudBusMax", "Amplitud máxima del autobús", limite("amplitudBusMax", "min de la salida a la vuelta a cochera"), "Pasado este tiempo fuera, el autobús vuelve a cochera."],

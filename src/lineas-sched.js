@@ -44,6 +44,8 @@ import { PARAMS_DEFECTO, geografia, nombreDia, viajesDelDia } from "./lineas-sch
 import { kpisServicio, perfilVehiculos } from "./lineas-sched/kpis.js";
 import { programarTurnos } from "./lineas-sched/turnos.js";
 import { seguirConductores } from "./lineas-sched/seguir.js";
+import { asignarFlota, flotaDe } from "./lineas-sched/flota.js";
+export { asignarFlota, flotaDe } from "./lineas-sched/flota.js";
 import { minutosCoste, costeDeMinutos, hayPrecios } from "./lineas-sched/costes.js";
 export { minutosCoste, costeDeMinutos, hayPrecios, CAMPOS_PRECIO } from "./lineas-sched/costes.js";
 import { vehiculosYAutobuses } from "./lineas-sched/vehiculos.js";
@@ -70,8 +72,11 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
   const geo = geografia(red, cfg, cocheras, p);
   const { vehiculos, autobuses } = vehiculosYAutobuses(viajes, cfg, find, p, geo);
   for (const v of vehiculos) v.relevos = [];
+  // la flota real (Planning → Flota): un vehículo para cada autobús del escenario
+  const flota = asignarFlota(vehiculos, autobuses, flotaDe(cfg), { cargaEntreSalidas: p.cargaEntreSalidas !== false });
+  if (flota) for (const b of autobuses) { const f = flota.porAutobus[b.id]; b.matricula = f?.matricula || null; b.flota = f || null; }
   return {
-    viajes, vehiculos, autobuses, turnos: null, find, ctx: { geo, cfg }, kpis: kpisServicio(viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos),
+    viajes, vehiculos, autobuses, flota, turnos: null, find, ctx: { geo, cfg }, kpis: kpisServicio(viajes, vehiculos, null, autobuses), perfil: perfilVehiculos(vehiculos),
     aproximado, params: p, diaNombre: nombreDia(p.dia, red), conCocheras: !!geo?.hayCocheras,
   };
 }

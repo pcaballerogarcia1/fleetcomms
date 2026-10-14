@@ -54,8 +54,11 @@ export function filasDe(res, modo) {
       const viajes = bloques.flatMap(x => x.viajes);
       const vacios = bloques.slice(1).map((x, i) => ({ inicio: bloques[i].fin, fin: x.inicio }));
       const relevos = bloques.flatMap(x => x.relevos);
-      return fila(`Bus ${b.id}`, nombreTipo(b.tipo) || "—", viajes, {
-        id: b.id, vacios, relevos, bloques: bloques.length, avisos: bloques.flatMap(x => x.avisos || []), manual: bloques.some(x => x.manual),
+      // con flota: la matrícula, y aviso si no le llega la autonomía
+      const f = b.flota;
+      const avisoFlota = f && !f.ok ? [f.matricula ? `Necesita ${f.necesita} km y el ${f.matricula} aguanta ${f.autonomia} km` : "No hay vehículo en la flota para este autobús"] : [];
+      return fila(b.matricula || `Bus ${b.id}`, `${nombreTipo(b.tipo) || "—"}${b.matricula ? ` · bus ${b.id}` : ""}${f?.autonomia ? ` · ${f.necesita}/${f.autonomia} km` : ""}`, viajes, {
+        id: b.id, vacios, relevos, bloques: bloques.length, avisos: [...avisoFlota, ...bloques.flatMap(x => x.avisos || [])], manual: bloques.some(x => x.manual),
       });
     });
   }
@@ -212,7 +215,7 @@ export function kpisDetalle(res, p = res.params) {
 export function cambiosKpi(res, p = res.params) {
   const k = res.kpis;
   return {
-    "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques`, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
+    "Vehículos": { l: "Autobuses", sub: `pico ${k.pico} a la vez · ${num(k.bloques)} bloques${res.flota ? ` · flota: ${res.flota.faltan ? `faltan ${res.flota.faltan}` : `${num(res.flota.sobran)} libres`}${res.flota.noLlegan ? ` · ${res.flota.noLlegan} sin autonomía` : ""}` : ""}`, subColor: res.flota && (res.flota.faltan || res.flota.noLlegan) ? C.red : undefined, ayuda: "Autobuses necesarios: un mismo autobús puede hacer varios bloques si entre ellos hay margen para ir y volver de cochera. El pico es el máximo en servicio a la vez." },
     "Turnos": { sub: res.turnos ? (Object.keys(k.turnosPorTipo || {}).length ? Object.entries(k.turnosPorTipo).sort((a, b) => b[1] - a[1]).map(([n, c]) => `${num(c)} ${n.toLowerCase()}`).join(" · ") : `${(k.piezasMedias || 0).toFixed(1).replace(".", ",")} piezas de media · ${num(k.turnosPartidos || 0)} partidos`) + (k.cambiosBus != null ? ` · ${num(k.cambiosBus)} cambios de bus${p.maxCambiosBusTotal != null && k.cambiosBus > p.maxCambiosBusTotal ? ` (máx. ${num(p.maxCambiosBusTotal)})` : ""}` : "") : "falta el paso 2 (turnos)", subColor: !res.turnos ? C.amber : p.maxCambiosBusTotal != null && k.cambiosBus > p.maxCambiosBusTotal ? C.red : undefined, ayuda: "Turnos de conductor: cada uno encadena las piezas (de cualquier autobús, con relevo en cabecera) que caben en su jornada y amplitud. Partido = con un hueco largo sin pagar." },
     "Eficiencia vehículo": { sub: `km con viajeros / km totales · ${num(k.km - (k.kmVacio || 0))} / ${num(k.km)}`, ayuda: "Parte de los km que se hacen con viajeros: el resto son vacíos (salir y volver a cochera, ir a otra cabecera)." },
     "Eficiencia personal": { sub: `conducción / trabajo · ${num(k.horasPagadas)} h`, ayuda: "Tiempo conduciendo con viajeros / tiempo de trabajo de los turnos (suma de sus piezas)." },
