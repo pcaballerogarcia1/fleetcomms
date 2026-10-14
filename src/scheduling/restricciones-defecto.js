@@ -5,5 +5,7 @@ export const RESTRICCIONES_DEFECTO = {
   optimizeWeight: 0, virtualShiftMin: 0, rosterMode: "cuadrante",
   costeHora: null, costeKm: null, sin561: false,
   // capacidad del camión y viajes a descargar (scheduling/capacidad.js)
+  // ruta maestra semanal con frecuencias (scheduling/frecuencias.js)
+  usarFrecuencias: false, diasServicio: "LMXJVS", frecuenciaDefecto: "diaria",
   usarCapacidad: false, llenadoPct: 70, compactacion: 3, litrosPorDefecto: 1000, tiempoDescarga: 20,
 };

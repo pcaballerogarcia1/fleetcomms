@@ -18,6 +18,7 @@ import { GanttChart } from "./gantt.jsx";
 import { KpiBar } from "./kpi-bar.jsx";
 import { idbLoad, idbSave } from "./idb.js";
 import { ConstraintsPanel } from "./restricciones.jsx";
+import { nombreDiaEscenario } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import {
   runCloudSave as runCloudSaveMod, takeTheirScenario as takeTheirScenarioMod, restorePoint as restorePointMod, importFromPlanning as importFromPlanningMod, runGenerate as runGenerateMod, runSimulation as runSimulationMod,
@@ -717,7 +718,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               background: C.card, border: `1px solid ${C.border}`,
               borderRadius: 5, padding: "2px 8px", flexShrink: 0,
             }}>
-              <span style={{ fontSize: 9, color: C.blue, fontWeight: 700, fontFamily: mono }}>Día {d + 1}</span>
+              <span style={{ fontSize: 9, color: C.blue, fontWeight: 700, fontFamily: mono }}>{nombreDiaEscenario(constraints, d)}</span>
               <span style={{ fontSize: 9, color: C.muted }}>{stopsPerDay[d] || 0}p</span>
             </div>
           ))}
@@ -764,6 +765,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               onPlaceUnassigned={placeUnassignedTask}
               maxShiftMin={constraints.maxShiftMin}
               reglas={reglasGantt}
+              nombreDia={d => nombreDiaEscenario(constraints, d)}
             />
           </div>
         </div>

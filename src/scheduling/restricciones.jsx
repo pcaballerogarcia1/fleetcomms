@@ -8,6 +8,7 @@ import { minToTime, timeToMin } from "../vrp-engine.js";
 import { C, font, mono } from "./estilo.js";
 import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restricciones.jsx";
 import { CAPACIDAD_DEFECTO } from "./capacidad.js";
+import { DIAS, FRECUENCIAS_DEFECTO } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
@@ -85,6 +86,30 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
       { id: "flota", nombre: "Días y flota necesaria", items: [
         ["maxDays", "Días máximos del escenario", limite("maxDays", 365, "días"), "Si con la flota actual no caben todas las paradas en esos días, se añaden los vehículos y conductores necesarios («Vehículo necesario 1»…). Apagado: los días que hagan falta."],
         ...(c.maxDays > 0 ? [["virtualShiftMin", "Jornada de los añadidos", limite("virtualShiftMin", 1440, "min"), "Apagado: jornada completa."]] : []),
+      ] },
+      { id: "frecuencias", nombre: "Frecuencias (ruta maestra)", items: [
+        ["usarFrecuencias", "Hacer la ruta maestra semanal", <Interruptor on={!!c.usarFrecuencias} onCambiar={v => onChange({ ...FRECUENCIAS_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarFrecuencias: v })} />, "El escenario es la semana tipo: cada parada sale los días de su frecuencia y cada vehículo trabaja siempre la misma zona. La frecuencia se lee de una columna del Excel («Frecuencia», «Días»): días («L,X,V», «lunes y jueves», «L-V», «diaria») o veces por semana («3», «2/semana»); las de veces se colocan en días separados y equilibrando la zona."],
+        ...(c.usarFrecuencias ? [
+          ["diasServicio", "Días que se trabaja", (
+            <span style={{ display: "flex", gap: 4 }}>
+              {DIAS.map(d => {
+                const on = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio).includes(d);
+                return <button key={d} onClick={() => { const act = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio); const nuevo = DIAS.filter(x => (x === d ? !on : act.includes(x))).join(""); if (nuevo) set("diasServicio", nuevo); }}
+                  style={{ width: 26, height: 24, borderRadius: 5, border: `1px solid ${on ? C.blue : C.border}`, background: on ? "rgba(92,155,255,0.18)" : "none", color: on ? C.blueText : C.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>{d}</button>;
+              })}
+            </span>
+          ), "Día 1 del escenario es el primero de estos (normalmente el lunes)."],
+          ["frecuenciaDefecto", "Frecuencia si el Excel no la dice", (
+            <select value={c.frecuenciaDefecto ?? FRECUENCIAS_DEFECTO.frecuenciaDefecto} onChange={e => set("frecuenciaDefecto", e.target.value)}
+              style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
+              <option value="diaria">Todos los días de servicio</option>
+              <option value="L-V">De lunes a viernes</option>
+              <option value="3">3 veces por semana</option>
+              <option value="2">2 veces por semana</option>
+              <option value="1">1 vez por semana</option>
+            </select>
+          )],
+        ] : []),
       ] },
       { id: "capacidad", nombre: "Capacidad y descargas", items: [
         ["usarCapacidad", "Tener en cuenta lo que cabe en el camión", <Interruptor on={!!c.usarCapacidad} onCambiar={v => onChange({ ...CAPACIDAD_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarCapacidad: v })} />, "Cada camión carga lo que pone su ficha (Flota → Capacidad, m³). Cuando la siguiente parada no cabe, va a la planta de descarga más cercana, descarga y sigue; y descarga al final antes de volver al depósito. Las plantas se marcan en Planning → Depots («Planta»); si no hay, descarga en su depósito."],

@@ -4,9 +4,11 @@
 // Un worker por cálculo, que se cierra al terminar (libera su memoria).
 // Sin soporte de Workers (entorno de pruebas), se ejecuta aquí mismo.
 import { generateScenario, autoScaleFleet } from "./vrp-engine.js";
+import { generarRutaMaestra } from "./scheduling/frecuencias.js";
 
 function runInWorker(op, args, onProgress) {
   if (typeof Worker === "undefined") {
+    if (op === "maestra") return generarRutaMaestra(...args, generateScenario);
     return op === "generate" ? generateScenario(...args) : autoScaleFleet(...args, onProgress);
   }
   return new Promise((resolve, reject) => {
@@ -29,3 +31,6 @@ export const generateScenarioBg = (tasks, resources, constraints) =>
   runInWorker("generate", [tasks, resources, constraints]);
 export const autoScaleFleetBg = (tasks, resources, constraints, onProgress) =>
   runInWorker("autoscale", [tasks, resources, constraints], onProgress);
+// Ruta maestra semanal (scheduling/frecuencias.js): cada vehículo en su zona, día a día
+export const rutaMaestraBg = (tasks, resources, constraints) =>
+  runInWorker("maestra", [tasks, resources, constraints]);

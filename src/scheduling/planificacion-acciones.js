@@ -9,11 +9,12 @@ import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { scenarioKpis } from "../scenario-metrics.js";
 import { loadScenarioCloud, newScenarioVersion, saveScenarioCloud } from "../scenario-store.js";
-import { autoScaleFleetBg, generateScenarioBg } from "../vrp-client.js";
+import { autoScaleFleetBg, generateScenarioBg, rutaMaestraBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
 import { deriveWorkerRows, extractShifts, kpiHistorial, loadTasksFromLayers, vehicleDayWindows, workerDayWindows } from "./datos.js";
 import { idbSave } from "./idb.js";
 import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
+import { NOMBRE_DIA } from "./frecuencias.js";
 import { enrichWithOSRM } from "./osrm.js";
 
 // La librería de Excel se descarga solo cuando se usa
@@ -172,7 +173,8 @@ export async function runGenerate(ctx) {
     // Modo "libre": el cuadrante de trabajadores no se mira (se optimiza
     // después en Rostering sobre los turnos que salgan de aquí); la
     // disponibilidad de VEHÍCULOS (taller/avería/ITV) sí, en los dos modos.
-    const rosterLibre = constraints.rosterMode === "libre";
+    // La ruta maestra es una semana tipo: tampoco mira el cuadrante de un mes concreto.
+    const rosterLibre = constraints.rosterMode === "libre" || !!constraints.usarFrecuencias;
     const rosterWorkers = workers.map(w => ({
       ...w,
       _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
@@ -218,7 +220,12 @@ export async function runGenerate(ctx) {
     // Capacidad del camión: cada parada reserva su parte del viaje a descargar
     const opcCapacidad = capacidadDe(constraints);
     const tasksVRP = reservarDescargas(tasks, vehiclesForVRP, plantas, opcCapacidad);
-    if (vehiclesForVRP.length > 0) {
+    let maestra = null;
+    if (vehiclesForVRP.length > 0 && constraints.usarFrecuencias) {
+      // Ruta maestra: la semana tipo con las frecuencias de cada parada y cada vehículo en su zona
+      vr = await rutaMaestraBg(tasksVRP, vehiclesForVRP, constraints);
+      maestra = vr.resumen;
+    } else if (vehiclesForVRP.length > 0) {
       vr = await generateScenarioBg(tasksVRP, vehiclesForVRP, constraints);
 
       // Días máximos de escenario: si sobran paradas dentro de ese límite,
@@ -364,6 +371,9 @@ export async function runGenerate(ctx) {
     const scaleMsgs = [
       addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
+        : null,
+      maestra
+        ? `Ruta maestra: ${maestra.visitas} visitas a la semana de ${maestra.paradas} paradas, cada vehículo en su zona (${maestra.dias.map((d, i) => `Día ${i + 1} = ${NOMBRE_DIA[d]}`).join(", ")}).${vr.unassigned.length ? ` ${vr.unassigned.length} visita(s) no caben en su día: hacen falta más vehículos o más horas.` : ""}`
         : null,
       descargas.descargas > 0
         ? `${descargas.descargas} viaje(s) a descargar${plantas.length ? "" : " (sin plantas marcadas en Planning: se descarga en el depósito)"}${descargas.rutasPasadas ? ` · ${descargas.rutasPasadas} ruta(s) acaban hasta ${descargas.minPasados} min más tarde de lo previsto por las descargas` : ""}.`

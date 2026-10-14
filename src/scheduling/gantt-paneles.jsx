@@ -7,7 +7,7 @@ import { C, barrioColor, fmtDurHM, font, mono } from "./estilo.js";
 import { ROW_H, UNASSIGNED_RENDER_CAP, ZOOM_STEPS } from "./gantt-comun.js";
 import { ClockBadge } from "./kpi-bar.jsx";
 
-export function BarraGantt({ cambiarVista, compactDayNav, days, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }) {
+export function BarraGantt({ cambiarVista, compactDayNav, days, nombreDia = d => `Día ${d + 1}`, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }) {
   return (
     <>
       {/* ── Toolbar ── */}
@@ -92,7 +92,7 @@ export function BarraGantt({ cambiarVista, compactDayNav, days, ganttSort, pxPer
                 color: selectedDay === d ? C.green : C.dim,
                 fontWeight: selectedDay === d ? 700 : 400,
                 transition: "all .1s",
-              }}>Día {d + 1}</button>
+              }}>{nombreDia(d)}</button>
             ))
           )}
 

@@ -12,7 +12,7 @@ import {
 import { ClockBadge } from "./kpi-bar.jsx";
 import { FilaLienzo } from "./gantt-lienzo.jsx";
 
-export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null }) {
+export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null, nombreDia = d => `Día ${d + 1}` }) {
   // Vista "Tabla" (columnas de datos) o "Compacta" (solo nombre y resumen)
   const [vista, setVista] = useState(() => { try { return localStorage.getItem("fc_gantt_vista") || "tabla"; } catch { return "tabla"; } });
   const cambiarVista = v => { setVista(v); try { localStorage.setItem("fc_gantt_vista", v); } catch { /* sin almacenamiento local */ } };
@@ -392,7 +392,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      <BarraGantt {...{ cambiarVista, compactDayNav, days, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }} />
+      <BarraGantt {...{ cambiarVista, compactDayNav, days, nombreDia, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }} />
 
       {/* ── Scrollable Gantt ── */}
       <div ref={ganttScrollRef} onScroll={handleGanttScroll} style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative" }} onClick={closePanel}>
