@@ -16,7 +16,7 @@ const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ
 export function Interruptor({ on, onCambiar, titulo }) {
   return (
     <button type="button" role="switch" aria-checked={on} title={titulo} onClick={() => onCambiar(!on)}
-      style={{ width: 34, height: 18, borderRadius: 9, border: "none", padding: 2, cursor: "pointer", flexShrink: 0, background: on ? C.blue : "rgba(255,255,255,0.14)", transition: "background .15s", display: "flex", justifyContent: on ? "flex-end" : "flex-start" }}>
+      style={{ width: 34, height: 18, borderRadius: 9, border: "none", padding: 2, cursor: "pointer", flexShrink: 0, background: on ? C.green : "#3a475e", transition: "background .15s", display: "flex", justifyContent: on ? "flex-end" : "flex-start" }}>
       <span style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", display: "block" }} />
     </button>
   );
@@ -65,7 +65,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
   );
   const apartado = (s, conTitulo) => (
     <div key={s.id} style={{ marginBottom: 18 }}>
-      {conTitulo && <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 4 }}>{s.nombre}</div>}
+      {conTitulo && <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{s.nombre}</div>}
       {s.nota && <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 6px", lineHeight: 1.5 }}>{s.nota}</div>}
       {s.contenido ?? (q ? s.items.filter(coincide) : s.items).map(fila)}
     </div>
@@ -74,7 +74,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
   return (
     <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, flexShrink: 0, height: alto, display: "flex", flexDirection: "column", animation: "sched-fadein .15s ease both" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <span style={{ fontSize: 14, color: C.text, fontWeight: 650 }}>{titulo}</span>
+        <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{titulo}</span>
         {cabecera}
         <span style={{ flex: 1 }} />
         {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar ✕</button>}
@@ -83,20 +83,20 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
         <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", background: C.bg }}>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
             style={{ width: "100%", boxSizing: "border-box", background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 10 }} />
-          <div className="op-seg" style={{ display: "flex", marginBottom: 14 }}>
+          <div style={{ display: "flex", border: `1px solid ${C.border2}`, borderRadius: 6, overflow: "hidden", marginBottom: 14 }}>
             {[[true, "En uso"], [false, "Todas"]].map(([v, t]) => (
-              <button key={t} onClick={() => setEnUso(v)} className={enUso === v ? "op-on" : ""} style={{ flex: 1 }}>{t}</button>
+              <button key={t} onClick={() => setEnUso(v)} style={{ flex: 1, padding: "5px 0", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: font, background: enUso === v ? C.surface2 : "transparent", color: enUso === v ? C.text : C.dim }}>{t}</button>
             ))}
           </div>
           {visibles.map(c => (
             <div key={c.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.text, fontSize: 13, fontWeight: 650, marginBottom: 4, padding: "0 4px" }}><span style={{ color: C.muted, display: "inline-flex" }}>{c.icono}</span>{c.nombre}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.green, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>{c.icono}{c.nombre}</div>
               {c.secs.map(s => {
                 const activo = !q && actual?.id === s.id;
                 return (
                   <button key={s.id} onClick={() => { setBusca(""); setSec(s.id); }} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", padding: "5px 8px 5px 23px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 12, fontFamily: font, background: activo ? C.surface2 : "none", color: activo ? C.text : C.muted }}>
                     <span style={{ flex: 1 }}>{s.nombre}</span>
-                    {secUsada(s) && <span title="Tiene algo cambiado" style={{ width: 6, height: 6, borderRadius: 3, background: C.blue, flexShrink: 0 }} />}
+                    {secUsada(s) && <span title="Tiene algo cambiado" style={{ width: 6, height: 6, borderRadius: 3, background: C.green, flexShrink: 0 }} />}
                   </button>
                 );
               })}
