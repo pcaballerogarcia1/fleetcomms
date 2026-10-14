@@ -17,6 +17,7 @@ export const relevoPermitido = (p, find) => {
 const datosCochera = (veh, viajes, geo) => ({
   saleDeCochera: viajes[0]?.vacio && viajes[0].tipo === "salida",
   vuelveACochera: viajes.at(-1)?.vacio && viajes.at(-1).tipo === "vuelta",
+  cochera: veh.cochera ?? null,
   cocheraLL: veh.cochera != null ? geo?.coord?.get(veh.cochera) || null : null,
 });
 
@@ -39,7 +40,9 @@ export function entrePiezas(a, b, p) {
   if (sigue) return { sigue, cambio: false, viaje: 0, hace: 0, km: 0 };
   if (a.d != null && a.d === b.o) return { sigue, cambio, viaje: 0, hace: p.relevoMin, km: 0 };
   let km = null, viaje = p.desplazamiento;
-  if (a.dLL && b.oLL) {
+  const t = p._tramo?.(a.d, b.o);
+  if (t) { km = t.km; viaje = Math.max(p.desplazamiento, t.min); }
+  else if (a.dLL && b.oLL) {
     km = Math.round(kmRecta(a.dLL, b.oLL) * (p.factorRodeo || 1.35) * 10) / 10;
     viaje = Math.max(p.desplazamiento, Math.ceil((km / Math.max(1, p.velocidadVacio || 25)) * 60));
   }
@@ -54,8 +57,9 @@ const kmEntre = (a, b, p) => (a && b ? Math.round(kmRecta(a, b) * (p.factorRodeo
 const minViaje = (km, p) => (km > 0.3 ? Math.ceil((km / Math.max(1, p.velocidadVacio || 25)) * 60) : 0);
 export function tomaYDeje(primera, ultima, p) {
   const enCochera = !!p.presentacionEnCochera;
-  const ida = enCochera && !primera.saleDeCochera && primera.cocheraLL ? minViaje(kmEntre(primera.cocheraLL, primera.oLL, p), p) : 0;
-  const vuelta = enCochera && !ultima.vuelveACochera && ultima.cocheraLL ? minViaje(kmEntre(ultima.dLL, ultima.cocheraLL, p), p) : 0;
+  const tramo = (x, y, xLL, yLL) => { const t = p._tramo?.(x, y); return t ? t.min : minViaje(kmEntre(xLL, yLL, p), p); };
+  const ida = enCochera && !primera.saleDeCochera && primera.cocheraLL ? tramo(primera.cochera, primera.o, primera.cocheraLL, primera.oLL) : 0;
+  const vuelta = enCochera && !ultima.vuelveACochera && ultima.cocheraLL ? tramo(ultima.d, ultima.cochera, ultima.dLL, ultima.cocheraLL) : 0;
   return { antes: (p.tomaServicio || 0) + ida, despues: (p.dejeServicio || 0) + vuelta, ida, vuelta };
 }
 
@@ -364,7 +368,7 @@ function turnosDeGrupos(piezas, grupos, p) {
 /** Solo la partición (lo pesado), para hacerla en el worker: grupos de claves de pieza */
 export function gruposTurnos(resVehiculos, opciones = {}) {
   const r = resVehiculos;
-  const p = efectivos({ ...r.params, ...opciones });
+  const p = efectivos({ ...r.params, ...opciones, ...(r.ctx?.geo?.tramo ? { _tramo: r.ctx.geo.tramo } : {}) });
   if (esFlexible(p)) {
     const { piezas, unidades } = cortarCandidatas(r.vehiculosBase || r.vehiculos, p, r.find, r.ctx?.geo);
     return turnosPorParticion(piezas, p, unidades).map(t => t.piezas.map(claveGrupo));
@@ -387,6 +391,7 @@ export function validar(piezas, p) {
 }
 
 export function programarTurnos(vehiculos, pOriginal, find, grupos = null, geo = null) {
+  if (geo?.tramo && !pOriginal._tramo) pOriginal = { ...pOriginal, _tramo: geo.tramo };
   const p0 = efectivos(pOriginal);
   // los cortes flexibles solo tienen sentido con la partición
   const p = esFlexible(p0) && p0.metodo === "voraz" ? efectivos({ ...pOriginal, metodo: "particion" }) : p0;

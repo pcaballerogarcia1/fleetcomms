@@ -12,6 +12,7 @@ import { FRANJAS, TIPOS_DIA, filtrarRed, viajesLinea } from "./gtfs-red.js";
 import { TIPOS_VEHICULO, watchRed, guardarRed, watchCfg, guardarCfgLinea, guardarColorLinea, tiempoEfectivo, watchCocheras, cambiarCocheras, asegurarResumenRed, anotarCambioPlanning } from "./lineas-store.js";
 import { Horarios } from "./lineas-horarios.jsx";
 import { DisenoRed } from "./lineas-diseno.jsx";
+import { VaciosRed } from "./lineas-vacios.jsx";
 import { nombreDia, cabecerasDeRed } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
 
@@ -578,6 +579,14 @@ export function PlanningLineasPage({ projectId, orgId }) {
   const linea = sel ? red?.lineas.find(l => l.id === sel) || null : null;
   const configuradas = Object.values(cfg).filter(c => c?.tipos?.length || c?.regulacion != null || Object.keys(c?.tiempos || {}).length).length;
 
+  // tiempos de vacío (Planning → Vacíos): se juntan con los que ya había
+  const guardarVacios = nuevos => {
+    const n = Object.keys(nuevos).length;
+    return guardarCfgLinea(projectId, "_vacios", { pares: nuevos }, { detalle: n === 1 ? "un tiempo de vacío" : `tiempos de vacío (${n})` })
+      .then(() => logAudit({ modulo: "Planning", accion: n === 1 ? "Cambió un tiempo de vacío" : "Calculó los tiempos de vacío por carretera", detalle: `${n} par${n === 1 ? "" : "es"}` }))
+      .catch(e => alert("No se pudo guardar: " + (e.message || e)));
+  };
+
   async function importar(file) {
     if (!file) return;
     if (estado.red && !window.confirm(`Sustituir la red actual (${estado.red.lineas.length} líneas) por la de «${file.name}»? La configuración de las líneas que se llamen igual se conserva.${estado.red.diseno ? " La red dibujada a mano se pierde." : ""}`)) return;
@@ -641,11 +650,12 @@ export function PlanningLineasPage({ projectId, orgId }) {
           {pestana("red", "Red y mapa")}
           {pestana("horarios", "Horarios de salida")}
           {pestana("relevos", "Puntos de relevo")}
+          {pestana("vacios", "Vacíos")}
           {vista === "horarios" && <span style={{ fontSize: 11, color: C.dim }}>Pincha una hora de salida o un tiempo de recorrido para cambiarlo. Los cambios los usa el Scheduling (y avisa de que el Planning ha cambiado).</span>}
         </div>
       )}
       {vista === "diseno" && !estado.cargando && (!red || red.diseno) ? <DisenoRed key={projectId} projectId={projectId} orgId={orgId} red={red} ficha={estado.ficha} onCerrar={red ? () => setVista("red") : null} />
-        : red && vista === "relevos" ? <PuntosRelevo red={red} cfg={cfg} onGuardar={guardarRelevos} /> : red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
+        : red && vista === "relevos" ? <PuntosRelevo red={red} cfg={cfg} onGuardar={guardarRelevos} /> : red && vista === "vacios" ? <VaciosRed red={red} cfg={cfg} cocheras={cocheras} onGuardar={guardarVacios} /> : red && vista === "horarios" ? <Horarios red={red} cfg={cfg} editable onGuardar={guardarSalidas} onGuardarTiempo={guardarTiempo} /> : (
     <div style={{ display: "flex", flex: 1, width: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
       {eligiendo && <ElegirImportacion archivo={eligiendo.archivo} red={eligiendo.red} onImportar={guardarElegida} onCancelar={() => setEligiendo(null)} />}
       {/* Lista de líneas */}

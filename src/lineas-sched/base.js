@@ -221,8 +221,13 @@ export function geografia(red, cfg, cocheras, p) {
   const coord = new Map(red.paradas.map(x => [x.id, [x.lat, x.lng]]));
   const lista = (cocheras || []).filter(c => isFinite(c.lat) && isFinite(c.lng));
   for (const c of lista) coord.set(ID_COCHERA(c.id), [c.lat, c.lng]);
-  const km = (a, b) => { const x = coord.get(a), y = coord.get(b); return x && y ? Math.round(kmRecta(x, y) * p.factorRodeo * 10) / 10 : null; };
-  const min = k => Math.max(1, Math.round((k / Math.max(1, p.velocidadVacio)) * 60));
+  // Tabla de vacíos (Planning → Vacíos): km y min por carretera entre cabeceras y
+  // cocheras, calculados o puestos a mano. Si un par no está, la estimación de siempre.
+  const pares = cfg?._vacios?.pares || null;
+  const raiz = pares ? cabeceras(red.lineas || []) : x => x;
+  const entre = (a, b) => (pares ? pares[`${raiz(a)}|${raiz(b)}`] || null : null);
+  const km = (a, b) => { const e = entre(a, b); if (e) return e[0]; const x = coord.get(a), y = coord.get(b); return x && y ? Math.round(kmRecta(x, y) * p.factorRodeo * 10) / 10 : null; };
+  const min = (k, a, b) => { const e = a != null && b != null ? entre(a, b) : null; return e ? Math.max(0, e[1]) : Math.max(1, Math.round((k / Math.max(1, p.velocidadVacio)) * 60)); };
   // la más cercana se mide siempre desde la primera cabecera de la línea (la
   // misma en todas las estrategias, para que Optimizar y Generar cuadren)
   const inicioLinea = new Map((red.lineas || []).map(l => [l.id, l.sentidos[0]?.paradas[0]]));
@@ -239,7 +244,9 @@ export function geografia(red, cfg, cocheras, p) {
     }
     return cocheraLinea.get(lineaId);
   };
-  return { coord, km, min, cocheraDe, hayCocheras: lista.length > 0, nombres: new Map(lista.map(c => [ID_COCHERA(c.id), c.nombre || "Cochera"])) };
+  // para el conductor (desplazamientos, toma desde la cochera): { km, min } o null si no está en la tabla
+  const tramo = (a, b) => { const e = entre(a, b); return e ? { km: e[0], min: e[1] } : null; };
+  return { coord, km, min, tramo, cocheraDe, hayCocheras: lista.length > 0, nombres: new Map(lista.map(c => [ID_COCHERA(c.id), c.nombre || "Cochera"])) };
 }
 
 // tipo: "salida" (de cochera), "vuelta" (a cochera) o "cabecera" (entre cabeceras); hacia: línea que va a hacer

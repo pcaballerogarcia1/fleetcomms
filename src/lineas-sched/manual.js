@@ -30,7 +30,7 @@ export function montarBloque(veh, reales, r) {
       const km = find(a.d) === find(v.o) ? 0 : geo ? geo.km(a.d, v.o) : null;
       if (km == null) avisos.push(`De la ${a.nombre} a la ${v.nombre}: cabeceras distintas sin coordenadas para el vacío`);
       else if (km >= PEGADAS_KM) {
-        const m = geo.min(km);
+        const m = geo.min(km, a.d, v.o);
         viajes.push(vacio(a.d, v.o, Math.max(a.arr, Math.min(a.arr + reg, v.dep - m)), m, km, "cabecera", v.nombre));
         if (a.arr + reg + m > v.dep) avisos.push(`No llega a tiempo a la ${v.nombre} de las ${reloj(v.dep)}: vacío de ${String(km).replace(".", ",")} km (${m} min) y ${reg} min de regulación`);
       } else if (a.arr + reg > v.dep) avisos.push(`Solo ${v.dep - a.arr} min de regulación antes de la ${v.nombre} de las ${reloj(v.dep)} (mín. ${reg})`);
@@ -42,8 +42,8 @@ export function montarBloque(veh, reales, r) {
     const primero = ord[0], ultimo = ord.at(-1);
     veh.cochera = geo.cocheraDe(primero.linea, primero.o);
     const ida = geo.km(veh.cochera, primero.o), vuelta = geo.km(ultimo.d, veh.cochera);
-    if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida); viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida, "salida", primero.nombre)); }
-    if (vuelta != null && vuelta >= PEGADAS_KM) viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta), vuelta, "vuelta"));
+    if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida, veh.cochera, primero.o); viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida, "salida", primero.nombre)); }
+    if (vuelta != null && vuelta >= PEGADAS_KM) viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta, ultimo.d, veh.cochera), vuelta, "vuelta"));
   }
   veh.viajes = viajes;
   veh.inicio = viajes[0].dep;

@@ -77,7 +77,7 @@ export function generarVehiculos(red, cfg = {}, opciones = {}, { cocheras = [] }
 /** Paso 2: turnos de conductor sobre los bloques del paso 1 (no los cambia) */
 export function generarTurnos(resVehiculos, opciones = {}, { grupos = null } = {}) {
   const r = resVehiculos;
-  const p = { ...r.params, ...opciones };
+  const p = { ...r.params, ...opciones, ...(r.ctx?.geo?.tramo ? { _tramo: r.ctx.geo.tramo } : {}) };
   // los turnos se hacen siempre sobre los autobuses del paso 1 tal cual (si r ya
   // trae turnos, sus autobuses pueden venir intercambiados: se usan los de antes)
   const base = r.vehiculosBase || r.vehiculos;

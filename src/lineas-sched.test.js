@@ -686,3 +686,18 @@ describe("espera larga en cabecera: el autobús vuelve a cochera", () => {
     });
   }
 });
+
+describe("tabla de vacíos por carretera", () => {
+  it("si el par está en la tabla, manda sobre la estimación (km y minutos)", async () => {
+    const { geografia } = await import("./lineas-sched/base.js");
+    const red = { paradas: [{ id: "a", lat: 40.40, lng: -3.70 }, { id: "b", lat: 40.42, lng: -3.70 }], lineas: [] };
+    const p = { ...PARAMS_DEFECTO };
+    const sin = geografia(red, {}, [], p);
+    expect(sin.km("a", "b")).toBeCloseTo(3, 0);
+    const con = geografia(red, { _vacios: { pares: { "a|b": [5.4, 17, "c"] } } }, [], p);
+    expect(con.km("a", "b")).toBe(5.4);
+    expect(con.min(5.4, "a", "b")).toBe(17);
+    expect(con.tramo("a", "b")).toEqual({ km: 5.4, min: 17 });
+    expect(con.tramo("b", "a")).toBeNull(); // cada sentido, el suyo
+  });
+});

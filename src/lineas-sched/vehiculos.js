@@ -23,7 +23,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
       for (const x of raices) {
         if (x === r) continue;
         const k = geo.km(r, x);
-        if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k)]); // paradas pegadas: es la misma cabecera
+        if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k, r, x)]); // paradas pegadas: es la misma cabecera
       }
       vecinos.set(r, l.sort((a, b) => a[1] - b[1]).slice(0, 30));
     }
@@ -32,7 +32,7 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
   // Amplitud máxima del autobús: desde que sale de cochera (o del primer
   // viaje, sin cocheras) hasta que vuelve tras el último viaje
   const ampMax = amplitudBus(p);
-  const minCochera = (a, b) => { const k = geo?.hayCocheras ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
+  const minCochera = (a, b) => { const k = geo?.hayCocheras ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k, a, b) : 0; };
   const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
   const cabe = (veh, v) => ampMax === Infinity || v.arr + (veh.cocheraEst ? minCochera(v.d, veh.cocheraEst) : 0) - veh.salida0 <= ampMax;
   // espera larga en cabecera: el autobús se va a cochera (si le da tiempo a ir y volver) y este viaje lo empieza otro bloque
@@ -93,8 +93,8 @@ function programarVehiculos(viajes, cfg, find, p, geo) {
       const primero = reales[0], ultimo = reales.at(-1);
       veh.cochera = geo.cocheraDe(primero.linea, primero.o);
       const ida = geo.km(veh.cochera, primero.o), vuelta = geo.km(ultimo.d, veh.cochera);
-      if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida); veh.viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida, "salida", primero.nombre)); }
-      if (vuelta != null && vuelta >= PEGADAS_KM) veh.viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta), vuelta, "vuelta"));
+      if (ida != null && ida >= PEGADAS_KM) { const m = geo.min(ida, veh.cochera, primero.o); veh.viajes.unshift(vacio(veh.cochera, primero.o, primero.dep - m, m, ida, "salida", primero.nombre)); }
+      if (vuelta != null && vuelta >= PEGADAS_KM) veh.viajes.push(vacio(ultimo.d, veh.cochera, ultimo.arr, geo.min(vuelta, ultimo.d, veh.cochera), vuelta, "vuelta"));
     }
     veh.inicio = veh.viajes[0].dep;
     veh.fin = veh.viajes.at(-1).arr;
@@ -124,7 +124,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   const sigue = autobusPuedeSeguir(p);
   const compatibles = (a, b) => { const ta = tipoDe(a), tb = tipoDe(b); return admite(cfg[b.linea], ta) && admite(cfg[a.linea], tb) && (ta == null || tb == null || ta === tb); };
   const cocheraDe = v => (geo?.hayCocheras ? geo.cocheraDe(v.linea, v.o) : null);
-  const minK = (a, b) => { const k = geo ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k) : 0; };
+  const minK = (a, b) => { const k = geo ? geo.km(a, b) : null; return k != null && k >= PEGADAS_KM ? geo.min(k, a, b) : 0; };
   const deps = viajes.map(v => v.dep); // ya vienen por hora de salida
   const desde = (lista, t, dep) => { let lo = 0, hi = lista.length; while (lo < hi) { const mm = (lo + hi) >> 1; if (dep(lista[mm]) < t) lo = mm + 1; else hi = mm; } return lo; };
   const porLugar = new Map();
@@ -134,7 +134,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
   const vecinosDe = r => {
     if (!vecinos.has(r)) {
       const l = [];
-      if (vmax > 0) for (const x of raices) { if (x === r) continue; const k = geo.km(r, x); if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k)]); }
+      if (vmax > 0) for (const x of raices) { if (x === r) continue; const k = geo.km(r, x); if (k != null && k <= vmax) l.push([x, k, k < PEGADAS_KM ? 0 : geo.min(k, r, x)]); }
       vecinos.set(r, l.sort((a, b) => a[1] - b[1]).slice(0, 12));
     }
     return vecinos.get(r);
@@ -232,7 +232,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
     if (b.dep < a.arr + reg(a) || !compatibles(a, b)) return Infinity;
     const misma = b.linea === a.linea || sigue(a.nombre, b.nombre);
     if (misma && find(a.d) === find(b.o)) return 0;
-    if (misma && vmax > 0) { const k = geo.km(a.d, b.o); if (k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k))) return k; }
+    if (misma && vmax > 0) { const k = geo.km(a.d, b.o); if (k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k, a.d, b.o))) return k; }
     const ci = cocheraDe(a);
     if (ci) {
       if (cocheraDe(b) !== ci) return Infinity;
@@ -280,7 +280,7 @@ function programarVehiculosOptimo(viajes, cfg, find, p, geo) {
     if (b.linea !== a.linea && !sigue(a.nombre, b.nombre)) return false; // cambiar de línea sin pasar por cochera (o fuera del grupo) no se permite
     if (find(a.d) === find(b.o)) return true;
     const k = vmax > 0 ? geo.km(a.d, b.o) : null;
-    return k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k));
+    return k != null && k <= vmax && b.dep >= a.arr + reg(a) + (k < PEGADAS_KM ? 0 : geo.min(k, a.d, b.o));
   };
   const ampMax = amplitudBus(p);
   const caminos = [];
