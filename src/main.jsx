@@ -2,11 +2,14 @@ import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { initErrorReporting } from "./error-report.js";
+import { vigilarFallosDeCarga } from "./recuperar-version.js";
 import { App, SuperAdminApp, ErrorBoundary, RootFallback, UpdatePrompt } from "./raiz.jsx";
 import { WorkspaceRouter } from "./workspace.jsx";
 
 // Errores de cualquier pantalla (oficina y Rutas) → errores/{id} para el superadmin
 initErrorReporting();
+// Tras publicar una versión nueva, si el navegador tenía la anterior y no carga una pantalla: se pone al día solo
+vigilarFallosDeCarga();
 
 // ── Entry ─────────────────────────────────────────────────────────
 const initPath = window.location.pathname;

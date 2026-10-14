@@ -60,7 +60,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // avisos al móvil (notificaciones push): public/avisos-sw.js
         importScripts: ['avisos-sw.js'],
         navigateFallbackDenylist: [/^\/api\//],

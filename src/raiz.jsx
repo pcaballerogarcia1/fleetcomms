@@ -4,6 +4,7 @@
 import { lazy, Component } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { reportError } from "./error-report.js";
+import { esFalloDeCarga, recuperarVersion } from "./recuperar-version.js";
 import { C, font } from "./raiz-estilo.js";
 
 export const App            = lazy(() => import("./App.jsx"));
@@ -15,10 +16,17 @@ export class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
   componentDidCatch(error, info) {
+    // versión vieja guardada en el navegador tras publicar una nueva: se pone al día sola
+    if (esFalloDeCarga(error)) { recuperarVersion().then(va => { if (!va) this.setState({ recuperando: false }); }); this.setState({ recuperando: true }); }
     reportError({ tipo: "pantalla", mensaje: error?.message || String(error), stack: (error?.stack || "") + "\n--- componentes:" + (info?.componentStack || "") });
   }
   render() {
     if (!this.state.error) return this.props.children;
+    if (this.state.recuperando) return (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
+        <div style={{ color: C.muted, fontSize: 13 }}>Actualizando a la versión nueva de Operanzia…</div>
+      </div>
+    );
     return (
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
         <div style={{ maxWidth: 420, textAlign: "center", padding: 24 }}>
