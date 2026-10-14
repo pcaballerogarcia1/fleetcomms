@@ -13,6 +13,7 @@ import { autoScaleFleetBg, generateScenarioBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
 import { deriveWorkerRows, extractShifts, kpiHistorial, loadTasksFromLayers, vehicleDayWindows, workerDayWindows } from "./datos.js";
 import { idbSave } from "./idb.js";
+import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
 import { enrichWithOSRM } from "./osrm.js";
 
 // La librería de Excel se descarga solo cuando se usa
@@ -144,12 +145,15 @@ export async function runGenerate(ctx) {
   try {
     // Read Planning depots from Firestore as fallback depot for vehicles
     let planningDepot = null;
+    let plantas = []; // plantas de descarga (Planning → Depots marcados como «Planta»)
     try {
       if (activeProject?._id) {
         const snap = await getDoc(doc(db, "planning_depots", activeProject._id));
         if (snap.exists()) {
           const list = snap.data().depots ?? [];
-          if (list.length > 0) planningDepot = { lat: +list[0].lat, lng: +list[0].lng };
+          const depositos = list.filter(d => !d.planta);
+          if (depositos.length > 0) planningDepot = { lat: +depositos[0].lat, lng: +depositos[0].lng };
+          plantas = list.filter(d => d.planta && hasCoords(d.lat, d.lng)).map(d => ({ nombre: d.nombre, lat: +d.lat, lng: +d.lng }));
         }
       }
     } catch { /* ignore */ }
@@ -211,13 +215,16 @@ export async function runGenerate(ctx) {
     let vr = { schedule: [], unassigned: [...tasks], daysUsed: 1 };
     let vehiclesForSchedule = vehiclesForVRP;
     let addedVehicles = [];
+    // Capacidad del camión: cada parada reserva su parte del viaje a descargar
+    const opcCapacidad = capacidadDe(constraints);
+    const tasksVRP = reservarDescargas(tasks, vehiclesForVRP, plantas, opcCapacidad);
     if (vehiclesForVRP.length > 0) {
-      vr = await generateScenarioBg(tasks, vehiclesForVRP, constraints);
+      vr = await generateScenarioBg(tasksVRP, vehiclesForVRP, constraints);
 
       // Días máximos de escenario: si sobran paradas dentro de ese límite,
       // añade vehículos virtuales "Vehículo necesario N" hasta que quepan todas.
       if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-        const scaled = await autoScaleFleetBg(tasks, vehiclesForVRP, constraints, setScaleProgress);
+        const scaled = await autoScaleFleetBg(tasksVRP, vehiclesForVRP, constraints, setScaleProgress);
         vr = scaled.result;
         vehiclesForSchedule = scaled.resources;
         addedVehicles = scaled.resources.slice(vehiclesForVRP.length);
@@ -236,7 +243,10 @@ export async function runGenerate(ctx) {
     setGenPhase("osrm");
     setOsrmRunning(true);
     console.time("[PERF] osrm");
-    const vehicleSchedule = await enrichWithOSRM(vehicleScheduleRaw);
+    const conCarretera = await enrichWithOSRM(vehicleScheduleRaw);
+    // y, con las rutas hechas, los viajes a la planta cuando el camión se llena
+    const { schedule: vehicleSchedule, resumen: descargas } = aplicarDescargas(conCarretera, plantas, opcCapacidad);
+    vr = { ...vr, unassigned: vr.unassigned.map(sinReserva) };
     console.timeEnd("[PERF] osrm");
     setOsrmRunning(false);
 
@@ -354,6 +364,9 @@ export async function runGenerate(ctx) {
     const scaleMsgs = [
       addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
+        : null,
+      descargas.descargas > 0
+        ? `${descargas.descargas} viaje(s) a descargar${plantas.length ? "" : " (sin plantas marcadas en Planning: se descarga en el depósito)"}${descargas.rutasPasadas ? ` · ${descargas.rutasPasadas} ruta(s) acaban hasta ${descargas.minPasados} min más tarde de lo previsto por las descargas` : ""}.`
         : null,
       usedCoverWorkers.length > 0
         ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Rostering — cubiertos por "Conductor necesario".`
@@ -532,12 +545,15 @@ export async function runSimulation(ctx) {
   setSimResult(null);
   try {
     let planningDepot = null;
+    let plantas = [];
     try {
       if (activeProject?._id) {
         const snap = await getDoc(doc(db, "planning_depots", activeProject._id));
         if (snap.exists()) {
           const list = snap.data().depots ?? [];
-          if (list.length > 0) planningDepot = { lat: +list[0].lat, lng: +list[0].lng };
+          const depositos = list.filter(d => !d.planta);
+          if (depositos.length > 0) planningDepot = { lat: +depositos[0].lat, lng: +depositos[0].lng };
+          plantas = list.filter(d => d.planta && hasCoords(d.lat, d.lng)).map(d => ({ nombre: d.nombre, lat: +d.lat, lng: +d.lng }));
         }
       }
     } catch { /* ignore */ }
@@ -576,10 +592,12 @@ export async function runSimulation(ctx) {
       return;
     }
 
-    let vr = await generateScenarioBg(tasks, simVehicles, constraints);
+    // con capacidad, cada parada lleva su parte del viaje a descargar (como al generar)
+    const tasksVRP = reservarDescargas(tasks, simVehicles, plantas, capacidadDe(constraints));
+    let vr = await generateScenarioBg(tasksVRP, simVehicles, constraints);
     let finalVehicleCount = simVehicles.length;
     if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-      const scaled = await autoScaleFleetBg(tasks, simVehicles, constraints);
+      const scaled = await autoScaleFleetBg(tasksVRP, simVehicles, constraints);
       vr = scaled.result;
       finalVehicleCount = scaled.resources.length;
     }

@@ -21,7 +21,7 @@ function DepotSection({ projectId, formObj, setFormObj }) {
     if (!projectId) return;
     return onSnapshot(doc(db, "planning_depots", projectId), snap => {
       if (snap.exists()) {
-        setPlanningDepots(snap.data().depots ?? []);
+        setPlanningDepots((snap.data().depots ?? []).filter(d => !d.planta)); // las plantas de descarga no son depósito de salida
       } else {
         // Fallback: legacy localStorage data
         try {

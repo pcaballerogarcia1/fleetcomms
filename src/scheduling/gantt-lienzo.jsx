@@ -27,7 +27,7 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
     const dur = t.duracion || 15;
     const bw = Math.max(dur * pxPerMin - 2, 3);
     if (t._break || t._wait) {
-      const c = t._break ? "251,146,60" : "34,211,238";
+      const c = t._break ? "251,146,60" : t._descarga ? "52,211,153" : "34,211,238";
       g.fillStyle = `rgba(${c},0.15)`; g.strokeStyle = `rgba(${c},0.5)`;
       g.fillRect(x, ROW_H * 0.3, bw, ROW_H * 0.4); g.strokeRect(x + 0.5, ROW_H * 0.3 + 0.5, bw - 1, ROW_H * 0.4 - 1);
     } else if (t._travel) {

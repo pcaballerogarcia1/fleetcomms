@@ -7,6 +7,7 @@ import { t, useLang } from "../i18n.js";
 import { minToTime, timeToMin } from "../vrp-engine.js";
 import { C, font, mono } from "./estilo.js";
 import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restricciones.jsx";
+import { CAPACIDAD_DEFECTO } from "./capacidad.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
@@ -84,6 +85,15 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
       { id: "flota", nombre: "Días y flota necesaria", items: [
         ["maxDays", "Días máximos del escenario", limite("maxDays", 365, "días"), "Si con la flota actual no caben todas las paradas en esos días, se añaden los vehículos y conductores necesarios («Vehículo necesario 1»…). Apagado: los días que hagan falta."],
         ...(c.maxDays > 0 ? [["virtualShiftMin", "Jornada de los añadidos", limite("virtualShiftMin", 1440, "min"), "Apagado: jornada completa."]] : []),
+      ] },
+      { id: "capacidad", nombre: "Capacidad y descargas", items: [
+        ["usarCapacidad", "Tener en cuenta lo que cabe en el camión", <Interruptor on={!!c.usarCapacidad} onCambiar={v => onChange({ ...CAPACIDAD_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarCapacidad: v })} />, "Cada camión carga lo que pone su ficha (Flota → Capacidad, m³). Cuando la siguiente parada no cabe, va a la planta de descarga más cercana, descarga y sigue; y descarga al final antes de volver al depósito. Las plantas se marcan en Planning → Depots («Planta»); si no hay, descarga en su depósito."],
+        ...(c.usarCapacidad ? [
+          ["llenadoPct", "Llenado medio de los contenedores", numero("llenadoPct", 1, 100, "%")],
+          ["compactacion", "Compactación del camión", numero("compactacion", 1, 10, ": 1"), "Cuánto reduce el volumen el camión (un compactador de carga lateral suele ir de 3 a 5)."],
+          ["litrosPorDefecto", "Contenedor si el Excel no lo dice", numero("litrosPorDefecto", 1, 10000, "litros"), "El volumen se lee de una columna «Litros»/«Volumen»/«Capacidad» o del tipo de contenedor («3200 L»); si no hay, se usa este."],
+          ["tiempoDescarga", "Tiempo en la planta (cola + descarga)", numero("tiempoDescarga", 0, 240, "min")],
+        ] : []),
       ] },
       { id: "coste-v", nombre: "Coste", items: [
         ["costeKm", "Coste por km", limite("costeKm", null, "€/km", { decimal: true }), "Para el coste estimado de los indicadores."],

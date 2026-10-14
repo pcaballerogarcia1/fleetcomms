@@ -648,6 +648,13 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
 
                   // Wait block — llegó antes de que abriera la franja horaria de la
                   // siguiente parada y tiene que esperar in situ.
+                  // Descarga en planta — el camión se llenó (Restricciones → Capacidad y descargas)
+                  if (task._descarga) return (
+                    <div key={`d${ti}`} title={`Descarga en ${task.planta || "planta"} · ${task.carga ?? "?"} m³ · ${dur} min`} style={{
+                      position: "absolute", left, top: ROW_H * 0.25, width: w, height: ROW_H * 0.5, zIndex: 3,
+                      background: "rgba(52,211,153,0.18)", border: "1px solid rgba(52,211,153,0.55)", borderRadius: 3,
+                    }} />
+                  );
                   if (task._wait) return (
                     <div key={`w${ti}`} title={`Espera franja horaria · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,

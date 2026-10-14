@@ -288,6 +288,17 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                   <div style={{ fontSize: 11, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
                 </div>
+                {/* Planta de descarga (vertedero, planta de transferencia…): el Scheduling manda ahí a los camiones cuando se llenan */}
+                <button
+                  title={d.planta ? "Es una planta de descarga: los camiones descargan aquí. Pulsa para que vuelva a ser depósito." : "Marcar como planta de descarga (vertedero, planta de transferencia…)"}
+                  onClick={() => {
+                    const cambio = l => l.map(x => (x.id === d.id ? { ...x, planta: !x.planta } : x));
+                    if (projectId) cambiarDepots(projectId, orgId, cambio).catch(e => window.alert("No se ha podido cambiar: " + (e.message || "error desconocido")));
+                    else setDepots(cambio);
+                  }}
+                  style={{ background: d.planta ? "rgba(52,211,153,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(52,211,153,0.5)" : C.border}`, color: d.planta ? "#34d399" : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  {d.planta ? "Planta" : "Depósito"}
+                </button>
                 <button
                   onClick={() => {
                     if (projectId) {

@@ -4,4 +4,6 @@ export const RESTRICCIONES_DEFECTO = {
   startMin: 360, endMin: 1320, days: 1, maxDays: 0, circular: false,
   optimizeWeight: 0, virtualShiftMin: 0, rosterMode: "cuadrante",
   costeHora: null, costeKm: null, sin561: false,
+  // capacidad del camión y viajes a descargar (scheduling/capacidad.js)
+  usarCapacidad: false, llenadoPct: 70, compactacion: 3, litrosPorDefecto: 1000, tiempoDescarga: 20,
 };
