@@ -128,6 +128,13 @@ service cloud.firestore {
       allow create: if sameOrg(request.resource.data.org_id);
       allow update, delete: if sameOrg(resource.data.org_id);
     }
+    // Pesadas de báscula (kg por camión, planta y fracción): las apunta la
+    // oficina o el conductor en la planta; solo la oficina las corrige o borra.
+    match /pesadas/{docId} {
+      allow read: if sameOrg(resource.data.org_id);
+      allow create: if sameOrg(request.resource.data.org_id);
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+    }
 
     // ── SCHEDULING ───────────────────────────────────────────────
     // Datos del workspace de gestión — Field no tiene ningún caso de uso
@@ -195,6 +202,13 @@ service cloud.firestore {
     }
     // Escenario completo de Scheduling, comprimido y troceado (scenario-store.js)
     match /scheduling_scenarios/{projectId} {
+      allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      match /trozos/{pieceId} {
+        allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
+      }
+    }
+    // Inventario de contenedores, comprimido y troceado (inventario-store.js)
+    match /planning_inventario/{projectId} {
       allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();
       match /trozos/{pieceId} {
         allow read, write: if sameOrg(projectOrg(projectId)) && puedeWorkspace();

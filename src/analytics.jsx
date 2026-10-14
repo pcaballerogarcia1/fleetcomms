@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, limit, Timestamp } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
+import { PesadasAnalytics } from "./analytics-pesadas.jsx";
 import { listenPrices, effectivePrice, puntoKeyOf, fmtEur } from "./price-store.js";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -314,7 +315,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
           </span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
+              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ["pesadas", "Pesadas"], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? C.blue : "none",
@@ -453,6 +454,10 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
               </Panel>
             </div>
           </div>
+        )}
+
+        {vista === "pesadas" && (
+          <PesadasAnalytics orgId={orgId} mes={mesFilter} planes={projectId ? planes.filter(p => !p.projectId || p.projectId === projectId) : planes} sesion={sesion} projectId={projectId} />
         )}
 
         {vista === "varios" && (

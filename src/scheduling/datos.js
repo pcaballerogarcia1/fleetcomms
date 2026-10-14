@@ -2,6 +2,8 @@
 // (Separado de scheduling.jsx sin cambiar su comportamiento.)
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase.js";
+import { conInventario } from "../inventario.js";
+import { leerInventario } from "../inventario-store.js";
 import { loadLayerMarkers } from "../layer-store.js";
 import { idbGet, isJunkCoord } from "../planning/datos.js";
 import { isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
@@ -106,7 +108,10 @@ export async function loadTasksFromLayers(projectId) {
     }
   } catch { /* no crítico: se sigue sin ello */ }
 
-  return allTasks;
+  // Inventario de contenedores (Planning → Inventario): litros y RFID de cada
+  // parada; los puntos con todos sus contenedores retirados no se recogen.
+  const inventario = await leerInventario(projectId).catch(() => ({ lista: [] }));
+  return conInventario(allTasks, inventario.lista);
 }
 
 // Reparte las assignments de UN vehículo entre los conductores vinculados a

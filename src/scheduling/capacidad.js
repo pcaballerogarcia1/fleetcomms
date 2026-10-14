@@ -25,11 +25,13 @@ const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil((km / TRAVEL_SPEED_KMH
 
 /** Litros del contenedor: de una columna (litros / volumen / capacidad) o del tipo («Carga lateral 3200L») */
 export function litrosDe(task) {
+  if (Number(task.litros) > 0) return Number(task.litros); // del inventario de contenedores
   const campos = task.campos || {};
   for (const [k, v] of Object.entries(campos)) {
     if (/^(litros|volumen|capacidad)/i.test(k)) { const n = parseFloat(String(v).replace(",", ".")); if (n > 0) return n < 20 ? n * 1000 : n; } // m³ o litros
   }
-  const texto = `${task.contenedor || ""} ${campos.contenedor || campos["tipo contenedor"] || campos.tipo_contenedor || ""}`;
+  const kTipo = Object.keys(campos).find(k => /^(contenedor|tipo[ _]?contenedor|modelo[ _]?contenedor)$/i.test(k.trim()));
+  const texto = `${task.contenedor || ""} ${kTipo ? campos[kTipo] : ""}`;
   const m = /(\d{1,2}[.,]\d{3}|\d{2,4})\s*(?:l\b|lts?\b|litros)/i.exec(texto) || /\b(80|120|240|330|360|660|770|800|1000|1100|1700|2200|2400|3000|3200|4000|5000)\b/.exec(texto);
   return m ? parseFloat(m[1].replace(/[.,]/, "")) : null;
 }

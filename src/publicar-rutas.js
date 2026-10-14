@@ -69,6 +69,14 @@ export function loadScenario(projectId) {
 }
 
 // Parada del escenario → ubicación de un plan de Rutas
+// Los contenedores de la parada (inventario) → elementos que el conductor
+// marca uno a uno o leyendo su RFID. Sin inventario, el RFID de la columna.
+function elementosDe(task, rfidColumna) {
+  const cs = (task.contenedores || []).filter(c => c.codigo || c.rfid);
+  if (cs.length) return cs.map(c => ({ codiQR: c.codigo || c.rfid, rfid: c.rfid || "", model: [c.tipo, c.fraccion].filter(Boolean).join(" · "), realizado: false }));
+  return rfidColumna ? [{ codiQR: rfidColumna, rfid: rfidColumna, model: "", realizado: false }] : [];
+}
+
 export function taskToUbicacion(task, idx) {
   const campos = task.campos || {};
   const field = (...keys) => {
@@ -91,7 +99,7 @@ export function taskToUbicacion(task, idx) {
     dia: field("día","dia","day"),
     lat: +task.lat || 0,
     lng: +task.lng || 0,
-    elementos: [],
+    elementos: elementosDe(task, field("rfid", "tag", "tag rfid", "chip")),
     realizado: false,
     realizadoPor: null,
     realizadoEn: null,

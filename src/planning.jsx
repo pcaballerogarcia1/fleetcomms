@@ -6,6 +6,7 @@ import { logAudit } from "./audit.js";
 import { cambiarDepots, getContenedor, getFraccion } from "./planning/datos.js";
 import { C, LAYER_COLORS, font } from "./planning/estilo.js";
 import { TabTimetable } from "./planning/horarios.jsx";
+import { TabInventario } from "./planning/inventario.jsx";
 import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
@@ -536,6 +537,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
         {[
           { key: "mapa",      label: "Mapa" },
           { key: "timetable", label: "Timetable" },
+          { key: "inventario", label: "Inventario" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             background: "none", border: "none", cursor: "pointer",
@@ -591,6 +593,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
             />
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} recorridos={recorridos} />
           </>
+        ) : tab === "inventario" ? (
+          <TabInventario layers={layers} projectId={projectId} orgId={orgId} />
         ) : (
           <TabTimetable layers={layers} projectId={projectId} orgId={orgId}
             canPrice={sesion?.rol === "admin" || sesion?.rol === "superadmin"} />

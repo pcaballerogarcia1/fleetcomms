@@ -1,7 +1,81 @@
 // App del conductor → Rutas: el detalle de una ruta (paradas, inspección, mapa).
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { C, PUNTOS_INSPECCION, S, timeAgo } from "./comun.js";
+import { buscarEtiqueta, hayNfc } from "./rfid.js";
+import { leerKg } from "../pesadas.js";
+import { apuntarPesada } from "../pesadas-store.js";
 import { MapaLeaflet } from "./ui.jsx";
+
+// ── LECTOR RFID ───────────────────────────────────────────────────
+// Lector por USB/Bluetooth (escribe el código + Intro) o NFC del móvil: la
+// etiqueta leída marca su contenedor y, si era el último, la parada.
+function LectorRfid({ubicaciones,onLeido}){
+  const [texto,setTexto]=useState("");
+  const [aviso,setAviso]=useState(null);
+  const [nfc,setNfc]=useState(false);
+  const nfcRef=useRef(null);
+  function leer(codigo){
+    const r=buscarEtiqueta(ubicaciones,codigo);
+    if(!r){setAviso({ok:false,t:`${codigo}: no es de esta ruta`});return;}
+    const ub=ubicaciones.find(u=>u.id===r.ubicId);
+    if(!r.yaHecho) onLeido(r.ubicId,r.codiQR);
+    setAviso({ok:true,t:`${r.yaHecho?"Ya estaba":"✓"} ${r.codiQR} · parada ${ub?.orden??""} ${ub?.calle||ub?.pa||""}`});
+  }
+  async function activarNfc(){
+    if(nfc){nfcRef.current?.abort();setNfc(false);return;}
+    try{
+      const ctrl=new AbortController();nfcRef.current=ctrl;
+      const lector=new window.NDEFReader();
+      await lector.scan({signal:ctrl.signal});
+      lector.onreading=e=>leer(e.serialNumber||"");
+      setNfc(true);
+    }catch(e){setAviso({ok:false,t:`NFC: ${e.message||e}`});}
+  }
+  return(
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px",marginBottom:10}}>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Leer RFID / código del contenedor"
+          onKeyDown={e=>{if(e.key==="Enter"&&texto.trim()){leer(texto.trim());setTexto("");}}}
+          style={{flex:1,minWidth:0,background:"#0d1c34",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
+        {hayNfc()&&<button onClick={activarNfc} style={{...(nfc?S.btnOk:S.btnGhost),fontSize:11,padding:"7px 10px",flexShrink:0}}>{nfc?"NFC activo":"NFC"}</button>}
+      </div>
+      {aviso&&<div style={{fontSize:11,marginTop:6,color:aviso.ok?C.green:C.red}}>{aviso.t}</div>}
+    </div>
+  );
+}
+
+// ── PESADA EN BÁSCULA ─────────────────────────────────────────────
+// El conductor apunta el ticket de la planta: kg, planta, fracción y nº.
+function ApuntarPesada({plan,sesion}){
+  const [abierto,setAbierto]=useState(false);
+  const [f,setF]=useState({kg:"",planta:"",fraccion:"",ticket:""});
+  const [aviso,setAviso]=useState(null);
+  async function guardar(){
+    const kg=leerKg(f.kg);
+    if(!kg){setAviso({ok:false,t:"Pon los kg del ticket"});return;}
+    try{
+      await apuntarPesada(plan.org_id||sesion.org_id,{...f,kg,vehiculo:plan.vehiculoNombre||"",projectId:plan.projectId||null,hora:new Date().toTimeString().slice(0,5)},{id:sesion.id,nombre:[sesion.nombre,sesion.apellidos].filter(Boolean).join(" ")});
+      setF({kg:"",planta:f.planta,fraccion:f.fraccion,ticket:""});setAviso({ok:true,t:`✓ ${kg.toLocaleString("es-ES")} kg apuntados`});
+    }catch(e){setAviso({ok:false,t:e.message||String(e)});}
+  }
+  const inp={background:"#0d1c34",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
+  if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}>⚖️ Apuntar pesada de báscula</button>;
+  return(
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",marginBottom:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        <input inputMode="decimal" value={f.kg} onChange={e=>setF({...f,kg:e.target.value})} placeholder="Kg netos" style={inp}/>
+        <input value={f.ticket} onChange={e=>setF({...f,ticket:e.target.value})} placeholder="Nº ticket" style={inp}/>
+        <input value={f.planta} onChange={e=>setF({...f,planta:e.target.value})} placeholder="Planta" style={inp}/>
+        <input value={f.fraccion} onChange={e=>setF({...f,fraccion:e.target.value})} placeholder="Fracción" style={inp}/>
+      </div>
+      <div style={{display:"flex",gap:6,marginTop:8}}>
+        <button onClick={guardar} style={{...S.btnOk,flex:1}}>Guardar</button>
+        <button onClick={()=>{setAbierto(false);setAviso(null);}} style={{...S.btnGhost}}>Cerrar</button>
+      </div>
+      {aviso&&<div style={{fontSize:11,marginTop:6,color:aviso.ok?C.green:C.red}}>{aviso.t}</div>}
+    </div>
+  );
+}
 
 // ── TARJETA UBICACIÓN ─────────────────────────────────────────────
 function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNota,onNavegar,onParte,done}){
@@ -332,6 +406,8 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             <button onClick={()=>window.open(`https://maps.google.com/maps?daddr=${proxima.lat},${proxima.lng}&dirflg=d`,"_blank")} style={{...S.btnOk,flexShrink:0}}>🧭 IR</button>
           </div>
         )}
+        {plan.origenVRP&&<ApuntarPesada plan={plan} sesion={sesion}/>}
+        {totalQR>0&&<LectorRfid ubicaciones={ubicaciones} onLeido={(ubicId,qr)=>marcarQR(ubicId,qr,true)}/>}
         <button onClick={()=>setVerMapa(v=>!v)} style={{...S.btnGhost,width:"100%",marginBottom:8,borderColor:verMapa?C.blue:C.border,color:verMapa?C.blueText:C.muted}}>
           🗺️ {verMapa?"Ocultar mapa":"Ver mapa del recorrido"}
         </button>
