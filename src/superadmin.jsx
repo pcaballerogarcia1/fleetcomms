@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
+import { PanelSalud } from "./superadmin-salud.jsx";
 
 const C = {
   bg: "#0f1623", card: "#172035", surface2: "#1e2d48",
@@ -435,6 +436,7 @@ function SuperAdminPanel({ sesion }) {
   const [form, setForm]             = useState({ nombre: "", max_usuarios: 5, plan: "basic", contacto: "" });
   const [saving, setSaving]         = useState(false);
   const [err, setErr]               = useState("");
+  const [vista, setVista]           = useState("orgs"); // orgs | salud
 
   useEffect(() => {
     return onSnapshot(
@@ -524,6 +526,12 @@ function SuperAdminPanel({ sesion }) {
       </div>
 
       <div style={{ padding: "24px", maxWidth: 800, margin: "0 auto" }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+          {[["orgs", "🏢 Organizaciones"], ["salud", "🩺 Salud"]].map(([k, l]) => (
+            <button key={k} onClick={() => setVista(k)} style={{ ...S.btnGhost, ...(vista === k ? { background: C.blueDim, borderColor: `${C.blue}66`, color: C.blueText, fontWeight: 600 } : {}) }}>{l}</button>
+          ))}
+        </div>
+        {vista === "salud" ? <PanelSalud sesion={sesion} orgs={orgs} /> : <>
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 }}>
           {[
@@ -655,6 +663,7 @@ function SuperAdminPanel({ sesion }) {
               </div>
             );
           })}
+        </>}
       </div>
     </div>
   );

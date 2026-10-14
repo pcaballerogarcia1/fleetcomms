@@ -133,9 +133,9 @@ service cloud.firestore {
     // avisos y quita las caducadas.
     match /avisos_suscripciones/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || (sameOrg(resource.data.org_id) && puedeWorkspace()));
-      allow create: if isSignedIn() && request.auth.uid == uid && sameOrg(request.resource.data.org_id);
+      allow create: if isSignedIn() && request.auth.uid == uid && (sameOrg(request.resource.data.org_id) || isSuperAdmin());
       allow update: if isSignedIn() && (
-        (request.auth.uid == uid && sameOrg(request.resource.data.org_id)) ||
+        (request.auth.uid == uid && (sameOrg(request.resource.data.org_id) || isSuperAdmin())) ||
         (sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id)
       );
       allow delete: if isSignedIn() && request.auth.uid == uid;

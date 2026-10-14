@@ -23,6 +23,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "usuarios/condA"), { rol: "conductor", org_id: "orgA" });
     await setDoc(doc(db, "usuarios/condA2"), { rol: "conductor", org_id: "orgA" });
     await setDoc(doc(db, "usuarios/adminB"), { rol: "admin", org_id: "orgB" });
+    await setDoc(doc(db, "usuarios/super"), { rol: "superadmin", org_id: null });
     await setDoc(doc(db, "scheduling_projects/pA"), { org_id: "orgA", nombre: "Proyecto" });
     await setDoc(doc(db, "avisos_suscripciones/condA2"), { uid: "condA2", org_id: "orgA", subs: [{ endpoint: "https://x/1" }] });
   });
@@ -36,6 +37,14 @@ describe("avisos_suscripciones", () => {
     await assertFails(setDoc(doc(como("condA"), "avisos_suscripciones/condA3"), { ...sub, uid: "condA3" }));
     await assertFails(setDoc(doc(como("condA"), "avisos_suscripciones/condA"), { ...sub, org_id: "orgB" }));
     await assertSucceeds(getDoc(doc(como("condA"), "avisos_suscripciones/condA"))); // la propia, aunque no exista aún
+  });
+  it("el superadmin (sin organización) da de alta la suya para las alertas de errores", async () => {
+    await assertSucceeds(setDoc(doc(como("super"), "avisos_suscripciones/super"), { uid: "super", org_id: null, subs: [] }));
+    await assertFails(setDoc(doc(como("condA"), "avisos_suscripciones/condA"), { uid: "condA", org_id: null, subs: [] }));
+  });
+  it("las marcas de alertas enviadas solo las toca el servidor", async () => {
+    await assertFails(getDoc(doc(como("adminA"), "alertas_estado/x")));
+    await assertFails(setDoc(doc(como("condA"), "alertas_estado/x"), { ultimo: 0 }));
   });
   it("la oficina de su org las lee (para enviar) y quita caducadas; otro conductor u otra org no", async () => {
     await assertSucceeds(getDoc(doc(como("adminA"), "avisos_suscripciones/condA2")));

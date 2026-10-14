@@ -10,7 +10,7 @@
 // mucho MAX_POR_SESION por pestaña, así un bucle de errores no dispara el
 // coste de Firestore.
 
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
 import { addDoc, collection, serverTimestamp, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
 export const MAX_POR_SESION = 25;
@@ -47,8 +47,22 @@ export function reportError({ tipo = "error", mensaje, stack = "" } = {}) {
     pagina: typeof location !== "undefined" ? location.pathname : "",
     navegador: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "",
     version: VERSION, at: serverTimestamp(), atMs: Date.now(),
-  }).catch(() => { /* si no se puede guardar el error, no hay nada más que hacer */ });
+  }).then(ref => { if (tipo !== "lentitud") avisarAlServidor(ref.id); })
+    .catch(() => { /* si no se puede guardar el error, no hay nada más que hacer */ });
   return true;
+}
+
+// El servidor decide si avisa al móvil del superadmin (api/alerta-error.js:
+// un aviso por error cada 6 h, con tope diario). Sin cobertura o en local no
+// pasa nada: el error ya está guardado.
+const SIN_SERVIDOR = !!(import.meta.env?.VITE_EMULADORES) || import.meta.env?.MODE === "test";
+async function avisarAlServidor(id) {
+  if (SIN_SERVIDOR || typeof fetch === "undefined") return;
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return;
+    await fetch("/api/alerta-error", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ id }) });
+  } catch { /* no es crítico */ }
 }
 
 // Con el código de Firestore delante (p. ej. "resource-exhausted: Quota exceeded.")
@@ -71,6 +85,7 @@ export function initErrorReporting() {
   window.addEventListener("unhandledrejection", e => {
     reportError({ tipo: "promesa", mensaje: texto(e.reason), stack: e.reason?.stack });
   });
+  vigilarLentitud();
   // Firestore avisa de ciertos fallos solo por consola (no lanzan excepción)
   const orig = console.error.bind(console);
   console.error = (...args) => {
@@ -80,6 +95,33 @@ export function initErrorReporting() {
       reportError({ tipo: "firestore", mensaje: msg, stack: args.find(a => a instanceof Error)?.stack || new Error().stack });
     }
   };
+}
+
+// ── Pantallas lentas ─────────────────────────────────────────────────
+// Se apuntan como tipo «lentitud» (no avisan al móvil, se ven en el panel
+// Salud): una pantalla que se queda congelada más de 2 s seguidos, o una
+// página que tarda más de 6 s en enseñar lo principal.
+export const CONGELADA_MS = 2000, CARGA_LENTA_MS = 6000;
+const seg = ms => (ms / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 });
+export const textoCongelada = (ms, pagina) => `Pantalla congelada ${seg(ms)} s en ${pagina || "/"}`;
+export const textoCargaLenta = (ms, pagina) => `Carga lenta: ${seg(ms)} s hasta ver ${pagina || "/"}`;
+function vigilarLentitud() {
+  if (typeof PerformanceObserver === "undefined") return;
+  const pagina = () => location.pathname.split("/").slice(0, 2).join("/") || "/";
+  try {
+    new PerformanceObserver(l => {
+      for (const e of l.getEntries()) if (e.duration >= CONGELADA_MS) reportError({ tipo: "lentitud", mensaje: textoCongelada(e.duration, pagina()), stack: `duración ${Math.round(e.duration)} ms` });
+    }).observe({ type: "longtask", buffered: true });
+  } catch { /* navegador sin longtask (Safari, Firefox) */ }
+  try {
+    let ultima = 0;
+    const po = new PerformanceObserver(l => { const e = l.getEntries().at(-1); if (e) ultima = e.startTime; });
+    po.observe({ type: "largest-contentful-paint", buffered: true });
+    setTimeout(() => { if (ultima >= CARGA_LENTA_MS) { reportError({ tipo: "lentitud", mensaje: textoCargaLenta(ultima, pagina()), stack: `LCP ${Math.round(ultima)} ms` }); ultima = 0; } }, 20_000);
+    addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden" && ultima >= CARGA_LENTA_MS) { reportError({ tipo: "lentitud", mensaje: textoCargaLenta(ultima, pagina()), stack: `LCP ${Math.round(ultima)} ms` }); ultima = 0; }
+    });
+  } catch { /* sin LCP */ }
 }
 
 /** Últimos errores (solo superadmin puede leerlos). */
