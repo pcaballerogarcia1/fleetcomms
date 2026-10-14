@@ -5,11 +5,12 @@
 // Sin soporte de Workers (entorno de pruebas), se ejecuta aquí mismo.
 import { generateScenario, autoScaleFleet } from "./vrp-engine.js";
 import { generarRutaMaestra } from "./scheduling/frecuencias.js";
+import { conMejora } from "./scheduling/mejora-rutas.js";
 
 function runInWorker(op, args, onProgress) {
   if (typeof Worker === "undefined") {
     if (op === "maestra") return generarRutaMaestra(...args, generateScenario);
-    return op === "generate" ? generateScenario(...args) : autoScaleFleet(...args, onProgress);
+    return (op === "generate" ? generateScenario(...args) : autoScaleFleet(...args, onProgress)).then(r => conMejora(op, r, args[2]));
   }
   return new Promise((resolve, reject) => {
     const w = new Worker(new URL("./vrp-worker.js", import.meta.url), { type: "module" });

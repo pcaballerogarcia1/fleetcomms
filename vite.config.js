@@ -82,5 +82,6 @@ export default defineConfig({
     }),
   ],
   // Los tests de reglas van aparte (necesitan el emulador): npm run test:rules
-  test: { exclude: [...configDefaults.exclude, "rules-tests/**", "e2e/**"] },
+  // y el banco de pruebas de los motores también (tarda minutos): bench/vitest.config.js
+  test: { exclude: [...configDefaults.exclude, "rules-tests/**", "e2e/**", "bench/**"] },
 })
