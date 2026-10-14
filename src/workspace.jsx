@@ -28,6 +28,7 @@ const TabProyectosLazy   = lazy(() => import("./scheduling.jsx").then(m => ({ de
 const SchedulingModuleWrapperLazy = lazy(() => import("./scheduling.jsx").then(m => ({ default: m.SchedulingModuleWrapper })));
 const RosteringPageLazy  = lazy(() => import("./rostering.jsx").then(m => ({ default: m.RosteringPage })));
 const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ default: m.ControlPage })));
+const DespachoPageLazy   = lazy(() => import("./despacho.jsx").then(m => ({ default: m.DespachoPage })));
 const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ default: m.AnalyticsPage })));
 const AnalyticsLineasLazy = lazy(() => import("./analytics-lineas.jsx").then(m => ({ default: m.AnalyticsLineasPage })));
 // Proyectos de "Líneas regulares" (autobuses): su propio Planning y Scheduling
@@ -91,6 +92,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
           {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
+          {activeProject?.tipo !== "lineas" && crumb("Despacho", "/despacho", path === "/despacho")}
           {crumb(t("control", lang),    "/control",     path === "/control")}
           {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
@@ -118,7 +120,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
         >{lang.toUpperCase()}</button>
-        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics") && (
+        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/despacho" || path === "/control" || path === "/analytics") && (
           <button onClick={onFullscreen} title={t("fullscreen", lang)} style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -254,7 +256,7 @@ export function WorkspaceRouter() {
       window.location.href = "/rutas";
       return;
     }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/control" || path === "/analytics")) {
+    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/despacho" || path === "/control" || path === "/analytics")) {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
@@ -384,6 +386,19 @@ export function WorkspaceRouter() {
           }}>
             <Suspense fallback={<LazyFallback />}>
               <RosteringPageLazy sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
+            </Suspense>
+          </div>
+        )}
+
+        {/* /despacho — el día de hoy: ausencias, quién cubre y vehículos (proyectos de puntos) */}
+        {activeProject && visitedTabs.despacho && !esLineas && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === "/despacho" ? "visible" : "hidden",
+            pointerEvents: path === "/despacho" ? "auto" : "none",
+          }}>
+            <Suspense fallback={<LazyFallback />}>
+              <DespachoPageLazy orgId={effectiveOrgId} workers={workers} vehicles={vehicles} />
             </Suspense>
           </div>
         )}
