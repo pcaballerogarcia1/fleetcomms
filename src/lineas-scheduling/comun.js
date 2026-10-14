@@ -168,6 +168,46 @@ export function kpisBarra(res, p) {
   };
 }
 
+// Todos los indicadores (el panel «Todos los indicadores»), como los de Optibus.
+// (Km, viajes y avisos ya vienen de la barra: aquí no se repiten.)
+export function kpisDetalle(res, p = res.params) {
+  const k = res.kpis;
+  const turnos = res.turnos || [];
+  if (!res.turnos) return [{ l: "Turnos", v: "—", sub: "falta el paso 2 (turnos)" }];
+  const suma = f => turnos.reduce((s, t) => s + (f(t) || 0), 0);
+  const hmT = m => `${Math.floor(m / 60).toLocaleString("es-ES")}h${String(Math.round(m % 60)).padStart(2, "0")}`;
+  const pagado = suma(t => t.trabajo), amplitud = suma(t => t.duracion), conduccion = suma(t => t.conduccion);
+  const plataforma = suma(t => t.piezas.reduce((s, pz) => s + (pz.fin - pz.inicio), 0));
+  const enVacio = suma(t => t.piezas.reduce((s, pz) => s + pz.viajes.filter(v => v.vacio).reduce((a, v) => a + (v.arr - v.dep), 0), 0));
+  const sinPagar = amplitud - pagado;
+  const desp = turnos.flatMap(t => t.desplazamientos || []);
+  const enPartido = suma(t => t.piezas.slice(1).filter((pz, i) => (pz.autobus ?? pz.vehiculo) !== (t.piezas[i].autobus ?? t.piezas[i].vehiculo) && pz.inicio - t.piezas[i].fin >= (p.huecoNoPagado ?? 60)).length);
+  const n = turnos.length || 1;
+  const eur = v => v.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const hayPrecio = p.costeHora > 0 || p.costeVehiculoDia > 0 || p.costeKm > 0;
+  const tramo = m => (m < 300 ? "<5 h" : m < 420 ? "5-7 h" : m < 480 ? "7-8 h" : m <= 540 ? "8-9 h" : ">9 h");
+  const cuenta = (lista, f, orden) => { const o = {}; for (const x of lista) { const c = f(x); o[c] = (o[c] || 0) + 1; } return (orden || Object.keys(o)).filter(c => o[c]).map(c => ({ n: c, v: o[c] })); };
+  return [
+    { l: "Partidos", v: num(k.turnosPartidos || 0), sub: `${hmT(sinPagar)} de hueco sin pagar · ${Math.round(((k.turnosPartidos || 0) / n) * 100)} % de los turnos` },
+    { l: "Cambios de bus", v: num(k.cambiosBus || 0), sub: `${num(enPartido)} en el hueco del partido${res.intercambiosBus ? ` · ${num(res.intercambiosBus)} evitados (los autobuses siguen al conductor)` : ""}` },
+    { l: "Media pagada por turno", v: hmT(pagado / n), sub: "trabajo pagado de media" },
+    { l: "Horas pagadas", v: hmT(pagado), sub: "piezas + huecos cortos" },
+    { l: "Amplitud total", v: hmT(amplitud), sub: `de la primera salida a la última llegada · media ${hmT(amplitud / n)}` },
+    { l: "Conducción", v: hmT(conduccion), sub: `con viajeros + vacíos: ${hmT(conduccion - enVacio)} + ${hmT(enVacio)}` },
+    { l: "Tiempo en plataforma", v: hmT(plataforma), sub: "con el autobús (piezas)" },
+    { l: "Tiempo parado", v: hmT(Math.max(0, plataforma - conduccion)), sub: "con el autobús, sin conducir (regulación)" },
+    { l: "Desplazamientos", v: desp.length ? hmT(desp.reduce((s, d) => s + (d.fin - d.inicio), 0)) : "—", sub: desp.length ? `${num(desp.length)} a otra cabecera · ${num(desp.reduce((s, d) => s + (d.km || 0), 0))} km` : "ninguno" },
+    ...(hayPrecio ? [
+      { l: "Coste de personal", v: eur((pagado / 60) * (p.costeHora || 0)), sub: `${num(pagado / 60)} h × ${p.costeHora || 0} €/h` },
+      { l: "Coste de autobuses", v: eur(k.autobuses * (p.costeVehiculoDia || 0) + k.km * (p.costeKm || 0)), sub: `${num(k.autobuses)} × ${p.costeVehiculoDia || 0} € + ${num(k.km)} km × ${String(p.costeKm || 0).replace(".", ",")} €` },
+    ] : []),
+    { l: "Tipos de turno", barras: Object.entries(k.turnosPorTipo || {}).sort((a, b) => b[1] - a[1]).map(([n2, v]) => ({ n: n2, v })) },
+    { l: "Horas pagadas por turno", barras: cuenta(turnos, t => tramo(t.trabajo), ["<5 h", "5-7 h", "7-8 h", "8-9 h", ">9 h"]) },
+    { l: "Piezas por turno", barras: cuenta(turnos, t => (t.piezas.length >= 4 ? "4+" : String(t.piezas.length)), ["1", "2", "3", "4+"]) },
+    ...(Object.keys(k.porTipo || {}).length > 1 ? [{ l: "Tipos de autobús", barras: Object.entries(k.porTipo).map(([n2, v]) => ({ n: n2, v })) }] : []),
+  ];
+}
+
 export function cambiosKpi(res, p = res.params) {
   const k = res.kpis;
   return {

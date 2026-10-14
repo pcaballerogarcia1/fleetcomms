@@ -20,7 +20,7 @@ import { EnviarRostering } from "./lineas-enviar-rostering.jsx";
 import { turnosCompactos } from "./lineas-rostering.js";
 import {
   C, ESTRATEGIA_UI, MAX_EN_MEMORIA, baseDeResumen, cambiosKpi, claveEscenario,
-  claveVehiculos, font, hhmm, kpisBarra, mismos, mono,
+  claveVehiculos, font, hhmm, kpisBarra, kpisDetalle, mismos, mono,
   nombreObjetivo, nombreTipo, num, sinCampos, soloCampos,
 } from "./lineas-scheduling/comun.js";
 import { Gantt } from "./lineas-scheduling/gantt.jsx";
@@ -553,7 +553,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             </div>
           )}
 
-          {res && <KpiBar k={kpisBarra(res, params)} base={actual.base} onConfigCostes={() => setShowC(true)} cambios={cambiosKpi(res, params)} />}
+          {res && <KpiBar k={kpisBarra(res, params)} base={actual.base} onConfigCostes={() => setShowC(true)} cambios={cambiosKpi(res, params)} detalle={kpisDetalle(res, params)} />}
           {res && modo === "workers" && !res.turnos ? (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center", maxWidth: 460 }}>

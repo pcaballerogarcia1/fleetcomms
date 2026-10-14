@@ -2,13 +2,18 @@
 
 
 
+import { useState } from "react";
 import { C, font, mono } from "./estilo.js";
 import { KPI_AYUDA } from "./gantt-comun.js";
 
 // Barra de indicadores del escenario, con el cambio respecto a la generación anterior.
 // `cambios` adapta indicadores sin tocar los de aquí (lo usa el Scheduling de
 // líneas regulares): { "Paradas": { l: "Viajes", sub, ayuda }, "Eficiencia vehículo": { ocultar: true } }
-export function KpiBar({ k, base, onConfigCostes, cambios = {} }) {
+// Arriba solo los principales (como Optibus); «Todos los indicadores» despliega
+// el resto y los de `detalle` ([{ l, v, sub, ayuda }] o gráficas [{ l, barras: [{ n, v }] }]).
+const PRINCIPALES = ["Turnos", "Vehículos", "Eficiencia vehículo", "Eficiencia personal", "Coste estimado"];
+export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) {
+  const [abierto, setAbierto] = useState(false);
   const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
   const num = v => v == null ? "—" : Math.round(v).toLocaleString("es-ES");
   const eur = v => v == null ? "—" : v.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -34,11 +39,16 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {} }) {
       : { l: "Coste estimado", v: <button onClick={onConfigCostes} style={{ background: "none", border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
     { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
   ];
-  const vistos = items
+  const todos = items
     .filter(it => !cambios[it.l]?.ocultar)
-    .map(it => ({ ...it, ...(cambios[it.l] || {}), ayuda: cambios[it.l]?.ayuda || KPI_AYUDA[it.l] }));
+    .map(it => ({ ...it, clave: it.l, ...(cambios[it.l] || {}), ayuda: cambios[it.l]?.ayuda || KPI_AYUDA[it.l] }));
+  const vistos = PRINCIPALES.map(l => todos.find(it => it.clave === l)).filter(Boolean);
+  const resto = [...todos.filter(it => !PRINCIPALES.includes(it.clave)), ...detalle.filter(x => !x.barras)];
+  const graficas = detalle.filter(x => x.barras?.length);
+  const avisos = k.filasConAviso || 0;
   return (
-    <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, display: "flex", overflowX: "auto" }}>
+    <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}` }}>
+    <div style={{ display: "flex", overflowX: "auto" }}>
       {vistos.map((it, i) => (
         <div key={it.l} title={it.ayuda} style={{ padding: "10px 18px", borderRight: i < vistos.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0, cursor: "help" }}>
           <div style={{ display: "flex", alignItems: "baseline" }}>
@@ -49,7 +59,49 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {} }) {
           <div style={{ fontSize: 10, color: it.subColor || C.dim, marginTop: 1, whiteSpace: "nowrap" }}>{it.sub}</div>
         </div>
       ))}
-      {base && <div style={{ padding: "10px 14px", fontSize: 10, color: C.dim, alignSelf: "center", whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</div>}
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
+        {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
+        <button onClick={() => setAbierto(a => !a)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 7, border: `1px solid ${abierto ? C.blue : C.border2}`, background: abierto ? "rgba(92,155,255,0.12)" : "none", color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
+          Todos los indicadores {abierto ? "▴" : "▾"}
+          {avisos > 0 && <span style={{ background: "rgba(248,113,113,0.18)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10.5, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
+        </button>
+      </div>
+    </div>
+    {abierto && (
+      <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 16px 16px", maxHeight: "48vh", overflowY: "auto", background: C.bg }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 10 }}>
+          {resto.map(it => (
+            <div key={it.l} title={it.ayuda} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", cursor: it.ayuda ? "help" : "default" }}>
+              <div style={{ display: "flex", alignItems: "baseline" }}>
+                <span style={{ fontSize: 19, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
+                {it.d}
+              </div>
+              <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 4 }}>{it.l}</div>
+              {it.sub && <div style={{ fontSize: 10, color: it.subColor || C.dim, marginTop: 2, lineHeight: 1.35 }}>{it.sub}</div>}
+            </div>
+          ))}
+          {graficas.map(g => {
+            const max = Math.max(1, ...g.barras.map(b => b.v));
+            return (
+              <div key={g.l} title={g.ayuda} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px" }}>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 62 }}>
+                  {g.barras.map(b => (
+                    <div key={b.n} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", minWidth: 0 }}>
+                      <span style={{ fontSize: 9.5, color: C.muted, fontFamily: mono }}>{b.v}</span>
+                      <div style={{ width: "100%", maxWidth: 34, height: `${Math.max(3, (b.v / max) * 44)}px`, background: C.blue, borderRadius: "3px 3px 0 0" }} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 3 }}>
+                  {g.barras.map(b => <span key={b.n} title={b.n} style={{ flex: 1, fontSize: 9, color: C.dim, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{b.n}</span>)}
+                </div>
+                <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 6 }}>{g.l}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
     </div>
   );
 }
