@@ -11,6 +11,14 @@ const celda = (r, k) => {
   return r[k];
 };
 
+// Forma de una pieza: un extremo recto y el otro en punta, en la cabecera «en punta» de la línea
+const formaPieza = (dir, w) => {
+  const n = Math.min(9, w * 0.45);
+  return dir === 1
+    ? { borderRadius: "4px 0 0 4px", clipPath: `polygon(0 0, calc(100% - ${n}px) 0, 100% 50%, calc(100% - ${n}px) 100%, 0 100%)` }
+    : { borderRadius: "0 4px 4px 0", clipPath: `polygon(${n}px 0, 100% 0, 100% 100%, ${n}px 100%, 0 50%)` };
+};
+
 export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
   const [vista, setVista] = useState(() => { try { return localStorage.getItem("fc_gantt_vista") || "tabla"; } catch { return "tabla"; } });
   const cambiarVista = v => { setVista(v); try { localStorage.setItem("fc_gantt_vista", v); } catch { /* sin almacenamiento */ } };
@@ -142,11 +150,11 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
                       background: "repeating-linear-gradient(135deg, #475569 0px, #475569 4px, #64748b 4px, #64748b 8px)", border: "1px solid #94a3b8",
                       color: "#e2e8f0", fontSize: 8.5, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 2, lineHeight: `${ROW_H - 20}px`,
                     } : {
-                      // como en Optibus: recta al salir y en punta al llegar (el sentido del tiempo)
-                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, borderRadius: "4px 0 0 4px",
-                      clipPath: `polygon(0 0, calc(100% - ${Math.min(9, w * 0.45)}px) 0, 100% 50%, calc(100% - ${Math.min(9, w * 0.45)}px) 100%, 0 100%)`,
+                      // como en Optibus: la punta es siempre la misma cabecera de la línea (la de salida de
+                      // la ida): la ida la lleva al salir (izquierda) y la vuelta al llegar (derecha)
+                      position: "absolute", left: X(x.dep), width: w, top: 6, height: ROW_H - 12, ...formaPieza(x.dir, w),
                       background: x.color + (x.dir === 1 ? "c8" : "f0"), color: "#0d0f14", fontSize: 9.5, fontWeight: 800,
-                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: 4, lineHeight: `${ROW_H - 12}px`,
+                      overflow: "hidden", whiteSpace: "nowrap", paddingLeft: x.dir === 1 ? 4 : Math.min(9, w * 0.45) + 2, lineHeight: `${ROW_H - 12}px`,
                     }) }}>{x.vacio ? (w > 34 && x.hacia ? `→${x.hacia}` : w > 14 ? "V" : "") : w > 20 ? x.nombre : ""}</div>
                 );
               })}
