@@ -31,7 +31,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
             const off = !hayPrecio(o);
             return (
               <button key={o.id} disabled={off} onClick={() => setObjetivo(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda}
-                style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? C.blue : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>
+                style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? "rgba(255,255,255,0.1)" : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>
             );
           })}
         </div>
@@ -261,7 +261,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
             <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
               {lista.map(o => {
                 const off = o.precios && !o.precios.some(k => precios[k] > 0);
-                return <button key={o.id} disabled={off} onClick={() => set(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda} style={{ padding: "4px 9px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: val === o.id ? C.blue : "none", color: val === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: val === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
+                return <button key={o.id} disabled={off} onClick={() => set(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda} style={{ padding: "4px 9px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: val === o.id ? "rgba(255,255,255,0.1)" : "none", color: val === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: val === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
               })}
             </div>
           </div>

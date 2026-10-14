@@ -4,6 +4,7 @@
 // franja (calculados, corregibles a mano), regulación en cabecera y los
 // tipos de vehículo que admite. Nada de esto aparece en los proyectos de
 // "Rutas por puntos" (residuos, reparto…), que siguen con su Planning.
+import { FileDown, Loader2, Upload } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLeaflet } from "./use-leaflet.js";
 import { agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
@@ -352,8 +353,7 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
         <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, fontFamily: font }}>
           {abierto ? "▾" : "▸"} Cocheras {cocheras.length ? `(${cocheras.length})` : ""}
         </button>
-        <button onClick={() => setPoniendo(p => !p)} style={{ marginLeft: "auto", fontSize: 11, padding: "3px 9px", borderRadius: 6, cursor: "pointer", fontFamily: font, fontWeight: 600,
-          background: poniendo ? "#f59e5b" : "none", color: poniendo ? "#0d0f14" : "#f59e5b", border: "1px solid #f59e5b88" }}>{poniendo ? "Pincha en el mapa…" : "+ Añadir"}</button>
+        <button onClick={() => setPoniendo(p => !p)} className={`op-btn${poniendo ? " op-activo" : ""}`} style={{ marginLeft: "auto", height: 26, fontSize: 12 }}>{poniendo ? "Pincha en el mapa…" : "+ Añadir"}</button>
       </div>
       {abierto && (
         <div style={{ marginTop: 8 }}>
@@ -688,14 +688,13 @@ export function PlanningLineasPage({ projectId, orgId }) {
         <div style={{ padding: "14px 14px 10px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Red de líneas</div>
           <input ref={fileRef} type="file" accept=".zip" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; importar(f); }} />
-          <button onClick={() => fileRef.current?.click()} disabled={!!importando} style={{
-            width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.blue}55`, background: importando ? C.surface2 : "#222c58",
-            color: "#a3c4fc", fontSize: 12, fontWeight: 600, cursor: importando ? "wait" : "pointer", fontFamily: font,
-          }}>{importando || (red ? "Sustituir red (GTFS .zip)" : "Importar red (GTFS .zip)")}</button>
+          <button onClick={() => fileRef.current?.click()} disabled={!!importando} className={`op-btn${red ? "" : " op-primario"}`} style={{ width: "100%", height: 34 }}>
+            {importando ? <><Loader2 size={14} className="op-girando" /> {importando}</> : <><Upload size={14} /> {red ? "Sustituir red (GTFS .zip)" : "Importar red (GTFS .zip)"}</>}
+          </button>
           {red && (
             <button onClick={exportarGtfs} title="Un GTFS con la red tal y como está en Operanzia: calendarios, salidas (también las cambiadas a mano) y pasos por parada"
-              style={{ width: "100%", marginTop: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(63,207,142,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
-              Exportar GTFS (.zip)
+              className="op-btn op-fantasma" style={{ width: "100%", marginTop: 6 }}>
+              <FileDown size={14} /> Exportar GTFS (.zip)
             </button>
           )}
           {error && <div style={{ fontSize: 11, color: C.red, marginTop: 8 }}>{error}</div>}

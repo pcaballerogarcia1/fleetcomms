@@ -3,7 +3,7 @@
 //   CAPTURAS=carpeta npx playwright test -c e2e/playwright.config.js capturas.spec.js
 import { test } from "@playwright/test";
 import { sembrar } from "./semilla.mjs";
-import { entrarOficina, entrarCampo } from "./ayudas.mjs";
+import { entrarOficina, entrarCampo, gtfsMini } from "./ayudas.mjs";
 
 const DIR = process.env.CAPTURAS;
 test.skip(!DIR, "solo a mano, con CAPTURAS=carpeta");
@@ -79,4 +79,68 @@ test("capturas rutas", async ({ browser }) => {
   await entrarCampo(a, "admin@demo.test");
   await a.screenshot({ path: `${DIR}/r-11-portada-admin.png`, fullPage: true });
   try { await a.getByRole("button", { name: /admin/i }).last().click(); await a.waitForTimeout(1200); await a.screenshot({ path: `${DIR}/r-12-admin.png`, fullPage: true }); } catch (e) { console.log("admin", e.message); }
+});
+
+// Fase 2: Rostering, Control, Analytics y las pantallas de líneas
+test("capturas oficina", async ({ browser }) => {
+  test.setTimeout(400_000);
+  await sembrar();
+  const p = await (await browser.newContext({ viewport: { width: 1440, height: 860 } })).newPage();
+  p.setDefaultTimeout(10_000);
+  p.on("dialog", d => d.accept());
+  const shot = async n => { await p.waitForTimeout(1200); await p.screenshot({ path: `${DIR}/o-${n}.png` }); };
+  const paso = async (n, f) => { try { await f(); await shot(n); } catch (e) { console.log(n, e.message.split("\n")[0]); } };
+  const ir = async m => { await p.getByRole("button", { name: m, exact: true }).first().click(); await p.waitForTimeout(800); };
+  await entrarOficina(p);
+  await p.getByText("Abrir proyecto").first().click();
+  await p.waitForURL(/\/planning/);
+  await p.locator('input[type="file"]').nth(1).setInputFiles({ name: "puntos.csv", mimeType: "text/csv", buffer: csvPuntos() });
+  await p.waitForTimeout(3000);
+  await ir("Scheduling");
+  try { await p.getByRole("button", { name: /Importar desde Planning/ }).click(); await p.waitForTimeout(2000); await p.getByRole("button", { name: /Generar escenario/ }).first().click(); await p.waitForTimeout(12000); } catch (e) { console.log(e.message); }
+  await paso("01-restricciones", () => p.getByRole("button", { name: /Restricciones/ }).first().click());
+  await p.keyboard.press("Escape"); await p.getByRole("button", { name: /Restricciones/ }).first().click().catch(() => {});
+  await paso("02-indicadores", () => p.getByRole("button", { name: /Todos los indicadores/ }).first().click());
+  await p.getByRole("button", { name: /Todos los indicadores/ }).first().click().catch(() => {});
+  await paso("03-publicar", () => p.getByRole("button", { name: /Publicar en Rutas/ }).first().click());
+  await p.keyboard.press("Escape");
+  await p.goto("/scheduling"); await p.waitForTimeout(2500);
+  await paso("04-rostering", () => ir("Rostering"));
+  await paso("05-rostering-vehiculos", () => p.getByRole("button", { name: "Vehículos", exact: true }).first().click());
+  await paso("06-control", () => ir("Control"));
+  await paso("07-control-flota", () => p.getByRole("button", { name: /flota/i }).first().click());
+  await paso("08-analytics", () => ir("Analytics"));
+  for (const [n, t] of [["09-an-pesadas", "Pesadas"], ["10-an-personal", "Personal"], ["11-an-varios", "Varios"]]) await paso(n, () => p.getByRole("button", { name: t, exact: true }).first().click());
+  await paso("12-inventario", async () => { await ir("Planning"); await p.getByText("Inventario", { exact: true }).first().click(); });
+  await paso("13-timetable", () => p.getByText("Timetable", { exact: true }).first().click());
+  // líneas
+  await p.goto("/projects"); await p.waitForTimeout(1500);
+  await p.getByText("Nuevo proyecto").first().click();
+  await shot("14-nuevo-proyecto");
+  await p.getByRole("button", { name: /^Líneas regulares/ }).click();
+  await p.fill('input[placeholder="Nombre del proyecto *"]', "Líneas demo");
+  await p.getByRole("button", { name: "Crear proyecto" }).click();
+  await p.waitForTimeout(2000);
+  await p.goto("/planning"); await p.waitForTimeout(2500);
+  await shot("15-lineas-vacio");
+  const [elegir] = await Promise.all([p.waitForEvent("filechooser"), p.getByText("Importar red (GTFS .zip)").click()]);
+  await elegir.setFiles({ name: "red-mini.zip", mimeType: "application/zip", buffer: gtfsMini() });
+  await p.getByText(/Qué quieres importar/).waitFor({ timeout: 60_000 }); await shot("16-importar-gtfs");
+  await p.getByRole("button", { name: "Importar", exact: true }).click();
+  await p.getByText(/2 líneas/).first().waitFor({ timeout: 60_000 });
+  await shot("17-lineas-red");
+  await p.getByRole("button", { name: "+ Añadir" }).click().catch(() => {});
+  const mapa = await p.locator(".leaflet-container").first().boundingBox();
+  await p.mouse.click(mapa.x + mapa.width / 2, mapa.y + mapa.height / 2); await p.waitForTimeout(1500);
+  for (const [n, t] of [["18-lin-horarios", "Horarios de salida"], ["19-lin-relevos", "Puntos de relevo"], ["20-lin-vacios", "Vacíos"], ["21-lin-flota", "Flota"]]) await paso(n, () => p.getByText(t, { exact: true }).first().click());
+  await ir("Scheduling");
+  await p.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first().waitFor({ timeout: 60_000 }).catch(() => {});
+  await shot("22-lin-sched");
+  await paso("23-lin-sched-turnos", () => p.getByRole("button", { name: /Trabajadores/ }).first().click());
+  await paso("24-lin-restricciones", () => p.getByRole("button", { name: /Restricciones/ }).first().click());
+  await p.getByRole("button", { name: /Restricciones/ }).first().click().catch(() => {});
+  await paso("25-lin-calendarios", () => p.getByText("Calendarios", { exact: true }).first().click());
+  await paso("26-lin-rostering", () => ir("Rostering"));
+  await paso("27-lin-control", () => ir("Control"));
+  await paso("28-lin-analytics", () => ir("Analytics"));
 });

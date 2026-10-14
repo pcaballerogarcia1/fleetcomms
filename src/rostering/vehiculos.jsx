@@ -15,7 +15,7 @@ export function ModeTabs({ mode, setMode }) {
         <button key={m} onClick={() => setMode(m)} style={{
           padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
           fontFamily: font, fontSize: 12, fontWeight: 600,
-          background: mode === m ? C.blue : "transparent",
+          background: mode === m ? "rgba(255,255,255,0.1)" : "transparent",
           color: mode === m ? "#fff" : C.muted,
           transition: "all .12s",
         }}>{label}</button>

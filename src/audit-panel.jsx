@@ -98,7 +98,7 @@ function AuditPanel({ sesion, activeProject, onClose }) {
               {isSA && (
                 <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
                   {[["cambios", "Cambios"], ["errores", "Errores"]].map(([k, l]) => (
-                    <button key={k} onClick={() => setTab(k)} style={{ padding: "3px 10px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font, background: tab === k ? C.blue : "transparent", color: tab === k ? "#fff" : C.muted }}>{l}</button>
+                    <button key={k} onClick={() => setTab(k)} style={{ padding: "3px 10px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font, background: tab === k ? "rgba(255,255,255,0.1)" : "transparent", color: tab === k ? "#fff" : C.muted }}>{l}</button>
                   ))}
                 </div>
               )}

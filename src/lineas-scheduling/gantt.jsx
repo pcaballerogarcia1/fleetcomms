@@ -156,26 +156,29 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
             </div>
           </div>
   );
-  const barraBtn = (on) => ({ padding: "3px 8px", borderRadius: 4, border: "none", cursor: "pointer", fontFamily: font, fontSize: 10.5, background: on ? C.blue : "none", color: on ? "#fff" : C.muted, fontWeight: on ? 600 : 400 });
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Controles del Gantt (como en el de puntos) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 16px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
-        <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2 }}>
-          <button onClick={() => cambiarVista("tabla")} style={barraBtn(vista === "tabla")}>Tabla</button>
-          <button onClick={() => cambiarVista("compacta")} style={barraBtn(vista === "compacta")}>Compacta</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, flexWrap: "wrap" }}>
+        <div className="op-seg">
+          <button onClick={() => cambiarVista("tabla")} className={vista === "tabla" ? "op-on" : ""}>Tabla</button>
+          <button onClick={() => cambiarVista("compacta")} className={vista === "compacta" ? "op-on" : ""}>Compacta</button>
         </div>
-        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700 }}>ZOOM</span>
-        <div style={{ display: "flex", gap: 2 }}>
-          {ZOOM_STEPS.map(z => <button key={z} onClick={() => setPx(z)} style={{ ...barraBtn(px === z), border: `1px solid ${px === z ? C.blue : C.border}`, fontFamily: mono }}>{z}×</button>)}
+        <div className="op-sep" />
+        <span style={{ fontSize: 12, color: C.dim }}>Zoom</span>
+        <div className="op-seg">
+          {ZOOM_STEPS.map(z => <button key={z} onClick={() => setPx(z)} className={px === z ? "op-on" : ""}>{z}×</button>)}
         </div>
-        <span style={{ fontSize: 9, color: C.dim, letterSpacing: 1.5, fontWeight: 700, marginLeft: 6 }}>ORDENAR</span>
-        {[["inicio", "Salida"], ["amplitud", "Amplitud"], ["nViajes", "Viajes"]].map(([k, l]) => (
-          <button key={k} onClick={() => setOrden(o => (o?.k === k ? (o.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} style={{ ...barraBtn(orden?.k === k), border: `1px solid ${orden?.k === k ? C.blue : C.border}`, fontFamily: mono }}>
-            {l} {orden?.k === k ? (orden.dir === 1 ? "↑" : "↓") : ""}
-          </button>
-        ))}
-        {modo === "workers" && res.kpis.turnosConAviso > 0 && <span style={{ fontSize: 11, color: C.red, fontFamily: mono }}>! {res.kpis.turnosConAviso} con avisos</span>}
+        <div className="op-sep" />
+        <span style={{ fontSize: 12, color: C.dim }}>Ordenar</span>
+        <div className="op-seg">
+          {[["inicio", "Salida"], ["amplitud", "Amplitud"], ["nViajes", "Viajes"]].map(([k, l]) => (
+            <button key={k} onClick={() => setOrden(o => (o?.k === k ? (o.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} className={orden?.k === k ? "op-on" : ""}>
+              {l} {orden?.k === k ? (orden.dir === 1 ? "↑" : "↓") : ""}
+            </button>
+          ))}
+        </div>
+        {modo === "workers" && res.kpis.turnosConAviso > 0 && <span style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>! {res.kpis.turnosConAviso} con avisos</span>}
         {sel.size > 0 && (
           <span style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", fontSize: 11.5, color: C.text, background: C.blueDim, border: `1px solid ${C.blue}`, borderRadius: 6, padding: "3px 6px 3px 10px" }}>
             {sel.size} {modo === "vehicles" ? "expedicion(es)" : "viaje(s)"} elegidos · arrástralos a otro {modo === "vehicles" ? "autobús" : "turno"}

@@ -380,7 +380,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
               {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                 <button key={v} onClick={() => setForm({ ...form, rol: v })} style={{
                   padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
-                  background: form.rol === v ? C.blue : "none",
+                  background: form.rol === v ? "rgba(255,255,255,0.1)" : "none",
                   color: form.rol === v ? "#fff" : C.muted,
                   fontSize: 11, fontFamily: font, transition: "all .12s",
                 }}>{l}</button>
@@ -419,7 +419,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                     <button key={v} onClick={() => setEditForm({ ...editForm, rol: v })} style={{
                       padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
-                      background: editForm.rol === v ? C.blue : "none",
+                      background: editForm.rol === v ? "rgba(255,255,255,0.1)" : "none",
                       color: editForm.rol === v ? "#fff" : C.muted,
                       fontSize: 11, fontFamily: font, transition: "all .12s",
                     }}>{l}</button>

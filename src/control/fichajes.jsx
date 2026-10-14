@@ -100,7 +100,7 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
               {[["calendario", "Calendario"], ["tabla", "Tabla"]].map(([k, l]) => (
                 <button key={k} onClick={() => setVistaFichajes(k)} style={{
                   padding: "4px 10px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vistaFichajes === k ? C.blue : "none",
+                  background: vistaFichajes === k ? "rgba(255,255,255,0.1)" : "none",
                   color: vistaFichajes === k ? "#fff" : C.muted,
                   fontSize: 11, fontWeight: vistaFichajes === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",

@@ -75,7 +75,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11.5, color: C.muted }}>Periodo</span>
         <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? C.blue : "none", color: periodo === d ? "#fff" : C.muted, fontSize: 11.5, fontFamily: font }}>últimos {d} días</button>)}
+          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? "rgba(255,255,255,0.1)" : "none", color: periodo === d ? "#fff" : C.muted, fontSize: 11.5, fontFamily: font }}>últimos {d} días</button>)}
         </div>
         <button onClick={analizar} disabled={estado.cargando} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: estado.cargando ? "wait" : "pointer", fontFamily: font }}>{estado.cargando ? "Leyendo los días publicados…" : "Analizar"}</button>
         <span style={{ fontSize: 10.5, color: C.dim }}>Lee los turnos de los días publicados del periodo (una lectura por turno).</span>

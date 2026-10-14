@@ -175,7 +175,7 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
       <div style={{ display: "flex", gap: 4, marginTop: 10, background: C.surface2, borderRadius: 7, padding: 3 }}>
         {[0, 1].map(k => {
           const existe = linea.sentidos.some(x => x.dir === k);
-          return <button key={k} onClick={() => setDir(k)} style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", background: dir === k ? C.blue : "none", color: dir === k ? "#fff" : existe ? C.muted : C.dim, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{k === 0 ? "Ida" : "Vuelta"}{!existe ? " (no hay)" : ""}</button>;
+          return <button key={k} onClick={() => setDir(k)} style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", background: dir === k ? "rgba(255,255,255,0.1)" : "none", color: dir === k ? "#fff" : existe ? C.muted : C.dim, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{k === 0 ? "Ida" : "Vuelta"}{!existe ? " (no hay)" : ""}</button>;
         })}
       </div>
       {!s ? (

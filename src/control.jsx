@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "./firebase.js";
 import { collection, query, where, onSnapshot, getCountFromServer, limit } from "firebase/firestore";
 import { useLang, t } from "./i18n.js";
-import { C, fmtMes, font, mono, userName } from "./control/datos.js";
+import { C, fmtMes, font, userName } from "./control/datos.js";
 import { AvisoConductores } from "./control/aviso-conductores.jsx";
 import { PanelFichajes } from "./control/fichajes.jsx";
 import { MapaControl, MapaFlota } from "./control/mapas.jsx";
@@ -179,15 +179,16 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
       {/* ── Header ── */}
       <div style={{ padding: "14px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>
-            Control · tiempo real
-          </span>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Control</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Rutas del día, flota en el mapa y fichajes, en directo</div>
+          </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
               {[["planes", t("planes", lang)], ["flota", t("mapaFlota", lang)], ["fichajes", t("fichajes", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vista === k ? C.blue : "none",
+                  background: vista === k ? "rgba(255,255,255,0.1)" : "none",
                   color: vista === k ? "#fff" : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",
@@ -239,12 +240,9 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
             { l: "Completadas",      v: stats.done,   c: C.green   },
             { l: "Progreso global",  v: `${stats.pct}%`, c: pctColor },
           ].map(s => (
-            <div key={s.l} style={{
-              background: C.card, border: `1px solid ${C.border}`, borderRadius: 8,
-              padding: "8px 14px", flex: 1,
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</div>
-              <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>{s.l}</div>
+            <div key={s.l} className="op-tarjeta" style={{ padding: "12px 18px", flex: 1 }}>
+              <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{s.l}</div>
+              <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 3 }}>{s.v}</div>
             </div>
           ))}
         </div>

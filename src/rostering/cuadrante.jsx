@@ -2,6 +2,7 @@
 // la tabla de trabajadores × días y el resumen del turno de una celda).
 
 
+import { Scale, Sparkles } from "lucide-react";
 import { checkWorkerMonth } from "../roster-optimizer.js";
 import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnStyle, pubBtn, thStyle } from "./datos.js";
 import { ModeTabs } from "./vehiculos.jsx";
@@ -47,11 +48,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
 
           <button onClick={() => setShowRules(true)}
             title="Reglas del cuadrante: días seguidos, horas/mes, descanso, reparto"
-            style={{
-              padding: "4px 12px", borderRadius: 6, background: "none",
-              border: `1px solid ${C.border2}`, color: C.muted, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: font,
-            }}>
+            className="op-btn"><Scale size={14} />
             Reglas
           </button>
 
@@ -91,21 +88,12 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
               <span style={{ fontSize: 11, color: C.dim }}>= planificado</span>
               <button
                 onClick={optimizar}
-                style={{
-                  marginLeft: 4,
-                  padding: "4px 12px", borderRadius: 6,
-                  background: C.blue + "22",
-                  border: `1px solid ${C.blue}55`,
-                  color: C.blue, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: font,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = C.blue + "40"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = C.blue + "22"; }}
+                className="op-btn op-primario" style={{ marginLeft: 4 }}
                 title={schedRoster.modo === "libre"
                   ? "Asigna trabajador y vehículo a cada turno del escenario respetando las Reglas"
                   : "Asigna los turnos del escenario de scheduling a los trabajadores disponibles"}
               >
-                Optimizar
+                <Sparkles size={14} /> Optimizar
               </button>
             </div>
           )}

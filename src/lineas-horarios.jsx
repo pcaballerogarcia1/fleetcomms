@@ -217,7 +217,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
           {!esCalendario(dia) && red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
           <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
             {[["hora", "Salidas por hora"], ["parada", "Pasos por parada"]].map(([v, t]) => (
-              <button key={v} onClick={() => setVista(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: vista === v ? C.blue : "none", color: vista === v ? "#fff" : C.muted, fontSize: 11, fontWeight: vista === v ? 600 : 400, fontFamily: font }}>{t}</button>
+              <button key={v} onClick={() => setVista(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: vista === v ? "rgba(255,255,255,0.1)" : "none", color: vista === v ? "#fff" : C.muted, fontSize: 11, fontWeight: vista === v ? 600 : 400, fontFamily: font }}>{t}</button>
             ))}
           </div>
           {vista === "parada" && linea && linea.sentidos.length > 1 && (

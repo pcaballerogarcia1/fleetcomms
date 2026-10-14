@@ -2,6 +2,7 @@
 
 
 
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { C, font, mono } from "./estilo.js";
 import { KPI_AYUDA } from "./gantt-comun.js";
@@ -12,6 +13,9 @@ import { KPI_AYUDA } from "./gantt-comun.js";
 // Arriba solo los principales (como Optibus); «Todos los indicadores» despliega
 // el resto y los de `detalle` ([{ l, v, sub, ayuda }] o gráficas [{ l, barras: [{ n, v }] }]).
 const PRINCIPALES = ["Turnos", "Vehículos", "Eficiencia vehículo", "Eficiencia personal", "Coste estimado"];
+// solo los indicadores en alerta van en color; el resto, en el color del texto
+const alerta = c => c === C.red || c === C.amber || c === C.orange;
+
 export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) {
   const [abierto, setAbierto] = useState(false);
   const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
@@ -47,22 +51,22 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
   const graficas = detalle.filter(x => x.barras?.length);
   const avisos = k.filasConAviso || 0;
   return (
-    <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}` }}>
+    <div style={{ flexShrink: 0, background: C.bg, borderBottom: `1px solid ${C.border}` }}>
     <div style={{ display: "flex", overflowX: "auto" }}>
       {vistos.map((it, i) => (
-        <div key={it.l} title={it.ayuda} style={{ padding: "10px 18px", borderRight: i < vistos.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 150, flexShrink: 0, cursor: "help" }}>
-          <div style={{ display: "flex", alignItems: "baseline" }}>
-            <span style={{ fontSize: 20, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
+        <div key={it.l} title={it.ayuda} style={{ padding: "12px 20px", borderRight: i < vistos.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 160, flexShrink: 0, cursor: "help" }}>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>{it.l}</div>
+          <div style={{ display: "flex", alignItems: "baseline", marginTop: 3 }}>
+            <span style={{ fontSize: 22, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{it.v}</span>
             {it.d}
           </div>
-          <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 3 }}>{it.l}</div>
-          <div style={{ fontSize: 10, color: it.subColor || C.dim, marginTop: 1, whiteSpace: "nowrap" }}>{it.sub}</div>
+          <div style={{ fontSize: 11.5, color: it.subColor || C.dim, marginTop: 2, whiteSpace: "nowrap" }}>{it.sub}</div>
         </div>
       ))}
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
         {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
-        <button onClick={() => setAbierto(a => !a)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 7, border: `1px solid ${abierto ? C.blue : C.border2}`, background: abierto ? "rgba(91,124,250,0.12)" : "none", color: C.text, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
-          Todos los indicadores {abierto ? "▴" : "▾"}
+        <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`}>
+          Todos los indicadores {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10.5, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
         </button>
       </div>
@@ -73,10 +77,10 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
           {resto.map(it => (
             <div key={it.l} title={it.ayuda} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", cursor: it.ayuda ? "help" : "default" }}>
               <div style={{ display: "flex", alignItems: "baseline" }}>
-                <span style={{ fontSize: 19, fontWeight: 700, color: it.color || C.blueText, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
+                <span style={{ fontSize: 19, fontWeight: 700, color: alerta(it.color) ? it.color : C.text, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
                 {it.d}
               </div>
-              <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 4 }}>{it.l}</div>
+              <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginTop: 4 }}>{it.l}</div>
               {it.sub && <div style={{ fontSize: 10, color: it.subColor || C.dim, marginTop: 2, lineHeight: 1.35 }}>{it.sub}</div>}
             </div>
           ))}
@@ -95,7 +99,7 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
                 <div style={{ display: "flex", gap: 6, marginTop: 3 }}>
                   {g.barras.map(b => <span key={b.n} title={b.n} style={{ flex: 1, fontSize: 9, color: C.dim, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{b.n}</span>)}
                 </div>
-                <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 6 }}>{g.l}</div>
+                <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginTop: 6 }}>{g.l}</div>
               </div>
             );
           })}

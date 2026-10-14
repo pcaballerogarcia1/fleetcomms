@@ -4,6 +4,7 @@
 // KpiBar, Gantt con vista Tabla/Compacta y zoom) con lo propio de los
 // autobuses: los viajes de cada línea en su color, los relevos de conductor
 // (T12) y la pestaña de horarios de salida. El cálculo está en lineas-sched.js.
+import { CalendarRange, Check, ChevronDown, FileDown, Send, SlidersHorizontal, Sparkles, TrendingUp } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales, watchCambioPlanning } from "./lineas-store.js";
 import {
@@ -449,17 +450,14 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
 
   const nLineas = params.lineas ? params.lineas.length : red.lineas.length;
   const totalViajes = red.lineas.filter(l => !params.lineas || params.lineas.includes(l.id)).reduce((s, l) => s + l.sentidos.reduce((a, x) => a + viajesDia(x, params.dia, red, cfg[l.id]), 0), 0);
-  const btnSec = { padding: "5px 10px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
-  const btnExcel = { padding: "5px 10px", background: "rgba(63,207,142,.08)", border: "1px solid rgba(63,207,142,.3)", color: "#3fcf8e", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 };
-  const icoDescarga = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
   const sep = <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />;
   const infoCal = porCalendario[dia];
   const restriccionesUI = { ...params, entreLineas: params.entreLineasGlobal };
   const sinTurnos = res && !res.turnos;
   const etiquetaOpt = [infoCal?.objetivoV && `vehículos: ${nombreObjetivo(infoCal.objetivoV)}`, infoCal?.objetivoT && `turnos: ${nombreObjetivo(infoCal.objetivoT)}`].filter(Boolean).join(" · ");
   const paso = (v, n, l, aviso) => (
-    <button key={v} onClick={() => setModo(v)} title={aviso || undefined} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 4, border: "none", cursor: "pointer", background: modo === v ? C.blue : "none", color: modo === v ? "#fff" : C.muted, fontSize: 11, fontWeight: modo === v ? 600 : 400, fontFamily: font }}>
-      <span style={{ width: 16, height: 16, borderRadius: 8, fontSize: 9.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: modo === v ? "#fff" : C.bg, color: modo === v ? C.blue : C.muted }}>{n}</span>
+    <button key={v} onClick={() => setModo(v)} title={aviso || undefined} className={modo === v ? "op-on" : ""} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ width: 16, height: 16, borderRadius: 8, fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", background: modo === v ? C.blue : "rgba(255,255,255,0.08)", color: modo === v ? "#fff" : C.muted }}>{n}</span>
       {l}
       {aviso && <span style={{ width: 7, height: 7, borderRadius: 4, background: C.amber }} />}
     </button>
@@ -475,59 +473,56 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
       ) : (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* ── TOOLBAR (como la del Scheduling de puntos) ── */}
-          <div style={{ padding: "0 16px", height: 46, borderBottom: `1px solid ${C.border}`, background: C.card, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ padding: "0 16px", height: 50, borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ position: "relative" }}>
-              <button onClick={() => setPanelLineas(v => !v)} title="Líneas que entran en el escenario" style={{ padding: "5px 11px", background: C.greenDim, border: `1px solid ${C.green}44`, color: C.green, borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6, flexShrink: 0, whiteSpace: "nowrap" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+              <button onClick={() => setPanelLineas(v => !v)} title="Líneas que entran en el escenario" className="op-btn op-ok">
+                <Check size={14} />
                 {totalViajes.toLocaleString("es-ES")} viajes · {nLineas === red.lineas.length ? `${nLineas} líneas` : `${nLineas} de ${red.lineas.length} líneas`}
               </button>
               {panelLineas && <SelectorLineas lineas={red.lineas} elegidas={params.lineas} onCambiar={ids => setCambios(c => ({ ...c, lineas: ids }))} onCerrar={() => setPanelLineas(false)} />}
             </div>
             <SelectorCalendario red={red} valor={dia} onCambiar={cambiarDia} ancho={240} />
-            {etiquetaOpt && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} style={{ fontSize: 10.5, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>Optimizado · {etiquetaOpt}</span>}
+            {etiquetaOpt && <span title={`Estrategia de este calendario: ${nombreEstrategia(infoCal.estrategia || {}, params.piezaMax)}`} className="op-pastilla" style={{ background: "rgba(63,207,142,0.1)", color: C.green, flexShrink: 0, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}><Sparkles size={11} /> Optimizado · {etiquetaOpt}</span>}
             {sep}
-            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 6, padding: 2, flexShrink: 0 }}>
+            <div className="op-seg">
               {paso("vehicles", 1, "Vehículos")}
               {paso("workers", 2, "Trabajadores", sinTurnos ? "Faltan los turnos de estos vehículos" : null)}
             </div>
-            <button onClick={() => setShowC(s => !s)} style={{ ...btnSec, background: showC ? C.surface2 : "none", border: `1px solid ${showC ? C.border2 : C.border}`, color: showC ? C.text : C.muted }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="11" y1="18" x2="13" y2="18" /></svg>
+            <button onClick={() => setShowC(s => !s)} className={`op-btn${showC ? " op-activo" : ""}`}>
+              <SlidersHorizontal size={14} />
               Restricciones
             </button>
             {res && <>
               {sep}
               <div style={{ position: "relative" }}>
-                <button onClick={() => setMenuExportar(m => !m)} title="Descargar en Excel o imprimir (PDF)" style={btnExcel}>{icoDescarga} Exportar ▾</button>
+                <button onClick={() => setMenuExportar(m => !m)} title="Descargar en Excel o imprimir (PDF)" className="op-btn op-fantasma"><FileDown size={14} /> Exportar <ChevronDown size={13} /></button>
                 {menuExportar && (
-                  <div onMouseLeave={() => setMenuExportar(false)} style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: 6, minWidth: 250, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+                  <div onMouseLeave={() => setMenuExportar(false)} style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 6, minWidth: 260, boxShadow: "0 16px 48px rgba(0,0,0,.5)" }}>
                     {[["t", "Excel"], ["autobuses", "Autobuses (con los vacíos)"], ["turnos", "Turnos (viaje a viaje)", true], ["resumen", "Resumen de turnos", true], ["nomina", "Nómina (horas y €)", true], ["todo", "Todo en un libro"],
                       ["t", "PDF para imprimir"], ["pdf-turnos", "Hojas de servicio (una por turno)", true], ["pdf-autobuses", "Hojas de autobús (una por autobús)"]].map(([k, t, conTurnos]) => k === "t"
-                      ? <div key={t} style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, padding: "6px 8px 3px" }}>{t}</div>
+                      ? <div key={t} style={{ fontSize: 11.5, color: C.dim, fontWeight: 600, padding: "8px 10px 4px" }}>{t}</div>
                       : <button key={k} onClick={() => exportar(k)} disabled={conTurnos && !res.turnos} title={conTurnos && !res.turnos ? "Primero hay que hacer los turnos (paso 2)" : undefined}
-                        style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 5, border: "none", background: "none", color: conTurnos && !res.turnos ? C.dim : C.text, fontSize: 12, cursor: conTurnos && !res.turnos ? "not-allowed" : "pointer", fontFamily: font }}>{t}</button>)}
+                        className="op-btn op-fantasma" style={{ display: "flex", justifyContent: "flex-start", width: "100%", height: 32, color: conTurnos && !res.turnos ? C.dim : C.text }}>{t}</button>)}
                   </div>
                 )}
               </div>
               <button onClick={() => setPublicando(true)} disabled={!res.turnos || !orgId} title={res.turnos ? "Publicar los turnos de este calendario para un día: los conductores los ven en el móvil y Control los sigue en vivo" : "Primero hay que hacer los turnos (paso 2)"}
-                style={{ ...btnSec, color: C.blueText || C.blue, border: `1px solid ${C.blue}66`, fontWeight: 600, opacity: res.turnos && orgId ? 1 : 0.4, cursor: res.turnos && orgId ? "pointer" : "not-allowed" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
+                className="op-btn">
+                <Send size={14} />
                 Publicar a Control
               </button>
-              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al Rostering: cada día, los del calendario que circula" style={{ ...btnSec, opacity: orgId ? 1 : 0.4 }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al Rostering: cada día, los del calendario que circula" className="op-btn op-fantasma">
+                <CalendarRange size={14} />
                 Enviar a Rostering
               </button>
             </>}
             <div style={{ flex: 1 }} />
-            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" style={{ width: 130, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
-            <button onClick={() => setShowOpt(s => !s)} title={modo === "vehicles" ? "Buscar los mejores vehículos de este calendario" : "Buscar los mejores turnos sobre estos vehículos"} style={{ ...btnSec, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: showOpt ? C.blueDim : "none", border: `1px solid ${showOpt ? C.blue : C.border2}`, color: showOpt ? C.blueText : C.text }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></svg>
+            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" className="op-input" style={{ width: 150, height: 30, fontSize: 12.5 }} />
+            <button onClick={() => setShowOpt(s => !s)} title={modo === "vehicles" ? "Buscar los mejores vehículos de este calendario" : "Buscar los mejores turnos sobre estos vehículos"} className={`op-btn${showOpt ? " op-activo" : ""}`}>
+              <TrendingUp size={14} />
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
-            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} style={{
-              padding: "7px 16px", borderRadius: 7, border: "none", background: pendientes ? C.amber : C.blue, color: pendientes ? "#0d0f14" : "#fff",
-              fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font, flexShrink: 0, whiteSpace: "nowrap",
-            }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
+            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} className="op-btn op-primario" style={{ height: 32, padding: "0 14px", ...(pendientes ? { background: C.amber, color: "#0d0f14", boxShadow: "none" } : {}) }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
           {avisoPlanning && (

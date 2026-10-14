@@ -16,7 +16,6 @@ const C = {
   blue: "#5b7cfa", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d", purple: "#a78bfa",
 };
 const font = "var(--font)";
-const mono = "var(--mono)";
 const CATS_INCIDENCIA = [
   { label: "Avería mecánica", color: "#ef4444" },
   { label: "Accidente / Golpe", color: "#f97316" },
@@ -63,10 +62,10 @@ const KPI_AYUDA = {
 
 function KpiCard({ label, value, sub, color = C.blue }) {
   return (
-    <div title={KPI_AYUDA[label]} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 140, cursor: KPI_AYUDA[label] ? "help" : undefined }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: mono, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{label}</div>
-      {sub && <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{sub}</div>}
+    <div title={KPI_AYUDA[label]} className="op-tarjeta" style={{ padding: "14px 18px", flex: 1, minWidth: 150, cursor: KPI_AYUDA[label] ? "help" : undefined }}>
+      <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 650, color: color === C.red || color === C.orange ? color : C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
@@ -309,15 +308,16 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       {/* Header */}
       <div style={{ padding: "14px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>
-            Analytics · cuadros de mando
-          </span>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Analytics</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Producción, facturación, pesadas, personal e incidencias</div>
+          </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
               {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ["pesadas", "Pesadas"], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vista === k ? C.blue : "none",
+                  background: vista === k ? "rgba(255,255,255,0.1)" : "none",
                   color: vista === k ? "#fff" : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",
