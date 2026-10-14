@@ -587,6 +587,25 @@ export function PlanningLineasPage({ projectId, orgId }) {
       .catch(e => alert("No se pudo guardar: " + (e.message || e)));
   };
 
+  // Crear un GTFS con la red de Operanzia (para Google Maps, paneles, el Consorcio…)
+  async function exportarGtfs() {
+    if (!red) return;
+    setError(null);
+    try {
+      const { crearGtfs } = await import("./gtfs-exportar.js");
+      const operador = red.agencias?.length === 1 ? red.agencias[0] : red.lineas.find(l => l.agencia)?.agencia || "Operanzia";
+      const { zip, resumen } = crearGtfs(red, cfg, { operador });
+      const url = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `gtfs_${(estado.ficha?.archivo || "operanzia").replace(/\.zip$/i, "").replace(/[^\w.-]+/g, "_")}_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      logAudit({ modulo: "Planning", accion: "Exportó la red a GTFS", detalle: `${resumen.lineas} líneas · ${resumen.expediciones} expediciones · ${resumen.calendarios} calendarios` });
+    } catch (e) {
+      setError(`No se pudo crear el GTFS: ${e.message || e}`);
+    }
+  }
+
   async function importar(file) {
     if (!file) return;
     if (estado.red && !window.confirm(`Sustituir la red actual (${estado.red.lineas.length} líneas) por la de «${file.name}»? La configuración de las líneas que se llamen igual se conserva.${estado.red.diseno ? " La red dibujada a mano se pierde." : ""}`)) return;
@@ -667,6 +686,12 @@ export function PlanningLineasPage({ projectId, orgId }) {
             width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.blue}55`, background: importando ? C.surface2 : "#16306a",
             color: "#a3c4fc", fontSize: 12, fontWeight: 600, cursor: importando ? "wait" : "pointer", fontFamily: font,
           }}>{importando || (red ? "Sustituir red (GTFS .zip)" : "Importar red (GTFS .zip)")}</button>
+          {red && (
+            <button onClick={exportarGtfs} title="Un GTFS con la red tal y como está en Operanzia: calendarios, salidas (también las cambiadas a mano) y pasos por parada"
+              style={{ width: "100%", marginTop: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.green}66`, background: "rgba(52,211,153,.08)", color: C.green, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+              Exportar GTFS (.zip)
+            </button>
+          )}
           {error && <div style={{ fontSize: 11, color: C.red, marginTop: 8 }}>{error}</div>}
           {estado.ficha && (
             <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8, lineHeight: 1.6 }}>
