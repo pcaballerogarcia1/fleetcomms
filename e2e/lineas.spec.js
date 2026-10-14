@@ -261,6 +261,12 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   await m.getByRole("button", { name: "Terminar turno" }).click();
   await expect(m.getByText(/Turno terminado/)).toBeVisible();
   await movil.close();
+
+  // Analytics: el análisis de tiempos reales lee el día publicado
+  await page.getByRole("button", { name: "Analytics", exact: true }).first().click();
+  await page.getByRole("button", { name: "Analizar" }).click();
+  await expect(page.getByText("Días publicados", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Puntualidad de salida/).first()).toBeVisible();
   expect(errores).toEqual([]);
   expect(erroresMovil).toEqual([]);
 });

@@ -163,3 +163,19 @@ export function watchMisCuadrantes(orgId, uid, cb) {
   const q = query(collection(db, "cuadrantes"), where("org_id", "==", orgId), where("uid", "==", uid));
   return onSnapshot(q, s => cb(s.docs.map(d => ({ ...d.data(), _id: d.id }))), e => { console.error("cuadrantes:", e); cb([]); });
 }
+
+/**
+ * Los días publicados de un proyecto entre dos fechas, con sus turnos (para el
+ * análisis de tiempos reales de Analytics). Lee una vez (no escucha): cada
+ * turno es una lectura. → [{ fecha, dia, turnos: [{ viajes, real }] }]
+ */
+export async function leerRealPeriodo(projectId, orgId, desde, hasta) {
+  const q = query(collection(db, "servicio_lineas"), where("org_id", "==", orgId), where("projectId", "==", projectId));
+  const dias = (await getDocs(q)).docs.map(d => ({ ...d.data(), _id: d.id })).filter(s => s.fecha >= desde && s.fecha <= hasta).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const out = [];
+  for (const s of dias) {
+    const ts = await getDocs(query(turnosDe(s._id), where("org_id", "==", orgId)));
+    out.push({ fecha: s.fecha, dia: s.dia, nombreDia: s.nombreDia, turnos: ts.docs.map(d => { const x = d.data(); return { viajes: x.viajes || [], real: x.real || {} }; }) });
+  }
+  return out;
+}
