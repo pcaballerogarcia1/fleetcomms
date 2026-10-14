@@ -139,7 +139,7 @@ describe("toma y deje de servicio", () => {
     expect(cerrarTurno({ piezas: [sale] }, p).trabajo).toBe(240);
   });
   it("si con la toma y el deje pasa de la jornada máxima, no cabe", () => {
-    const p = { ...P, tiposTurno: [], aplicar561: false, jornadaMax: 480, tomaServicio: 15, dejeServicio: 15 };
+    const p = { ...P, tiposTurno: [], aplicar561: false, jornadaSinPausaMax: 0, jornadaMax: 480, tomaServicio: 15, dejeServicio: 15 };
     expect(validar([pieza(1, 360, 820, "A", "A", A, A)], p)).toBeNull(); // 460 + 30 > 480
     expect(validar([pieza(1, 360, 800, "A", "A", A, A)], p)).not.toBeNull();
   });
