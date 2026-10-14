@@ -63,7 +63,10 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   // 4) Scheduling: los dos pasos
   await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
   await expect(page.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first()).toBeVisible({ timeout: 60_000 });
+  // los km en vacío están en «Todos los indicadores» (arriba solo van los 5 principales)
+  await page.getByRole("button", { name: /Todos los indicadores/ }).first().click();
   await expect(page.getByText(/en vacío/).first()).toBeVisible();
+  await page.getByRole("button", { name: /Todos los indicadores/ }).first().click();
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
   await expect(page.getByText(/^split \d+h\d\d$/).first()).toBeVisible(); // los partidos marcan su split
@@ -169,7 +172,8 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   // puntos de relevo: sin relevo en la parada B
   await page.getByRole("button", { name: "Puntos de relevo" }).click();
   await expect(page.getByText(/Se puede relevar en 4 de 4 cabeceras/)).toBeVisible();
-  await page.locator("label").filter({ hasText: "Parada B" }).locator("input").uncheck();
+  // (la casilla cambia cuando se guarda: se pulsa y se espera al texto, sin exigir el cambio al instante)
+  await page.locator("label").filter({ hasText: "Parada B" }).locator("input").click();
   await expect(page.getByText(/Se puede relevar en 3 de 4 cabeceras/)).toBeVisible();
   await expect.poll(async () => (await leer(`planning_settings/${pid}`))?.lineasCfg?._relevos?.no || []).toContain("B");
   // el Scheduling avisa y usa las horas nuevas (un viaje menos)
