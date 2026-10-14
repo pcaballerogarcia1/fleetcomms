@@ -22,7 +22,7 @@ import { turnosCompactos } from "./lineas-rostering.js";
 import {
   C, ESTRATEGIA_UI, MAX_EN_MEMORIA, baseDeResumen, cambiosKpi, claveEscenario,
   claveVehiculos, font, kpisBarra, kpisDetalle, mismos, mono,
-  nombreObjetivo, nombreTipo, num, sinCampos, soloCampos,
+  nombreObjetivo, nombreTipo, num, sinCampos, soloCampos, textoEstable,
 } from "./lineas-scheduling/comun.js";
 import { Gantt } from "./lineas-scheduling/gantt.jsx";
 import { PanelOptimizar, PorQueSinTipo, ResumenCalendarios, SelectorLineas } from "./lineas-scheduling/paneles.jsx";
@@ -72,7 +72,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
 
   const red = estado.red;
   // la clave de cada escenario también cambia si se mueven las cocheras
-  const cfgTxt = useMemo(() => JSON.stringify(cfg) + JSON.stringify(cocheras.map(c => [c.id, c.lat, c.lng])), [cfg, cocheras]);
+  const cfgTxt = useMemo(() => textoEstable(cfg) + JSON.stringify(cocheras.map(c => [c.id, c.lat, c.lng])), [cfg, cocheras]);
   const { porCalendario = {}, ...guardadoTop } = guardados || {};
   const existe = d => !esCalendario(d) || !!red?.calendarios?.some(c => c.id === d);
   const diaGuardado = existe(guardadoTop.dia) ? guardadoTop.dia : "laborable";

@@ -20,3 +20,14 @@ describe("color de las líneas", () => {
     expect(colorearRed(red, { b: "#123456" }).lineas.map(l => l.color)).toEqual(["#ff0000", "#123456"]);
   });
 });
+
+import { textoEstable } from "./lineas-scheduling/comun.js";
+describe("configuración de líneas comparada sin importar el orden", () => {
+  it("el mismo contenido con los campos en otro orden da el mismo texto (si no, el Scheduling recalculaba sin parar)", () => {
+    const a = { "484": { color: "#f00", salidas: [1, 2] }, _flota: { lista: [{ id: 1, km: 200 }] } };
+    const b = { _flota: { lista: [{ km: 200, id: 1 }] }, "484": { salidas: [1, 2], color: "#f00" } };
+    expect(textoEstable(a)).toBe(textoEstable(b));
+    expect(textoEstable({ x: 1 })).not.toBe(textoEstable({ x: 2 }));
+    expect(textoEstable({ x: undefined, y: null })).toBe(textoEstable({ y: null }));
+  });
+});

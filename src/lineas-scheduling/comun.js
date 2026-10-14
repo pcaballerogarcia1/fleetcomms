@@ -138,6 +138,15 @@ export const soloCampos = (o, campos) => Object.fromEntries(Object.entries(o).fi
 
 function hashTexto(t) { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
+// JSON con las claves siempre en el mismo orden: Firestore puede devolver el
+// mismo documento con los campos en otro orden (lo escrito en local frente a
+// lo que vuelve del servidor), y eso no puede contar como «ha cambiado»
+export function textoEstable(v) {
+  if (Array.isArray(v)) return `[${v.map(textoEstable).join(",")}]`;
+  if (v && typeof v === "object") return `{${Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => `${JSON.stringify(k)}:${textoEstable(v[k])}`).join(",")}}`;
+  return JSON.stringify(v ?? null);
+}
+
 export const claveEscenario = (p, cfgTxt) => hashTexto(JSON.stringify(Object.keys(p).filter(k => !CAMPOS_COSTE.includes(k)).sort().map(k => [k, p[k]])) + cfgTxt);
 
 export const claveVehiculos = (p, cfgTxt) => hashTexto(JSON.stringify(CLAVES_VEHICULOS.map(k => [k, p[k] ?? null])) + cfgTxt);
