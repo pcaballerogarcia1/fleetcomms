@@ -13,6 +13,7 @@ import {
 import { AvisosMovil } from "./avisos-movil.jsx";
 import { DetallePlan } from "./ruta-detalle.jsx";
 import { Btn } from "./ui.jsx";
+import { comprobarLugarFichaje, escucharDepotsFichaje, RADIO_FICHAJE_M } from "../fichaje-depots.js";
 
 // Correctivo: tarjeta de tarea manual (sin KML)
 function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
@@ -79,6 +80,8 @@ function FichajeWidget({ sesion }){
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [, forceTick] = useState(0); // refresca el cronómetro cada minuto mientras hay fichaje abierto
+  const [lugares, setLugares] = useState([]); // depots de la empresa: solo se ficha cerca de uno
+  useEffect(() => escucharDepotsFichaje(sesion?.org_id, setLugares), [sesion?.org_id]);
 
   // El fichaje abierto y los últimos cerrados (antes se descargaba toda la
   // historia del conductor en cada apertura: ver e2e/informe-lecturas.md).
@@ -110,6 +113,7 @@ function FichajeWidget({ sesion }){
     if(!mat){ setErr("Introduce la matrícula del vehículo"); return; }
     setSaving(true); setErr("");
     try{
+      const { lugar } = await comprobarLugarFichaje(lugares);
       await addDoc(collection(db,"fichajes"),{
         uid: sesion.id, org_id: sesion.org_id ?? null,
         nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" "),
@@ -118,9 +122,10 @@ function FichajeWidget({ sesion }){
         matricula: mat.toUpperCase(),
         kmInicio: +v, kmFin: null, kmRecorridos: null,
         estado: "abierto",
+        ...(lugar ? { lugarEntrada: lugar } : {}),
       });
       setKm(""); setMatricula("");
-    }catch(e){ setErr("No se pudo fichar entrada: "+e.message); }
+    }catch(e){ setErr(e.message?.startsWith("Estás a") || e.message?.startsWith("Activa") || e.message?.startsWith("No se ha podido saber") ? e.message : "No se pudo fichar entrada: "+e.message); }
     setSaving(false);
   }
 
@@ -131,12 +136,14 @@ function FichajeWidget({ sesion }){
     if(kmFin < fichajeAbierto.kmInicio){ setErr("El km de fin no puede ser menor que el de inicio"); return; }
     setSaving(true); setErr("");
     try{
+      const { lugar } = await comprobarLugarFichaje(lugares);
       await updateDoc(doc(db,"fichajes",fichajeAbierto._id),{
         horaSalida: Date.now(), kmFin, kmRecorridos: +(kmFin - fichajeAbierto.kmInicio).toFixed(1),
         estado: "cerrado",
+        ...(lugar ? { lugarSalida: lugar } : {}),
       });
       setKm("");
-    }catch(e){ setErr("No se pudo fichar salida: "+e.message); }
+    }catch(e){ setErr(e.message?.startsWith("Estás a") || e.message?.startsWith("Activa") || e.message?.startsWith("No se ha podido saber") ? e.message : "No se pudo fichar salida: "+e.message); }
     setSaving(false);
   }
 
@@ -185,6 +192,7 @@ function FichajeWidget({ sesion }){
         </Btn>
       </div>
       {err && <div style={{fontSize:11,color:C.red,marginTop:6}}>{err}</div>}
+      {lugares.length > 0 && !err && <div style={{fontSize:10.5,color:C.dim,marginTop:6}}>Solo se puede fichar a menos de {RADIO_FICHAJE_M / 1000} km de un depot.</div>}
 
       {expanded && recientes.length>0 && (
         <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>

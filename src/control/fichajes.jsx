@@ -65,11 +65,11 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
 
   function exportarExcel() {
     const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const header = ["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Estado"];
+    const header = ["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Depot entrada", "Depot salida", "Estado"];
     const rows = delMes.map(f => [
       nombreDe(f), f.matricula ?? "", f.fecha, fmtHoraF(f.horaEntrada), fmtHoraF(f.horaSalida),
       f.horaSalida ? fmtDur(f.horaSalida - f.horaEntrada) : "en curso",
-      f.kmInicio ?? "", f.kmFin ?? "", f.kmRecorridos ?? "", f.estado,
+      f.kmInicio ?? "", f.kmFin ?? "", f.kmRecorridos ?? "", f.lugarEntrada?.nombre ?? "", f.lugarSalida?.nombre ?? "", f.estado,
     ]);
     const csv = "﻿" + [header, ...rows].map(r => r.map(esc).join(";")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -172,12 +172,14 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
 }
 
 // ── TABLA DE FICHAJES (reutilizada por la vista tabla y el detalle del día) ──
+// Dónde fichó (el depot más cercano y a cuántos metros), para el tooltip
+const lugarTitulo = f => [["Entrada", f.lugarEntrada], ["Salida", f.lugarSalida]].filter(([, l]) => l).map(([q, l]) => `${q}: ${l.nombre}, a ${l.distanciaM} m`).join(" · ") || undefined;
 function TablaFichajes({ rows, nombreDe }) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
       <thead>
         <tr style={{ position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
-          {["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", ""].map(h => (
+          {["Conductor", "Matrícula", "Fecha", "Entrada", "Salida", "Duración", "Km inicio", "Km fin", "Km recorridos", "Depot", ""].map(h => (
             <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: C.dim, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
           ))}
         </tr>
@@ -194,6 +196,7 @@ function TablaFichajes({ rows, nombreDe }) {
             <td style={{ padding: "8px 14px", color: C.dim, fontFamily: mono }}>{f.kmInicio ?? "—"}</td>
             <td style={{ padding: "8px 14px", color: C.dim, fontFamily: mono }}>{f.kmFin ?? "—"}</td>
             <td style={{ padding: "8px 14px", color: C.orange, fontFamily: mono, fontWeight: 600 }}>{f.kmRecorridos ?? "—"}</td>
+            <td style={{ padding: "8px 14px", color: C.muted }} title={lugarTitulo(f)}>{f.lugarEntrada?.nombre || "—"}</td>
             <td style={{ padding: "8px 14px" }}>
               {f.estado === "abierto" && (
                 <span style={{ fontSize: 10, color: C.green, background: "rgba(63,207,142,0.1)", border: "1px solid rgba(63,207,142,0.3)", borderRadius: 4, padding: "2px 7px" }}>en curso</span>

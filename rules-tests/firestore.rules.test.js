@@ -21,6 +21,7 @@ const USERS = {
   condA:   { rol: "conductor",  org_id: "orgA", nombre: "Carlos" },
   condA2:  { rol: "conductor",  org_id: "orgA", nombre: "Clara" },
   adminB:  { rol: "admin",      org_id: "orgB", nombre: "Bea" },
+  condB:   { rol: "conductor",  org_id: "orgB", nombre: "Berta" },
   sa:      { rol: "superadmin", org_id: null,   nombre: "Super" },
 };
 const as = uid => env.authenticatedContext(uid).firestore();
@@ -171,6 +172,27 @@ describe("presencia, cuadrantes y fichajes", () => {
     await assertFails(addDoc(collection(as("condA"), "fichajes"), { org_id: "orgA", uid: "condA2" }));
     await assertFails(updateDoc(doc(as("condA2"), "fichajes/fA"), { estado: "cerrado" }));
     await assertFails(deleteDoc(doc(as("condA"), "fichajes/fA")));
+  });
+  it("fichajes: con depots, solo cerca de uno (entrada y salida)", async () => {
+    // orgB tiene un depot en Madrid; orgA no tiene ninguno (ficha como siempre, arriba)
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "depots_fichaje/orgB"), { org_id: "orgB", porProyecto: { pB: { d1: { nombre: "Cochera", lat: 40.40, lng: -3.70 } } } }));
+    const cerca = { p: "pB", d: "d1", lat: 40.405, lng: -3.708 }, lejos = { p: "pB", d: "d1", lat: 40.45, lng: -3.70 };
+    const fb = collection(as("condB"), "fichajes");
+    await assertFails(addDoc(fb, { org_id: "orgB", uid: "condB", estado: "abierto" })); // sin lugar
+    await assertFails(addDoc(fb, { org_id: "orgB", uid: "condB", estado: "abierto", lugarEntrada: lejos }));
+    await assertFails(addDoc(fb, { org_id: "orgB", uid: "condB", estado: "abierto", lugarEntrada: { ...cerca, d: "otro" } }));
+    const f = await assertSucceeds(addDoc(fb, { org_id: "orgB", uid: "condB", estado: "abierto", lugarEntrada: cerca }));
+    await assertFails(updateDoc(f, { estado: "cerrado", lugarSalida: lejos }));
+    await assertFails(updateDoc(f, { estado: "cerrado" }));
+    await assertSucceeds(updateDoc(f, { estado: "cerrado", lugarSalida: cerca }));
+    await assertFails(updateDoc(f, { org_id: "orgA" })); // no se cambia de empresa
+  });
+  it("depots para fichar: los lee la empresa y solo los cambia la oficina", async () => {
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "depots_fichaje/orgA"), { org_id: "orgA", porProyecto: {} }));
+    await assertSucceeds(getDoc(doc(as("condA"), "depots_fichaje/orgA")));
+    await assertFails(getDoc(doc(as("adminB"), "depots_fichaje/orgA")));
+    await assertFails(setDoc(doc(as("condA"), "depots_fichaje/orgA"), { porProyecto: {} }));
+    await assertSucceeds(setDoc(doc(as("adminA"), "depots_fichaje/orgA"), { org_id: "orgA", porProyecto: { pA: { d: { nombre: "x", lat: 1, lng: 1 } } } }));
   });
 });
 

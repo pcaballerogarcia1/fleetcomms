@@ -349,6 +349,29 @@ service cloud.firestore {
     // workspace (control horario/laboral, panel de Control). Escritura:
     // solo el propio conductor puede fichar o cerrar su propio fichaje —
     // nadie puede fichar en nombre de otro ni tocar fichajes ajenos.
+    // Solo se ficha cerca de un depot de la empresa (fichaje-depots.js): si la
+    // empresa tiene depots, la entrada trae lugarEntrada y la salida
+    // lugarSalida ({ p: proyecto, d: depot, lat, lng }) a menos de ~1 km de
+    // ese depot. Aquí con un margen cuadrado (sin trigonometría en las
+    // reglas): ±0,0095° de latitud (~1,05 km) y ±0,0125° de longitud (~1 km
+    // en la Península). La app comprueba el círculo de 1 km de verdad.
+    function depotsFichaje(org) {
+      return get(/databases/$(database)/documents/depots_fichaje/$(org)).data.get('porProyecto', {});
+    }
+    function hayDepotsFichaje(org) {
+      return exists(/databases/$(database)/documents/depots_fichaje/$(org)) && depotsFichaje(org).size() > 0;
+    }
+    function cercaDeDepot(org, l) {
+      let deps = depotsFichaje(org);
+      return l is map && l.p is string && l.d is string && l.lat is number && l.lng is number &&
+        l.p in deps && l.d in deps[l.p] &&
+        math.abs(l.lat - deps[l.p][l.d].lat) <= 0.0095 &&
+        math.abs(l.lng - deps[l.p][l.d].lng) <= 0.0125;
+    }
+    function fichaEnDepot(org, datos, campo) {
+      return !hayDepotsFichaje(org) || cercaDeDepot(org, datos.get(campo, null));
+    }
+
     match /fichajes/{docId} {
       allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
@@ -356,9 +379,22 @@ service cloud.firestore {
       );
       allow create: if isSignedIn() &&
         request.resource.data.uid == request.auth.uid &&
-        sameOrg(request.resource.data.org_id);
-      allow update: if isSignedIn() && resource.data.uid == request.auth.uid;
+        sameOrg(request.resource.data.org_id) &&
+        fichaEnDepot(request.resource.data.org_id, request.resource.data, 'lugarEntrada');
+      // cerrar el fichaje (la salida) también, cerca de un depot
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.org_id == resource.data.org_id &&
+        (request.resource.data.get('estado', '') != 'cerrado' || resource.data.get('estado', '') == 'cerrado' ||
+          fichaEnDepot(resource.data.org_id, request.resource.data, 'lugarSalida'));
       allow delete: if false;
+    }
+
+    // Depots de la empresa para fichar: los lee cualquiera de la empresa (el
+    // conductor no puede leer los de cada proyecto); los pone al día la oficina.
+    match /depots_fichaje/{orgId} {
+      allow read: if sameOrg(orgId);
+      allow write: if sameOrg(orgId) && puedeWorkspace();
     }
   }
 }

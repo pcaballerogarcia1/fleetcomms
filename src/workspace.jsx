@@ -17,6 +17,7 @@ import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { setErrorUser } from "./error-report.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
+import { sincronizarDepotsFichaje } from "./fichaje-depots.js";
 import { C, font } from "./raiz-estilo.js";
 
 // Lazy: cada uno de estos es su propio chunk grande (App = app de
@@ -226,6 +227,14 @@ export function WorkspaceRouter() {
   // Planes antiguos sin conductorUid: los arregla quien gestiona rutas al entrar
   useEffect(() => { repararPlanesSinConductor(sesion).catch(e => console.warn("[planes] arreglo de planes antiguos:", e)); }, [sesion]);
   useEffect(() => { setAuditProject(activeProject); }, [activeProject]);
+  // Los depots del proyecto abierto, en la lista de la empresa para fichar (fichaje-depots.js)
+  useEffect(() => {
+    const pid = activeProject?._id, org = sesion?.org_id;
+    if (!pid || !org || !puedeUsarWorkspace(sesion?.rol)) return;
+    return onSnapshot(doc(db, "planning_depots", pid),
+      s => sincronizarDepotsFichaje(org, pid, s.exists() ? s.data().depots || [] : []).catch(e => console.warn("[fichaje] depots:", e)),
+      () => {});
+  }, [activeProject?._id, sesion?.org_id, sesion?.rol]);
 
   // Presencia: esta sesión aparece como conectada a los de su organización.
   // Solo usuarios de oficina (la ubicación de los conductores ya se ve en
