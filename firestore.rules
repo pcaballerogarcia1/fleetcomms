@@ -28,7 +28,15 @@ service cloud.firestore {
     // treated as "same org" — that would let broken profiles see each
     // other's data.)
     function sameOrg(orgIdValue) {
-      return isSignedIn() && orgIdValue != null && orgIdValue == myOrgId();
+      return isSignedIn() && orgIdValue != null && (orgIdValue == myOrgId() || esEspacioDeConcurso(orgIdValue));
+    }
+
+    // Espacio aislado de un concurso (licitación): «{org}--c-{concurso}». Sus
+    // vehículos, plantilla, cuadrante, convenio y escenarios llevan ese
+    // org_id, así que nunca se mezclan con la operativa. Solo entra la
+    // oficina de la empresa (los conductores, nunca).
+    function esEspacioDeConcurso(orgIdValue) {
+      return orgIdValue is string && orgIdValue.matches('^' + myOrgId() + '--c-[A-Za-z0-9]+$') && puedeWorkspace();
     }
 
     // Workspace de gestión (Planning/Scheduling/Rostering/Control/Analytics,
@@ -50,7 +58,7 @@ service cloud.firestore {
     // de quien la pide (p. ej. {org}_2026_09). Solo sirve para que la
     // escucha en vivo no falle antes de que se cree.
     function fichaPropiaSinCrear(docId) {
-      return resource == null && docId.matches('^' + myOrgId() + '_.*');
+      return resource == null && docId.matches('^' + myOrgId() + '(--c-[A-Za-z0-9]+)?_.*'); // también las de un concurso (su espacio)
     }
 
     // ── SUPERADMIN: acceso total a todo ─────────────────────────────
@@ -164,6 +172,15 @@ service cloud.firestore {
       allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
       allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
+    // ── CONCURSOS (licitaciones) ─────────────────────────────────────
+    // La ficha de cada concurso, de la empresa. Su trabajo vive en su espacio.
+    match /concursos/{concursoId} {
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace() &&
+        (request.resource == null || request.resource.data.org_id == resource.data.org_id);
+    }
+
     match /scheduling_projects/{projectId} {
       allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
       allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();

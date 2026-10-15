@@ -62,6 +62,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
               : null;
             return { _id: d.id, ...data, planning };
           })
+          .filter(p => !p.concurso) // los proyectos de los concursos van en Concursos
           .sort((a, b) => {
             const am = a.updatedAt?.toMillis?.() ?? 0;
             const bm = b.updatedAt?.toMillis?.() ?? 0;

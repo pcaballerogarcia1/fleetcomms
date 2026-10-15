@@ -2,7 +2,7 @@
 // /scheduling, /rostering, /control, /analytics) y la sesión.
 import { MARCA } from "./tema.js";
 import { Marca } from "./ui/marca.jsx";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { LoginScheduling } from "./login-scheduling.jsx";
 import { db, auth, getUserProfileSafe } from "./firebase.js";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query } from "firebase/firestore";
@@ -18,6 +18,7 @@ import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { setErrorUser } from "./error-report.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { sincronizarDepotsFichaje } from "./fichaje-depots.js";
+import { RUTAS_CONCURSO } from "./concursos/store.js";
 import { C, font } from "./raiz-estilo.js";
 
 // Lazy: cada uno de estos es su propio chunk grande (App = app de
@@ -36,6 +37,14 @@ const AnalyticsLineasLazy = lazy(() => import("./analytics-lineas.jsx").then(m =
 const PlanningLineasLazy   = lazy(() => import("./lineas-planning.jsx").then(m => ({ default: m.PlanningLineasPage })));
 const SchedulingLineasLazy = lazy(() => import("./lineas-scheduling.jsx").then(m => ({ default: m.SchedulingLineasPage })));
 const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m => ({ default: m.ControlLineasPage })));
+// Concursos (licitaciones): su lista y sus módulos propios
+const ConcursosPageLazy    = lazy(() => import("./concursos/lista.jsx").then(m => ({ default: m.ConcursosPage })));
+const ModuloConcursoLazy   = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ModuloConcurso })));
+
+// Las pantallas que necesitan un proyecto abierto
+const RUTAS_OPERATIVA = ["/planning", "/scheduling", "/rostering", "/departure", "/control", "/analytics"];
+const RUTAS_SOLO_OPERATIVA = ["/departure", "/control", "/analytics"];
+const RUTAS_CON_PROYECTO = [...RUTAS_OPERATIVA, ...RUTAS_CONCURSO.map(r => r[0])];
 
 function LazyFallback() {
   return (
@@ -85,7 +94,19 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         <button onClick={() => go("/projects")} title="Proyectos" style={{ background: "none", border: "none", padding: "0 6px 0 0", cursor: "pointer", display: "flex" }}><Marca size={22} /></button>
         <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 6px", fontSize: 18, fontWeight: 300 }}>/</span>
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
-        {activeProject && <>
+        {crumb("Concursos", "/concursos", path === "/concursos")}
+        {activeProject?.concurso && <>
+          <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
+          <span title="Concurso: trabaja con sus propios datos, aparte de la operativa" style={{ fontSize: 13, color: C.text, fontWeight: 550, padding: "5px 6px", display: "flex", alignItems: "center", gap: 6, maxWidth: 260, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            <span className="op-pastilla" style={{ background: "rgba(245,184,74,0.14)", color: "#f5b84a" }}>Concurso</span>{activeProject.concursoNombre || activeProject.nombre}
+          </span>
+          <span style={{ width: 1, height: 18, background: C.border, margin: "0 8px" }} />
+          {crumb(t("planning", lang),   "/planning",    path === "/planning")}
+          {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
+          {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
+          {RUTAS_CONCURSO.map(([ruta, , nombre]) => <span key={ruta}>{crumb(nombre, ruta, path === ruta)}</span>)}
+        </>}
+        {activeProject && !activeProject.concurso && <>
           <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
           {/* Nombre del proyecto: al pincharlo, menú con "Duplicar proyecto" */}
           <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} />
@@ -121,7 +142,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
         >{lang.toUpperCase()}</button>
-        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/departure" || path === "/control" || path === "/analytics") && (
+        {RUTAS_CON_PROYECTO.includes(path) && (
           <button onClick={onFullscreen} title={t("fullscreen", lang)} style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -230,11 +251,11 @@ export function WorkspaceRouter() {
   // Los depots del proyecto abierto, en la lista de la empresa para fichar (fichaje-depots.js)
   useEffect(() => {
     const pid = activeProject?._id, org = sesion?.org_id;
-    if (!pid || !org || !puedeUsarWorkspace(sesion?.rol)) return;
+    if (!pid || !org || activeProject?.concurso || !puedeUsarWorkspace(sesion?.rol)) return; // los depots de un concurso no son para fichar
     return onSnapshot(doc(db, "planning_depots", pid),
       s => sincronizarDepotsFichaje(org, pid, s.exists() ? s.data().depots || [] : []).catch(e => console.warn("[fichaje] depots:", e)),
       () => {});
-  }, [activeProject?._id, sesion?.org_id, sesion?.rol]);
+  }, [activeProject?._id, activeProject?.concurso, sesion?.org_id, sesion?.rol]);
 
   // Presencia: esta sesión aparece como conectada a los de su organización.
   // Solo usuarios de oficina (la ubicación de los conductores ya se ve en
@@ -265,13 +286,21 @@ export function WorkspaceRouter() {
       window.location.href = "/rutas";
       return;
     }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/departure" || path === "/control" || path === "/analytics")) {
+    if (sesion  && !activeProject && RUTAS_CON_PROYECTO.includes(path)) {
       go("/projects");
     }
+    // un concurso no tiene Departure/Control/Analytics, ni la operativa los módulos del concurso
+    if (sesion && activeProject?.concurso && RUTAS_SOLO_OPERATIVA.includes(path)) go("/planning");
+    if (sesion && activeProject && !activeProject.concurso && RUTAS_CONCURSO.some(r => r[0] === path)) go("/planning");
   }, [sesion, activeProject, path]);
 
-  // Superadmin may not have org_id — fall back to project's org, then project's _id
-  const effectiveOrgId = sesion?.org_id || activeProject?.org_id || activeProject?._id || null;
+  // Superadmin may not have org_id — fall back to project's org, then project's _id.
+  // Dentro de un concurso, su espacio aislado: los módulos leen y escriben ahí
+  // (vehículos, plantilla, cuadrante, convenio) y la operativa no se toca.
+  const enConcurso = !!activeProject?.concurso;
+  const effectiveOrgId = (enConcurso ? activeProject.org_id : null) || sesion?.org_id || activeProject?.org_id || activeProject?._id || null;
+  const espacio = enConcurso ? activeProject.org_id : null;
+  const sesionModulos = useMemo(() => (espacio && sesion ? { ...sesion, org_id: espacio } : sesion), [sesion, espacio]);
 
   // Firestore: vehicles + workers filtrados por org_id
   useEffect(() => {
@@ -346,6 +375,15 @@ export function WorkspaceRouter() {
           </div>
         )}
 
+        {/* /concursos — la lista de licitaciones (cada una con su espacio aislado) */}
+        {path === "/concursos" && (
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
+            <Suspense fallback={<LazyFallback />}>
+              <ConcursosPageLazy orgId={sesion?.org_id} onAbrir={openProject} />
+            </Suspense>
+          </div>
+        )}
+
         {/* /planning — always mounted while project is active.
             visibility:hidden (not display:none) keeps Leaflet dimensions
             correct and layers state alive regardless of navigation */}
@@ -359,7 +397,7 @@ export function WorkspaceRouter() {
               {esLineas
                 ? <PlanningLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} />
                 : <PlanningPageLazy
-                    sesion={sesion} onLogout={logout}
+                    sesion={sesionModulos} onLogout={logout}
                     projectId={activeProject._id} embedded
                   />}
             </Suspense>
@@ -374,11 +412,11 @@ export function WorkspaceRouter() {
             pointerEvents: path === "/scheduling" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              {esLineas ? <SchedulingLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} proyecto={activeProject.nombre} sesion={sesion} /> : <SchedulingModuleWrapperLazy
+              {esLineas ? <SchedulingLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} proyecto={activeProject.nombre} sesion={sesionModulos} /> : <SchedulingModuleWrapperLazy
                 vehicles={vehicles} workers={workers}
                 loadingV={loadingV} loadingW={loadingW}
                 activeProject={activeProject} onProjectUpdate={updateProject}
-                orgId={effectiveOrgId} sesion={sesion}
+                orgId={effectiveOrgId} sesion={sesionModulos}
               />}
             </Suspense>
           </div>
@@ -394,13 +432,13 @@ export function WorkspaceRouter() {
             pointerEvents: path === "/rostering" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <RosteringPageLazy sesion={sesion} embedded activeProject={activeProject} orgId={effectiveOrgId} />
+              <RosteringPageLazy sesion={sesionModulos} embedded activeProject={activeProject} orgId={effectiveOrgId} />
             </Suspense>
           </div>
         )}
 
         {/* /departure (Despacho) — el día de hoy: ausencias, quién cubre y vehículos (proyectos de puntos) */}
-        {activeProject && visitedTabs.departure && !esLineas && (
+        {activeProject && !enConcurso && visitedTabs.departure && !esLineas && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/departure" ? "visible" : "hidden",
@@ -418,7 +456,7 @@ export function WorkspaceRouter() {
             reconnecting from scratch — with hundreds of plans, that
             reconnect was the multi-second "blank screen" every time you
             navigated back here. */}
-        {activeProject && visitedTabs.control && (
+        {activeProject && !enConcurso && visitedTabs.control && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/control" ? "visible" : "hidden",
@@ -436,7 +474,20 @@ export function WorkspaceRouter() {
             its own planes/fichajes/incidencias listeners plus the whole
             recharts bundle were loading for every project open even when
             nobody ever clicked into Analytics. */}
-        {activeProject && visitedTabs.analytics && (
+        {/* Módulos propios de un concurso (Cálculo, Alternativas, Documentos, Resumen) */}
+        {enConcurso && RUTAS_CONCURSO.map(([ruta, id]) => visitedTabs[id] && (
+          <div key={id} style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            visibility: path === ruta ? "visible" : "hidden",
+            pointerEvents: path === ruta ? "auto" : "none",
+          }}>
+            <Suspense fallback={<LazyFallback />}>
+              <ModuloConcursoLazy modulo={id} concursoId={activeProject.concurso} />
+            </Suspense>
+          </div>
+        ))}
+
+        {activeProject && !enConcurso && visitedTabs.analytics && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             visibility: path === "/analytics" ? "visible" : "hidden",
