@@ -25,6 +25,19 @@ import {
 import { hasCoords } from "./vrp-engine.js";
 import { getScenarioMeta, loadScenarioCloud } from "./scenario-store.js";
 
+// Nombre del trabajo: al publicar se puede poner otro (p. ej. «Recogida de
+// vidrio» en vez de «Limpieza Exterior»). En Rutas sale como un apartado
+// propio de la portada, con el icono y el color de su tipo.
+export const NOMBRE_TIPO = { prev: "Mantenimiento Preventivo", ext: "Limpieza Exterior", int: "Limpieza Interior" };
+/** Lo que se guarda en el plan: el nombre escrito, o nada si es el de siempre */
+export function trabajoParaGuardar(tipo, texto) {
+  const t = String(texto || "").trim().slice(0, 60);
+  return t && t.toLowerCase() !== (NOMBRE_TIPO[tipo] || "").toLowerCase() ? { trabajo: t } : {};
+}
+// El último nombre usado con cada tipo (para no tener que escribirlo cada vez)
+export function trabajoRecordado(tipo) { try { return localStorage.getItem(`pub_trabajo_${tipo}`) || NOMBRE_TIPO[tipo] || ""; } catch { return NOMBRE_TIPO[tipo] || ""; } }
+export function recordarTrabajo(tipo, texto) { try { localStorage.setItem(`pub_trabajo_${tipo}`, String(texto || "").trim() || NOMBRE_TIPO[tipo] || ""); } catch { /* sin almacenamiento */ } }
+
 /** Un plan que el conductor ya ha empezado (alguna parada hecha) no se sustituye */
 export const planEmpezado = data => (data?.ubicaciones || []).some(u => u.realizado);
 
@@ -147,7 +160,7 @@ export function workerStopsByDay({ scenario, startMin, asignWorker, workerRow })
  * hecho: esos días se dejan como estaban y se informan en `kept`).
  */
 export async function publishWorker({
-  orgId, projectId, worker, year, month, tipo, scenario, startMin,
+  orgId, projectId, worker, year, month, tipo, trabajo = "", scenario, startMin,
   gridWorker, asignWorker, dailyDetailWorker, schedDayOffset = 0,
 }) {
   const mes = `${year}-${String(month).padStart(2, "0")}`;
@@ -198,7 +211,7 @@ export async function publishWorker({
       if (code === "L" || code === "B") continue; // de libre/baja ese día: no se le publica
       const dayLabel = `Día ${String(d).padStart(2, "0")}`;
       await addDoc(collection(db, "planes"), {
-        tipo, nombre: `${nombre} · ${dayLabel} · ${mes}`, archivo: "vrp-generado",
+        tipo, ...trabajoParaGuardar(tipo, trabajo), nombre: `${nombre} · ${dayLabel} · ${mes}`, archivo: "vrp-generado",
         turno: code || "", conductorNombre: nombre, conductorUid: uid, workerId: worker._id,
         vehiculoNombre: vehiculo, mes, diaServicio: dayLabel, diaNum: d,
         ubicaciones: stops.map((a, i) => taskToUbicacion(a, i)),

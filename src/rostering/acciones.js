@@ -13,7 +13,7 @@ import { MONTH_NAMES, isVehicleUnavailable } from "./datos.js";
 
 
 
-export async function doPublish(ctx, targets, tipo) {
+export async function doPublish(ctx, targets, tipo, trabajo = "") {
   const { activeProject, asign, grid, month, orgId, schedRoster, setPublishModal, setPublishing, viewMes, year } = ctx;
   setPublishModal(null);
   const projectId = activeProject?._id || null;
@@ -44,7 +44,7 @@ export async function doPublish(ctx, targets, tipo) {
     setPublishing(`Publicando ${++i}/${targets.length}…`);
     try {
       const r = await publishWorker({
-        orgId, projectId, worker: w, year, month, tipo, scenario, startMin,
+        orgId, projectId, worker: w, year, month, tipo, trabajo, scenario, startMin,
         gridWorker: grid[w._id] || {}, asignWorker: asign[w._id] || {},
         dailyDetailWorker: schedRoster?.dailyDetail?.[w._id],
       });

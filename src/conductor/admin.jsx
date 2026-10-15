@@ -114,7 +114,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
       const tot  = p.ubicaciones?.length || 0;
       const real = p.ubicaciones?.filter(u=>u.realizado).length || 0;
       rows.push([
-        TIPOS.find(t=>t.key===p.tipo)?.label||p.tipo,
+        p.trabajo||TIPOS.find(t=>t.key===p.tipo)?.label||p.tipo,
         p.nombre, p.turno||"", p.diaServicio||"",
         tot, real, tot ? Math.round(real/tot*100)+"%" : "—"
       ]);
@@ -198,7 +198,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                   <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
                     {tipo?.Icono?<tipo.Icono size={15} color={tipo.color}/>:<Folder size={15} color={C.muted}/>}
                     <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:(tipo?.color||C.cyan)+"18",color:tipo?.color||C.cyan,border:`1px solid ${(tipo?.color||C.cyan)}33`}}>
-                      {tipo?.label||plan.tipo}
+                      {plan.trabajo||tipo?.label||plan.tipo}
                     </span>
                     {plan.turno&&<span style={{fontSize:10,color:C.muted}}>{plan.turno}</span>}
                     <span style={{fontSize:10,color:C.dim}}>{plan.diaServicio}</span>

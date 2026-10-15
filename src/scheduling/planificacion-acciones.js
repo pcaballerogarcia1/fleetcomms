@@ -5,7 +5,7 @@ import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from "fir
 import { logAudit } from "../audit.js";
 import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { db } from "../firebase.js";
-import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion } from "../publicar-rutas.js";
+import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { scenarioKpis } from "../scenario-metrics.js";
@@ -786,7 +786,7 @@ export function handleUploadXLSX(ctx, e) {
   reader.readAsArrayBuffer(file);
 }
 
-export async function publishToRoutes(ctx, tipo, mes) {
+export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
   const { activeProject, constraints, orgId, rosterAsign, rosterGrid, scenarioRosterMode, schedules, setPublishModal, setPublishing, vehicleRosterGrid, workers } = ctx;
   const vehicleSchedule = schedules.vehicles;
   if (!vehicleSchedule) return;
@@ -903,7 +903,7 @@ export async function publishToRoutes(ctx, tipo, mes) {
           ? `${conductorLabel} · ${dayLabel} · ${mes}`
           : `${conductorLabel} · ${mes}`;
         docs.push({
-          tipo, nombre, archivo: "vrp-generado",
+          tipo, ...trabajoParaGuardar(tipo, trabajo), nombre, archivo: "vrp-generado",
           turno: row.turno || "",
           conductorNombre: conductorLabel,
           vehiculoNombre: row.nombre || row.matricula || "",

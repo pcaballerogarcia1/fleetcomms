@@ -234,8 +234,19 @@ export function AvisoCobertura({estado}){
   return <div data-testid="aviso-cobertura" style={{background:`${color}1f`,border:`1px solid ${color}55`,color,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,margin:"8px 14px 0"}}>{sin?<WifiOff size={14} style={{verticalAlign:"-2px",marginRight:6}}/>:<Loader2 size={14} className="op-girando" style={{verticalAlign:"-2px",marginRight:6}}/>}{texto}</div>;
 }
 
+// Nombre propio del trabajo (puesto al publicar desde Scheduling o Rostering)
+const trabajoDe = p => (p.trabajo && String(p.trabajo).trim()) || null;
+// Apartados de la portada: los cuatro de siempre y, detrás de cada uno, los
+// trabajos con nombre propio de ese tipo que haya en los planes
+function gruposTrabajo(planes){
+  return TIPOS_TRABAJO.flatMap(t=>{
+    const propios=[...new Set(planes.filter(p=>p.tipo===t.key).map(trabajoDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+    return [{t,trabajo:null},...propios.map(trabajo=>({t,trabajo}))];
+  });
+}
+
 function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
-  const [tipoActivo,setTipoActivo]   = useState(null); // null = portada
+  const [tipoActivo,setTipoActivo]   = useState(null); // null = portada · { key, trabajo } (trabajo: nombre propio puesto al publicar, o null)
   const [planActivo,setPlanActivo]   = useState(null);
   // Cambios de paradas de esta persona que aún no han llegado al servidor
   // (sin cobertura, o enviándose): se pintan encima de su versión
@@ -330,7 +341,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
     </>;
   }
 
-  const tipo = TIPOS_TRABAJO.find(t=>t.key===tipoActivo);
+  // El tipo abierto, con el nombre propio del trabajo si lo tiene
+  const tipoBase = tipoActivo && TIPOS_TRABAJO.find(t=>t.key===tipoActivo.key);
+  const tipo = tipoBase && { ...tipoBase, label: tipoActivo.trabajo || tipoBase.label };
+  const delGrupo = (p, key, trabajo) => p.tipo===key && (trabajoDe(p)||null)===(trabajo||null);
 
   // ── PORTADA ──
   if(!tipoActivo) return(
@@ -350,8 +364,8 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
         </div>
         <AvisosMovil sesion={sesion}/>
         <div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:14}}>Selecciona tipo de trabajo</div>
-        {TIPOS_TRABAJO.map(t=>{
-          const planesTipo=planes.filter(p=>p.tipo===t.key);
+        {gruposTrabajo(planes).map(({t,trabajo})=>{
+          const planesTipo=planes.filter(p=>delGrupo(p,t.key,trabajo));
           const total=planesTipo.length;
           const completados=planesTipo.filter(p=>{
             if(p.tipo==="corr") return p.estado==="cerrada";
@@ -359,13 +373,13 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             return ubs.length>0&&ubs.every(u=>u.realizado);
           }).length;
           return(
-            <div key={t.key} onClick={()=>setTipoActivo(t.key)} style={{...S.card,cursor:"pointer",marginBottom:10}}
+            <div key={t.key+"|"+(trabajo||"")} onClick={()=>setTipoActivo({key:t.key,trabajo})} style={{...S.card,cursor:"pointer",marginBottom:10}}
               onMouseEnter={e=>e.currentTarget.style.borderColor=C.blueText}
               onMouseLeave={e=>e.currentTarget.style.borderColor=t.color}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:46,height:46,borderRadius:12,background:`${t.color}18`,border:`1px solid ${t.color}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:t.color}}><t.Icono size={22} strokeWidth={1.8}/></div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:15,fontWeight:700,marginBottom:3}}>{t.label}</div>
+                  <div style={{fontSize:15,fontWeight:700,marginBottom:3}}>{trabajo||t.label}</div>
                   <div style={{fontSize:11,color:C.muted}}>{total} {t.kml?"planes":"tareas"} · {completados} completados</div>
                   {!t.kml&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>Sin rutas KML · gestión manual</div>}
                 </div>
@@ -380,7 +394,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
 
   // ── VISTA TIPO CON KML ──
   if(tipo.kml){
-    const planesT=planes.filter(p=>p.tipo===tipoActivo);
+    const planesT=planes.filter(p=>delGrupo(p,tipoActivo.key,tipoActivo.trabajo));
     const meses=[...new Set(planesT.map(p=>p.mes))].sort((a,b)=>b.localeCompare(a));
     const filtrados=mesFilter?planesT.filter(p=>p.mes===mesFilter):planesT;
 
@@ -402,7 +416,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               const dia=ubicaciones[0]?.dia||"";
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
-              addPlan({tipo:tipoActivo,nombre:docName||file.name.replace(".kml",""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido,fechaSubida:Date.now()});
+              addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(".kml",""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido,fechaSubida:Date.now()});
               setShowUpload(false);setDebugInfo([]);
             }
           }catch(err){setErrorMsg("Error: "+err.message);}

@@ -602,8 +602,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     return handleUploadXLSXMod({ setSchedules, vehicles, workers }, e);
   }
 
-  function publishToRoutes(tipo, mes) {
-    return publishToRoutesMod({ activeProject, constraints, orgId, rosterAsign, rosterGrid, scenarioRosterMode, schedules, setPublishModal, setPublishing, vehicleRosterGrid, workers }, tipo, mes);
+  function publishToRoutes(tipo, mes, trabajo) {
+    return publishToRoutesMod({ activeProject, constraints, orgId, rosterAsign, rosterGrid, scenarioRosterMode, schedules, setPublishModal, setPublishing, vehicleRosterGrid, workers }, tipo, mes, trabajo);
   }
 
   if (!activeProject) {

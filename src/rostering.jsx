@@ -58,8 +58,8 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
     catch (e) { alert("No se pudo vincular: " + (e.message || e)); }
   }
 
-  function doPublish(targets, tipo) {
-    return doPublishMod({ activeProject, asign, grid, month, orgId, schedRoster, setPublishModal, setPublishing, viewMes, year }, targets, tipo);
+  function doPublish(targets, tipo, trabajo) {
+    return doPublishMod({ activeProject, asign, grid, month, orgId, schedRoster, setPublishModal, setPublishing, viewMes, year }, targets, tipo, trabajo);
   }
 
   // Disponibilidad de vehículos del mes (para no mover turnos a días de taller)
@@ -572,7 +572,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       {publishModal && (
         <PublishModal targets={publishModal.targets} mes={viewMes}
           onClose={() => setPublishModal(null)}
-          onConfirm={tipo => doPublish(publishModal.targets, tipo)} />
+          onConfirm={(tipo, trabajo) => doPublish(publishModal.targets, tipo, trabajo)} />
       )}
       {optResult && (
         <OptResultModal result={optResult} workers={workers} rules={rules} onClose={() => setOptResult(null)} />

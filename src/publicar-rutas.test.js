@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 vi.mock("./firebase.js", () => ({ db: {} }));
-import { workerStopsByDay, taskToUbicacion } from "./publicar-rutas.js";
+import { workerStopsByDay, taskToUbicacion, trabajoParaGuardar } from "./publicar-rutas.js";
 
 const startMin = 360;
 const blk = (day, t, extra = {}) => ({ _start: (day - 1) * 1440 + t, _end: (day - 1) * 1440 + t + 20, lat: 40, lng: -3, ...extra });
@@ -44,5 +44,14 @@ describe("rutas ya publicadas: qué se sustituye", () => {
     expect(diaDelPlan({ diaNum: 12, diaServicio: "Día 03" })).toBe(12);
     expect(diaDelPlan({ diaServicio: "Día 07" })).toBe(7);
     expect(diaDelPlan({})).toBe(null);
+  });
+});
+
+describe("nombre del trabajo al publicar", () => {
+  it("se guarda solo si es distinto del de siempre", () => {
+    expect(trabajoParaGuardar("ext", "  Recogida de vidrio ")).toEqual({ trabajo: "Recogida de vidrio" });
+    expect(trabajoParaGuardar("ext", "Limpieza exterior")).toEqual({});
+    expect(trabajoParaGuardar("prev", "")).toEqual({});
+    expect(trabajoParaGuardar("int", "x".repeat(80)).trabajo).toHaveLength(60);
   });
 });

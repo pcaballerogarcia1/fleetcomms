@@ -1,4 +1,5 @@
 // Rostering: ventanas de Reglas, Publicar a Rutas y resultado de Optimizar.
+import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { useState, useEffect, useRef } from "react";
 import { db } from "../firebase.js";
 import { describeReasons, DEFAULT_ROSTER_RULES, ESTATUTO_RULES, ESTATUTO_ARTS } from "../roster-optimizer.js";
@@ -298,6 +299,7 @@ export function PublishModal({ targets, mes, onClose, onConfirm }) {
   const [tipo, setTipo] = useState(() => {
     try { return localStorage.getItem("rostering_pub_tipo") || "prev"; } catch { return "prev"; }
   });
+  const [trabajo, setTrabajo] = useState(() => trabajoRecordado(tipo));
   const names = targets.map(w => [w.nombre, w.apellidos].filter(Boolean).join(" "));
   return (
     <ModalShell title="Publicar en Rutas" onClose={onClose} width={440}>
@@ -309,12 +311,15 @@ export function PublishModal({ targets, mes, onClose, onConfirm }) {
         Se sustituye lo publicado antes de este proyecto y mes, salvo los días en que ya haya marcado paradas.
       </div>
       <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 4 }}>Tipo de trabajo</label>
-      <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ ...inputStyle, width: "100%", marginBottom: 16 }}>
+      <select value={tipo} onChange={e => { setTipo(e.target.value); setTrabajo(trabajoRecordado(e.target.value)); }} style={{ ...inputStyle, width: "100%", marginBottom: 12 }}>
         {TIPOS_RUTA.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
       </select>
+      <label style={{ fontSize: 12, color: C.muted, display: "block", marginBottom: 4 }}>Nombre del trabajo en Rutas</label>
+      <input value={trabajo} maxLength={60} onChange={e => setTrabajo(e.target.value)} placeholder={NOMBRE_TIPO[tipo]} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginBottom: 4 }} />
+      <div style={{ fontSize: 11, color: C.dim, marginBottom: 16 }}>Así lo verán los conductores en la app (p. ej. «Recogida de vidrio»).</div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <button onClick={onClose} style={secondaryBtn}>Cancelar</button>
-        <button onClick={() => { try { localStorage.setItem("rostering_pub_tipo", tipo); } catch { /* sin almacenamiento */ } onConfirm(tipo); }}
+        <button onClick={() => { try { localStorage.setItem("rostering_pub_tipo", tipo); } catch { /* sin almacenamiento */ } recordarTrabajo(tipo, trabajo); onConfirm(tipo, trabajo); }}
           style={primaryBtn}>Publicar</button>
       </div>
     </ModalShell>

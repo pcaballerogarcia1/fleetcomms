@@ -7,6 +7,7 @@
 
 import { Check, Download, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { t } from "../i18n.js";
+import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
 
 
@@ -291,7 +292,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
               <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Tipo de plan</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {[["prev","Prev. Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
-                  <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k }))} style={{
+                  <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k, trabajo: trabajoRecordado(k) }))} style={{
                     flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${publishModal.tipo === k ? C.blue : C.border}`,
                     background: publishModal.tipo === k ? C.blueDim : "none",
                     color: publishModal.tipo === k ? C.blueText : C.muted,
@@ -300,6 +301,18 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                   }}>{label}</button>
                 ))}
               </div>
+            </div>
+
+            {/* Nombre del trabajo */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Nombre del trabajo en Rutas</div>
+              <input
+                value={publishModal.trabajo ?? trabajoRecordado(publishModal.tipo)} maxLength={60}
+                onChange={e => setPublishModal(m => ({ ...m, trabajo: e.target.value }))}
+                placeholder={NOMBRE_TIPO[publishModal.tipo]}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 12, fontFamily: font }}
+              />
+              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>Así lo verán los conductores en la app (p. ej. «Recogida de vidrio»).</div>
             </div>
 
             {/* Mes */}
@@ -324,7 +337,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                 background: "none", color: C.muted, fontSize: 13, fontWeight: 500,
                 cursor: "pointer", fontFamily: font,
               }}>Cancelar</button>
-              <button onClick={() => publishToRoutes(publishModal.tipo, publishModal.mes)} disabled={publishing} style={{
+              <button onClick={() => { const tr = publishModal.trabajo ?? trabajoRecordado(publishModal.tipo); recordarTrabajo(publishModal.tipo, tr); publishToRoutes(publishModal.tipo, publishModal.mes, tr); }} disabled={publishing} style={{
                 flex: 2, padding: "9px 0", borderRadius: 7, border: "none",
                 background: publishing ? C.blueDim : C.blue,
                 color: publishing ? C.blueText : "#fff",
