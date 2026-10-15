@@ -4,7 +4,7 @@
 // Scheduling), sus vehículos, su plantilla, su cuadrante y su convenio, con
 // ese org_id. Así los módulos de siempre funcionan dentro del concurso sin
 // tocar nunca la operativa, y los conductores no lo ven (reglas: esEspacioDeConcurso).
-import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 
@@ -60,4 +60,51 @@ export async function cambiarConcurso(id, cambios, texto) {
 }
 
 // Los módulos de un concurso (además de Planning, Scheduling y Rostering) y su ruta
-export const RUTAS_CONCURSO = [["/calculo", "calculo", "Cálculo"], ["/alternativas", "alternativas", "Alternativas"], ["/documentos", "documentos", "Documentos"], ["/resumen", "resumen", "Resumen"]];
+export const RUTAS_CONCURSO = [["/documentos", "documentos", "Documentos"], ["/calculo", "calculo", "Cálculo"], ["/alternativas", "alternativas", "Alternativas"], ["/resumen", "resumen", "Resumen"]];
+
+// ── Documentos del concurso (pliegos) ──────────────────────────────────
+// concursos/{id}/documentos/{doc}: nombre, clase, páginas y lo leído
+// (leerPliego); el texto de cada página en …/texto/{n} y el PDF en …/pdf/{n},
+// troceados (un documento de Firestore no pasa de 1 MB).
+const TROZO = 700_000;
+export const PDF_MAX = 15 * 1024 * 1024;
+const trozos = (txt, n = TROZO) => Array.from({ length: Math.max(1, Math.ceil(txt.length / n)) }, (_, i) => txt.slice(i * n, (i + 1) * n));
+
+export function escucharDocumentos(concursoId, cb) {
+  return onSnapshot(collection(db, "concursos", concursoId, "documentos"),
+    s => cb(s.docs.map(d => ({ _id: d.id, ...d.data() })).sort((a, b) => (a.subidoEn || 0) - (b.subidoEn || 0))), () => cb([]));
+}
+
+/** Guarda un pliego ya leído: { archivo, paginas: [texto], lectura } */
+export async function guardarDocumento(concursoId, { archivo, paginas, lectura, onProgreso }) {
+  const ref = doc(collection(db, "concursos", concursoId, "documentos"));
+  const b64 = await new Promise((ok, mal) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1]); fr.onerror = mal; fr.readAsDataURL(archivo); });
+  const pdf = trozos(b64), texto = trozos(JSON.stringify(paginas));
+  let hecho = 0;
+  const total = pdf.length + texto.length + 1;
+  for (const [i, t] of texto.entries()) { await setDoc(doc(ref, "texto", String(i)), { i, t }); onProgreso?.(++hecho, total); }
+  for (const [i, d] of pdf.entries()) { await setDoc(doc(ref, "pdf", String(i)), { i, d }); onProgreso?.(++hecho, total); }
+  await setDoc(ref, {
+    nombre: archivo.name, tamano: archivo.size, paginas: paginas.length, subidoEn: Date.now(),
+    trozosTexto: texto.length, trozosPdf: pdf.length, clase: lectura.clase || null, lectura,
+  });
+  logAudit({ modulo: "Concursos", accion: "Subió un pliego", detalle: archivo.name });
+  return ref.id;
+}
+
+export async function textoDocumento(concursoId, d) {
+  const partes = await Promise.all(Array.from({ length: d.trozosTexto || 0 }, (_, i) => getDoc(doc(db, "concursos", concursoId, "documentos", d._id, "texto", String(i)))));
+  return JSON.parse(partes.map(p => p.data()?.t || "").join("") || "[]");
+}
+export async function pdfDocumento(concursoId, d) {
+  const partes = await Promise.all(Array.from({ length: d.trozosPdf || 0 }, (_, i) => getDoc(doc(db, "concursos", concursoId, "documentos", d._id, "pdf", String(i)))));
+  const b64 = partes.map(p => p.data()?.d || "").join("");
+  return new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: "application/pdf" });
+}
+export async function borrarDocumento(concursoId, d) {
+  const base = ["concursos", concursoId, "documentos", d._id];
+  for (let i = 0; i < (d.trozosTexto || 0); i++) await deleteDoc(doc(db, ...base, "texto", String(i)));
+  for (let i = 0; i < (d.trozosPdf || 0); i++) await deleteDoc(doc(db, ...base, "pdf", String(i)));
+  await deleteDoc(doc(db, ...base));
+  logAudit({ modulo: "Concursos", accion: "Quitó un pliego", detalle: d.nombre });
+}

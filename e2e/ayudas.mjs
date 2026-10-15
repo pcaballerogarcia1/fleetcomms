@@ -61,3 +61,28 @@ export function gtfsMini() {
   };
   return Buffer.from(zipSync(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, strToU8(v)]))));
 }
+
+/**
+ * PDF mínimo con texto (una línea por renglón, solo ASCII) para las pruebas
+ * que suben documentos. paginas: [[renglón, …], …]. Devuelve un Buffer.
+ */
+export function pdfMini(paginas) {
+  const esc = t => t.replace(/[\()]/g, m => "\\" + m);
+  const objs = [];
+  const n = paginas.length;
+  objs.push("<< /Type /Catalog /Pages 2 0 R >>");
+  objs.push(`<< /Type /Pages /Kids [${paginas.map((_, i) => `${4 + i * 2} 0 R`).join(" ")}] /Count ${n} >>`);
+  objs.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  paginas.forEach((lineas, i) => {
+    const flujo = `BT /F1 11 Tf 14 TL 50 790 Td ${lineas.map(l => `(${esc(l)}) Tj T*`).join(" ")} ET`;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`);
+    objs.push(`<< /Length ${flujo.length} >>\nstream\n${flujo}\nendstream`);
+  });
+  let out = "%PDF-1.4\n";
+  const pos = [];
+  objs.forEach((o, i) => { pos.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${pos.map(p => `${String(p).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}

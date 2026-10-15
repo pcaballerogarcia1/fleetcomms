@@ -58,4 +58,12 @@ describe("concursos", () => {
     await assertFails(addDoc(collection(como("adminA"), "scheduling_vehicles"), { org_id: "orgA--c-c1_x", nombre: "x" }));
     await assertFails(addDoc(collection(como("adminA"), "scheduling_vehicles"), { org_id: "orgAx--c-c1", nombre: "x" }));
   });
+  it("sus documentos (pliegos): solo la oficina de la empresa", async () => {
+    await assertSucceeds(setDoc(doc(como("adminA"), "concursos/c1/documentos/d1"), { nombre: "pliego.pdf", lectura: { datos: [] } }));
+    await assertSucceeds(setDoc(doc(como("adminA"), "concursos/c1/documentos/d1/texto/0"), { i: 0, t: "[]" }));
+    await assertSucceeds(getDoc(doc(como("interA"), "concursos/c1/documentos/d1/texto/0")));
+    await assertFails(getDoc(doc(como("condA"), "concursos/c1/documentos/d1")));
+    await assertFails(getDoc(doc(como("adminB"), "concursos/c1/documentos/d1/texto/0")));
+    await assertFails(setDoc(doc(como("adminB"), "concursos/c1/documentos/d2"), { nombre: "x" }));
+  });
 });

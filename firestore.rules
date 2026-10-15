@@ -179,6 +179,11 @@ service cloud.firestore {
       allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
       allow update, delete: if sameOrg(resource.data.org_id) && puedeWorkspace() &&
         (request.resource == null || request.resource.data.org_id == resource.data.org_id);
+
+      // Sus documentos (pliegos: lo leído, el texto y el PDF troceados)
+      match /{sub}/{resto=**} {
+        allow read, write: if sameOrg(get(/databases/$(database)/documents/concursos/$(concursoId)).data.org_id) && puedeWorkspace();
+      }
     }
 
     match /scheduling_projects/{projectId} {

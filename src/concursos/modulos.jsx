@@ -19,6 +19,8 @@ const MODULOS_CONCURSO = [
   { id: "resumen", ruta: "/resumen", nombre: "Resumen", Icono: ClipboardList, que: "La foto final de la oferta: precio anual y total, flota, plantilla, km y las cifras clave de la alternativa elegida." },
 ];
 
+const euros = n => `${Number(n).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
 function useConcurso(id) {
   const [c, setC] = useState(null);
   useEffect(() => (id ? onSnapshot(doc(db, "concursos", id), s => setC(s.exists() ? { _id: s.id, ...s.data() } : null), () => setC(null)) : undefined), [id]);
@@ -41,7 +43,10 @@ export function ModuloConcurso({ modulo, concursoId }) {
       </div>
       {modulo === "resumen" && c && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, margin: "18px 0" }}>
-          {[["Organismo", c.organismo || "—"], ["Servicio", TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Duración", c.duracionAnios ? `${c.duracionAnios} años` : "—"], ["Presentar antes del", c.fechaLimite ? new Date(`${c.fechaLimite}T12:00:00`).toLocaleDateString("es-ES") : "—"], ["Estado", est?.nombre || "—"]].map(([l, v]) => (
+          {[["Organismo", c.organismo || "—"], ["Servicio", TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Expediente", c.expediente || "—"],
+            ["Duración", c.duracionMeses && c.duracionMeses % 12 ? `${c.duracionMeses} meses` : c.duracionAnios ? `${c.duracionAnios} años` : "—"],
+            ["Presupuesto sin IVA", c.presupuestoSinIva != null ? euros(c.presupuestoSinIva) : "—"], ["Valor estimado", c.valorEstimado != null ? euros(c.valorEstimado) : "—"],
+            ["Presentar antes del", c.fechaLimite ? new Date(`${c.fechaLimite}T12:00:00`).toLocaleDateString("es-ES") : "—"], ["Estado", est?.nombre || "—"]].map(([l, v]) => (
             <div key={l} className="op-tarjeta" style={{ padding: "12px 16px" }}>
               <div style={{ fontSize: 12, color: C.muted }}>{l}</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: l === "Estado" ? est?.color || C.text : C.text, marginTop: 3 }}>{v}</div>

@@ -40,6 +40,7 @@ const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m =>
 // Concursos (licitaciones): su lista y sus módulos propios
 const ConcursosPageLazy    = lazy(() => import("./concursos/lista.jsx").then(m => ({ default: m.ConcursosPage })));
 const ModuloConcursoLazy   = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ModuloConcurso })));
+const DocumentosConcursoLazy = lazy(() => import("./concursos/documentos.jsx").then(m => ({ default: m.DocumentosConcurso })));
 
 // Las pantallas que necesitan un proyecto abierto
 const RUTAS_OPERATIVA = ["/planning", "/scheduling", "/rostering", "/departure", "/control", "/analytics"];
@@ -101,10 +102,11 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
             <span className="op-pastilla" style={{ background: "rgba(245,184,74,0.14)", color: "#f5b84a" }}>Concurso</span>{activeProject.concursoNombre || activeProject.nombre}
           </span>
           <span style={{ width: 1, height: 18, background: C.border, margin: "0 8px" }} />
+          {crumb("Documentos", "/documentos", path === "/documentos")}
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
           {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
-          {RUTAS_CONCURSO.map(([ruta, , nombre]) => <span key={ruta}>{crumb(nombre, ruta, path === ruta)}</span>)}
+          {RUTAS_CONCURSO.filter(([ruta]) => ruta !== "/documentos").map(([ruta, , nombre]) => <span key={ruta}>{crumb(nombre, ruta, path === ruta)}</span>)}
         </>}
         {activeProject && !activeProject.concurso && <>
           <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
@@ -334,7 +336,8 @@ export function WorkspaceRouter() {
     clearLS("fc_active_project"); go("/login");
   }
   function openProject(p) {
-    setActiveProject(p); writeLS("fc_active_project", p); go("/planning");
+    // un concurso empieza por sus documentos (el pliego)
+    setActiveProject(p); writeLS("fc_active_project", p); go(p?.concurso ? "/documentos" : "/planning");
   }
   async function updateProject(updates) {
     if (!activeProject) return;
@@ -482,7 +485,9 @@ export function WorkspaceRouter() {
             pointerEvents: path === ruta ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <ModuloConcursoLazy modulo={id} concursoId={activeProject.concurso} />
+              {id === "documentos"
+                ? <DocumentosConcursoLazy concurso={{ _id: activeProject.concurso }} />
+                : <ModuloConcursoLazy modulo={id} concursoId={activeProject.concurso} />}
             </Suspense>
           </div>
         ))}
