@@ -27,8 +27,13 @@ export function ProjectMenu({ activeProject, onOpenProject }) {
     return () => { document.removeEventListener("mousedown", fuera); window.removeEventListener("keydown", esc); };
   }, [open, copiando]);
 
+  // el menú se coloca fijo bajo el botón: la barra de arriba se desplaza en
+  // horizontal y, dentro de ella, un menú normal saldría cortado
+  const [sitio, setSitio] = useState({ top: 0, left: 0 });
   function abrir() {
     if (copiando) return;
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setSitio({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 308)) });
     setModo("menu"); setError(null); setOpen(o => !o);
   }
 
@@ -66,7 +71,7 @@ export function ProjectMenu({ activeProject, onOpenProject }) {
 
       {open && (
         <div role="menu" style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 2100, width: 300,
+          position: "fixed", top: sitio.top, left: sitio.left, zIndex: 2100, width: 300,
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.45)",
           padding: 8, fontFamily: font,
         }}>

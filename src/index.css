@@ -138,3 +138,7 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 .op-tarjeta.op-activa { border-color: rgba(91,124,250,0.55); box-shadow: 0 0 0 1px rgba(91,124,250,0.35), 0 8px 28px rgba(0,0,0,.35); }
 .op-pastilla { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap; }
 .op-btn-peligro:hover:not(:disabled) { color: #f26d6d !important; background: rgba(242,109,109,0.08) !important; }
+
+/* Barra de pestañas que se desplaza en horizontal sin enseñar la barra de desplazamiento */
+.op-sin-barra { scrollbar-width: none; }
+.op-sin-barra::-webkit-scrollbar { display: none; }

@@ -12,7 +12,7 @@
 // Sin React ni Firebase.
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 2;
+export const VERSION_LECTOR = 3;
 
 const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
 const LETRAS = Object.keys(NUM_LETRA).join("|");
@@ -28,7 +28,8 @@ export function numeroEs(txt) {
 const enteroDe = s => (s == null ? null : /^\d/.test(s) ? numeroEs(s) : NUM_LETRA[s.toLowerCase()] ?? null);
 
 // Texto limpio de una página (sin cortes de palabra al final de línea)
-const limpia = t => String(t || "").replace(/-\n(?=[a-záéíóúñ])/g, "").replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
+// («S.A.» → «SA»: si no, el punto de la abreviatura corta la frase)
+const limpia = t => String(t || "").replace(/\b([A-Z])\.([A-Z])\.(?=[\s,;])/g, "$1$2").replace(/-\n(?=[a-záéíóúñ])/g, "").replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
 const sinAcentos = t => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** La frase alrededor de una posición (para enseñar de dónde sale cada dato) */
@@ -144,8 +145,9 @@ export function leerPliego(paginasCrudas) {
   // ── objeto ──
   // (no el del índice del PDF, que va en mayúsculas)
   const mayusculas = t => { const l = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, ""); return l.replace(/[^A-ZÁÉÍÓÚÑ]/g, "").length / Math.max(1, l.length); };
-  const obj = buscarTodas(paginas, /(?:tiene por objeto|objeto del (?:presente )?(?:contrato|pliego)(?: es| ser[aá])?)\s*[:,]?\s*(?:la |el |regular |definir )?([^.]{15,260})/i, 20).find(o => mayusculas(o.m[1]) < 0.5);
-  poner("objeto", "Objeto del contrato", obj, obj && corta(obj.m[1].replace(/^[:,\s]+/, "")));
+  const obj = buscarTodas(paginas, /(?:tiene por objeto|objeto del (?:presente )?(?:contrato|pliego)(?: es| ser[aá])?)\s*[:,]?\s*(?:la |el |regular |definir )?([^.]{15,500})/i, 20).find(o => mayusculas(o.m[1]) < 0.5);
+  const objetoLimpio = t => { const x = corta(t.replace(/^[:,\s]+/, "").replace(/^(?:el )?objeto del (?:presente )?(?:contrato|pliego) (?:es|ser[aá])\s+(?:el |la )?/i, "")); return x.charAt(0).toUpperCase() + x.slice(1); };
+  poner("objeto", "Objeto del contrato", obj, obj && objetoLimpio(obj.m[1]));
 
   // ── duración y prórrogas ──
   // primero «duración del contrato», luego cualquier plazo de ejecución o vigencia

@@ -33,12 +33,23 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await expect(page.getByText("3 años", { exact: true })).toBeVisible();
   await expect(page.getByText(/Cantidades que trae el pliego/)).toBeVisible();
   await foto("pliego");
-  // lo que interesa pasa a la ficha del concurso
-  page.once("dialog", d => d.accept());
-  await page.getByRole("button", { name: /Pasar a la ficha/ }).click();
-  await expect(page.getByText(/Datos pasados a la ficha/)).toBeVisible();
+  // Ficha de requisitos: se confirma lo que vale y se añaden los servicios de las tablas
+  await page.getByRole("button", { name: "Ficha de requisitos", exact: true }).click();
+  await expect(page.getByText(/de \d+ datos revisados/)).toBeVisible();
+  await page.locator("div", { hasText: "Duración" }).filter({ has: page.getByRole("button", { name: /Correcto/ }) }).last().getByRole("button", { name: /Correcto/ }).click();
+  await expect(page.getByText("Confirmado").first()).toBeVisible();
+  await page.getByRole("button", { name: /Añadir a la ficha las marcadas/ }).click();
+  await expect(page.getByText(/Servicios añadidos a la ficha/)).toBeVisible();
+  await expect(page.getByText(/Servicios y cantidades al año \(2\)/)).toBeVisible();
+  await foto("ficha");
+  // Planning del concurso: dimensionar por rendimientos con los servicios de la ficha
   await page.getByRole("button", { name: "Planning", exact: true }).click();
   await page.waitForURL(/\/planning/);
+  await expect(page.getByText("Equipos", { exact: true })).toBeVisible();
+  // 1.992 + 230 lavados de soterrados a 25 por turno = 89 turnos al año → 1 vehículo
+  await expect(page.locator(".op-tarjeta").filter({ hasText: "Vehículos" }).getByText("1", { exact: true })).toBeVisible();
+  await expect(page.getByText("88,9", { exact: true }).first()).toBeVisible(); // en la tabla de servicios y en la de equipos
+  await foto("planning");
 
   // sus módulos, y no los de la operativa diaria
   for (const m of ["Documentos", "Planning", "Scheduling", "Rostering", "Cálculo", "Alternativas", "Resumen"]) {

@@ -41,6 +41,7 @@ const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m =>
 const ConcursosPageLazy    = lazy(() => import("./concursos/lista.jsx").then(m => ({ default: m.ConcursosPage })));
 const ModuloConcursoLazy   = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ModuloConcurso })));
 const DocumentosConcursoLazy = lazy(() => import("./concursos/documentos.jsx").then(m => ({ default: m.DocumentosConcurso })));
+const PlanningConcursoLazy  = lazy(() => import("./concursos/planning.jsx").then(m => ({ default: m.PlanningConcurso })));
 
 // Las pantallas que necesitan un proyecto abierto
 const RUTAS_OPERATIVA = ["/planning", "/scheduling", "/rostering", "/departure", "/control", "/analytics"];
@@ -91,7 +92,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "0 16px", fontFamily: font, gap: 6,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <div className="op-sin-barra" style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 auto", minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
         <button onClick={() => go("/projects")} title="Proyectos" style={{ background: "none", border: "none", padding: "0 6px 0 0", cursor: "pointer", display: "flex" }}><Marca size={22} /></button>
         <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 6px", fontSize: 18, fontWeight: 300 }}>/</span>
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
@@ -121,7 +122,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         {/* Quién más está conectado (su organización; el superadmin, todas) */}
         <OnlineUsers sesion={sesion} />
         {/* Historial de cambios de la organización */}
@@ -397,12 +398,16 @@ export function WorkspaceRouter() {
             pointerEvents: path === "/planning" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              {esLineas
-                ? <PlanningLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} />
-                : <PlanningPageLazy
-                    sesion={sesionModulos} onLogout={logout}
-                    projectId={activeProject._id} embedded
-                  />}
+              {(() => {
+                const mapa = esLineas
+                  ? <PlanningLineasLazy key={activeProject._id} projectId={activeProject._id} orgId={activeProject.org_id || effectiveOrgId} />
+                  : <PlanningPageLazy
+                      sesion={sesionModulos} onLogout={logout}
+                      projectId={activeProject._id} embedded
+                    />;
+                // en un concurso, primero dimensionar por rendimientos (sin inventario); el mapa, en su pestaña
+                return enConcurso ? <PlanningConcursoLazy concursoId={activeProject.concurso} mapa={mapa} irADocumentos={() => go("/documentos")} /> : mapa;
+              })()}
             </Suspense>
           </div>
         )}

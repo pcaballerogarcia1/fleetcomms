@@ -3,12 +3,13 @@
 // lee en el propio navegador (concursos/pliego.js, sin IA): datos del
 // concurso, el servicio, requisitos e índice, cada uno con su página para
 // comprobarlo. Lo que interesa se pasa a la ficha del concurso con un clic.
-import { ArrowRightToLine, Check, ExternalLink, FileText, Loader2, Search, Trash2, Upload } from "lucide-react";
+import { Check, ExternalLink, FileText, Loader2, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { textoDelPdf } from "../rostering/convenio-pdf.js";
 import { C, font } from "../tema.js";
 import { VERSION_LECTOR, buscarEnPliego, leerPliego } from "./pliego.js";
-import { PDF_MAX, borrarDocumento, cambiarConcurso, escucharDocumentos, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
+import { PDF_MAX, borrarDocumento, escucharDocumentos, escucharFicha, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
+import { FichaRequisitos } from "./ficha-requisitos.jsx";
 
 const CLASE = { tecnico: "Pliego de prescripciones técnicas", administrativo: "Pliego de cláusulas administrativas", anuncio: "Anuncio de licitación" };
 const TIPO = { residuos: "Residuos", limpieza: "Limpieza viaria", autobuses: "Autobuses" };
@@ -21,22 +22,6 @@ const fechaEs = iso => new Date(`${iso}T12:00:00`).toLocaleDateString("es-ES");
 const DINERO = new Set(["presupuesto", "valorEstimado", "importeAnual", "importeSinIva", "importeConIva"]);
 const valorTxt = d => (DINERO.has(d.id) ? euros(d.valor) : d.id === "fechaLimite" ? fechaEs(d.valor) : typeof d.valor === "number" ? num(d.valor) : String(d.valor));
 
-// Qué se puede pasar a la ficha del concurso, desde lo leído
-function paraLaFicha(datos) {
-  const v = id => datos.find(d => d.id === id)?.valor;
-  const out = {};
-  if (v("organismo")) out.organismo = v("organismo");
-  if (v("fechaLimite")) out.fechaLimite = v("fechaLimite");
-  if (v("expediente")) out.expediente = v("expediente");
-  const dur = v("duracion");
-  if (dur) { const n = parseInt(dur, 10); if (/mes/.test(dur)) { out.duracionMeses = n; out.duracionAnios = Math.round((n / 12) * 10) / 10; } else out.duracionAnios = n; }
-  const base = v("presupuesto") ?? v("importeSinIva");
-  if (base != null) out.presupuestoSinIva = base;
-  if (v("valorEstimado") != null) out.valorEstimado = v("valorEstimado");
-  return out;
-}
-const NOMBRE_CAMPO = { organismo: "Organismo", fechaLimite: "Fecha límite", expediente: "Expediente", duracionAnios: "Duración (años)", duracionMeses: "Duración (meses)", presupuestoSinIva: "Presupuesto sin IVA", valorEstimado: "Valor estimado" };
-
 export function DocumentosConcurso({ concurso }) {
   const [docs, setDocs] = useState(null);
   const [selId, setSelId] = useState(null);
@@ -46,9 +31,12 @@ export function DocumentosConcurso({ concurso }) {
   const [q, setQ] = useState("");
   const [texto, setTexto] = useState({ id: null, paginas: null });
   const [abierta, setAbierta] = useState(null); // frase desplegada
+  const [pestana, setPestana] = useState("ficha"); // «ficha» de requisitos o «pliegos» (lo leído de cada uno)
+  const [ficha, setFicha] = useState(null);
   const fileRef = useRef();
   const id = concurso?._id;
   useEffect(() => (id ? escucharDocumentos(id, setDocs) : undefined), [id]);
+  useEffect(() => (id ? escucharFicha(id, setFicha) : undefined), [id]);
   useEffect(() => { if (!nota) return; const t = setTimeout(() => setNota(null), 6000); return () => clearTimeout(t); }, [nota]);
 
   const sel = docs?.find(d => d._id === selId) || docs?.[docs.length - 1] || null;
@@ -74,7 +62,7 @@ export function DocumentosConcurso({ concurso }) {
         const lect = leerPliego(paginas);
         setSubiendo(`Guardando ${archivo.name}…`);
         const nuevo = await guardarDocumento(id, { archivo, paginas, lectura: lect, onProgreso: (i, n) => setSubiendo(`Guardando ${archivo.name}… ${Math.round((100 * i) / n)} %`) });
-        setSelId(nuevo); setTexto({ id: nuevo, paginas });
+        setSelId(nuevo); setTexto({ id: nuevo, paginas }); setPestana("pliegos");
         setNota(lect.conTexto ? `Leído: ${lect.datos.length} datos y ${lect.requisitos.length} requisitos encontrados.` : "Guardado, pero el PDF parece escaneado (fotos de páginas): no tiene texto que leer.");
       } catch (e) { setError(`No se pudo subir «${archivo.name}»: ${e.message || e}`); }
     }
@@ -89,15 +77,6 @@ export function DocumentosConcurso({ concurso }) {
     try { const url = URL.createObjectURL(await pdfDocumento(id, sel)); window.open(url, "_blank"); setTimeout(() => URL.revokeObjectURL(url), 60000); }
     catch (e) { setError(`No se pudo abrir el PDF: ${e.message || e}`); }
   }
-  async function pasar() {
-    const cambios = paraLaFicha(lectura.datos);
-    const lista = Object.entries(cambios).map(([k, v]) => `· ${NOMBRE_CAMPO[k]}: ${typeof v === "number" && k.includes("Iva") || k === "valorEstimado" ? euros(v) : k === "fechaLimite" ? fechaEs(v) : v}`).join("\n");
-    if (!lista) { setNota("No hay datos de la ficha en este documento."); return; }
-    if (!window.confirm(`Se pondrán en la ficha del concurso:\n\n${lista}\n\n(Sustituye lo que hubiera en esos campos.)`)) return;
-    try { await cambiarConcurso(id, cambios, "Pasó datos del pliego a la ficha"); setNota("Datos pasados a la ficha del concurso (los ves en Resumen)."); }
-    catch (e) { setError(`No se pudieron pasar: ${e.message || e}`); }
-  }
-
   const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 };
   const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "20px 0 10px" }}>{t}</div>;
 
@@ -124,7 +103,14 @@ export function DocumentosConcurso({ concurso }) {
             <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 10 }}>Arrastra aquí el pliego en PDF</div>
             <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>o pulsa para elegirlo. Se lee en este ordenador: no se envía a ningún servicio externo.</div>
           </div>
-        ) : (
+        ) : (<>
+          <div className="op-seg" style={{ marginBottom: 16 }}>
+            <button className={pestana === "ficha" ? "op-on" : ""} onClick={() => setPestana("ficha")}>Ficha de requisitos</button>
+            <button className={pestana === "pliegos" ? "op-on" : ""} onClick={() => setPestana("pliegos")}>Pliegos ({docs.length})</button>
+          </div>
+          {pestana === "ficha" ? (
+            ficha ? <FichaRequisitos concursoId={id} docs={docs} ficha={ficha} onError={setError} onNota={setNota} /> : <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div>
+          ) : (
           <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
             {/* documentos subidos */}
             <div style={{ flex: "0 0 260px", width: 260, minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
@@ -153,7 +139,6 @@ export function DocumentosConcurso({ concurso }) {
                     <div style={{ fontSize: 12.5, color: C.muted }}>{sel.nombre} · {sel.paginas} páginas{lectura.tipo ? ` · servicio de ${TIPO[lectura.tipo].toLowerCase()}` : ""}</div>
                   </div>
                   <button className="op-btn" onClick={abrirPdf}><ExternalLink size={14} /> Abrir PDF</button>
-                  <button className="op-btn op-primario" onClick={pasar} title="Organismo, fecha límite, duración, presupuesto…"><ArrowRightToLine size={14} /> Pasar a la ficha</button>
                 </div>
 
                 {!lectura.conTexto && <div style={{ ...tarjeta, marginTop: 14, color: C.amber, fontSize: 13 }}>Este PDF parece escaneado (son fotos de las páginas): no tiene texto que leer. Si lo tienes en otra versión, súbela.</div>}
@@ -251,7 +236,8 @@ export function DocumentosConcurso({ concurso }) {
               </div>
             )}
           </div>
-        )}
+          )}
+        </>)}
     </div>
   );
 }

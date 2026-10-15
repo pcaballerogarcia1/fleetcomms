@@ -4,7 +4,7 @@
 // Scheduling), sus vehículos, su plantilla, su cuadrante y su convenio, con
 // ese org_id. Así los módulos de siempre funcionan dentro del concurso sin
 // tocar nunca la operativa, y los conductores no lo ven (reglas: esEspacioDeConcurso).
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, FieldPath, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 
@@ -113,3 +113,30 @@ export async function borrarDocumento(concursoId, d) {
   await deleteDoc(doc(db, ...base));
   logAudit({ modulo: "Concursos", accion: "Quitó un pliego", detalle: d.nombre });
 }
+
+// ── Ficha de requisitos (lo confirmado del pliego: concursos/{id}/requisitos/ficha) ──
+const refFicha = concursoId => doc(db, "concursos", concursoId, "requisitos", "ficha");
+export function escucharFicha(concursoId, cb) {
+  return onSnapshot(refFicha(concursoId), s => cb(s.exists() ? { datos: {}, servicios: {}, ...s.data() } : { datos: {}, servicios: {} }), () => cb({ datos: {}, servicios: {} }));
+}
+async function cambiarFicha(concursoId, ruta, valor) {
+  const ref = refFicha(concursoId);
+  try { await updateDoc(ref, new FieldPath(...ruta), valor); }
+  catch (e) {
+    if (e?.code !== "not-found") throw e;
+    await setDoc(ref, { datos: {}, servicios: {} }, { merge: true });
+    await updateDoc(ref, new FieldPath(...ruta), valor);
+  }
+}
+/** Un dato revisado: { valor, estado: "confirmado" | "corregido" | "descartado", propuesto, pagina, frase, doc } (null = volver a pendiente) */
+export const fijarDato = (concursoId, clave, dato) => cambiarFicha(concursoId, ["datos", clave], dato ? { ...dato, en: Date.now() } : deleteField());
+/** Un servicio de la ficha (null = quitarlo) */
+export const fijarServicio = (concursoId, id, servicio) => cambiarFicha(concursoId, ["servicios", id], servicio ? { ...servicio, en: Date.now() } : deleteField());
+
+// ── Dimensionamiento por rendimientos (Planning del concurso): concursos/{id}/requisitos/dimension ──
+// { parametros: { jornadasAnio, horasTurno, … }, porServicio: { [servicio]: { porTurno, equipo } } }
+const refDimension = concursoId => doc(db, "concursos", concursoId, "requisitos", "dimension");
+export function escucharDimension(concursoId, cb) {
+  return onSnapshot(refDimension(concursoId), s => cb(s.exists() ? { parametros: {}, porServicio: {}, ...s.data() } : { parametros: {}, porServicio: {} }), () => cb({ parametros: {}, porServicio: {} }));
+}
+export const guardarDimension = (concursoId, cambios) => setDoc(refDimension(concursoId), { ...cambios, en: Date.now() }, { merge: true });
