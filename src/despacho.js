@@ -119,3 +119,31 @@ export function vehiculosLibres({ vehiculos, filas, gridVehiculos = {}, d }) {
     return !usados.has(id) && !["T", "A", "I"].includes(gridVehiculos[id]?.[k(d)] || "");
   });
 }
+
+/**
+ * Cómo va el fichaje de un turno.
+ * @param fila      fila de diaDeDespacho ({ worker, turno })
+ * @param fichajes  fichajes de ese día ({ uid, horaEntrada, horaSalida, estado, lugarEntrada })
+ * @param cuando    "hoy" | "pasado" | "futuro"
+ * @param ahoraMin  minutos desde las 00:00 de hoy (solo con "hoy")
+ * @returns null (día futuro) o { tipo, texto } — tipo: "dentro" | "salio" | "tarde" | "pendiente" | "sinApp" | "noFicho"
+ */
+export const TOLERANCIA_FICHAJE_MIN = 5;
+const hhmm = ms => { const f = new Date(ms); return `${String(f.getHours()).padStart(2, "0")}:${String(f.getMinutes()).padStart(2, "0")}`; };
+export function estadoFichaje(fila, fichajes, cuando, ahoraMin = 0) {
+  if (cuando === "futuro") return null;
+  const uid = fila.worker?.uid;
+  if (!uid) return { tipo: "sinApp", texto: "Sin usuario en la app: no puede fichar" };
+  const suyos = fichajes.filter(f => f.uid === uid).sort((a, b) => (b.horaEntrada || 0) - (a.horaEntrada || 0));
+  const abierto = suyos.find(f => f.estado === "abierto");
+  const ult = abierto || suyos[0];
+  if (ult) {
+    const donde = ult.lugarEntrada?.nombre ? ` · ${ult.lugarEntrada.nombre}` : "";
+    if (ult.estado === "abierto") return { tipo: "dentro", texto: `Fichó a las ${hhmm(ult.horaEntrada)}${donde}` };
+    return { tipo: "salio", texto: `Fichó ${hhmm(ult.horaEntrada)}–${hhmm(ult.horaSalida)}${donde}` };
+  }
+  if (cuando === "pasado") return { tipo: "noFicho", texto: "No fichó" };
+  const tarde = ahoraMin - fila.turno.s;
+  if (tarde > TOLERANCIA_FICHAJE_MIN) return { tipo: "tarde", texto: `Aún no ha fichado · ${tarde >= 60 ? `${Math.floor(tarde / 60)} h ${tarde % 60} min` : `${tarde} min`} tarde` };
+  return { tipo: "pendiente", texto: "Aún no ha fichado" };
+}

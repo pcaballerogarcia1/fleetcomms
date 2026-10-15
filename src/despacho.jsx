@@ -3,17 +3,38 @@
 // vehículos que no están disponibles) y en un clic: marcar quién no viene,
 // ver quién puede cubrir (con las reglas del cuadrante) y cubrir — el turno,
 // la ruta del día, «Mi cuadrante» y el aviso al móvil van solos.
+// Con los fichajes (Control → Fichajes): en cada turno, si ya ha fichado o si
+// aún no y llega tarde. Y un reloj, que esta pantalla se mira con la hora en la cabeza.
 // La lógica está en despacho.js y lo que se guarda en despacho-store.js.
-import { AlertTriangle, ArrowRightLeft, CalendarDays, Check, Loader2, UserMinus, UserPlus, Wrench, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CalendarDays, Check, Clock, Loader2, LogIn, LogOut, UserMinus, UserPlus, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { MOTIVOS, NIVEL_TEXTO, candidatos, diaDeDespacho, nombre, vehiculosLibres } from "./despacho.js";
-import { cambiarVehiculo, cubrir, deshacerAusencia, escucharGridVehiculos, escucharMes, escucharPlanes, escucharReglas, estadoVehiculo, noViene } from "./despacho-store.js";
+import { MOTIVOS, NIVEL_TEXTO, candidatos, diaDeDespacho, estadoFichaje, nombre, vehiculosLibres } from "./despacho.js";
+import { cambiarVehiculo, cubrir, deshacerAusencia, escucharFichajesDia, escucharGridVehiculos, escucharMes, escucharPlanes, escucharReglas, estadoVehiculo, noViene } from "./despacho-store.js";
 import { C, font } from "./tema.js";
 
 const hora = min => `${String(Math.floor((((min % 1440) + 1440) % 1440) / 60)).padStart(2, "0")}:${String(((min % 60) + 60) % 60).padStart(2, "0")}`;
 const TURNO = { M: { t: "Mañana", c: "#5b7cfa" }, T: { t: "Tarde", c: "#f59e5b" }, N: { t: "Noche", c: "#a78bfa" } };
 const ESTADO_VEH = { T: "en el taller", A: "averiado", I: "en la ITV" };
 const ymd = f => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+
+const dos = n => String(n).padStart(2, "0");
+// El reloj (hh:mm:ss): aparte, para que el segundero no repinte la pantalla entera
+function Reloj() {
+  const [ahora, setAhora] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setAhora(new Date()), 1000); return () => clearInterval(t); }, []);
+  return (
+    <div className="op-tarjeta" style={{ padding: "6px 14px", display: "flex", alignItems: "center", gap: 8 }} title="Hora de este ordenador">
+      <Clock size={16} color={C.muted} />
+      <span style={{ fontSize: 22, fontWeight: 650, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>{dos(ahora.getHours())}:{dos(ahora.getMinutes())}:{dos(ahora.getSeconds())}</span>
+    </div>
+  );
+}
+const minutosDeHoy = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+// Color e icono del estado del fichaje
+const FICHAJE = {
+  dentro: { c: "#3fcf8e", I: LogIn }, salio: { c: "#8b95a5", I: LogOut }, tarde: { c: "#f26d6d", I: AlertTriangle },
+  pendiente: { c: "#8b95a5", I: Clock }, noFicho: { c: "#f26d6d", I: AlertTriangle }, sinApp: { c: "#5f6b7d", I: Clock },
+};
 
 function Pastilla({ code }) {
   const t = TURNO[code] || { t: code, c: C.muted };
@@ -39,11 +60,15 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
   const [ausencia, setAusencia] = useState(null);   // fila a la que se le marca la ausencia
   const [buscando, setBuscando] = useState(null);   // hueco para el que se buscan candidatos
   const [cambioVeh, setCambioVeh] = useState(null); // fila a la que se le cambia el vehículo
+  const [fichajes, setFichajes] = useState({ fecha: null, lista: [] });
+  const [ahoraMin, setAhoraMin] = useState(minutosDeHoy); // para saber quién llega tarde (cada 20 s)
 
   useEffect(() => { if (!orgId) return; return escucharMes(orgId, y, m, datos => setMes({ clave: `${orgId}|${y}|${m}`, datos }), e => setError(e.message)); }, [orgId, y, m]);
   useEffect(() => { if (!orgId) return; return escucharPlanes(orgId, y, m, lista => setPlanes({ clave: `${orgId}|${y}|${m}`, lista })); }, [orgId, y, m]);
   useEffect(() => { if (!orgId) return; return escucharGridVehiculos(orgId, y, m, grid => setGridVeh({ clave: `${orgId}|${y}|${m}`, grid })); }, [orgId, y, m]);
   useEffect(() => { if (!orgId) return; return escucharReglas(orgId, setReglas); }, [orgId]);
+  useEffect(() => { if (!orgId) return; return escucharFichajesDia(orgId, fecha, lista => setFichajes({ fecha, lista })); }, [orgId, fecha]);
+  useEffect(() => { const t = setInterval(() => setAhoraMin(minutosDeHoy()), 20000); return () => clearInterval(t); }, []);
   useEffect(() => { if (!nota) return; const t = setTimeout(() => setNota(null), 6000); return () => clearTimeout(t); }, [nota]);
 
   const cargando = mes.clave !== clave;
@@ -53,6 +78,10 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
   const activos = useMemo(() => workers.filter(w => w.activo !== false), [workers]);
   const dia = diaDeDespacho({ workers: activos, vehiculos: vehicles, porTrabajador, gridVehiculos, d, planes: listaPlanes });
   const libres = vehiculosLibres({ vehiculos: vehicles, filas: dia.filas, gridVehiculos, d });
+  const cuando = fecha === hoy ? "hoy" : fecha < hoy ? "pasado" : "futuro";
+  const listaFichajes = fichajes.fecha === fecha ? fichajes.lista : [];
+  const fichajeDe = fl => estadoFichaje(fl, listaFichajes, cuando, ahoraMin);
+  const sinFichar = dia.filas.filter(fl => ["tarde", "noFicho"].includes(fichajeDe(fl)?.tipo)).length;
   const cands = buscando ? candidatos({ hueco: buscando, workers: activos, porTrabajador, rules: reglas, d, daysInMonth: diasMes }) : [];
 
   const base = { orgId, y, m, d };
@@ -74,7 +103,8 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
           <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Departure</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{esHoy ? `Hoy, ${fechaTxt}` : esManana ? `Mañana, ${fechaTxt}` : fechaTxt.charAt(0).toUpperCase() + fechaTxt.slice(1)}</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Reloj />
           <div className="op-seg">
             <button className={esHoy ? "op-on" : ""} onClick={() => setFecha(hoy)}>Hoy</button>
             <button className={esManana ? "op-on" : ""} onClick={() => setFecha(manana)}>Mañana</button>
@@ -87,7 +117,7 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
       {nota && <div style={{ ...tarjeta, borderColor: "rgba(63,207,142,0.35)", color: C.green, fontSize: 13, marginBottom: 12, padding: "10px 14px", display: "flex", gap: 8, alignItems: "center" }}><Check size={15} />{nota}</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 20 }}>
-        {[["Turnos", dia.filas.length, C.text], ["Sin cubrir", dia.sinCubrir.length, dia.sinCubrir.length ? C.red : C.text], ["Vehículos con problema", dia.vehiculosMal.length, dia.vehiculosMal.length ? C.amber : C.text], ["Cubiertos", dia.huecos.length - dia.sinCubrir.length, C.text]].map(([l, v, c]) => (
+        {[["Turnos", dia.filas.length, C.text], ["Sin cubrir", dia.sinCubrir.length, dia.sinCubrir.length ? C.red : C.text], ["Vehículos con problema", dia.vehiculosMal.length, dia.vehiculosMal.length ? C.amber : C.text], ["Cubiertos", dia.huecos.length - dia.sinCubrir.length, C.text], ...(cuando === "futuro" ? [] : [["Sin fichar", sinFichar, sinFichar ? C.red : C.text]])].map(([l, v, c]) => (
           <div key={l} className="op-tarjeta" style={{ padding: "12px 18px" }}>
             <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{l}</div>
             <div style={{ fontSize: 24, fontWeight: 650, color: c, letterSpacing: "-0.02em", marginTop: 3 }}>{cargando ? "…" : v}</div>
@@ -143,6 +173,12 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
               <div style={{ flex: "1 1 140px", minWidth: 120, fontSize: 12.5, color: C.muted }}>
                 {fl.paradas ? <>{fl.hechas}/{fl.paradas} paradas{fl.hechas > 0 ? " · en marcha" : ""}</> : "Sin ruta publicada"}
               </div>
+              {(() => {
+                const fj = fichajeDe(fl);
+                if (!fj) return null;
+                const { c, I } = FICHAJE[fj.tipo];
+                return <div style={{ flex: "1 1 190px", minWidth: 170, fontSize: 12.5, color: c, display: "flex", alignItems: "center", gap: 6, fontWeight: fj.tipo === "tarde" || fj.tipo === "noFicho" ? 600 : 400 }}><I size={14} />{fj.texto}</div>;
+              })()}
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="op-btn op-fantasma" title="Cambiar de vehículo este día" onClick={() => setCambioVeh(fl)}><ArrowRightLeft size={14} /> Vehículo</button>
                 <button className="op-btn op-fantasma op-btn-peligro" disabled={fl.hechas > 0} title={fl.hechas > 0 ? "Ya ha empezado su ruta" : "No viene: su turno queda por cubrir"} onClick={() => setAusencia({ fila: fl, motivo: MOTIVOS[0] })}><UserMinus size={14} /> No viene</button>

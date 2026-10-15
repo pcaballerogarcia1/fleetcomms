@@ -125,3 +125,9 @@ export async function estadoVehiculo({ orgId, y, m, d, vehiculoId, estado }) {
   await batch.commit();
   logAudit({ modulo: "Departure", accion: "Cambió el estado de un vehículo", detalle: `día ${d} · ${estado || "disponible"}` });
 }
+
+/** Los fichajes de un día de la empresa (Control → Fichajes), para ver quién ha fichado */
+export function escucharFichajesDia(orgId, fecha, cb) {
+  return onSnapshot(query(collection(db, "fichajes"), where("org_id", "==", orgId), where("fecha", "==", fecha)),
+    s => cb(s.docs.map(x => ({ _id: x.id, ...x.data() }))), () => cb([]));
+}

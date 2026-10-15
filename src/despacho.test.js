@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { turnoDe, diaDeDespacho, candidatos, vehiculosLibres } from "./despacho.js";
+import { turnoDe, diaDeDespacho, candidatos, vehiculosLibres, estadoFichaje } from "./despacho.js";
 
 const w = (id, extra = {}) => ({ _id: id, nombre: id, uid: `u-${id}`, ...extra });
 const workers = [w("ana", { vehiculoId: "v1" }), w("bea", { vehiculoId: "v2" }), w("carlos"), w("dani"), w("eva"), w("fede")];
@@ -48,5 +48,23 @@ describe("despacho del día", () => {
   it("vehículos libres: disponibles y sin conductor ese día", () => {
     const { filas } = diaDeDespacho({ workers, vehiculos, porTrabajador, d: 10 });
     expect(vehiculosLibres({ vehiculos, filas, gridVehiculos: { v3: { 10: "A" } }, d: 10 }).map(v => v._id)).toEqual(["v2"]);
+  });
+
+  it("fichajes: ya fichó, aún no (a tiempo o tarde), no fichó y sin usuario", () => {
+    const fila = (uid, s = 360) => ({ worker: { _id: "w", uid }, turno: { code: "M", s, e: s + 480 } });
+    const a6 = new Date(2026, 9, 15, 5, 58).getTime(), a14 = new Date(2026, 9, 15, 14, 5).getTime();
+    const fichajes = [
+      { uid: "u1", estado: "abierto", horaEntrada: a6, lugarEntrada: { nombre: "Cochera Norte" } },
+      { uid: "u2", estado: "cerrado", horaEntrada: a6, horaSalida: a14 },
+    ];
+    expect(estadoFichaje(fila("u1"), fichajes, "hoy", 400)).toEqual({ tipo: "dentro", texto: "Fichó a las 05:58 · Cochera Norte" });
+    expect(estadoFichaje(fila("u2"), fichajes, "hoy", 900).texto).toBe("Fichó 05:58–14:05");
+    expect(estadoFichaje(fila("u3"), fichajes, "hoy", 350)).toEqual({ tipo: "pendiente", texto: "Aún no ha fichado" });
+    expect(estadoFichaje(fila("u3"), fichajes, "hoy", 364).tipo).toBe("pendiente"); // dentro de la tolerancia
+    expect(estadoFichaje(fila("u3"), fichajes, "hoy", 372)).toEqual({ tipo: "tarde", texto: "Aún no ha fichado · 12 min tarde" });
+    expect(estadoFichaje(fila("u3"), fichajes, "hoy", 445).texto).toBe("Aún no ha fichado · 1 h 25 min tarde");
+    expect(estadoFichaje(fila("u3"), fichajes, "pasado").tipo).toBe("noFicho");
+    expect(estadoFichaje(fila(null), fichajes, "hoy", 400).tipo).toBe("sinApp");
+    expect(estadoFichaje(fila("u3"), fichajes, "futuro")).toBeNull();
   });
 });
