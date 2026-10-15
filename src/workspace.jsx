@@ -92,7 +92,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
           {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
-          {activeProject?.tipo !== "lineas" && crumb("Despacho", "/despacho", path === "/despacho")}
+          {activeProject?.tipo !== "lineas" && crumb("Departure", "/departure", path === "/departure")}
           {crumb(t("control", lang),    "/control",     path === "/control")}
           {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
@@ -120,7 +120,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
         >{lang.toUpperCase()}</button>
-        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/despacho" || path === "/control" || path === "/analytics") && (
+        {(path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/departure" || path === "/control" || path === "/analytics") && (
           <button onClick={onFullscreen} title={t("fullscreen", lang)} style={{
             width: 30, height: 30, borderRadius: 7, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
@@ -256,7 +256,7 @@ export function WorkspaceRouter() {
       window.location.href = "/rutas";
       return;
     }
-    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/despacho" || path === "/control" || path === "/analytics")) {
+    if (sesion  && !activeProject && (path === "/planning" || path === "/scheduling" || path === "/rostering" || path === "/departure" || path === "/control" || path === "/analytics")) {
       go("/projects");
     }
   }, [sesion, activeProject, path]);
@@ -390,12 +390,12 @@ export function WorkspaceRouter() {
           </div>
         )}
 
-        {/* /despacho — el día de hoy: ausencias, quién cubre y vehículos (proyectos de puntos) */}
-        {activeProject && visitedTabs.despacho && !esLineas && (
+        {/* /departure (Despacho) — el día de hoy: ausencias, quién cubre y vehículos (proyectos de puntos) */}
+        {activeProject && visitedTabs.departure && !esLineas && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-            visibility: path === "/despacho" ? "visible" : "hidden",
-            pointerEvents: path === "/despacho" ? "auto" : "none",
+            visibility: path === "/departure" ? "visible" : "hidden",
+            pointerEvents: path === "/departure" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
               <DespachoPageLazy orgId={effectiveOrgId} workers={workers} vehicles={vehicles} />

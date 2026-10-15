@@ -21,8 +21,8 @@ test("un conductor no viene y otro de guardia cubre su turno y su ruta", async (
   await entrarOficina(page);
   await page.getByText("Abrir proyecto").first().click();
   await page.waitForURL(/\/planning/);
-  await page.getByRole("button", { name: "Despacho", exact: true }).first().click();
-  await page.waitForURL(/\/despacho/);
+  await page.getByRole("button", { name: "Departure", exact: true }).first().click();
+  await page.waitForURL(/\/departure/);
   await expect(page.getByText("Trabajador 1 Demo")).toBeVisible();
   await expect(page.getByText("Camión 1").first()).toBeVisible();
   const foto = async n => { if (process.env.CAPTURAS) await page.screenshot({ path: `${process.env.CAPTURAS}/despacho-${n}.png` }); };

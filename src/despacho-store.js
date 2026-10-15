@@ -64,7 +64,7 @@ export async function noViene({ orgId, y, m, d, worker, turno, vehiculo, planes,
   });
   await batch.commit();
   await diaCuadrante(orgId, y, m, worker, d, { c: "B" });
-  logAudit({ modulo: "Despacho", accion: "Marcó una ausencia", detalle: `${nombre(worker)} · día ${d} · ${motivo}` });
+  logAudit({ modulo: "Departure", accion: "Marcó una ausencia", detalle: `${nombre(worker)} · día ${d} · ${motivo}` });
 }
 
 /** Deshace una ausencia aún sin cubrir: vuelve su turno */
@@ -73,7 +73,7 @@ export async function deshacerAusencia({ orgId, y, m, d, hueco }) {
   escribir(batch, orgId, y, m, hueco.workerId, { [`grid.${d}`]: hueco.code, [`despacho.${d}`]: deleteField() });
   await batch.commit();
   await diaCuadrante(orgId, y, m, hueco.worker, d, { c: hueco.code, ...(hueco.vn ? { v: hueco.vn } : {}), s: hueco.s, e: hueco.e });
-  logAudit({ modulo: "Despacho", accion: "Deshizo una ausencia", detalle: `${nombre(hueco.worker)} · día ${d}` });
+  logAudit({ modulo: "Departure", accion: "Deshizo una ausencia", detalle: `${nombre(hueco.worker)} · día ${d}` });
 }
 
 /**
@@ -94,7 +94,7 @@ export async function cubrir({ orgId, y, m, d, hueco, cubre, asignAusente }) {
   for (const id of hueco.planes || []) batch.update(doc(db, "planes", id), { conductorUid: cubre.uid || null, workerId: cubre._id, conductorNombre: nombre(cubre) });
   await batch.commit();
   await diaCuadrante(orgId, y, m, cubre, d, { c: hueco.code, ...(hueco.vn ? { v: hueco.vn } : {}), s: hueco.s, e: hueco.e }, true);
-  logAudit({ modulo: "Despacho", accion: "Cubrió un turno", detalle: `${nombre(cubre)} cubre a ${nombre(hueco.worker)} · día ${d} · ${hora(hueco.s)}–${hora(hueco.e)}` });
+  logAudit({ modulo: "Departure", accion: "Cubrió un turno", detalle: `${nombre(cubre)} cubre a ${nombre(hueco.worker)} · día ${d} · ${hora(hueco.s)}–${hora(hueco.e)}` });
   if (!cubre.uid) return null;
   return enviarAvisos(orgId, [cubre.uid], {
     titulo: `Hoy cubres un turno ${NOMBRE_TURNO[hueco.code] || ""}`.trim(),
@@ -111,7 +111,7 @@ export async function cambiarVehiculo({ orgId, y, m, d, fila, nuevo }) {
   for (const p of fila.planes) batch.update(doc(db, "planes", p._id), { vehiculoNombre: veh.nombre });
   await batch.commit();
   await diaCuadrante(orgId, y, m, fila.worker, d, { c: fila.turno.code, v: veh.nombre, s: fila.turno.s, e: fila.turno.e });
-  logAudit({ modulo: "Despacho", accion: "Cambió el vehículo de un turno", detalle: `${nombre(fila.worker)} · día ${d} · ${fila.vehiculo?.nombre || "—"} → ${veh.nombre}` });
+  logAudit({ modulo: "Departure", accion: "Cambió el vehículo de un turno", detalle: `${nombre(fila.worker)} · día ${d} · ${fila.vehiculo?.nombre || "—"} → ${veh.nombre}` });
   if (!fila.worker.uid) return null;
   return enviarAvisos(orgId, [fila.worker.uid], { titulo: "Cambio de vehículo", cuerpo: `Hoy sales con ${veh.nombre}${fila.vehiculo ? ` (no con ${fila.vehiculo.nombre})` : ""}.`, url: "/rutas", etiqueta: `vehiculo-${d}` }).catch(() => null);
 }
@@ -123,5 +123,5 @@ export async function estadoVehiculo({ orgId, y, m, d, vehiculoId, estado }) {
   batch.set(ref, { org_id: orgId, year: y, month: m }, { merge: true });
   batch.update(ref, new FieldPath("grid", vehiculoId, String(d)), estado || deleteField());
   await batch.commit();
-  logAudit({ modulo: "Despacho", accion: "Cambió el estado de un vehículo", detalle: `día ${d} · ${estado || "disponible"}` });
+  logAudit({ modulo: "Departure", accion: "Cambió el estado de un vehículo", detalle: `día ${d} · ${estado || "disponible"}` });
 }

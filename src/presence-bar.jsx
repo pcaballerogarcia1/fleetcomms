@@ -14,7 +14,7 @@ const MAX_VISIBLE = 5;
 
 const PAGINAS = {
   "/projects": "Proyectos", "/planning": "Planning", "/scheduling": "Scheduling",
-  "/rostering": "Rostering", "/control": "Control", "/analytics": "Analytics",
+  "/rostering": "Rostering", "/departure": "Departure", "/control": "Control", "/analytics": "Analytics",
   "/rutas": "App Rutas", "/incidencias": "App Rutas · Incidencias", "/inventario": "App Rutas · Inventario",
 };
 const donde = p => PAGINAS[p.pagina] || (p.app === "rutas" ? "App Rutas" : "Oficina");

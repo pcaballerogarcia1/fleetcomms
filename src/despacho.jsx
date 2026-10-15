@@ -71,7 +71,7 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
     <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Despacho</div>
+          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Departure</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{esHoy ? `Hoy, ${fechaTxt}` : esManana ? `Mañana, ${fechaTxt}` : fechaTxt.charAt(0).toUpperCase() + fechaTxt.slice(1)}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
