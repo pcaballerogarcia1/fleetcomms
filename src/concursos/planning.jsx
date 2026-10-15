@@ -8,8 +8,10 @@
 import { FileText, Map as IconoMapa, Calculator } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
-import { PARAMETROS_DEFECTO, dimensionar, rendimientoOrientativo } from "./ficha.js";
-import { escucharDimension, escucharFicha, guardarDimension } from "./store.js";
+import { PARAMETROS_DEFECTO, dimensionar, parqueDelPliego, rendimientoOrientativo } from "./ficha.js";
+import { DESPLAZAMIENTO_DEFECTO, UTIL_DEFECTO, minutosOrientativos, rendimientoConInventario, resumenInventario, vanJuntas } from "./inventario.js";
+import { PanelInventario } from "./inventario-panel.jsx";
+import { escucharDimension, escucharDocumentos, escucharFicha, escucharInventario, guardarDimension } from "./store.js";
 
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 1 }); } catch { return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }); } })();
 const num = n => FMT.format(Math.round(n * 10) / 10);
@@ -19,6 +21,11 @@ const PARAMS = [
   ["horasAnualesConvenio", "Horas al año de un trabajador (convenio)", "h"],
   ["absentismoPct", "Absentismo (bajas y ausencias)", "%"],
 ];
+// con inventario: para estimar lo que rinde un equipo con los puntos reales
+const PARAMS_INVENTARIO = [
+  ["desplazamiento", "Minutos de un punto al siguiente", "min"],
+  ["utilPct", "Parte del turno trabajando", "%"],
+];
 
 export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
   const [vista, setVista] = useState("rendimientos");
@@ -27,6 +34,12 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
   const [local, setLocal] = useState(null); // cambios aún sin guardar (se guardan solos)
   useEffect(() => (concursoId ? escucharFicha(concursoId, setFicha) : undefined), [concursoId]);
   useEffect(() => (concursoId ? escucharDimension(concursoId, setDim) : undefined), [concursoId]);
+  const [inventario, setInventario] = useState(null);
+  const [docs, setDocs] = useState([]);
+  useEffect(() => (concursoId ? escucharInventario(concursoId, setInventario) : undefined), [concursoId]);
+  useEffect(() => (concursoId ? escucharDocumentos(concursoId, setDocs) : undefined), [concursoId]);
+  const resumen = useMemo(() => (inventario?.contenedores?.length ? resumenInventario(inventario.contenedores) : null), [inventario]);
+  const parque = useMemo(() => docs.flatMap(d => parqueDelPliego(d.lectura?.tablas || [])), [docs]);
 
   // guardado automático, un momento después del último cambio
   const tmr = useRef();
@@ -39,11 +52,22 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
 
   const servicios = useMemo(() => Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)), [ficha]);
   const jornadasPliego = ficha?.datos?.jornadasAnio && ficha.datos.jornadasAnio.estado !== "descartado" ? Number(ficha.datos.jornadasAnio.valor) : null;
-  const parametros = { ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}), ...(local?.parametros || {}) };
+  const parametros = { desplazamiento: DESPLAZAMIENTO_DEFECTO, utilPct: UTIL_DEFECTO * 100, ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}), ...(local?.parametros || {}) };
   const porServicio = { ...(dim?.porServicio || {}), ...(local?.porServicio || {}) };
   // vehículo y personas: lo cambiado aquí > lo que exige el pliego (ficha) > orientativo
   const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, vehiculo: porServicio[s.id]?.vehiculo || s.vehiculo || null, personas: porServicio[s.id]?.personas ?? s.personas ?? null }));
   const r = dimensionar(entrada, parametros);
+  // lo que rendiría cada servicio con los puntos del inventario
+  const conInventario = id => {
+    const s = servicios.find(x => x.id === id);
+    if (!resumen || !s) return null;
+    return rendimientoConInventario(s, resumen, { horasTurno: parametros.horasTurno, minPorContenedor: porServicio[id]?.minCont ?? undefined, desplazamiento: parametros.desplazamiento, util: parametros.utilPct / 100, todasEnElPunto: vanJuntas(s, servicios, resumen) });
+  };
+  const usarTodosInventario = () => setLocal(l => {
+    const ps = { ...(l?.porServicio || {}) };
+    for (const s of servicios) { const e = conInventario(s.id); if (e) ps[s.id] = { ...(porServicio[s.id] || {}), ...(ps[s.id] || {}), porTurno: e.porTurno, deInventario: true }; }
+    return { ...(l || {}), porServicio: ps };
+  });
 
   const cambiarParam = (k, v) => setLocal(l => ({ ...(l || {}), parametros: { ...(l?.parametros || {}), [k]: v } }));
   const cambiarServicio = (id, k, v) => setLocal(l => ({ ...(l || {}), porServicio: { ...(l?.porServicio || {}), [id]: { ...(porServicio[id] || {}), [k]: v } } }));
@@ -84,9 +108,11 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
               ))}
             </div>
 
+            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} />
+
             {/* parámetros */}
             <div style={{ ...tarjeta, padding: "12px 16px", display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
-              {PARAMS.map(([k, l, u]) => (
+              {[...PARAMS, ...(resumen ? PARAMS_INVENTARIO : [])].map(([k, l, u]) => (
                 <label key={k} style={{ display: "grid", gap: 4, fontSize: 12, color: C.muted }}>
                   {l}{k === "jornadasAnio" && jornadasPliego ? <span style={{ fontSize: 11, color: C.dim }}>(el pliego dice {jornadasPliego})</span> : null}
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -98,10 +124,13 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             </div>
 
             {/* servicios */}
-            <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 8 }}>Servicios de la ficha</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Servicios de la ficha</div>
+              {resumen && <button className="op-btn" onClick={usarTodosInventario} title="Pone en cada servicio lo que rinde con los puntos del inventario">Usar los rendimientos del inventario</button>}
+            </div>
             <div style={{ ...tarjeta, overflow: "auto", marginBottom: 18 }}>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", "Rinde por turno", "Vehículo", "Personas", "Turnos al año"].map(h => <th key={h} style={{ ...th, textAlign: ["Al año", "Turnos al año"].includes(h) ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", ...(resumen ? ["Min. por contenedor", "Con el inventario"] : []), "Rinde por turno", "Vehículo", "Personas", "Turnos al año"].map(h => <th key={h} style={{ ...th, textAlign: ["Al año", "Turnos al año"].includes(h) ? "right" : "left" }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {r.lineas.map(l => {
                     const ori = rendimientoOrientativo(l);
@@ -110,6 +139,13 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                       <tr key={l.id} style={{ borderTop: `1px solid ${C.border}` }}>
                         <td style={td}>{l.nombre}</td><td style={{ ...td, color: C.muted }}>{l.fraccion || "—"}</td><td style={{ ...td, color: C.muted }}>{l.ubicacion || "—"}</td>
                         <td style={{ ...td, textAlign: "right" }}>{num(l.cantidadAnual)}</td>
+                        {resumen && (() => {
+                          const e = conInventario(l.id);
+                          return <>
+                            <td style={td}><input className="op-input" type="number" min={0.5} step={0.5} value={porServicio[l.id]?.minCont ?? ""} placeholder={String(minutosOrientativos(l))} onChange={ev => cambiarServicio(l.id, "minCont", ev.target.value === "" ? null : Number(ev.target.value))} style={{ width: 70, height: 30 }} /></td>
+                            <td style={td}>{e ? <span title={`${num(e.porPunto)} contenedores por punto en ${e.puntos} puntos; ${e.minPorContenedor} min por contenedor`}><b>{e.porTurno}</b> <span style={{ color: C.dim, fontSize: 11.5 }}>({num(e.porPunto)}/punto{vanJuntas(servicios.find(x => x.id === l.id), servicios, resumen) ? ", todas las fracciones" : ""})</span> <button className="op-btn op-fantasma" style={{ height: 24, padding: "0 6px", fontSize: 11 }} onClick={() => cambiarServicio(l.id, "porTurno", e.porTurno)}>Usar</button></span> : <span style={{ color: C.dim, fontSize: 12 }}>no va por puntos</span>}</td>
+                          </>;
+                        })()}
                         <td style={td} title={ori.nota}>
                           <input className="op-input" type="number" min={1} value={porServicio[l.id]?.porTurno ?? ""} placeholder={String(ori.porTurno)} onChange={e => cambiarServicio(l.id, "porTurno", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 80, height: 30 }} />
                           <span style={{ fontSize: 11, color: propio ? C.green : C.amber, marginLeft: 8 }}>{propio ? "tuyo" : "orientativo"}</span>

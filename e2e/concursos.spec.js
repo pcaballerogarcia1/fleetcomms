@@ -1,7 +1,7 @@
 // Concursos contra los emuladores: se crea uno, se abre con sus módulos y
 // trabaja en su espacio aislado (la plantilla y los proyectos de la
 // operativa no se ven dentro, ni el concurso entre los proyectos).
-/* global process */
+/* global process, Buffer */
 import { test, expect } from "@playwright/test";
 import { sembrar, escribir, ORG } from "./semilla.mjs";
 import { vigilarErrores, entrarOficina, pdfMini } from "./ayudas.mjs";
@@ -50,6 +50,14 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await expect(page.locator(".op-tarjeta").filter({ hasText: "Vehículos" }).getByText("1", { exact: true })).toBeVisible();
   await expect(page.getByText("88,9", { exact: true }).first()).toBeVisible(); // en la tabla de servicios y en la de equipos
   await foto("planning");
+  // inventario sin coordenadas: cualquier listado; dice cómo lo ha entendido antes de guardarlo
+  await page.locator('input[type="file"][accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt"]').setInputFiles({ name: "contenedores.csv", mimeType: "text/csv",
+    buffer: Buffer.from("Carrer;Num.;Fracció;Model\nMAJOR;1;RSU;Soterrado\nMAJOR;1;PAPEL;Soterrado\nSOL;7;RSU;Soterrado\n", "latin1") });
+  await expect(page.getByText(/Así he entendido «contenedores\.csv»/)).toBeVisible();
+  await expect(page.getByText("Salen 3 contenedores.")).toBeVisible();
+  await page.getByRole("button", { name: /Usar este listado/ }).click();
+  await expect(page.getByText(/3 contenedores en 2 puntos de aportación/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Usar los rendimientos del inventario/ })).toBeVisible();
 
   // sus módulos, y no los de la operativa diaria
   for (const m of ["Documentos", "Planning", "Scheduling", "Rostering", "Cálculo", "Alternativas", "Resumen"]) {

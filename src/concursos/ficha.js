@@ -11,12 +11,14 @@ const sinAcentos = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
 
 // Fracción a partir de cómo la llama el pliego
 const FRACCIONES = [
-  ["Resto", /\b(rsu|resto|rechazo|fraccion resto)\b/],
-  ["Papel y cartón", /\b(papel|carton|pc)\b/],
-  ["Envases", /\b(envases?|envasos|ligeros)\b/],
-  ["Vidrio", /\bvidrio\b/],
-  ["Orgánica", /\b(organica|form|biorresiduo|bio)\b/],
-  ["Todas", /\b(todas|todos|total)\b/],
+  ["Resto", /\b(rsu|resto|rechazo|fraccion resto|rebuig|resta|residual|refuse|general waste|hondakin|errefusa|fr)\b/],
+  ["Papel y cartón", /\b(papel|carton|pc|paper|cartro|cardboard|papera)\b/],
+  ["Envases", /\b(envases?|envasos|ligeros|packaging|plastic|plastico|ontziak|el|lleugers)\b/],
+  ["Vidrio", /\b(vidrio|vidre|glass|beira|iglu)\b/],
+  ["Orgánica", /\b(organica|organico|organic|form|biorresiduo|bio|fo|biowaste|organikoa)\b/],
+  ["Aceite", /\b(aceite|oli|oil)\b/],
+  ["Textil", /\b(textil|ropa|roba|clothes)\b/],
+  ["Todas", /\b(todas|todos|total|totes)\b/],
 ];
 export function fraccionDe(texto) {
   const t = sinAcentos(texto);
@@ -24,8 +26,8 @@ export function fraccionDe(texto) {
 }
 export function ubicacionDe(texto) {
   const t = sinAcentos(texto);
-  if (/soterrad/.test(t)) return "Soterrado";
-  if (/superficie/.test(t)) return "Superficie";
+  if (/soterr|subterr|enterrad|underground|lurpe|buried/.test(t)) return "Soterrado";
+  if (/superficie|surface|above ?ground|azaleko|en calle/.test(t)) return "Superficie";
   if (/carga lateral|lateral/.test(t)) return "Carga lateral";
   if (/bilateral|carga superior/.test(t)) return "Bilateral";
   return null;
@@ -246,4 +248,18 @@ export function dimensionar(servicios, p = PARAMETROS_DEFECTO) {
       personasExactas: horasPorPersona > 0 ? horasAnio / horasPorPersona : 0,
     },
   };
+}
+
+/** El parque que da el pliego (tablas de solo unidades por fracción): [{ ubicacion, fraccion, unidades, pagina }] */
+export function parqueDelPliego(tablas = []) {
+  const out = [];
+  tablas.forEach(t => {
+    if (claseDe(t) !== "parque") return;
+    for (const f of t.filas) {
+      const fraccion = fraccionDe(f.concepto);
+      if (!fraccion || fraccion === "Todas") continue;
+      out.push({ ubicacion: ubicacionDe(f.grupo || "") || ubicacionDe(t.titulo), fraccion, unidades: f.valores[0], pagina: t.pagina });
+    }
+  });
+  return out;
 }

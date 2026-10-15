@@ -140,3 +140,16 @@ export function escucharDimension(concursoId, cb) {
   return onSnapshot(refDimension(concursoId), s => cb(s.exists() ? { parametros: {}, porServicio: {}, ...s.data() } : { parametros: {}, porServicio: {} }), () => cb({ parametros: {}, porServicio: {} }));
 }
 export const guardarDimension = (concursoId, cambios) => setDoc(refDimension(concursoId), { ...cambios, en: Date.now() }, { merge: true });
+
+// ── Inventario de contenedores sin coordenadas (Planning del concurso): concursos/{id}/requisitos/inventario ──
+const refInventario = concursoId => doc(db, "concursos", concursoId, "requisitos", "inventario");
+export function escucharInventario(concursoId, cb) {
+  return onSnapshot(refInventario(concursoId), s => cb(s.exists() ? s.data() : null), () => cb(null));
+}
+export async function guardarInventario(concursoId, { nombre, contenedores }) {
+  await setDoc(refInventario(concursoId), { nombre, subidoEn: Date.now(), contenedores });
+  logAudit({ modulo: "Concursos", accion: "Subió un inventario de contenedores", detalle: `${nombre} · ${contenedores.length} contenedores` });
+}
+export async function borrarInventario(concursoId) {
+  await deleteDoc(refInventario(concursoId));
+}
