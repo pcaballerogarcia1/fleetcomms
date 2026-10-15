@@ -45,7 +45,7 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   // Planning del concurso: dimensionar por rendimientos con los servicios de la ficha
   await page.getByRole("button", { name: "Planning", exact: true }).click();
   await page.waitForURL(/\/planning/);
-  await expect(page.getByText("Equipos", { exact: true })).toBeVisible();
+  await expect(page.getByText("Equipos por tipo de vehículo")).toBeVisible();
   // 1.992 + 230 lavados de soterrados a 25 por turno = 89 turnos al año → 1 vehículo
   await expect(page.locator(".op-tarjeta").filter({ hasText: "Vehículos" }).getByText("1", { exact: true })).toBeVisible();
   await expect(page.getByText("88,9", { exact: true }).first()).toBeVisible(); // en la tabla de servicios y en la de equipos

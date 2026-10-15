@@ -12,7 +12,7 @@
 // Sin React ni Firebase.
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 3;
+export const VERSION_LECTOR = 4;
 
 const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
 const LETRAS = Object.keys(NUM_LETRA).join("|");
@@ -264,9 +264,10 @@ export function leerPliego(paginasCrudas) {
   });
 
   const tablas = tablasDeCantidades(paginasCrudas || []);
+  const equipos = equiposDelPliego(paginasCrudas || []);
 
   return {
-    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas,
+    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos,
     datos, requisitos: requisitos.slice(0, 40).map(({ texto, pagina }) => ({ texto, pagina })), indice: indice.slice(0, 120),
     listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL), frecuencias },
     paginas: paginas.length, conTexto,
@@ -311,50 +312,140 @@ export function frecuenciasDelServicio(paginas) {
   return out;
 }
 
-// ── Tablas de cantidades ──
-// Los anexos traen las cantidades en tablas («RSU 664 664 664 664», «Suma
-// contenedores 2.709 1.327 1.877 5.913»). En el texto del PDF cada fila es una
-// línea: un concepto y tres o más cifras. El título de la tabla es la última
-// línea sin cifras antes de las filas (o la que trae «AÑO», «TURNO»…), y una
-// línea corta en mayúsculas entre filas («SOTERRADO») es un grupo.
+// ── Tablas de cantidades, precios y parque ──
+// Los pliegos traen las cifras en tablas: «RSU 166 MENSUAL 1.992» (unidades,
+// frecuencia y total al año), «RSU 664 664 664 664» (por año del contrato),
+// «RSU 166» (el parque), «RSU 21,14 € 21,56 € …» (precio unitario por año).
+// En el texto del PDF cada fila es una línea: un concepto y una o más cifras
+// (con, a veces, la frecuencia o «€» entre medias). Una fila con una sola
+// cifra solo cuenta dentro de una tabla («Tabla 3 …», o tras su cabecera);
+// suelta podría ser cualquier frase. El título es el de la «Tabla N» o, si no
+// hay, la última línea de texto que lo parezca; una línea corta en mayúsculas
+// entre filas («SOTERRADO») es un grupo.
 const NUM = String.raw`\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?`;
-const FILA = new RegExp(String.raw`^(.{2,60}?[A-Za-zÁÉÍÓÚÑáéíóúñ)º.])\s+((?:(?:${NUM})\s+){2,}(?:${NUM}))(?=\s|$)`);
-const RUIDO = /firmado|verificaci|c[oó]digo|p[aá]gina|copia aut[eé]ntica|https?:|registre|registro mercantil|n\.?i\.?f/i;
+const ES_NUM = new RegExp(String.raw`^(?:${NUM})$`);
+const FRECUENCIA = /^(mensual|trimestral|semestral|anual|quincenal|semanal|bimestral|diari[oa])$/i;
+const RUIDO = /firmado|verificaci|c[oó]digo|p[aá]gina|copia aut[eé]ntica|https?:|registre|registro mercantil|\bn\.?i\.?f\b|^cargo:/i;
+const NO_ES_FILA = /^(?:mes|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|d[ií]as?\/mes|expte?\.?|art[ií]culo|p[aá]g\.?)$/i;
+const CABECERA = /\b(?:ud|uds|unidades|frecuencia|a[nñ]o|anual(?:es)?|cantidad(?:es)?|previstas?|temporada|veces|fracci[oó]n|modelo|turno|precio|importe)\b/i;
+
+/** Una línea como fila de tabla: { concepto, valores, frecuencia, euros } o null */
+function filaDe(l) {
+  const t = l.replace(/€/g, " € ").replace(/\s+/g, " ").trim().split(" ");
+  const k = t.findIndex(x => ES_NUM.test(x));
+  if (k < 1) return null;
+  const concepto = t.slice(0, k).join(" ");
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(concepto) || concepto.length > 60 || NO_ES_FILA.test(concepto.split(" ")[0]) || /^\d/.test(concepto)) return null;
+  const valores = [];
+  let frecuencia = null, euros = false;
+  for (const x of t.slice(k)) {
+    if (ES_NUM.test(x)) valores.push(numeroEs(x));
+    else if (x === "€") euros = true;
+    else if (FRECUENCIA.test(x)) frecuencia = x.toLowerCase();
+    else return null; // más texto: es una frase con cifras, no una fila
+  }
+  return { concepto, valores, frecuencia, euros };
+}
+
 export function tablasDeCantidades(paginasCrudas) {
   const tablas = [];
-  let actual = null, ultimaSinCifras = null, grupo = null, cabecera = null;
-  const recientes = []; // últimas líneas de texto, para dar con el título de la tabla
+  let actual = null, titulo = null, cabecera = [], grupo = null, enTabla = 0;
+  const recientes = []; // últimas líneas de texto, para dar con el título si no hay «Tabla N»
   const TITULO = /anexo|mantenimiento|lavado|limpieza|necesidades|programaci[oó]n|unidades|recogida|cantidades|servicio|contenedores|precios|costes/i;
   const enMayus = t => { const l = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, ""); return l.replace(/[^A-ZÁÉÍÓÚÑ]/g, "").length / Math.max(1, l.length) > 0.7; };
   const candidato = t => TITULO.test(t) && t.length >= 12 && t.length < 120;
-  // primero un título en mayúsculas (así van las cabeceras de las tablas)
-  const tituloDe = () => [...recientes].reverse().find(t => candidato(t) && enMayus(t)) || [...recientes].reverse().find(candidato) || ultimaSinCifras || "Tabla";
+  const tituloDe = () => titulo || [...recientes].reverse().find(t => candidato(t) && enMayus(t)) || [...recientes].reverse().find(candidato) || "Tabla";
+  const cerrar = () => { actual = null; };
   paginasCrudas.forEach((p, i) => {
     for (const bruta of String(p || "").split("\n")) {
       let l = bruta.replace(/\s+/g, " ").trim();
       const ruido = l.search(RUIDO); // el pie de firma puede venir pegado a la última fila
       if (ruido === 0) continue;
       if (ruido > 0) l = l.slice(0, ruido).trim();
-      if (!l) continue;
-      const m = FILA.exec(l);
-      if (m && !/^\d/.test(m[1]) && !/^(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|d[ií]as?\/mes)/i.test(m[1])) {
-        const valores = m[2].split(" ").map(numeroEs);
-        if (!actual) { actual = { titulo: tituloDe(), pagina: i + 1, cabecera, filas: [] }; tablas.push(actual); }
-        actual.filas.push({ grupo, concepto: m[1].trim(), valores });
+      if (!l || /^\d{1,3}$/.test(l)) continue; // número de página suelto
+
+      // «Tabla 3 Cantidades y frecuencias lavados anuales»: empieza una tabla
+      const tt = /^tabla\s+\d+\.?\s+(.{4,120})$/i.exec(l);
+      if (tt) { cerrar(); titulo = tt[1].trim(); cabecera = []; grupo = null; enTabla = 30; continue; }
+
+      const f = filaDe(l);
+      const vale = f && (f.valores.length >= 3 || (f.valores.length >= 1 && (enTabla > 0 || actual)));
+      if (vale) {
+        if (!actual) { actual = { titulo: tituloDe(), pagina: i + 1, cabecera: cabecera.join(" ") || null, filas: [] }; tablas.push(actual); }
+        actual.filas.push({ grupo, concepto: f.concepto, valores: f.valores, frecuencia: f.frecuencia, euros: f.euros });
+        enTabla = 30;
         continue;
       }
-      const conCifras = /\d/.test(l);
+      if (enTabla > 0) enTabla--;
       if (l.length < 120) { recientes.push(l); if (recientes.length > 20) recientes.shift(); }
-      const corta = l.length <= 30 && l === l.toUpperCase() && /[A-ZÁÉÍÓÚÑ]{3,}/.test(l);
-      if (corta && !conCifras && actual) { grupo = l; continue; }
-      if (/\b(?:a[nñ]o|turno|periodo|lote)\b/i.test(l) && l.length < 120) cabecera = l;
-      if (!conCifras || /\ba[nñ]o\b/i.test(l)) {
-        if (actual && actual.filas.length) actual = null;
-        if (!corta || !actual) { ultimaSinCifras = l.length < 120 ? l : ultimaSinCifras; grupo = corta ? l : null; }
+      const corta = l.length <= 30 && l === l.toUpperCase() && /[A-ZÁÉÍÓÚÑ]{3,}/.test(l) && !/\d/.test(l);
+      if (corta && (actual || enTabla > 0)) { if (!CABECERA.test(l) || actual) { grupo = l; continue; } }
+      if (CABECERA.test(l) && l.length < 120) {
+        // cabecera de columnas («LAVADO FRACCIÓN UD FRECUENCIA Cantidades previstas anuales», en varias líneas)
+        if (actual && actual.filas.length) { cerrar(); titulo = null; grupo = null; cabecera = []; }
+        cabecera.push(l); if (cabecera.length > 6) cabecera.shift();
+        if (!titulo && enMayus(l) && TITULO.test(l)) titulo = null;
+        enTabla = Math.max(enTabla, 8);
+        continue;
       }
+      // texto corrido: se acaba la tabla
+      if (!/\d/.test(l) && l.length > 40) { cerrar(); titulo = null; cabecera = []; grupo = corta ? l : null; enTabla = 0; }
     }
   });
-  return tablas.filter(t => t.filas.length >= 2).slice(0, 40);
+  return tablas.filter(t => t.filas.length >= 1 && (t.filas.length >= 2 || /tabla|anexo/i.test(t.titulo) || t.cabecera)).slice(0, 60);
+}
+
+// ── Equipos que exige el pliego para cada servicio ──
+// «…mediante un equipo formado por dos operarios y un camión lavacontenedores»
+// «…realizadas por un equipo formado por un conductor, un operario y un vehículo
+// equipado con grúa». De cada frase: el vehículo, cuántas personas y de qué
+// servicio es (el apartado en el que está: «2.4. Lavado de contenedores»).
+const CUANTOS = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 };
+const PERSONA = /(\d+|un|una|uno|dos|tres|cuatro|cinco|seis)\s+(?:\(\d+\)\s+)?(operari[oa]s?|conductor(?:es|a)?|pe[oó]n(?:es)?|oficial(?:es)?|mec[aá]nicos?|trabajador(?:es|a)?|ayudantes?|encargad[oa]s?|personas?)\b/gi;
+const VEHICULO = /(?:un|una|\d+)\s+((?:cami[oó]n|veh[ií]culo|furgoneta|furg[oó]n|barredora|baldeadora|cisterna|turismo|grúa|gr[uú]a)[^,.;:]{0,80})/i;
+export function equiposDelPliego(paginasCrudas) {
+  const out = [];
+  (paginasCrudas || []).forEach((cruda, i) => {
+    const lineas = String(cruda || "").split("\n");
+    const texto = limpia(cruda);
+    for (const m of texto.matchAll(/equipo formado por\s+([^.;]{5,220})/gi)) {
+      const que = m[1];
+      let personas = 0;
+      const quien = [];
+      for (const p of que.matchAll(PERSONA)) {
+        const n = /^\d+$/.test(p[1]) ? Number(p[1]) : CUANTOS[p[1].toLowerCase()] || 1;
+        personas += n; quien.push(`${n} ${p[2].toLowerCase()}`);
+      }
+      const v = VEHICULO.exec(que);
+      const vehiculo = v ? v[1].replace(/\s+(?:con una frecuencia|que|para|durante|y\s+\w+\s+operari).*$/i, "").trim() : null;
+      // el apartado en el que está la frase: el último título numerado antes de ella
+      const antes = texto.slice(0, m.index);
+      let apartado = null;
+      for (const l of lineas) {
+        const h = /^\s*(\d+(?:\.\d+)+)\.?\s+([A-ZÁÉÍÓÚÑ][^\n]{3,90})$/.exec(l);
+        if (h && antes.includes(h[2].trim().slice(0, 25))) apartado = `${h[1]}. ${h[2].trim()}`;
+      }
+      out.push({ apartado, vehiculo, personas: personas || null, quien: quien.join(", "), pagina: i + 1, frase: fraseEn(texto, m.index, m[0].length) });
+    }
+  });
+  // «…mediante vehículo lavador de contenedores con conductor», «El servicio se
+  // deberá realizar con vehículo (camión) de lavado de contenedores de carga lateral»
+  (paginasCrudas || []).forEach((cruda, i) => {
+    const texto = limpia(cruda);
+    for (const m of texto.matchAll(/(?:mediante|deber[aá] realizar con|se realizar[aá] con|dotad[oa] de)\s+(?:un |una )?((?:veh[ií]culo|cami[oó]n|furgoneta|barredora|baldeadora)[^.;:]{3,110})/gi)) {
+      let vehiculo = m[1].replace(/\s+(?:apto|que|para|durante|lo que|con una|tanto).*$/i, "").trim();
+      const conConductor = /con conductor/i.test(vehiculo);
+      vehiculo = vehiculo.replace(/\s*con conductor.*$/i, "").trim();
+      vehiculo = vehiculo.replace(/[,\s]+$/, "");
+      if (out.some(e => e.pagina === i + 1 && e.vehiculo === vehiculo)) continue;
+      out.push({ apartado: null, vehiculo, personas: conConductor ? 1 : null, quien: conConductor ? "1 conductor" : "", pagina: i + 1, frase: fraseEn(texto, m.index, m[0].length) });
+    }
+  });
+  out.sort((a, b) => a.pagina - b.pagina);
+  // el apartado puede estar en la página anterior: se arrastra el último visto
+  let ultimo = null;
+  for (const e of out) { if (e.apartado) ultimo = e.apartado; else e.apartado = ultimo; }
+  return out;
 }
 
 /** Busca un texto en las páginas: [{ pagina, frase }] (sin distinguir acentos ni mayúsculas) */

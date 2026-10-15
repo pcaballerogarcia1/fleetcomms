@@ -35,7 +35,8 @@ export function ubicacionDe(texto) {
 const SERVICIOS = [
   ["Mantenimiento correctivo", /mantenimiento correctivo|correctivo/],
   ["Mantenimiento preventivo", /mantenimiento preventivo|preventivo|mantenimiento/],
-  ["Limpieza bajo contenedor", /bajo contenedor|bajos|zona inferior|pavimento/],
+  ["Rehabilitación de contenedores", /rehabilitaci/],
+  ["Limpieza bajo contenedor", /bajo contenedor|bajos|\bbajo\b|zona inferior|pavimento/],
   ["Limpieza exterior", /limpieza exterior|exterior|hidrolimpiad/],
   ["Lavado interior", /lavado|lavados/],
   ["Recogida", /recogida|vaciado/],
@@ -47,63 +48,107 @@ export function servicioDe(titulo) {
 }
 
 /**
- * Tablas del pliego convertidas en servicios propuestos: una línea por fila
- * (fracción y ubicación) con su cantidad al año. Cada tabla dice si se
- * propone usarla (porAnio) o no (cantidades por trimestre, programación mes a
- * mes…): el usuario elige y corrige.
- * @param tablas  lectura.tablas de pliego.js
- * @param docId   el documento del que salen (para volver a la página)
- * @returns [{ indice, titulo, pagina, servicio, usar, motivo, lineas: [{ id, nombre, fraccion, ubicacion, cantidadAnual, concepto, … }] }]
+ * Tablas del pliego → servicios propuestos, con su cantidad al año y, cuando
+ * la tabla trae unidades y frecuencia, la comprobación de la cuenta del propio
+ * pliego (166 contenedores × 12 meses = 1.992). Las tablas de precios no son
+ * servicios: dan el precio unitario de cada uno (preciosDelPliego); las de
+ * parque (solo unidades) tampoco (parqueDelPliego).
+ * @returns [{ indice, titulo, pagina, servicio, clase: "anual"|"porAnios"|"programa"|"parque"|"precios",
+ *            usar, motivo, lineas: [{ id, nombre, fraccion, ubicacion, cantidadAnual, unidades, frecuencia, cuadra, cuenta, … }] }]
  */
+const VECES = { diaria: 365, diario: 365, semanal: 52, quincenal: 24, mensual: 12, bimestral: 6, trimestral: 4, semestral: 2, anual: 1 };
+const MESES_TEMPORADA = t => { const m = /\(([a-záéíóú]+)\s*-\s*([a-záéíóú]+)\)/i.exec(t); if (!m) return null; const o = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]; const a = o.findIndex(x => x.startsWith(sinAcentos(m[1]).slice(0, 3))), b = o.findIndex(x => x.startsWith(sinAcentos(m[2]).slice(0, 3))); return a < 0 || b < 0 ? null : ((b - a + 12) % 12) + 1; };
+const FMT_ES = n => Number(n).toLocaleString("es-ES");
+
+function claseDe(t) {
+  const cab = sinAcentos(`${t.cabecera || ""} ${t.titulo}`);
+  if (t.filas.some(f => f.euros)) return "precios";
+  // unidades + una cifra por periodo (166 TRIMESTRAL 166 166 166 166): programación
+  if (t.filas.every(f => f.frecuencia) && t.filas.some(f => f.valores.length >= 3)) return "programa";
+  if (/anual/.test(cab)) return "anual";
+  if (/\ba[nñ]o\b|1r ano|2ndo|prorroga/.test(cab)) return "porAnios";
+  if (t.filas.every(f => f.frecuencia) || /\bmes 1\b|enero|febrero/.test(cab)) return "programa";
+  if (t.filas.every(f => f.valores.length === 1)) return "parque";
+  return "otra";
+}
+
 export function tablasParaServicios(tablas = [], docId = null) {
   const propuestas = tablas.map((t, k) => {
-    const texto = `${t.titulo} ${t.cabecera || ""}`;
-    const nombreTabla = servicioDe(t.titulo) || servicioDe(t.cabecera || "");
-    const porAnios = /a[nñ]o/i.test(texto);              // columnas por año (1r año, 2º año…)
-    const anual = /anual/i.test(texto);                   // «cantidades previstas anuales»: la última columna
-    const mesAMes = /enero|febrero|mes 1|d[ií]as\/mes/i.test(texto);
-    const trimestral = t.filas.some(f => /trimestral|semestral|mensual/i.test(f.concepto));
+    const clase = claseDe(t);
+    const nombreTabla = servicioDe(t.cabecera || "") || servicioDe(t.titulo);
     const lineas = [];
-    let conProducto = false; // alguna fila es «ud × veces = total»: cantidades al año
     t.filas.forEach((f, i) => {
-      if (/suma|total general|acumulad|festivos|d[ií]as/i.test(f.concepto)) return;
-      const iguales = f.valores.every(v => v === f.valores[0]);
-      // años iguales → el primero; «cantidades anuales» con varias columnas → la última (ud × veces = anual)
-      // o la última si es el producto de las demás por un número entero (543 ud × 2 veces/mes × 7 meses = 7.602)
-      const ult = f.valores[f.valores.length - 1], prod = f.valores.slice(0, -1).reduce((x, y) => x * y, 1);
-      const esProducto = f.valores.length >= 3 && prod > 0 && ult > prod && ult % prod === 0;
-      if (esProducto) conProducto = true;
-      const cantidad = iguales ? f.valores[0] : anual || esProducto ? ult : f.valores[0];
-      if (!(cantidad > 0)) return;
-      const concepto = f.concepto.replace(/\s+\d[\d.,]*\s+(trimestral|semestral|mensual|anual)\b.*$/i, "");
-      const ubicacion = ubicacionDe(f.grupo || "") || ubicacionDe(f.concepto) || ubicacionDe(t.titulo);
+      if (/suma|total general|acumulad|festivos|d[ií]as|lavados mensuales/i.test(f.concepto)) return;
+      const v = f.valores, ult = v[v.length - 1];
+      let cantidad = null, unidades = null, cuenta = null, cuadra = null;
+      if (clase === "anual") {
+        cantidad = ult; unidades = v.length >= 2 ? v[0] : null;
+        if (unidades && f.frecuencia && VECES[f.frecuencia]) { const esp = unidades * VECES[f.frecuencia]; cuenta = `${FMT_ES(unidades)} × ${VECES[f.frecuencia]} (${f.frecuencia})`; cuadra = esp === cantidad; }
+        else if (v.length === 3) { const meses = MESES_TEMPORADA(f.concepto); if (meses) { const esp = v[0] * v[1] * meses; cuenta = `${FMT_ES(v[0])} × ${v[1]} al mes × ${meses} meses`; cuadra = esp === cantidad; } }
+      } else if (clase === "porAnios") cantidad = v[0];
+      else if (clase === "programa" && f.frecuencia && VECES[f.frecuencia]) { unidades = v[0]; cantidad = v[0] * VECES[f.frecuencia]; cuenta = `${FMT_ES(v[0])} × ${VECES[f.frecuencia]} (${f.frecuencia})`; }
+      else if (clase === "parque") unidades = v[0];
+      else return;
+      const concepto = f.concepto;
+      const temporada = MESES_TEMPORADA(concepto) ? concepto : null;
+      const ubicacion = ubicacionDe(f.grupo || "") || ubicacionDe(concepto) || ubicacionDe(t.titulo) || ubicacionDe(t.cabecera || "");
       lineas.push({
-        id: `d${docId || "x"}_t${k}_${i}`, nombre: servicioDe(concepto) || nombreTabla || "Servicio",
-        fraccion: fraccionDe(concepto) || fraccionDe(f.grupo || "") || concepto,
-        ubicacion, cantidadAnual: cantidad, concepto: [f.grupo, f.concepto].filter(Boolean).join(" · "),
-        tabla: t.titulo, pagina: t.pagina, doc: docId,
+        id: `d${docId || "x"}_t${k}_${i}`, nombre: servicioDe(concepto) || servicioDe(f.grupo || "") || nombreTabla || "Servicio",
+        // la fracción, si la fila es de una; si es de una temporada o de una ubicación, todas
+        fraccion: fraccionDe(concepto) || fraccionDe(f.grupo || "") || (temporada || ubicacionDe(concepto) ? "Todas" : null), temporada, ubicacion,
+        cantidadAnual: cantidad, unidades, frecuencia: f.frecuencia || null, cuenta, cuadra,
+        concepto: [f.grupo, f.concepto].filter(Boolean).join(" · "), tabla: t.titulo, pagina: t.pagina, doc: docId,
       });
     });
-    const usar = lineas.length > 0 && !mesAMes && !trimestral && (porAnios || anual || conProducto);
-    const motivo = mesAMes ? "programación mes a mes" : trimestral ? "cantidades por periodo (no al año)" : !(porAnios || anual || conProducto) ? "no dice que sean cantidades al año" : null;
-    return { indice: k, titulo: t.titulo, pagina: t.pagina, servicio: nombreTabla, usar, motivo, lineas };
+    const esServicio = ["anual", "porAnios", "programa"].includes(clase);
+    const usar = esServicio && clase !== "programa" && lineas.length > 0 && lineas.every(l => l.cantidadAnual > 0);
+    const motivo = clase === "programa" ? "programación por periodos (el total al año sale de unidades × frecuencia): suele repetirse en el anexo"
+      : !esServicio ? null : lineas.some(l => l.cuadra === false) ? "las cuentas de la tabla no cuadran: revísala" : null;
+    return { indice: k, titulo: t.titulo, pagina: t.pagina, servicio: nombreTabla, clase, usar, motivo, lineas };
   }).filter(t => t.lineas.length);
-  // El mismo servicio en dos tablas (el pliego lo cuenta dos veces, a veces
-  // con cifras distintas): solo se propone la primera y se avisa en la otra
-  const usados = new Map();
-  for (const t of propuestas) {
-    if (!t.usar) continue;
-    const claves = [...new Set(t.lineas.map(l => `${l.nombre}|${l.ubicacion || ""}`))];
-    const repetida = claves.map(c => usados.get(c)).find(Boolean);
-    if (repetida) {
-      const total = ts => ts.lineas.filter(l => claves.includes(`${l.nombre}|${l.ubicacion || ""}`)).reduce((a, l) => a + l.cantidadAnual, 0);
-      t.usar = false;
-      t.motivo = `repite «${t.servicio || t.lineas[0].nombre}» de la pág. ${repetida.pagina}` + (total(t) !== total(repetida) ? ` con otra cifra (${total(t).toLocaleString("es-ES")} frente a ${total(repetida).toLocaleString("es-ES")}): elige cuál vale` : "");
-      continue;
-    }
-    claves.forEach(c => usados.set(c, t));
+
+  // El mismo servicio en dos tablas: se propone la que más dice (unidades y
+  // frecuencia) y en la otra se avisa, con las cifras si no coinciden
+  const servicios = propuestas.filter(t => ["anual", "porAnios", "programa"].includes(t.clase));
+  const clave = l => `${l.nombre}|${l.ubicacion || ""}`;
+  const totalDe = (t, claves) => t.lineas.filter(l => claves.has(clave(l))).reduce((a, l) => a + (l.cantidadAnual || 0), 0);
+  const elegida = new Map();
+  for (const t of servicios.filter(x => x.usar)) {
+    for (const l of t.lineas) if (!elegida.has(clave(l))) elegida.set(clave(l), t);
   }
-  return propuestas;
+  for (const t of servicios) {
+    const otras = [...new Set(t.lineas.map(l => elegida.get(clave(l))).filter(o => o && o !== t))];
+    if (!otras.length) continue;
+    const o = otras[0], claves = new Set(t.lineas.map(clave));
+    const a = totalDe(t, claves), b = totalDe(o, claves);
+    if (t.usar && (o.clase === "anual" || o.pagina < t.pagina)) t.usar = false;
+    if (!t.usar) t.motivo = `repite «${t.servicio || t.lineas[0].nombre}» de la pág. ${o.pagina}` + (a !== b ? ` con otra cifra (${FMT_ES(a)} frente a ${FMT_ES(b)}): comprueba cuál vale` : " (mismas cifras)");
+  }
+  // la limpieza exterior por temporadas va con su total al año (no por fracción)
+  return propuestas.filter(t => t.clase !== "precios" && t.clase !== "parque" && t.clase !== "otra");
+}
+
+/** Precios unitarios del pliego (Anexo de costes): [{ nombre, ubicacion, fraccion, precio, pagina }] (el del primer año) */
+export function preciosDelPliego(tablas = []) {
+  const out = [];
+  tablas.forEach(t => {
+    if (claseDe(t) !== "precios") return;
+    const nombre = servicioDe(t.cabecera || "") || servicioDe(t.titulo);
+    for (const f of t.filas) {
+      if (!f.euros || !f.valores.length) continue;
+      out.push({ nombre: servicioDe(f.concepto) || servicioDe(f.grupo || "") || nombre, ubicacion: ubicacionDe(f.grupo || "") || ubicacionDe(f.concepto), fraccion: fraccionDe(f.concepto), concepto: [f.grupo, f.concepto].filter(Boolean).join(" · "), precio: f.valores[0], pagina: t.pagina });
+    }
+  });
+  return out;
+}
+/** El precio unitario de un servicio (mismo servicio, ubicación y, si la hay, fracción) */
+export function precioDe(linea, precios) {
+  const mismos = precios.filter(p => p.nombre === linea.nombre && (!p.ubicacion || !linea.ubicacion || p.ubicacion === linea.ubicacion));
+  return mismos.find(p => p.fraccion && p.fraccion === linea.fraccion) || mismos.find(p => !p.fraccion) || null;
+}
+/** El equipo que el pliego exige para un servicio (vehículo y personas), si lo dice */
+export function equipoDe(linea, equipos = []) {
+  return equipos.find(e => servicioDe(e.apartado || "") === linea.nombre) || equipos.find(e => servicioDe(`${e.apartado || ""} ${e.vehiculo || ""}`) === linea.nombre) || null;
 }
 
 /**
@@ -130,37 +175,39 @@ export function serviciosDeDatos(datos = [], docId = null) {
 // Valores de partida para dimensionar sin inventario; se cambian en Planning
 // con la experiencia de cada empresa (y, más adelante, con los datos reales).
 export const RENDIMIENTOS = [
-  { servicio: "Lavado interior", ubicacion: "Soterrado", porTurno: 25, nota: "camión lavacontenedores con sistema de elevación" },
-  { servicio: "Lavado interior", ubicacion: "Bilateral", porTurno: 35, nota: "carga superior bilateral" },
-  { servicio: "Lavado interior", ubicacion: null, porTurno: 70, nota: "carga lateral / superficie" },
-  { servicio: "Limpieza exterior", ubicacion: "Soterrado", porTurno: 60, nota: "hidrolimpiadora, buzones" },
-  { servicio: "Limpieza exterior", ubicacion: null, porTurno: 70, nota: "hidrolimpiadora" },
-  { servicio: "Limpieza bajo contenedor", ubicacion: null, porTurno: 60, nota: "barrido y fregado del pavimento" },
-  { servicio: "Mantenimiento preventivo", ubicacion: "Soterrado", porTurno: 20, nota: "revisión de soterrado (mecanismos, plataforma)" },
-  { servicio: "Mantenimiento preventivo", ubicacion: null, porTurno: 40, nota: "revisión de contenedor de superficie" },
-  { servicio: "Mantenimiento correctivo", ubicacion: null, porTurno: 10, nota: "reparaciones por aviso" },
-  { servicio: "Achiques", ubicacion: null, porTurno: 10, nota: "achique de fosos de soterrados" },
-  { servicio: "Recogida", ubicacion: "Soterrado", porTurno: 120, nota: "carga bilateral / grúa" },
-  { servicio: "Recogida", ubicacion: null, porTurno: 250, nota: "carga lateral" },
-  { servicio: null, ubicacion: null, porTurno: 50, nota: "valor genérico: ajústalo" },
+  { servicio: "Lavado interior", ubicacion: "Soterrado", porTurno: 25, vehiculo: "camión lavacontenedores", personas: 2, nota: "camión lavacontenedores con sistema de elevación" },
+  { servicio: "Lavado interior", ubicacion: "Bilateral", porTurno: 35, vehiculo: "camión lavacontenedores", personas: 2, nota: "carga superior bilateral" },
+  { servicio: "Lavado interior", ubicacion: null, porTurno: 70, vehiculo: "camión lavacontenedores", personas: 1, nota: "carga lateral / superficie" },
+  { servicio: "Limpieza exterior", ubicacion: "Soterrado", porTurno: 60, vehiculo: "vehículo con hidrolimpiadora", personas: 1, nota: "hidrolimpiadora, buzones" },
+  { servicio: "Limpieza exterior", ubicacion: null, porTurno: 70, vehiculo: "vehículo con hidrolimpiadora", personas: 1, nota: "hidrolimpiadora" },
+  { servicio: "Limpieza bajo contenedor", ubicacion: null, porTurno: 60, vehiculo: "vehículo con grúa", personas: 2, nota: "levantar el contenedor y barrer debajo" },
+  { servicio: "Mantenimiento preventivo", ubicacion: "Soterrado", porTurno: 20, vehiculo: "furgoneta de taller", personas: 2, nota: "revisión de soterrado (mecanismos, plataforma)" },
+  { servicio: "Mantenimiento preventivo", ubicacion: null, porTurno: 40, vehiculo: "furgoneta de taller", personas: 2, nota: "revisión de contenedor de superficie" },
+  { servicio: "Mantenimiento correctivo", ubicacion: null, porTurno: 10, vehiculo: "furgoneta de taller", personas: 2, nota: "reparaciones por aviso" },
+  { servicio: "Rehabilitación de contenedores", ubicacion: null, porTurno: 1, vehiculo: "furgoneta de taller", personas: 2, nota: "en taller (traslado con la furgoneta de taller)" },
+  { servicio: "Achiques", ubicacion: null, porTurno: 10, vehiculo: "furgoneta de taller", personas: 2, nota: "achique de fosos de soterrados" },
+  { servicio: "Recogida", ubicacion: "Soterrado", porTurno: 120, vehiculo: "camión recolector", personas: 1, nota: "carga bilateral / grúa" },
+  { servicio: "Recogida", ubicacion: null, porTurno: 250, vehiculo: "camión recolector", personas: 1, nota: "carga lateral" },
+  { servicio: null, ubicacion: null, porTurno: 50, vehiculo: null, personas: 2, nota: "valor genérico: ajústalo" },
 ];
 export function rendimientoOrientativo(s) {
   const r = RENDIMIENTOS.find(x => (x.servicio === s.nombre || x.servicio == null) && (x.ubicacion == null || x.ubicacion === s.ubicacion));
-  return r ? { porTurno: r.porTurno, nota: r.nota } : { porTurno: 50, nota: "valor genérico: ajústalo" };
+  return r || RENDIMIENTOS[RENDIMIENTOS.length - 1];
 }
 
 export const PARAMETROS_DEFECTO = {
   jornadasAnio: 357,        // días de servicio al año (los del pliego si los trae)
   horasTurno: 7,            // horas de trabajo efectivo por turno
-  personasPorEquipo: 1,     // conductor (+ peón si hace falta)
+  personasPorEquipo: 2,     // si el pliego no dice cuántas personas lleva el equipo
   horasAnualesConvenio: 1720, // horas de trabajo al año de un trabajador (convenio)
   absentismoPct: 6,         // bajas y ausencias, en % de las horas
 };
 
 /**
  * Dimensionar por rendimientos (sin inventario ni rutas).
- * @param servicios [{ id, nombre, fraccion, ubicacion, cantidadAnual, porTurno, equipo }]
- *   equipo: nombre del equipo (vehículo) que lo hace; los servicios con el mismo equipo lo comparten
+ * @param servicios [{ id, nombre, fraccion, ubicacion, cantidadAnual, porTurno, vehiculo, personas, equipo }]
+ *   vehiculo / personas: el equipo que exige el pliego para ese servicio; equipo: otro nombre
+ *   de equipo si se quiere juntar servicios distintos. Los del mismo vehículo lo comparten.
  * @param p PARAMETROS_DEFECTO (o los del concurso)
  * @returns { lineas: [{ …, turnosAnio }], equipos: [{ equipo, turnosAnio, porDia, unidades }], resumen }
  */
@@ -168,20 +215,27 @@ export function dimensionar(servicios, p = PARAMETROS_DEFECTO) {
   const q = { ...PARAMETROS_DEFECTO, ...p };
   const lineas = servicios.map(s => {
     const porTurno = Number(s.porTurno) > 0 ? Number(s.porTurno) : rendimientoOrientativo(s).porTurno;
-    return { ...s, porTurno, turnosAnio: (Number(s.cantidadAnual) || 0) / porTurno };
+    const ori = rendimientoOrientativo(s);
+    const personas = Number(s.personas) > 0 ? Number(s.personas) : ori.personas || q.personasPorEquipo;
+    const vehiculo = s.vehiculo || ori.vehiculo || s.nombre;
+    return { ...s, porTurno, personas, vehiculo, turnosAnio: (Number(s.cantidadAnual) || 0) / porTurno };
   });
   const porEquipo = new Map();
   for (const l of lineas) {
-    const e = l.equipo || l.nombre;
-    porEquipo.set(e, (porEquipo.get(e) || 0) + l.turnosAnio);
+    // los servicios que hace el mismo tipo de vehículo lo comparten
+    const e = l.equipo || l.vehiculo || l.nombre;
+    const x = porEquipo.get(e) || { turnosAnio: 0, personas: 0, servicios: new Set() };
+    x.turnosAnio += l.turnosAnio; x.personas = Math.max(x.personas, l.personas); x.servicios.add(l.nombre);
+    porEquipo.set(e, x);
   }
-  const equipos = [...porEquipo.entries()].map(([equipo, turnosAnio]) => {
+  const equipos = [...porEquipo.entries()].map(([equipo, { turnosAnio, personas, servicios }]) => {
     const porDia = turnosAnio / q.jornadasAnio;     // turnos que hacen falta cada día de servicio
     const unidades = Math.max(1, Math.ceil(porDia - 1e-9)); // vehículos (un turno al día cada uno)
-    return { equipo, turnosAnio, porDia, unidades, ocupacion: porDia / unidades };
+    return { equipo, turnosAnio, porDia, unidades, ocupacion: porDia / unidades, personas, servicios: [...servicios] };
   });
   const turnosAnio = lineas.reduce((s, l) => s + l.turnosAnio, 0);
-  const horasAnio = turnosAnio * q.horasTurno * q.personasPorEquipo;
+  // horas de las personas: cada turno, con las personas que lleva su equipo
+  const horasAnio = lineas.reduce((s, l) => s + l.turnosAnio * q.horasTurno * l.personas, 0);
   const horasPorPersona = q.horasAnualesConvenio * (1 - q.absentismoPct / 100);
   return {
     lineas, equipos,

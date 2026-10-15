@@ -65,7 +65,7 @@ describe("lector de pliegos", () => {
     const t = tablasDeCantidades(ANEXO);
     expect(t).toHaveLength(1);
     expect(t[0].titulo).toMatch(/^LAVADO FRACCIÓN|ANEXO I/);
-    expect(t[0].filas).toEqual([
+    expect(t[0].filas.map(({ grupo, concepto, valores }) => ({ grupo, concepto, valores }))).toEqual([
       { grupo: "SOTERRADO", concepto: "RSU", valores: [1992, 1992, 1992, 1992] },
       { grupo: "SOTERRADO", concepto: "PAPEL", valores: [230, 230, 230, 230] },
       { grupo: "SUPERFICIE", concepto: "RSU", valores: [1476, 1476, 1476, 1476] },

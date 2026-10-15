@@ -16,7 +16,6 @@ const num = n => FMT.format(Math.round(n * 10) / 10);
 const PARAMS = [
   ["jornadasAnio", "Días de servicio al año", "días"],
   ["horasTurno", "Horas de trabajo por turno", "h"],
-  ["personasPorEquipo", "Personas por equipo", "pers."],
   ["horasAnualesConvenio", "Horas al año de un trabajador (convenio)", "h"],
   ["absentismoPct", "Absentismo (bajas y ausencias)", "%"],
 ];
@@ -42,7 +41,8 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
   const jornadasPliego = ficha?.datos?.jornadasAnio && ficha.datos.jornadasAnio.estado !== "descartado" ? Number(ficha.datos.jornadasAnio.valor) : null;
   const parametros = { ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}), ...(local?.parametros || {}) };
   const porServicio = { ...(dim?.porServicio || {}), ...(local?.porServicio || {}) };
-  const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, equipo: porServicio[s.id]?.equipo || s.nombre }));
+  // vehículo y personas: lo cambiado aquí > lo que exige el pliego (ficha) > orientativo
+  const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, vehiculo: porServicio[s.id]?.vehiculo || s.vehiculo || null, personas: porServicio[s.id]?.personas ?? s.personas ?? null }));
   const r = dimensionar(entrada, parametros);
 
   const cambiarParam = (k, v) => setLocal(l => ({ ...(l || {}), parametros: { ...(l?.parametros || {}), [k]: v } }));
@@ -101,7 +101,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 8 }}>Servicios de la ficha</div>
             <div style={{ ...tarjeta, overflow: "auto", marginBottom: 18 }}>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", "Rinde por turno", "Equipo que lo hace", "Turnos al año"].map(h => <th key={h} style={{ ...th, textAlign: ["Al año", "Turnos al año"].includes(h) ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", "Rinde por turno", "Vehículo", "Personas", "Turnos al año"].map(h => <th key={h} style={{ ...th, textAlign: ["Al año", "Turnos al año"].includes(h) ? "right" : "left" }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {r.lineas.map(l => {
                     const ori = rendimientoOrientativo(l);
@@ -114,7 +114,11 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                           <input className="op-input" type="number" min={1} value={porServicio[l.id]?.porTurno ?? ""} placeholder={String(ori.porTurno)} onChange={e => cambiarServicio(l.id, "porTurno", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 80, height: 30 }} />
                           <span style={{ fontSize: 11, color: propio ? C.green : C.amber, marginLeft: 8 }}>{propio ? "tuyo" : "orientativo"}</span>
                         </td>
-                        <td style={td}><input className="op-input" value={porServicio[l.id]?.equipo ?? l.nombre} onChange={e => cambiarServicio(l.id, "equipo", e.target.value)} style={{ width: 200, height: 30 }} /></td>
+                        <td style={td}>
+                          <input className="op-input" value={porServicio[l.id]?.vehiculo ?? l.vehiculo} onChange={e => cambiarServicio(l.id, "vehiculo", e.target.value)} style={{ width: 220, height: 30 }} />
+                          <span style={{ fontSize: 11, marginLeft: 8, color: servicios.find(x => x.id === l.id)?.vehiculo ? C.green : C.amber }} title={servicios.find(x => x.id === l.id)?.equipoPagina ? `pág. ${servicios.find(x => x.id === l.id).equipoPagina}` : "el pliego no lo fija"}>{servicios.find(x => x.id === l.id)?.vehiculo ? "pliego" : "orientativo"}</span>
+                        </td>
+                        <td style={td}><input className="op-input" type="number" min={1} value={porServicio[l.id]?.personas ?? l.personas} onChange={e => cambiarServicio(l.id, "personas", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 60, height: 30 }} /></td>
                         <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{num(l.turnosAnio)}</td>
                       </tr>
                     );
@@ -124,15 +128,17 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             </div>
 
             {/* equipos */}
-            <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 4 }}>Equipos</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8 }}>Los servicios con el mismo nombre de equipo los hace el mismo vehículo (p. ej. «Taller» para correctivo y achiques).</div>
+            <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 4 }}>Equipos por tipo de vehículo</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8 }}>Cada tipo de vehículo, con los servicios que hace, las personas que lleva y cuántos hacen falta. Los servicios con el mismo vehículo lo comparten.</div>
             <div style={{ ...tarjeta, overflow: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                <thead><tr>{["Equipo", "Turnos al año", "Turnos cada día", "Vehículos", "Ocupación"].map(h => <th key={h} style={{ ...th, textAlign: h === "Equipo" ? "left" : "right" }}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Vehículo", "Servicios", "Personas por equipo", "Turnos al año", "Turnos cada día", "Vehículos", "Ocupación"].map(h => <th key={h} style={{ ...th, textAlign: ["Vehículo", "Servicios"].includes(h) ? "left" : "right" }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {r.equipos.map(e => (
                     <tr key={e.equipo} style={{ borderTop: `1px solid ${C.border}` }}>
-                      <td style={td}>{e.equipo}</td>
+                      <td style={{ ...td, fontWeight: 600 }}>{e.equipo}</td>
+                      <td style={{ ...td, color: C.muted, whiteSpace: "normal", minWidth: 180 }}>{e.servicios.join(", ")}</td>
+                      <td style={{ ...td, textAlign: "right" }}>{e.personas}</td>
                       <td style={{ ...td, textAlign: "right" }}>{num(e.turnosAnio)}</td>
                       <td style={{ ...td, textAlign: "right" }}>{num(e.porDia)}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 650 }}>{e.unidades}</td>
@@ -143,7 +149,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
               </table>
             </div>
             <div style={{ fontSize: 11.5, color: C.dim, marginTop: 10, lineHeight: 1.5, maxWidth: 820 }}>
-              Turnos al año = cantidad al año ÷ lo que rinde un equipo en un turno. Vehículos = turnos que hacen falta cada día de servicio, redondeado hacia arriba. Personas = horas al año ÷ horas de un trabajador (convenio, descontando el absentismo). Se guarda solo y lo usa Cálculo.
+              Turnos al año = cantidad al año ÷ lo que rinde un equipo en un turno. Vehículos = turnos que hacen falta cada día de servicio, por tipo de vehículo, redondeado hacia arriba. Personas = horas al año (cada turno con las personas de su equipo) ÷ horas de un trabajador (convenio, descontando el absentismo). El vehículo y las personas de cada servicio vienen del pliego cuando lo exige («pliego»); si no, orientativos. Se guarda solo y lo usa Cálculo.
             </div>
           </>}
         </div>

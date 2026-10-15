@@ -2,10 +2,10 @@
 // El lector propone (con su página); aquí cada dato se confirma, se corrige o
 // se descarta, y los servicios con su cantidad al año se eligen de las tablas
 // del pliego (o se añaden a mano). De esta ficha leen los demás módulos.
-import { Check, Pencil, Plus, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, TriangleAlert, Truck, X } from "lucide-react";
 import { useState } from "react";
 import { C } from "../tema.js";
-import { serviciosDeDatos, tablasParaServicios } from "./ficha.js";
+import { equipoDe, precioDe, preciosDelPliego, serviciosDeDatos, tablasParaServicios } from "./ficha.js";
 import { cambiarConcurso, fijarDato, fijarServicio } from "./store.js";
 
 const GRUPOS = [
@@ -65,11 +65,23 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
   const propuestas = (docs || []).flatMap(d => [...serviciosDeDatos(d.lectura?.datos || [], d._id), ...tablasParaServicios(d.lectura?.tablas || [], d._id)].map(t => ({ ...t, clave: `${d._id}|${t.indice}`, docNombre: d.nombre })))
     .map(t => ({ ...t, lineas: t.lineas.filter(l => !yaEn.has(l.id)) })).filter(t => t.lineas.length);
   const marcadas = elegidas ?? new Set(propuestas.filter(t => t.usar).map(t => t.clave));
+  // equipos y precios del pliego (de todos los documentos subidos)
+  const equipos = (docs || []).flatMap(d => (d.lectura?.equipos || []).map(e => ({ ...e, docNombre: d.nombre })));
+  const precios = (docs || []).flatMap(d => preciosDelPliego(d.lectura?.tablas || []));
   async function anadirMarcadas() {
     let orden = servicios.length;
     try {
       for (const t of propuestas.filter(x => marcadas.has(x.clave))) {
-        for (const l of t.lineas) await fijarServicio(concursoId, l.id, { nombre: l.nombre, fraccion: l.fraccion, ubicacion: l.ubicacion || null, cantidadAnual: l.cantidadAnual, unidades: l.unidades ?? null, concepto: l.concepto, pagina: l.pagina, doc: l.doc, orden: orden++ });
+        for (const l of t.lineas) {
+          const e = equipoDe(l, equipos), pr = precioDe(l, precios);
+          await fijarServicio(concursoId, l.id, {
+            nombre: l.nombre, fraccion: l.fraccion ?? null, ubicacion: l.ubicacion || null, temporada: l.temporada ?? null,
+            cantidadAnual: l.cantidadAnual, unidades: l.unidades ?? null, frecuencia: l.frecuencia ?? null, cuenta: l.cuenta ?? null, cuadra: l.cuadra ?? null,
+            vehiculo: e?.vehiculo ?? null, personas: e?.personas ?? null, equipoPagina: e?.pagina ?? null,
+            precioUnitario: pr?.precio ?? null, precioPagina: pr?.pagina ?? null,
+            concepto: l.concepto, pagina: l.pagina, doc: l.doc, orden: orden++,
+          });
+        }
       }
       setElegidas(null); onNota("Servicios añadidos a la ficha. Revísalos y corrige lo que haga falta.");
     } catch (e) { onError(e.message || String(e)); }
@@ -143,15 +155,21 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
       <div style={{ ...tarjeta, overflow: "auto" }}>
         {!servicios.length ? <div style={{ padding: 16, fontSize: 13, color: C.muted }}>Aún no hay servicios en la ficha. Añádelos desde las tablas del pliego (abajo) o a mano.</div> : (
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>
-            <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", "De dónde sale", ""].map(h => <th key={h} style={{ textAlign: h === "Al año" ? "right" : "left", padding: "8px 12px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}` }}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Servicio", "Fracción", "Ubicación", "Al año", "Precio ud.", "Vehículo (pliego)", "Personas", "De dónde sale", ""].map(h => <th key={h} style={{ textAlign: ["Al año", "Precio ud.", "Personas"].includes(h) ? "right" : "left", padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
             <tbody>
               {servicios.map(s => (
                 <tr key={s.id} style={{ borderTop: `1px solid ${C.border}` }}>
-                  {[["nombre", 180], ["fraccion", 140], ["ubicacion", 120]].map(([campo, w]) => (
-                    <td key={campo} style={{ padding: "4px 8px" }}><input className="op-input" defaultValue={s[campo] || ""} onBlur={e => e.target.value !== (s[campo] || "") && cambiarServicio(s, campo, e.target.value || null)} style={{ width: w, height: 30 }} /></td>
+                  {[["nombre", 170], ["fraccion", 110], ["ubicacion", 100]].map(([campo, w]) => (
+                    <td key={campo} style={{ padding: "4px 6px" }}><input className="op-input" defaultValue={s[campo] || ""} onBlur={e => e.target.value !== (s[campo] || "") && cambiarServicio(s, campo, e.target.value || null)} style={{ width: w, height: 30 }} /></td>
                   ))}
-                  <td style={{ padding: "4px 8px", textAlign: "right" }}><input className="op-input" defaultValue={FMT.format(s.cantidadAnual || 0)} onBlur={e => { const n = aValor("x", e.target.value); if (typeof n === "number" && n !== s.cantidadAnual) cambiarServicio(s, "cantidadAnual", n); }} style={{ width: 100, height: 30, textAlign: "right" }} /></td>
-                  <td style={{ padding: "4px 12px", fontSize: 11.5, color: C.dim }}>{s.pagina ? `pág. ${s.pagina}` : "a mano"}{s.concepto ? ` · ${s.concepto}` : ""}</td>
+                  <td style={{ padding: "4px 6px", textAlign: "right" }}>
+                    <input className="op-input" defaultValue={FMT.format(s.cantidadAnual || 0)} onBlur={e => { const n = aValor("x", e.target.value); if (typeof n === "number" && n !== s.cantidadAnual) cambiarServicio(s, "cantidadAnual", n); }} style={{ width: 90, height: 30, textAlign: "right" }} />
+                    {s.cuenta && <div style={{ fontSize: 10.5, color: s.cuadra === false ? C.red : C.green, marginTop: 2, whiteSpace: "nowrap" }} title="Comprobación con las unidades y la frecuencia del pliego">{s.cuadra === false ? "✗" : "✓"} {s.cuenta}</div>}
+                  </td>
+                  <td style={{ padding: "4px 6px", textAlign: "right" }}><input className="op-input" defaultValue={s.precioUnitario != null ? FMT.format(s.precioUnitario) : ""} placeholder="—" title={s.precioPagina ? `Precio del pliego (pág. ${s.precioPagina})` : "Sin precio en el pliego"} onBlur={e => { const n = e.target.value.trim() === "" ? null : aValor("x", e.target.value); if (n !== s.precioUnitario && (n === null || typeof n === "number")) cambiarServicio(s, "precioUnitario", n); }} style={{ width: 80, height: 30, textAlign: "right" }} /></td>
+                  <td style={{ padding: "4px 6px" }}><input className="op-input" defaultValue={s.vehiculo || ""} placeholder="el pliego no lo dice" title={s.equipoPagina ? `Lo exige el pliego (pág. ${s.equipoPagina})` : ""} onBlur={e => e.target.value !== (s.vehiculo || "") && cambiarServicio(s, "vehiculo", e.target.value || null)} style={{ width: 210, height: 30 }} /></td>
+                  <td style={{ padding: "4px 6px", textAlign: "right" }}><input className="op-input" type="number" min={0} defaultValue={s.personas ?? ""} placeholder="—" onBlur={e => { const n = e.target.value === "" ? null : Number(e.target.value); if (n !== s.personas) cambiarServicio(s, "personas", n); }} style={{ width: 60, height: 30, textAlign: "right" }} /></td>
+                  <td style={{ padding: "4px 10px", fontSize: 11.5, color: C.dim, whiteSpace: "nowrap" }}>{s.pagina ? `pág. ${s.pagina}` : "a mano"}{s.temporada ? ` · ${s.temporada}` : ""}</td>
                   <td style={{ padding: "4px 8px" }}><button className="op-btn op-fantasma op-icono" title="Quitar" onClick={() => fijarServicio(concursoId, s.id, null).catch(e => onError(e.message))}><Trash2 size={14} /></button></td>
                 </tr>
               ))}
@@ -172,6 +190,21 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
         </div>
       </div>
 
+      {equipos.length > 0 && <>
+        {titulo("Equipos que exige el pliego")}
+        <div style={{ ...tarjeta, overflow: "hidden" }}>
+          {equipos.map((e, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", borderTop: i ? `1px solid ${C.border}` : "none", flexWrap: "wrap" }} title={e.frase}>
+              <Truck size={16} color={C.blue} />
+              <div style={{ flex: "1 1 240px", fontSize: 13, color: C.text }}>{e.apartado || "Servicio"}</div>
+              <div style={{ flex: "1 1 240px", fontSize: 13, color: C.text, fontWeight: 600 }}>{e.vehiculo || "—"}{e.personas ? ` + ${e.quien || `${e.personas} personas`}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: C.dim }}>pág. {e.pagina} · {e.docNombre}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Cada servicio de la ficha lleva el equipo de su apartado; Planning cuenta un vehículo de cada tipo y las personas de cada equipo. Lo que el pliego no fija (p. ej. el mantenimiento) lo eliges tú.</div>
+      </>}
+
       {propuestas.length > 0 && <>
         {titulo("Propuestas de las tablas del pliego")}
         <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>Marca las tablas que son cantidades al año y añádelas. Las que repiten un servicio o no son anuales vienen sin marcar: decide tú.</div>
@@ -182,7 +215,10 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.servicio || t.lineas[0].nombre} <span style={{ color: C.dim, fontWeight: 400, fontSize: 11.5 }}>· {t.titulo} · pág. {t.pagina} · {t.docNombre}</span></div>
                 {t.motivo && <div style={{ fontSize: 12, color: C.amber, marginTop: 2 }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> {t.motivo}</div>}
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.6 }}>{t.lineas.map(l => `${[l.fraccion, l.ubicacion].filter(Boolean).join(" ")}: ${FMT.format(l.cantidadAnual)}`).join(" · ")}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.6 }}>
+                  {t.lineas.map((l, i) => <span key={i}>{i ? " · " : ""}{[l.temporada || l.fraccion, l.ubicacion].filter(Boolean).join(" ")}: <b style={{ color: C.text }}>{FMT.format(l.cantidadAnual)}</b>{l.cuenta ? <span style={{ color: l.cuadra === false ? C.red : C.green }}> ({l.cuenta} {l.cuadra === false ? "✗" : "✓"})</span> : null}</span>)}
+                </div>
+                {(() => { const e = equipoDe(t.lineas[0], equipos); return e ? <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}><Truck size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />El pliego exige: {e.vehiculo}{e.personas ? ` + ${e.personas} persona${e.personas > 1 ? "s" : ""}` : ""} <span style={{ color: C.dim }}>(pág. {e.pagina})</span></div> : null; })()}
               </div>
             </label>
           ))}
