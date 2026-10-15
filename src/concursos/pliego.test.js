@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buscarEnPliego, leerPliego, numeroEs, tablasDeCantidades } from "./pliego.js";
+import { buscarEnPliego, frecuenciasDelServicio, leerPliego, numeroEs, tablasDeCantidades } from "./pliego.js";
 
 // Trozos con la forma de pliegos reales (técnico, anuncio de la Plataforma de Contratación y anexo)
 const TECNICO = [
@@ -82,5 +82,17 @@ describe("lector de pliegos", () => {
     const r = leerPliego(["", " ", ""]);
     expect(r.conTexto).toBe(false);
     expect(r.datos).toEqual([]);
+  });
+  it("frecuencias: la frase de qué se hace y cada cuánto, no informes ni pagos", () => {
+    const f = frecuenciasDelServicio([
+      "El adjudicatario deberá entregar a EMAYA un informe mensual con todas las actuaciones. Averías diarias Son las averías comunicadas por el servicio.",
+      "Limpieza exterior con hidrolimpiadora Se prestará un servicio de lavado exterior de los contenedores con una frecuencia de cuatro veces al mes durante el período de mayo a septiembre. - Frecuencia trimestral para contenedores de envases y vidrio - Frecuencia mensual para contenedores de RSU y FORM La limpieza de los contenedores incluye el barrido.",
+      "El servicio de limpieza exterior se abonará mensualmente en función del número de limpiezas. Tabla 5 Cantidades y frecuencia LIMPIEZA BAJOS SUPERFICIE TODAS 336 MENSUAL 4.032",
+    ]).map(x => x.texto);
+    expect(f).toEqual([
+      "Se prestará un servicio de lavado exterior de los contenedores con una frecuencia de cuatro veces al mes durante el período de mayo a septiembre.",
+      "Frecuencia trimestral para contenedores de envases y vidrio",
+      "Frecuencia mensual para contenedores de RSU y FORM",
+    ]);
   });
 });

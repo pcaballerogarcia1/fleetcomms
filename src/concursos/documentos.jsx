@@ -7,8 +7,8 @@ import { ArrowRightToLine, Check, ExternalLink, FileText, Loader2, Search, Trash
 import { useEffect, useMemo, useRef, useState } from "react";
 import { textoDelPdf } from "../rostering/convenio-pdf.js";
 import { C, font } from "../tema.js";
-import { buscarEnPliego, leerPliego } from "./pliego.js";
-import { PDF_MAX, borrarDocumento, cambiarConcurso, escucharDocumentos, guardarDocumento, pdfDocumento, textoDocumento } from "./store.js";
+import { VERSION_LECTOR, buscarEnPliego, leerPliego } from "./pliego.js";
+import { PDF_MAX, borrarDocumento, cambiarConcurso, escucharDocumentos, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
 
 const CLASE = { tecnico: "Pliego de prescripciones técnicas", administrativo: "Pliego de cláusulas administrativas", anuncio: "Anuncio de licitación" };
 const TIPO = { residuos: "Residuos", limpieza: "Limpieza viaria", autobuses: "Autobuses" };
@@ -53,6 +53,14 @@ export function DocumentosConcurso({ concurso }) {
 
   const sel = docs?.find(d => d._id === selId) || docs?.[docs.length - 1] || null;
   const lectura = sel?.lectura;
+  // leído con un lector más antiguo: se vuelve a leer solo (con el texto guardado)
+  const anticuado = sel && sel.lectura && (sel.lectura.version || 1) < VERSION_LECTOR ? sel : null;
+  useEffect(() => {
+    if (!anticuado) return;
+    let vivo = true;
+    textoDocumento(id, anticuado).then(paginas => vivo && releerDocumento(id, anticuado, leerPliego(paginas))).catch(e => console.warn("[pliegos] releer:", e));
+    return () => { vivo = false; };
+  }, [id, anticuado]);
   const resultados = useMemo(() => (texto.id === sel?._id && texto.paginas ? buscarEnPliego(texto.paginas, q) : []), [texto, sel?._id, q]);
 
   async function subir(files) {
@@ -119,9 +127,9 @@ export function DocumentosConcurso({ concurso }) {
         ) : (
           <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
             {/* documentos subidos */}
-            <div style={{ flex: "0 0 260px", width: 260, minWidth: 0, display: "grid", gap: 8 }}>
+            <div style={{ flex: "0 0 260px", width: 260, minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
               {docs.map(d => (
-                <div key={d._id} onClick={() => setSelId(d._id)} style={{ ...tarjeta, padding: "11px 13px", cursor: "pointer", borderColor: sel?._id === d._id ? C.blue : C.border }}>
+                <div key={d._id} onClick={() => setSelId(d._id)} style={{ ...tarjeta, padding: "11px 13px", cursor: "pointer", minWidth: 0, overflow: "hidden", borderColor: sel?._id === d._id ? C.blue : C.border }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <FileText size={16} color={sel?._id === d._id ? C.blue : C.muted} style={{ flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -167,7 +175,7 @@ export function DocumentosConcurso({ concurso }) {
                   <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Pulsa un dato para ver la frase del pliego de donde sale.</div>
                 </>}
 
-                {(lectura.listas.fracciones.length > 0 || lectura.listas.limpieza.length > 0 || lectura.listas.ambiental.length > 0) && <>
+                {(lectura.listas.fracciones.length > 0 || lectura.listas.limpieza.length > 0 || lectura.listas.ambiental.length > 0 || lectura.listas.frecuencias?.length > 0) && <>
                   {titulo("El servicio")}
                   {[["Fracciones", lectura.listas.fracciones], ["Limpieza", lectura.listas.limpieza], ["Exigencias ambientales", lectura.listas.ambiental]].filter(([, l]) => l.length).map(([t, l]) => (
                     <div key={t} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
@@ -175,6 +183,14 @@ export function DocumentosConcurso({ concurso }) {
                       {l.map(x => <span key={x.nombre} className="op-pastilla" title={`pág. ${x.pagina}`} style={{ background: "rgba(91,124,250,0.12)", color: C.blueText || C.blue }}>{x.nombre}</span>)}
                     </div>
                   ))}
+                  {lectura.listas.frecuencias?.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap", marginTop: 4 }}>
+                      <span style={{ fontSize: 12.5, color: C.muted, width: 160 }}>Frecuencias</span>
+                      <div style={{ flex: 1, minWidth: 240, display: "grid", gap: 4 }}>
+                        {lectura.listas.frecuencias.map((f, i) => <div key={i} style={{ fontSize: 13, color: C.text, lineHeight: 1.45 }}>{f.texto} <span style={{ fontSize: 11, color: C.dim }}>· pág. {f.pagina}</span></div>)}
+                      </div>
+                    </div>
+                  )}
                 </>}
 
                 {lectura.tablas?.length > 0 && <>

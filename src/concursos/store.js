@@ -92,6 +92,11 @@ export async function guardarDocumento(concursoId, { archivo, paginas, lectura, 
   return ref.id;
 }
 
+/** Lo leído de un documento, otra vez (con un lector mejor) */
+export function releerDocumento(concursoId, d, lectura) {
+  return updateDoc(doc(db, "concursos", concursoId, "documentos", d._id), { lectura, clase: lectura.clase || null });
+}
+
 export async function textoDocumento(concursoId, d) {
   const partes = await Promise.all(Array.from({ length: d.trozosTexto || 0 }, (_, i) => getDoc(doc(db, "concursos", concursoId, "documentos", d._id, "texto", String(i)))));
   return JSON.parse(partes.map(p => p.data()?.t || "").join("") || "[]");

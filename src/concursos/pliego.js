@@ -11,6 +11,9 @@
 // Igual que el lector de convenios: si algo no lo encuentra, no se inventa.
 // Sin React ni Firebase.
 
+// Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
+export const VERSION_LECTOR = 2;
+
 const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
 const LETRAS = Object.keys(NUM_LETRA).join("|");
 
@@ -95,6 +98,7 @@ const AMBIENTAL = [
 /**
  * Lee un pliego.
  * @param paginas [texto de cada página] (textoDelPdf)
+ * listas.frecuencias: [{ texto, pagina }] — cada frecuencia con lo que se hace («Frecuencia mensual para contenedores de RSU…»)
  * @returns { tipo, clase ("anuncio" | "tecnico" | "administrativo" | null), datos: [{ id, nombre, valor, pagina, frase }], listas: { fracciones, limpieza, ambiental },
  *            requisitos: [{ texto, pagina }], indice: [{ titulo, pagina }],
  *            tablas: [{ titulo, pagina, cabecera, filas: [{ grupo, concepto, valores }] }], paginas, conTexto }
@@ -213,10 +217,10 @@ export function leerPliego(paginasCrudas) {
   const turnoNoche = buscar(paginas, /(?:turno|horario|servicio) (?:de |en )?(?:la )?noche|nocturn[oa]/i);
   if (turnoNoche) poner("nocturno", "Trabajo nocturno", turnoNoche, "Sí");
 
-  // ── frecuencias ──
-  const frec = buscarTodas(paginas, /\b(diari[oa]|d[ií]as alternos|(?:\d|una|dos|tres|cuatro|cinco|seis|siete) (?:veces|d[ií]as) (?:a|por|cada|en) (?:la )?semana|semanal(?:mente)?|quincenal(?:mente)?|mensual(?:mente)?|lunes a (?:s[aá]bado|domingo|viernes))\b/i, 12);
-  const vistas = new Set();
-  for (const f of frec) { const k = sinAcentos(f.m[1]); if (vistas.has(k)) continue; vistas.add(k); poner(`frecuencia_${k}`, "Frecuencia", f, f.m[1]); }
+  // ── frecuencias del servicio ──
+  // La frase entera (qué se hace y cada cuánto), no la palabra suelta: «mensual»
+  // sola no dice nada, y muchas veces es de un informe o de la factura.
+  const frecuencias = frecuenciasDelServicio(paginas);
 
   // ── criterios de adjudicación ──
   const crit = buscar(paginas, /(?:oferta econ[oó]mica|precio)[^.]{0,60}?(\d{1,3})\s*puntos/i);
@@ -260,11 +264,49 @@ export function leerPliego(paginasCrudas) {
   const tablas = tablasDeCantidades(paginasCrudas || []);
 
   return {
-    tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas,
+    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas,
     datos, requisitos: requisitos.slice(0, 40).map(({ texto, pagina }) => ({ texto, pagina })), indice: indice.slice(0, 120),
-    listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL) },
+    listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL), frecuencias },
     paginas: paginas.length, conTexto,
   };
+}
+
+// ── Frecuencias ──
+const CADA_CUANTO = /\b(?:diari[oa]s?|diariamente|semanal(?:es|mente)?|quincenal(?:es|mente)?|mensual(?:es|mente)?|bimestral(?:es|mente)?|trimestral(?:es|mente)?|semestral(?:es|mente)?|una vez al a[nñ]o|por contenedor y a[nñ]o|d[ií]as alternos|(?:\d+|una|dos|tres|cuatro|cinco|seis|siete|ocho|diez|doce) (?:veces|pasadas|lavados|recogidas) (?:al|por|a la|cada|en el|en la) (?:d[ií]a|semana|mes|a[nñ]o|trimestre)|cada \d+ (?:d[ií]as|semanas|meses))\b/i;
+const NO_ES_SERVICIO = /informe|factura|abonar[aá]|se abona|precio|reuni[oó]n|certificad|liquidaci|pago|abono|memoria|declaraci|registr|seguro|revisi[oó]n de precios|planificaci|programaci|compromiso|penalidad|propuesta|oferta|aver[ií]as|se indican|ser[aá] (?:el|la) siguiente|siguiente:/i;
+// una frase nueva que el PDF ha pegado detrás (sin punto entre medias)
+// Se queda con la frase que contiene la frecuencia (de la última frase nueva
+// antes de ella a la primera después)
+const NUEVA = /\s(?=(?:La|El|Los|Las|Se|En|Para|Con|Este|Esta)\s[a-záéíóúñ])/g;
+function cortaFrase(t) {
+  const m = CADA_CUANTO.exec(t);
+  if (!m) return t;
+  let ini = 0, fin = t.length;
+  for (const b of t.matchAll(NUEVA)) {
+    if (b.index < m.index && b.index > 0) ini = b.index + 1;
+    else if (b.index > m.index + m[0].length) { fin = b.index; break; }
+  }
+  return t.slice(ini, fin).trim();
+}
+export function frecuenciasDelServicio(paginas) {
+  const out = [], vistas = new Set();
+  paginas.forEach((p, i) => {
+    // trozos: frases, y también las viñetas («- Frecuencia trimestral para…»)
+    for (const trozo of p.split(/(?<=[.;:])\s+|\s[-–•✓]\s/)) {
+      const t = cortaFrase(sinArrastre(trozo.trim().replace(/^[-–•✓▪]\s*/, "")));
+      if ((t.match(/\d+/g) || []).length >= 6 || /^tabla\s+\d/i.test(t)) continue; // una tabla volcada, no una frase
+      if (t.length < 20 || t.length > 320 || !CADA_CUANTO.test(t) || NO_ES_SERVICIO.test(t)) continue;
+      // tiene que decir de qué es (contenedores, lavado, recogida, limpieza…)
+      if (!/contenedor|lavad|limpi|recogid|mantenimiento|revisi[oó]n|inspecci[oó]n|achique|barrido|baldeo|vaciad|servicio|parque|soterrad|superficie|frecuencia|periodicidad/i.test(t)) continue;
+      const texto = t.length > 220 ? t.slice(0, 217).replace(/\s\S*$/, "") + "…" : t;
+      const k = sinAcentos(texto).slice(0, 80);
+      if (vistas.has(k)) continue;
+      vistas.add(k);
+      out.push({ texto: texto.charAt(0).toUpperCase() + texto.slice(1), pagina: i + 1 });
+      if (out.length >= 20) return;
+    }
+  });
+  return out;
 }
 
 // ── Tablas de cantidades ──
