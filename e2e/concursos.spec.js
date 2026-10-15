@@ -24,8 +24,9 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   // un concurso empieza por sus documentos: se sube el pliego y Operanzia lo lee
   await page.waitForURL(/\/documentos/);
   await page.locator('input[type="file"][accept="application/pdf,.pdf"]').setInputFiles({ name: "pliego-tecnico.pdf", mimeType: "application/pdf", buffer: pdfMini([
-    ["PLIEGO DE PRESCRIPCIONES TECNICAS PARTICULARES", "1. OBJETO DEL CONTRATO", "El objeto del contrato es el servicio de lavado de contenedores en Salamanca.", "El total de contenedores alcanzan las 6.037 unidades.", "La duracion del contrato sera de tres anos (3), con una prorroga de un (1) ano."],
+    ["PLIEGO DE PRESCRIPCIONES TECNICAS PARTICULARES", "1. OBJETO DEL CONTRATO", "El objeto del contrato es el servicio de lavado de contenedores en Salamanca.", "El total de contenedores alcanzan las 6.037 unidades.", "La duracion del contrato sera de tres anos (3), con una prorroga de un (1) ano.", "El presupuesto base de licitacion asciende a 1.800.000,00 euros."],
     ["ANEXO I - Unidades estimadas anuales", "LAVADO FRACCION 1r ANO 2ndo ANO 3r ANO", "SOTERRADO", "RSU 1.992 1.992 1.992", "PAPEL 230 230 230", "Los equipos deberan tener una antiguedad maxima de 15 anos."],
+    ["CRITERIOS DE ADJUDICACION", "Oferta economica: hasta 60 puntos.", "Memoria tecnica del servicio: hasta 40 puntos.", "Se puntuara con la formula P = 60 x (Omin / Oi)."],
   ]) });
   await expect(page.getByText(/Leído: \d+ datos/)).toBeVisible({ timeout: 20000 });
   await expect(page.getByText("Pliego de prescripciones técnicas").first()).toBeVisible();
@@ -38,6 +39,12 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await expect(page.getByText(/de \d+ datos revisados/)).toBeVisible();
   await page.locator("div", { hasText: "Duración" }).filter({ has: page.getByRole("button", { name: /Correcto/ }) }).last().getByRole("button", { name: /Correcto/ }).click();
   await expect(page.getByText("Confirmado").first()).toBeVisible();
+  await page.locator("div", { hasText: "Presupuesto base de licitación" }).filter({ has: page.getByRole("button", { name: /Correcto/ }) }).last().getByRole("button", { name: /Correcto/ }).click();
+  // criterios de adjudicación: los lee del pliego y se usan
+  await expect(page.getByText("Oferta economica").first()).toBeVisible();
+  await page.getByRole("button", { name: "Usar estos criterios" }).click();
+  await expect(page.getByText(/Total 100 puntos · precio 60/)).toBeVisible();
+  await expect(page.getByLabel("Fórmula del precio")).toHaveValue("proporcional");
   await page.getByRole("button", { name: /Añadir a la ficha las marcadas/ }).click();
   await expect(page.getByText(/Servicios añadidos a la ficha/)).toBeVisible();
   await expect(page.getByText(/Servicios y cantidades al año \(2\)/)).toBeVisible();
@@ -59,6 +66,19 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await expect(page.getByText(/3 contenedores en 2 puntos de aportación/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Usar los rendimientos del inventario/ })).toBeVisible();
 
+  // Cálculo: la cuenta de explotación con el presupuesto del pliego (600.000 € al año)
+  await page.getByRole("button", { name: "Cálculo", exact: true }).click();
+  await page.waitForURL(/\/calculo/);
+  await expect(page.getByText("Cuenta de explotación", { exact: true })).toBeVisible();
+  await expect(page.getByText("600.000 €", { exact: true })).toBeVisible();
+  await foto("calculo");
+  // Alternativas: qué baja presentar y escenarios
+  await page.getByRole("button", { name: "Alternativas", exact: true }).click();
+  await page.waitForURL(/\/alternativas/);
+  await expect(page.getByText("Qué baja presentar", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Escenarios con/)).toBeVisible();
+  await foto("alternativas");
+
   // sus módulos, y no los de la operativa diaria
   for (const m of ["Documentos", "Planning", "Scheduling", "Rostering", "Cálculo", "Alternativas", "Resumen"]) {
     await expect(page.getByRole("button", { name: m, exact: true })).toBeVisible();
@@ -76,6 +96,8 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await page.waitForURL(/\/resumen/);
   await expect(page.getByText("Ayuntamiento de Salamanca")).toBeVisible();
   await expect(page.locator(".op-tarjeta").filter({ hasText: "Duración" }).getByText("3 años")).toBeVisible();
+  await expect(page.getByText("Comprobaciones")).toBeVisible();
+  await expect(page.getByText("Criterios: 60 puntos de precio y 40 del resto")).toBeVisible();
   await foto(2);
 
   // la lista de concursos lo tiene; la de proyectos, no

@@ -250,6 +250,23 @@ export function dimensionar(servicios, p = PARAMETROS_DEFECTO) {
   };
 }
 
+/**
+ * Lo que dimensiona el Planning del concurso, igual en todos los módulos:
+ * los servicios de la ficha con lo cambiado en Planning (rendimiento, vehículo,
+ * personas) y los parámetros (los del pliego si los trae, luego los cambiados).
+ * @returns { servicios, parametros, entrada } → dimensionar(entrada, parametros)
+ */
+export function entradaDimension(ficha, dim, extra = {}) {
+  const servicios = Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  const jp = ficha?.datos?.jornadasAnio;
+  const jornadasPliego = jp && jp.estado !== "descartado" ? Number(jp.valor) || null : null;
+  const parametros = { ...extra, ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}) };
+  const porServicio = dim?.porServicio || {};
+  // vehículo y personas: lo cambiado en Planning > lo que exige el pliego (ficha) > orientativo
+  const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, vehiculo: porServicio[s.id]?.vehiculo || s.vehiculo || null, personas: porServicio[s.id]?.personas ?? s.personas ?? null }));
+  return { servicios, parametros, porServicio, entrada };
+}
+
 /** El parque que da el pliego (tablas de solo unidades por fracción): [{ ubicacion, fraccion, unidades, pagina }] */
 export function parqueDelPliego(tablas = []) {
   const out = [];

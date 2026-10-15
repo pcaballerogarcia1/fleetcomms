@@ -11,8 +11,10 @@
 // Igual que el lector de convenios: si algo no lo encuentra, no se inventa.
 // Sin React ni Firebase.
 
+import { criteriosDelPliego } from "./criterios.js";
+
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 4;
+export const VERSION_LECTOR = 5;
 
 const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
 const LETRAS = Object.keys(NUM_LETRA).join("|");
@@ -265,9 +267,10 @@ export function leerPliego(paginasCrudas) {
 
   const tablas = tablasDeCantidades(paginasCrudas || []);
   const equipos = equiposDelPliego(paginasCrudas || []);
+  const adjudicacion = criteriosDelPliego(paginasCrudas || []);
 
   return {
-    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos,
+    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos, adjudicacion,
     datos, requisitos: requisitos.slice(0, 40).map(({ texto, pagina }) => ({ texto, pagina })), indice: indice.slice(0, 120),
     listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL), frecuencias },
     paginas: paginas.length, conTexto,

@@ -39,7 +39,9 @@ const SchedulingLineasLazy = lazy(() => import("./lineas-scheduling.jsx").then(m
 const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m => ({ default: m.ControlLineasPage })));
 // Concursos (licitaciones): su lista y sus módulos propios
 const ConcursosPageLazy    = lazy(() => import("./concursos/lista.jsx").then(m => ({ default: m.ConcursosPage })));
-const ModuloConcursoLazy   = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ModuloConcurso })));
+const ResumenConcursoLazy  = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ResumenConcurso })));
+const CalculoConcursoLazy  = lazy(() => import("./concursos/calculo.jsx").then(m => ({ default: m.CalculoConcurso })));
+const AlternativasConcursoLazy = lazy(() => import("./concursos/alternativas.jsx").then(m => ({ default: m.AlternativasConcurso })));
 const DocumentosConcursoLazy = lazy(() => import("./concursos/documentos.jsx").then(m => ({ default: m.DocumentosConcurso })));
 const PlanningConcursoLazy  = lazy(() => import("./concursos/planning.jsx").then(m => ({ default: m.PlanningConcurso })));
 
@@ -490,9 +492,10 @@ export function WorkspaceRouter() {
             pointerEvents: path === ruta ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              {id === "documentos"
-                ? <DocumentosConcursoLazy concurso={{ _id: activeProject.concurso }} />
-                : <ModuloConcursoLazy modulo={id} concursoId={activeProject.concurso} />}
+              {id === "documentos" ? <DocumentosConcursoLazy concurso={{ _id: activeProject.concurso }} />
+                : id === "calculo" ? <CalculoConcursoLazy concursoId={activeProject.concurso} irA={go} />
+                : id === "alternativas" ? <AlternativasConcursoLazy concursoId={activeProject.concurso} irA={go} />
+                : <ResumenConcursoLazy concursoId={activeProject.concurso} irA={go} />}
             </Suspense>
           </div>
         ))}

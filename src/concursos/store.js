@@ -153,3 +153,14 @@ export async function guardarInventario(concursoId, { nombre, contenedores }) {
 export async function borrarInventario(concursoId) {
   await deleteDoc(refInventario(concursoId));
 }
+
+/** Criterios de adjudicación confirmados: { criterios: [{ nombre, puntos, tipo }], formula, saciedad, baja: { id, valor }, origen } */
+export const fijarAdjudicacion = (concursoId, adj) => cambiarFicha(concursoId, ["adjudicacion"], adj ? { ...adj, en: Date.now() } : deleteField());
+
+// ── Cálculo (concursos/{id}/requisitos/calculo) y oferta (…/requisitos/oferta) ──
+// calculo: { parametros, vehiculos: { [tipo]: { precio, … } }, presupuestoAnual }
+// oferta: { competidores: [{ nombre, baja, tecnicaPct }], tecnicaPct, margenMinimoPct, bajaElegida }
+export function escucharRequisito(concursoId, nombre, cb) {
+  return onSnapshot(doc(db, "concursos", concursoId, "requisitos", nombre), s => cb(s.exists() ? s.data() : {}), () => cb({}));
+}
+export const guardarRequisito = (concursoId, nombre, datos) => setDoc(doc(db, "concursos", concursoId, "requisitos", nombre), { ...datos, en: Date.now() }, { merge: true });

@@ -5,6 +5,7 @@
 import { Check, Pencil, Plus, Trash2, TriangleAlert, Truck, X } from "lucide-react";
 import { useState } from "react";
 import { C } from "../tema.js";
+import { CriteriosFicha } from "./criterios-ficha.jsx";
 import { equipoDe, precioDe, preciosDelPliego, serviciosDeDatos, tablasParaServicios } from "./ficha.js";
 import { cambiarConcurso, fijarDato, fijarServicio } from "./store.js";
 
@@ -149,6 +150,8 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
           </div>
         );
       })}
+
+      <CriteriosFicha concursoId={concursoId} docs={docs} ficha={ficha} onError={onError} />
 
       {/* ── Servicios y cantidades al año ── */}
       {titulo(`Servicios y cantidades al año (${servicios.length})`)}

@@ -8,7 +8,7 @@
 import { FileText, Map as IconoMapa, Calculator } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
-import { PARAMETROS_DEFECTO, dimensionar, parqueDelPliego, rendimientoOrientativo } from "./ficha.js";
+import { dimensionar, entradaDimension, parqueDelPliego, rendimientoOrientativo } from "./ficha.js";
 import { DESPLAZAMIENTO_DEFECTO, UTIL_DEFECTO, minutosOrientativos, rendimientoConInventario, resumenInventario, vanJuntas } from "./inventario.js";
 import { PanelInventario } from "./inventario-panel.jsx";
 import { escucharDimension, escucharDocumentos, escucharFicha, escucharInventario, guardarDimension } from "./store.js";
@@ -50,12 +50,12 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
     return () => clearTimeout(tmr.current);
   }, [local, concursoId]);
 
-  const servicios = useMemo(() => Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)), [ficha]);
   const jornadasPliego = ficha?.datos?.jornadasAnio && ficha.datos.jornadasAnio.estado !== "descartado" ? Number(ficha.datos.jornadasAnio.valor) : null;
-  const parametros = { desplazamiento: DESPLAZAMIENTO_DEFECTO, utilPct: UTIL_DEFECTO * 100, ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}), ...(local?.parametros || {}) };
-  const porServicio = { ...(dim?.porServicio || {}), ...(local?.porServicio || {}) };
-  // vehículo y personas: lo cambiado aquí > lo que exige el pliego (ficha) > orientativo
-  const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, vehiculo: porServicio[s.id]?.vehiculo || s.vehiculo || null, personas: porServicio[s.id]?.personas ?? s.personas ?? null }));
+  // lo guardado más lo que aún se está guardando
+  const { servicios, parametros, porServicio, entrada } = useMemo(() => entradaDimension(ficha, {
+    parametros: { ...(dim?.parametros || {}), ...(local?.parametros || {}) },
+    porServicio: { ...(dim?.porServicio || {}), ...(local?.porServicio || {}) },
+  }, { desplazamiento: DESPLAZAMIENTO_DEFECTO, utilPct: UTIL_DEFECTO * 100 }), [ficha, dim, local]);
   const r = dimensionar(entrada, parametros);
   // lo que rendiría cada servicio con los puntos del inventario
   const conInventario = id => {
