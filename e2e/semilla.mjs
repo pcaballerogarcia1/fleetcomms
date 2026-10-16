@@ -147,3 +147,10 @@ export async function sembrarGrande() {
   await escribirLote(docs);
   return { uids, documentos: docs.length };
 }
+
+/** Un superadmin (sin organización), para probar lo que hace en la oficina */
+export async function crearSuperadmin(email = "super@demo.test") {
+  const uid = await crearCuenta(email);
+  await escribir(`usuarios/${uid}`, { email, rol: "superadmin", nombre: "Sara", apellidos: "Super", activo: true });
+  return uid;
+}

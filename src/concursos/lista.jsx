@@ -4,14 +4,22 @@
 // espacio aislado: nada de lo que se haga aquí toca la operativa.
 import { Bus, ChevronRight, FileSearch, Loader2, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { C, font } from "../tema.js";
 import { ESTADOS, TIPOS_CONCURSO, cambiarConcurso, crearConcurso, escucharConcursos } from "./store.js";
 
 const fechaTxt = f => (f ? new Date(`${f}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : null);
 
-export function ConcursosPage({ orgId, onAbrir }) {
+export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onAbrir }) {
+  // El superadmin no es de ninguna organización: elige para cuál trabaja (por defecto, la del proyecto abierto)
+  const [orgs, setOrgs] = useState([]);
+  const [orgElegida, setOrgElegida] = useState(null);
+  useEffect(() => {
+    if (!isSuperAdmin) return undefined;
+    return onSnapshot(collection(db, "orgs"), s => setOrgs(s.docs.map(d => ({ org_id: d.id, ...d.data() })).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""))), () => setOrgs([]));
+  }, [isSuperAdmin]);
+  const orgId = orgPropia || (isSuperAdmin ? orgElegida || orgSugerida || orgs[0]?.org_id || null : null);
   const [lista, setLista] = useState(null);
   const [error, setError] = useState(null);
   const [nuevo, setNuevo] = useState(null);
@@ -28,6 +36,7 @@ export function ConcursosPage({ orgId, onAbrir }) {
   }
   async function crear() {
     if (!nuevo.nombre.trim()) return;
+    if (!orgId) { setError("Elige primero la organización del concurso."); return; }
     setNuevo(n => ({ ...n, guardando: true }));
     try {
       const { concurso } = await crearConcurso({ orgId, ...nuevo, nombre: nuevo.nombre.trim() });
@@ -45,6 +54,16 @@ export function ConcursosPage({ orgId, onAbrir }) {
         </div>
         <button className="op-btn op-primario" onClick={() => setNuevo({ nombre: "", organismo: "", tipo: "puntos", duracionAnios: 8, fechaLimite: "" })}><Plus size={15} /> Nuevo concurso</button>
       </div>
+
+      {isSuperAdmin && !orgPropia && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>Organización:</span>
+          <select className="op-input" value={orgId || ""} onChange={e => setOrgElegida(e.target.value)} style={{ maxWidth: 320, height: 34 }} aria-label="Organización">
+            {!orgId && <option value="">Elige una organización</option>}
+            {orgs.map(o => <option key={o.org_id} value={o.org_id}>{o.nombre || o.org_id}</option>)}
+          </select>
+        </div>
+      )}
 
       {error && <div className="op-tarjeta" style={{ padding: "10px 14px", color: C.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
 

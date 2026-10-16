@@ -3,7 +3,7 @@
 // operativa no se ven dentro, ni el concurso entre los proyectos).
 /* global process, Buffer */
 import { test, expect } from "@playwright/test";
-import { sembrar, escribir, ORG } from "./semilla.mjs";
+import { sembrar, escribir, ORG, crearSuperadmin } from "./semilla.mjs";
 import { vigilarErrores, entrarOficina, pdfMini } from "./ayudas.mjs";
 
 test("un concurso se crea, se abre con sus módulos y no se mezcla con la operativa", async ({ page }) => {
@@ -120,5 +120,22 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await page.waitForURL(/\/projects/);
   await expect(page.getByText("Proyecto de puntos").first()).toBeVisible();
   await expect(page.getByText("Abrir proyecto")).toHaveCount(1); // solo el de la operativa
+  expect(errores).toEqual([]);
+});
+
+test("el superadmin elige la organización y crea el concurso en ella", async ({ page }) => {
+  await sembrar();
+  await crearSuperadmin();
+  const errores = vigilarErrores(page);
+  await entrarOficina(page, "super@demo.test");
+  await page.getByRole("button", { name: "Concursos", exact: true }).click();
+  await page.waitForURL(/\/concursos/);
+  await expect(page.getByLabel("Organización")).toHaveValue(ORG);
+  await page.getByRole("button", { name: /Nuevo concurso/ }).click();
+  await page.getByPlaceholder("Recogida de residuos de Salamanca").fill("Gozón");
+  await page.getByRole("button", { name: /Crear y abrir/ }).click();
+  await page.waitForURL(/\/documentos/);
+  await page.getByRole("button", { name: "Concursos", exact: true }).click();
+  await expect(page.locator(".op-tarjeta").filter({ hasText: "Gozón" })).toBeVisible();
   expect(errores).toEqual([]);
 });

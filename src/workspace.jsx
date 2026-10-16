@@ -376,7 +376,7 @@ export function WorkspaceRouter() {
         {path === "/concursos" && (
           <div style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
             <Suspense fallback={<LazyFallback />}>
-              <ConcursosPageLazy orgId={sesion?.org_id} onAbrir={openProject} />
+              <ConcursosPageLazy orgId={sesion?.org_id} isSuperAdmin={sesion?.rol === "superadmin"} orgSugerida={activeProject?.org_id ? String(activeProject.org_id).split("--c-")[0] : null} onAbrir={openProject} />
             </Suspense>
           </div>
         )}
