@@ -65,6 +65,18 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await page.getByRole("button", { name: /Usar este listado/ }).click();
   await expect(page.getByText(/3 contenedores en 2 puntos de aportación/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Usar los rendimientos del inventario/ })).toBeVisible();
+  // sin coordenadas: se sitúa cada dirección (buscador de direcciones, aquí simulado) y pasa al mapa del Planning
+  await page.route("**/cartociudad.es/**", ruta => {
+    const q = decodeURIComponent(ruta.request().url().split("q=")[1] || "");
+    const [calle, num] = [q.replace(/\s\d+,.*$/, "").replace(/,.*$/, ""), (q.match(/\s(\d+),/) || [])[1]];
+    ruta.fulfill({ contentType: "application/json", body: JSON.stringify({ type: "portal", tip_via: "CALLE", address: calle, portalNumber: Number(num), muni: "Salamanca", lat: 40.96 + Number(num) / 1000, lng: -5.66, state: 0 }) });
+  });
+  await page.getByLabel("Municipio").fill("Salamanca");
+  await page.getByRole("button", { name: /Situar y pasar al mapa/ }).click();
+  await expect(page.getByRole("button", { name: /Mapa \(con coordenadas\)/ })).toHaveClass(/op-on/);
+  await expect(page.getByText("Inventario · contenedores.csv")).toBeVisible();
+  await page.getByRole("button", { name: "Por rendimientos" }).click();
+  await expect(page.getByText(/2 direcciones en su portal/)).toBeVisible();
 
   // Cálculo: la cuenta de explotación con el presupuesto del pliego (600.000 € al año)
   await page.getByRole("button", { name: "Cálculo", exact: true }).click();

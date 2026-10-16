@@ -50,6 +50,9 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
     return () => clearTimeout(tmr.current);
   }, [local, concursoId]);
 
+  // el municipio, para buscar las direcciones: «Ayuntamiento de Palma» → Palma
+  const organismo = String(ficha?.datos?.organismo?.valor || "");
+  const municipioSugerido = organismo.match(/(?:ayuntamiento|ajuntament|concello) (?:de |d'|del )?([A-ZÁÉÍÓÚÑ][\wáéíóúñ' -]{2,40})/i)?.[1]?.trim() || null;
   const jornadasPliego = ficha?.datos?.jornadasAnio && ficha.datos.jornadasAnio.estado !== "descartado" ? Number(ficha.datos.jornadasAnio.valor) : null;
   // lo guardado más lo que aún se está guardando
   const { servicios, parametros, porServicio, entrada } = useMemo(() => entradaDimension(ficha, {
@@ -91,7 +94,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
           {!ficha ? <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div> : !servicios.length ? <>
             {/* el listado de contenedores se puede subir ya, aunque aún no haya servicios */}
-            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} />
+            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} municipioSugerido={municipioSugerido} onVerMapa={() => setVista("mapa")} />
             <div style={{ ...tarjeta, padding: 28, textAlign: "center", maxWidth: 620 }}>
               <FileText size={30} color={C.dim} />
               <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 10 }}>Aún no hay servicios en la Ficha de requisitos</div>
@@ -110,7 +113,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
               ))}
             </div>
 
-            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} />
+            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} municipioSugerido={municipioSugerido} onVerMapa={() => setVista("mapa")} />
 
             {/* parámetros */}
             <div style={{ ...tarjeta, padding: "12px 16px", display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>

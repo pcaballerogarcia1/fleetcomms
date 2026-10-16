@@ -150,9 +150,12 @@ export async function guardarInventario(concursoId, { nombre, contenedores }) {
   await setDoc(refInventario(concursoId), { nombre, subidoEn: Date.now(), contenedores });
   logAudit({ modulo: "Concursos", accion: "Subió un inventario de contenedores", detalle: `${nombre} · ${contenedores.length} contenedores` });
 }
-export async function borrarInventario(concursoId) {
+export async function borrarInventario(concursoId, capa) {
+  if (capa) await deleteDoc(doc(db, "planning_layers", capa)).catch(() => {});
   await deleteDoc(refInventario(concursoId));
 }
+/** Quita del mapa la capa del inventario anterior (al cambiar de listado) */
+export const quitarCapaInventario = capa => (capa ? deleteDoc(doc(db, "planning_layers", capa)).catch(() => {}) : Promise.resolve());
 
 /** Criterios de adjudicación confirmados: { criterios: [{ nombre, puntos, tipo }], formula, saciedad, baja: { id, valor }, origen } */
 export const fijarAdjudicacion = (concursoId, adj) => cambiarFicha(concursoId, ["adjudicacion"], adj ? { ...adj, en: Date.now() } : deleteField());
@@ -164,3 +167,27 @@ export function escucharRequisito(concursoId, nombre, cb) {
   return onSnapshot(doc(db, "concursos", concursoId, "requisitos", nombre), s => cb(s.exists() ? s.data() : {}), () => cb({}));
 }
 export const guardarRequisito = (concursoId, nombre, datos) => setDoc(doc(db, "concursos", concursoId, "requisitos", nombre), { ...datos, en: Date.now() }, { merge: true });
+
+// ── El inventario, en el mapa del Planning del concurso (una capa más, como en Proyectos) ──
+// La capa va al proyecto del concurso (su espacio); si ya había una del
+// inventario, se quita antes. Más de 500 puntos: a la nube troceados (layer-store).
+export async function volcarInventarioAlMapa(concursoId, { nombre, marcadores, capaAnterior }) {
+  const c = (await getDoc(doc(db, "concursos", concursoId))).data();
+  if (!c?.projectId) throw new Error("El concurso no tiene proyecto.");
+  if (capaAnterior) await deleteDoc(doc(db, "planning_layers", capaAnterior)).catch(() => {});
+  const id = Date.now() + Math.random();
+  const docId = `${c.projectId}_${id}`;
+  const capa = { id, name: `Inventario · ${nombre}`, type: "xlsx", color: "#3fcf8e", visible: true, projectId: c.projectId, orgId: c.espacio, createdAt: serverTimestamp() };
+  if (marcadores.length > 500) {
+    const { uploadLayerMarkers } = await import("../layer-store.js");
+    const cloud = await uploadLayerMarkers(docId, c.projectId, marcadores);
+    await setDoc(doc(db, "planning_layers", docId), { ...capa, markers: [], cloud, totalMarkers: marcadores.length });
+  } else {
+    await setDoc(doc(db, "planning_layers", docId), { ...capa, markers: marcadores });
+  }
+  await updateDoc(refInventario(concursoId), { capa: docId });
+  logAudit({ modulo: "Concursos", accion: "Pasó el inventario al mapa", detalle: `${nombre} · ${marcadores.length} contenedores` });
+  return docId;
+}
+/** Guarda las coordenadas encontradas en el inventario */
+export const guardarCoordenadas = (concursoId, cambios) => updateDoc(refInventario(concursoId), cambios);

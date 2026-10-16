@@ -3,20 +3,46 @@
 // ha entendido (qué es cada columna, con unas filas de ejemplo) y se corrige
 // si hace falta antes de guardarlo. Luego: cómo es (puntos, contenedores por
 // punto, distritos) y cómo se compara con el parque del pliego.
-import { Check, Trash2, TriangleAlert, Upload, X } from "lucide-react";
+import { Check, MapPin, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { C } from "../tema.js";
 import { CAMPOS, compararConPliego, entenderHoja, hojasDeArchivo, leerInventario } from "./inventario.js";
-import { borrarInventario, guardarInventario } from "./store.js";
+import { aplicarCoordenadas, direccionesDe, geocodificar, marcadoresDe } from "./geocodificar.js";
+import { borrarInventario, guardarCoordenadas, guardarInventario, quitarCapaInventario, volcarInventarioAlMapa } from "./store.js";
 
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 1 }); } catch { return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }); } })();
 const CON_FRACCION = "__fraccion__"; // columna con la cantidad de una fracción (listado por punto)
 
-export function PanelInventario({ concursoId, inventario, resumen, parque }) {
+export function PanelInventario({ concursoId, inventario, resumen, parque, municipioSugerido, onVerMapa }) {
   const [ocupado, setOcupado] = useState(null);
   const [error, setError] = useState(null);
   const [revisar, setRevisar] = useState(null); // { nombre, hojas, hoja, entendido }
   const ref = useRef();
+  const [municipio, setMunicipio] = useState(null); // null = el guardado o el sugerido
+  const [progreso, setProgreso] = useState(null);   // { hechas, total }
+  const muni = municipio ?? inventario?.municipio ?? municipioSugerido ?? "";
+  const yaConCoordenadas = (inventario?.contenedores || []).filter(c => Number.isFinite(c.lat) && Number.isFinite(c.lng)).length;
+
+  // Situar cada dirección en el mapa (CartoCiudad) y pasar el listado al mapa del Planning del concurso
+  async function alMapa() {
+    setError(null);
+    try {
+      let contenedores = inventario.contenedores;
+      const dirs = direccionesDe(contenedores, muni);
+      if (dirs.size) {
+        setProgreso({ hechas: 0, total: dirs.size });
+        const r = await geocodificar(dirs.keys(), { onProgreso: (hechas, total) => setProgreso({ hechas, total }) });
+        contenedores = aplicarCoordenadas(contenedores, muni, r.porDireccion).map(c => Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)));
+        const geo = { en: Date.now(), portal: r.encontradas, calle: r.aproximadas, nada: r.sinEncontrar, sin: [...r.porDireccion].filter(([, x]) => !x).map(([d]) => d).slice(0, 200) };
+        setProgreso(null); setOcupado("Guardando las coordenadas…");
+        await guardarCoordenadas(concursoId, { contenedores, municipio: muni || null, geocodificado: geo });
+      }
+      setOcupado("Pasando al mapa del Planning…");
+      await volcarInventarioAlMapa(concursoId, { nombre: inventario.nombre, marcadores: marcadoresDe(contenedores), capaAnterior: inventario.capa || null });
+      setOcupado(null);
+      onVerMapa?.();
+    } catch (e) { setProgreso(null); setOcupado(null); setError(`No se pudo pasar al mapa: ${e.message || e}`); }
+  }
   const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
 
   async function subir(archivo) {
@@ -37,6 +63,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque }) {
     setOcupado("Guardando…");
     try {
       // sin campos vacíos (Firestore no los admite)
+      await quitarCapaInventario(inventario?.capa); // la capa del listado anterior, fuera del mapa
       await guardarInventario(concursoId, { nombre: revisar.nombre, contenedores: contenedores.map(c => Object.fromEntries(Object.entries(c).filter(([, v]) => v != null))) });
       setRevisar(null);
     } catch (err) { setError(`No se pudo guardar: ${err.message || err}`); }
@@ -107,7 +134,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque }) {
           </div>
         </div>
         <button className="op-btn" disabled={!!ocupado} onClick={() => ref.current?.click()}><Upload size={14} /> {inventario ? "Cambiar listado" : "Subir listado"}</button>
-        {inventario && <button className="op-btn op-fantasma op-icono" title="Quitar el listado" onClick={() => window.confirm("¿Quitar el listado de contenedores?") && borrarInventario(concursoId).catch(e => setError(e.message))}><Trash2 size={14} /></button>}
+        {inventario && <button className="op-btn op-fantasma op-icono" title="Quitar el listado" onClick={() => window.confirm("¿Quitar el listado de contenedores?") && borrarInventario(concursoId, inventario.capa).catch(e => setError(e.message))}><Trash2 size={14} /></button>}
         <input ref={ref} type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; subir(f); }} />
       </div>
       {ocupado && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>{ocupado}</div>}
@@ -122,6 +149,29 @@ export function PanelInventario({ concursoId, inventario, resumen, parque }) {
             </div>
           ))}
           {resumen.porDistrito.length > 0 && <div style={{ background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: C.muted }}>{resumen.porDistrito.map(([d, n]) => `${d} ${n}`).join(" · ")}</div>}
+        </div>
+
+        {/* ── en el mapa del Planning ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, padding: "10px 12px", background: C.surface2, borderRadius: 10 }}>
+          <MapPin size={16} color={C.blue} />
+          <div style={{ flex: "1 1 260px", fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+            {inventario.capa
+              ? <>En el mapa del Planning{inventario.geocodificado ? <>: <b style={{ color: C.text }}>{inventario.geocodificado.portal}</b> direcciones en su portal{inventario.geocodificado.calle ? <>, <b style={{ color: C.amber }}>{inventario.geocodificado.calle}</b> en el centro de su calle (aproximado)</> : null}{inventario.geocodificado.nada ? <>, <b style={{ color: C.red }}>{inventario.geocodificado.nada}</b> sin encontrar</> : null}.</> : "."}</>
+              : yaConCoordenadas === inventario.contenedores.length ? "El listado trae coordenadas: pásalo al mapa para hacer rutas, turnos y cuadrantes como en Proyectos."
+              : "Sitúa cada dirección en el mapa (buscador oficial de direcciones, CartoCiudad) y pásalo al Planning para hacer rutas, turnos y cuadrantes como en Proyectos."}
+          </div>
+          {yaConCoordenadas < inventario.contenedores.length && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.muted }}>
+              Municipio <input className="op-input" value={muni} onChange={e => setMunicipio(e.target.value)} placeholder="p. ej. Palma" style={{ width: 150, height: 30 }} aria-label="Municipio" />
+            </label>
+          )}
+          <button className="op-btn op-primario" disabled={!!ocupado || !!progreso || (yaConCoordenadas < inventario.contenedores.length && !muni.trim())} onClick={alMapa}>
+            <MapPin size={14} /> {progreso ? `Buscando direcciones ${progreso.hechas}/${progreso.total}…` : inventario.capa ? "Volver a pasar al mapa" : "Situar y pasar al mapa"}
+          </button>
+          {inventario.capa && onVerMapa && <button className="op-btn" onClick={onVerMapa}>Ver en el mapa</button>}
+          {inventario.geocodificado?.sin?.length > 0 && (
+            <div style={{ flexBasis: "100%", fontSize: 11.5, color: C.dim }}>Sin encontrar (añádelos a mano en el mapa si hacen falta): {inventario.geocodificado.sin.join(" · ")}</div>
+          )}
         </div>
 
         {comparacion.length > 0 && <>
