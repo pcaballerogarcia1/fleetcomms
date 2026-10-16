@@ -82,21 +82,23 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
         <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Planning del concurso</div>
         <div className="op-seg">
           <button className={vista === "rendimientos" ? "op-on" : ""} onClick={() => setVista("rendimientos")}><Calculator size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Por rendimientos</button>
-          <button className={vista === "mapa" ? "op-on" : ""} onClick={() => setVista("mapa")}><IconoMapa size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Mapa (listado o zonas)</button>
+          <button className={vista === "mapa" ? "op-on" : ""} onClick={() => setVista("mapa")}><IconoMapa size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Mapa (con coordenadas)</button>
         </div>
-        <div style={{ fontSize: 12, color: C.dim }}>{vista === "rendimientos" ? "Sin inventario: con las cantidades de la ficha y lo que rinde cada equipo." : "Si tienes el listado de contenedores (o dibujas zonas), para calcular rutas en Scheduling."}</div>
+        <div style={{ fontSize: 12, color: C.dim }}>{vista === "rendimientos" ? "Con las cantidades de la ficha y lo que rinde cada equipo. Aquí se sube el listado de contenedores, tenga o no coordenadas." : "Para calcular rutas en Scheduling: listado con coordenadas o zonas dibujadas. ¿Tu listado no tiene coordenadas? Súbelo en «Por rendimientos»."}</div>
       </div>
 
       {vista === "mapa" ? <div style={{ flex: 1, position: "relative", display: "flex" }}>{mapa}</div> : (
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
-          {!ficha ? <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div> : !servicios.length ? (
+          {!ficha ? <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div> : !servicios.length ? <>
+            {/* el listado de contenedores se puede subir ya, aunque aún no haya servicios */}
+            <PanelInventario concursoId={concursoId} inventario={inventario} resumen={resumen} parque={parque} />
             <div style={{ ...tarjeta, padding: 28, textAlign: "center", maxWidth: 620 }}>
               <FileText size={30} color={C.dim} />
               <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 10 }}>Aún no hay servicios en la Ficha de requisitos</div>
               <div style={{ fontSize: 13, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>Sube el pliego en Documentos y añade a la ficha los servicios con su cantidad al año (de sus tablas o a mano). Con eso se dimensiona aquí.</div>
               <button className="op-btn op-primario" style={{ marginTop: 14 }} onClick={irADocumentos}>Ir a Documentos</button>
             </div>
-          ) : <>
+          </> : <>
             {/* resultado */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 18 }}>
               {[["Vehículos", r.resumen.vehiculos, "uno por equipo y turno al día"], ["Personas", r.resumen.personas, `${num(r.resumen.personasExactas)} a jornada completa`], ["Turnos al año", num(r.resumen.turnosAnio), "de todos los servicios"], ["Horas al año", num(r.resumen.horasAnio), "de trabajo de las personas"]].map(([l, v, n]) => (
