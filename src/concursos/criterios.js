@@ -131,6 +131,41 @@ export function criteriosDelPliego(paginasCrudas = []) {
   }
   for (const c of criterios) delete c.k;
 
+  // 2b) en el texto seguido (los PDF no siempre cortan las líneas donde acaba cada
+  // criterio): «-Oferta económica …, IVA incluido: 80 puntos. Criterio: …».
+  // Si lo leído por líneas no suma 100, se busca en el texto el grupo SEGUIDO de
+  // criterios que suma 100 y lleva el precio (casi siempre suman 100).
+  const sumaDe = cs => cs.reduce((a, c) => a + (Number(c.puntos) || 0), 0);
+  if (!(Math.abs(sumaDe(criterios) - 100) < 1e-6 && criterios.some(c => c.tipo === "precio"))) {
+    const seguido = [];
+    paginasCrudas.forEach((pg, i) => {
+      const t = String(pg || "").replace(/\s+/g, " ");
+      const re = /(?:^|[•·\-–]\s*|\d{1,2}[.)]\s+|\b[a-h]\)\s+|\.\s+)([A-ZÁÉÍÓÚÑa-záéíóúñ][^:•·\n]{2,140}?)\s*(?:[:.–-]|\(|,)\s*(?:hasta(?: un)?(?: m[aá]ximo de)?|m[aá]ximo(?: de)?|m[aá]x\.?)?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:puntos|ptos\.?|%|pts)\b/gi;
+      for (const m of t.matchAll(re)) {
+        const nombre = m[1].replace(/^(?:criterio|apartado)\s*\d*[.:]?\s*/i, "").trim();
+        const puntos = numero(m[2]);
+        if (!(puntos > 0 && puntos <= 100) || NO_ES_CRITERIO.test(nombre) || /^(?:el|la|los|las|un|una|de|del|al|con|por|se|que|y)\b/i.test(nombre) && nombre.length < 12) continue;
+        if (/inferior|superior|baja|anormal|desproporcion|penalidad|garant[ií]a|iva|retenci|anticipo|plazo de|d[ií]as|horas? de antelaci|cada|por cada|reduc|incremento del|precio del contrato|presupuesto/i.test(nombre) && !ES_PRECIO.test(nombre.slice(0, 30))) continue;
+        seguido.push({ nombre, puntos, tipo: ES_PRECIO.test(nombre) ? "precio" : ES_MEJORA.test(nombre) ? "mejora" : "formula", pagina: i + 1, frase: m[0].trim().slice(0, 200), pos: i * 1e7 + m.index });
+      }
+    });
+    // el primer grupo seguido que suma 100 y lleva el precio (mirando hasta 14 criterios)
+    let mejor = null;
+    for (let a = 0; a < seguido.length && !mejor; a++) {
+      let suma = 0;
+      for (let b = a; b < Math.min(seguido.length, a + 14); b++) {
+        suma += seguido[b].puntos;
+        if (suma > 100 + 1e-6) break;
+        const grupo = seguido.slice(a, b + 1);
+        if (Math.abs(suma - 100) < 1e-6 && grupo.some(c => c.tipo === "precio") && new Set(grupo.map(c => sinAcentos(c.nombre))).size === grupo.length) { mejor = grupo; break; }
+      }
+    }
+    if (mejor) {
+      criterios.length = 0;
+      for (const c of mejor) { const { pos: _pos, ...x } = c; void _pos; criterios.push({ ...x, nombre: x.nombre.charAt(0).toUpperCase() + x.nombre.slice(1) }); }
+    }
+  }
+
   // 3) la fórmula del precio y la baja anormal, en el texto seguido
   const paginas = paginasCrudas.map(p => String(p || "").replace(/\s+/g, " "));
   const busca = re => { for (let i = 0; i < paginas.length; i++) { const m = paginas[i].match(re); if (m) return { m, pagina: i + 1, frase: paginas[i].slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).trim() }; } return null; };
