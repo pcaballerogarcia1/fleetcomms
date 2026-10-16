@@ -15,10 +15,19 @@ import { criteriosDelPliego } from "./criterios.js";
 import { estudioDeCostes } from "./estudio.js";
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 6;
+export const VERSION_LECTOR = 8;
 
-const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
-const LETRAS = Object.keys(NUM_LETRA).join("|");
+const NUM_LETRA = {
+  un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
+  "dieciséis": 16, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, "veintidós": 22, veintidos: 22, "veintitrés": 23, veintitres: 23, veinticuatro: 24,
+  veinticinco: 25, "veintiséis": 26, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90,
+  // gallego, catalán y valenciano (pliegos de Galicia, Cataluña y la Comunidad Valenciana)
+  "un ano": 1, "dous": 2, "tres anos": 3, "dotze": 12, "vint-i-quatre": 24, "quatre": 4, "cinc": 5,
+};
+// «treinta y seis», «cuarenta y ocho»: decenas + unidades
+const DECENAS = "treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa";
+const UNIDADES = "uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve";
+const LETRAS = `(?:${DECENAS})\\s+y\\s+(?:${UNIDADES})|${Object.keys(NUM_LETRA).filter(k => !k.includes(" ")).sort((a, b) => b.length - a.length).join("|")}`;
 
 /** «1.234.567,89» → 1234567.89 */
 export function numeroEs(txt) {
@@ -28,7 +37,14 @@ export function numeroEs(txt) {
   if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) return Number(t.replace(/,/g, "")); // formato inglés
   return Number(t.replace(",", "."));
 }
-const enteroDe = s => (s == null ? null : /^\d/.test(s) ? numeroEs(s) : NUM_LETRA[s.toLowerCase()] ?? null);
+const enteroDe = s => {
+  if (s == null) return null;
+  if (/^\d/.test(s)) return numeroEs(String(s).replace(/\s/g, ""));
+  const t = s.toLowerCase().replace(/\s+/g, " ").trim();
+  const c = t.match(/^(\w+) y (\w+)$/);
+  if (c && NUM_LETRA[c[1]] && NUM_LETRA[c[2]]) return NUM_LETRA[c[1]] + NUM_LETRA[c[2]];
+  return NUM_LETRA[t] ?? null;
+};
 
 // Texto limpio de una página (sin cortes de palabra al final de línea)
 // («S.A.» → «SA»: si no, el punto de la abreviatura corta la frase)
@@ -159,21 +175,31 @@ export function leerPliego(paginasCrudas) {
   // plazo de duración del contrato de diez (10) años» vale; «cuando su duración
   // no sea superior a cuatro años» (el órgano de contratación) o «tendrán un
   // plazo máximo de duración de cinco años» (la ley, en general) no.
-  const DUR = new RegExp(String.raw`(?:duraci[oó]n|vigencia|plazo de ejecuci[oó]n)[^.]{0,140}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os|mes(?:es|\(es\))?)`, "i");
+  const DUR = new RegExp(String.raw`(?:duraci[oó]n|vigencia|plazo de ejecuci[oó]n|plazo de (?:la )?prestaci[oó]n|plazo total|per[ií]odo de ejecuci[oó]n|durada|duraci[oó]n inicial|prazo de execuci[oó]n)[^.]{0,140}?(?:\b|\()((?:\d\s?)?\d{1,2}|${LETRAS})\s*(?:\((\d{1,3})\)\s*)?(a[nñ]os?|anos?|anys?|mes(?:es|\(es\))?|meses|d[ií]as(?: naturales)?)\b`, "i");
   const notaDuracion = c => {
-    const f = sinAcentos(c.frase);
+    // el entorno cercano de la cifra (las frases de los PDF a veces no se separan bien)
+    const pag = paginas[c.pagina - 1], ini = c.m.index, fin = c.m.index + c.m[0].length;
+    const f = sinAcentos(pag.slice(Math.max(0, ini - 45), fin + 45));
+    const entre = sinAcentos(c.m[0].slice(0, c.m[0].indexOf(c.m[1])));
     let nota = 0;
-    if (/duracion del (presente )?contrato|plazo de duracion|vigencia del contrato|plazo de ejecucion del contrato/.test(f)) nota += 3;
-    if (/se establece|sera de|tendra una duracion|queda fijad|se fija/.test(f)) nota += 3;
-    if (/no sea superior|no superior a|plazo maximo de duracion|incluidas? las (posibles|eventuales)? ?prorrogas|organo de contratacion|articulo 29|art\. 29|cuando (su|la) duracion|recursos ordinarios|plurianual/.test(f)) nota -= 6;
-    if (/garantia|plazo de garantia|vida util|antiguedad|amortiz/.test(f)) nota -= 4;
+    if (/duracion del (presente )?contrato|plazo de duracion|vigencia del contrato|plazo de ejecucion|duracion inicial|plazo de (la )?prestacion|periodo de ejecucion|plazo total de ejecucion|durada del contracte|prazo de execucion/.test(f)) nota += 4;
+    if (/sera de|es de|tendra una duracion|se establece|queda fijad|se fija|\bde duracion\b|:\s*$|: \S/.test(f)) nota += 2;
+    if (c.pagina <= 12) nota += 2;
+    if (/^\s*(?:\d+[.)]|[a-z]\))?\s*(?:plazo|duracion)/.test(f)) nota += 1;
+    // lo que NO es la duración del contrato
+    if (/preaviso|inferior a|superior a|no sea superior|no podra (?:ser )?superior|no excedera|excedera|maximo|maxima|antelacion|confidencial|sigilo|conocimiento de esa informacion|garantia|prorrogas? incluidas|incluidas? (?:las|sus|la) (?:posibles |eventuales )?prorrogas|acuerdo marco|presentacion de (?:ofertas|proposiciones)|subsanacion|recurso|abono|pago|factura|desde la (?:recepcion|solicitud|notificacion)|requerimiento|organo de contratacion|articulo 29|art\. 29|cuando (su|la) duracion|recursos ordinarios|plurianual|vida util|antiguedad|amortiz|demora|penalidad|interrupci|suspensi|colectivos|desemplead|inscrit|parado|experiencia|en los ultimos|ultimos tres|ultimos cinco|ejercicios|de antelacion|con anterioridad|excepcionalmente|podra establecer|como maximo|hasta un maximo|plazo maximo/.test(f)) nota -= 8;
+    // la cifra de la prórroga no es la de la duración: «36 meses, prorrogables 24»
+    if (/prorrog/.test(entre)) nota -= 4;
+    if (/^d/i.test(c.m[3])) nota -= 1;
     return nota;
   };
-  const durs = buscarTodas(paginas, DUR, 40).map(c => ({ ...c, nota: notaDuracion(c) })).filter(c => c.nota > -3).sort((x, y) => y.nota - x.nota || x.pagina - y.pagina);
+  const durs = buscarTodas(paginas, DUR, 400).map(c => ({ ...c, nota: notaDuracion(c) })).filter(c => c.nota > 0).sort((x, y) => y.nota - x.nota || x.pagina - y.pagina);
   const dur = durs[0];
   if (dur) {
-    const n = enteroDe(dur.m[2] || dur.m[1]);
-    const unidad = /^a/i.test(dur.m[3]) ? (n === 1 ? "año" : "años") : (n === 1 ? "mes" : "meses");
+    let n = enteroDe(dur.m[2] || dur.m[1]);
+    let unidad = /^(a[nñ]|an)/i.test(dur.m[3]) ? "años" : /^mes/i.test(dur.m[3]) ? "meses" : "días";
+    if (unidad === "días" && n >= 28) { n = Math.round(n / 30); unidad = "meses"; }
+    if (n === 1) unidad = unidad === "años" ? "año" : unidad === "meses" ? "mes" : "día";
     poner("duracion", "Duración", dur, n ? `${n} ${unidad}` : null);
   }
   const sinProrroga = buscar(paginas, /no (?:siendo|ser[aá]|es) susceptible de pr[oó]rroga|sin (?:posibilidad de )?pr[oó]rrogas?|no (?:se prev[eé]n?|habr[aá]|cabe|podr[aá]n?) (?:ninguna )?pr[oó]rroga|no podr[aá] (?:ser )?prorrogad/i);
@@ -189,10 +215,46 @@ export function leerPliego(paginasCrudas) {
   }
 
   // ── dinero ──
-  const pbl = buscar(paginas, new RegExp(String.raw`presupuesto base de licitaci[oó]n[^.€]{0,160}?${IMPORTE}`, "i"));
-  if (pbl) poner("presupuesto", "Presupuesto base de licitación", pbl, numeroEs(pbl.m[1]));
-  const ve = buscar(paginas, new RegExp(String.raw`valor estimado(?: del contrato)?[^.€]{0,160}?${IMPORTE}`, "i"));
-  if (ve) poner("valorEstimado", "Valor estimado del contrato", ve, numeroEs(ve.m[1]));
+  // Las cifras de dinero tras «presupuesto base de licitación» o «valor estimado»,
+  // puntuadas por su entorno: fuera los umbrales de la ley («si el valor estimado
+  // es inferior a 35.000 €…»); en un desglose («presupuesto 231.812 + prórroga
+  // 231.812 = 463.624»), el total.
+  const cifrasTras = (clave, largo = 260, otro = null) => {
+    const out = [];
+    paginas.forEach((pag, i) => {
+      for (const k of pag.matchAll(new RegExp(clave, "gi"))) {
+        const tramo = pag.slice(k.index, k.index + largo);
+        for (const m of tramo.matchAll(new RegExp(IMPORTE, "gi"))) {
+          const pos = k.index + m.index;
+          // entre la palabra clave y la cifra no puede empezar otro concepto («… y el valor estimado es de X»)
+          if (otro && new RegExp(otro, "i").test(pag.slice(k.index + k[0].length, pos))) continue;
+          out.push({ valor: numeroEs(m[1]), pagina: i + 1, pos, antes: sinAcentos(pag.slice(Math.max(0, pos - 70), pos)), despues: sinAcentos(pag.slice(pos, pos + 60)), frase: fraseEn(pag, pos, m[0].length), dist: m.index, m });
+        }
+      }
+    });
+    return out;
+  };
+  const UMBRAL = /inferior(?:es)? a|superior(?:es)? a|igual(?:es)? o superior|igual o inferior|no (?:supere|exceda|sea superior)|umbral|cuando (?:el|su) (?:valor|importe|presupuesto)|menor(?:es)? de|mayor(?:es)? de|sujeto a regulacion|contratos? menor|hasta (?:un maximo de )?$|limite de|cuantia (?:minima|maxima)|solvencia|volumen (?:anual )?de negocio|facturacion|seguro|poliza|garantia|aval|penalidad|multa/;
+  const notaDinero = c => {
+    let n = 0;
+    if (UMBRAL.test(c.antes.slice(-55))) n -= 10;
+    if (/total|asciende|es de|sera de|importe de|cifra en|cantidad de|:\s*$|=\s*$/.test(c.antes.slice(-35))) n += 3;
+    if (c.pagina <= 12) n += 2;
+    n -= c.dist / 200; // cuanto más cerca de la palabra clave, mejor
+    return n;
+  };
+  const elegir = (cands, total) => {
+    const buenos = cands.map(c => ({ ...c, nota: notaDinero(c) })).filter(c => c.nota > -5 && c.valor >= 100);
+    if (!buenos.length) return null;
+    const mejor = Math.max(...buenos.map(c => c.nota));
+    const top = buenos.filter(c => c.nota >= mejor - 0.75);
+    // en un desglose del valor estimado, el total es la cifra mayor de las más cercanas
+    return total ? top.sort((a, b) => b.valor - a.valor)[0] : top.sort((a, b) => b.nota - a.nota || a.pagina - b.pagina)[0];
+  };
+  const pbl = elegir(cifrasTras(String.raw`presupuesto base de licitaci[oó]n|presupuesto (?:base )?de (?:la )?licitaci[oó]n|presupuesto m[aá]ximo de licitaci[oó]n|pressupost base de licitaci[oó]|orzamento base de licitaci[oó]n`, 260, String.raw`valor estimado|valor estimat|anualidad|lote\s*\d|importe del lote`), false);
+  if (pbl) poner("presupuesto", /iva (?:excluido|no incluido)|sin iva|excluido el iva|iva excluido/.test(pbl.despues + pbl.antes) ? "Presupuesto base de licitación (sin IVA)" : "Presupuesto base de licitación", pbl, pbl.valor);
+  const ve = elegir(cifrasTras(String.raw`valor estimado(?: del contrato)?|valor estimat|valor estimado total`, 260, String.raw`presupuesto base de licitaci|cr[eé]dito|anualidad`), true);
+  if (ve) poner("valorEstimado", "Valor estimado del contrato", ve, ve.valor);
   // (no el «importe anual de facturación» de la solvencia ni el «volumen anual de negocios»)
   const anual = buscarTodas(paginas, new RegExp(String.raw`(?:importe|presupuesto|precio)\s+anual[^.€]{0,120}?${IMPORTE}`, "i"), 20)
     .find(c => !/facturaci|volumen (?:anual )?de negocio|solvencia|seguro|cobertura|contratos? de (?:limpieza|recogida)/i.test(c.frase));

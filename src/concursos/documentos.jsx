@@ -5,9 +5,9 @@
 // comprobarlo. Lo que interesa se pasa a la ficha del concurso con un clic.
 import { Check, ExternalLink, FileText, Loader2, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { textoDelPdf } from "../rostering/convenio-pdf.js";
 import { C, font } from "../tema.js";
 import { VERSION_LECTOR, buscarEnPliego, leerPliego } from "./pliego.js";
+import { ACEPTA_PLIEGOS, documentosDeArchivo } from "./documento-texto.js";
 import { PDF_MAX, borrarDocumento, escucharDocumentos, escucharFicha, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
 import { FichaRequisitos } from "./ficha-requisitos.jsx";
 
@@ -60,18 +60,24 @@ export function DocumentosConcurso({ concurso }) {
 
   async function subir(files) {
     setError(null);
-    for (const archivo of files) {
-      if (archivo.type !== "application/pdf" && !/\.pdf$/i.test(archivo.name)) { setError(`«${archivo.name}» no es un PDF.`); continue; }
-      if (archivo.size > PDF_MAX) { setError(`«${archivo.name}» pasa de 15 MB: sube una versión más ligera.`); continue; }
+    for (const subido of files) {
+      if (subido.size > PDF_MAX * 2) { setError(`«${subido.name}» pasa de 30 MB: sube una versión más ligera.`); continue; }
+      let docsDe;
       try {
-        setSubiendo(`Leyendo ${archivo.name}…`);
-        const paginas = await textoDelPdf(archivo, { onProgreso: (i, n) => setSubiendo(`Leyendo ${archivo.name}: página ${i} de ${n}…`) });
-        const lect = leerPliego(paginas);
-        setSubiendo(`Guardando ${archivo.name}…`);
-        const nuevo = await guardarDocumento(id, { archivo, paginas, lectura: lect, onProgreso: (i, n) => setSubiendo(`Guardando ${archivo.name}… ${Math.round((100 * i) / n)} %`) });
-        setSelId(nuevo); setTexto({ id: nuevo, paginas }); setPestana("pliegos");
-        setNota(lect.conTexto ? `Leído: ${lect.datos.length} datos y ${lect.requisitos.length} requisitos encontrados.` : "Guardado, pero el PDF parece escaneado (fotos de páginas): no tiene texto que leer.");
-      } catch (e) { setError(`No se pudo subir «${archivo.name}»: ${e.message || e}`); }
+        setSubiendo(`Leyendo ${subido.name}…`);
+        docsDe = await documentosDeArchivo(subido, { onProgreso: (i, n) => setSubiendo(`Leyendo ${subido.name}: página ${i} de ${n}…`) });
+      } catch (e) { setError(`No se pudo leer «${subido.name}»: ${e.message || e}`); continue; }
+      // un ZIP puede traer varios documentos: cada uno, por separado
+      for (const { archivo, paginas } of docsDe) {
+        if (archivo.size > PDF_MAX) { setError(`«${archivo.name}» pasa de 15 MB: sube una versión más ligera.`); continue; }
+        try {
+          const lect = leerPliego(paginas);
+          setSubiendo(`Guardando ${archivo.name}…`);
+          const nuevo = await guardarDocumento(id, { archivo, paginas, lectura: lect, onProgreso: (i, n) => setSubiendo(`Guardando ${archivo.name}… ${Math.round((100 * i) / n)} %`) });
+          setSelId(nuevo); setTexto({ id: nuevo, paginas }); setPestana("pliegos");
+          setNota(lect.conTexto ? `Leído: ${lect.datos.length} datos y ${lect.requisitos.length} requisitos encontrados${docsDe.length > 1 ? ` (${docsDe.length} documentos en «${subido.name}»)` : ""}.` : "Guardado, pero el documento parece escaneado (fotos de páginas): no tiene texto que leer.");
+        } catch (e) { setError(`No se pudo subir «${archivo.name}»: ${e.message || e}`); }
+      }
     }
     setSubiendo(null);
   }
@@ -95,7 +101,7 @@ export function DocumentosConcurso({ concurso }) {
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3, maxWidth: 620 }}>Sube el pliego de prescripciones técnicas (y, si quieres, el de cláusulas administrativas o el anuncio). Operanzia lo lee y te enseña lo importante con la página de donde sale.</div>
         </div>
         <button className="op-btn op-primario" disabled={!!subiendo} onClick={() => fileRef.current?.click()}>{subiendo ? <Loader2 size={15} className="op-girando" /> : <Upload size={15} />} Subir pliego (PDF)</button>
-        <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple style={{ display: "none" }} onChange={e => { const f = [...e.target.files]; e.target.value = ""; subir(f); }} />
+        <input ref={fileRef} type="file" accept={ACEPTA_PLIEGOS} multiple style={{ display: "none" }} onChange={e => { const f = [...e.target.files]; e.target.value = ""; subir(f); }} />
       </div>
 
       {subiendo && <div style={{ ...tarjeta, padding: "10px 14px", color: C.muted, fontSize: 13, marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}><Loader2 size={15} className="op-girando" />{subiendo}</div>}

@@ -85,7 +85,7 @@ export async function guardarDocumento(concursoId, { archivo, paginas, lectura, 
   for (const [i, t] of texto.entries()) { await setDoc(doc(ref, "texto", String(i)), { i, t }); onProgreso?.(++hecho, total); }
   for (const [i, d] of pdf.entries()) { await setDoc(doc(ref, "pdf", String(i)), { i, d }); onProgreso?.(++hecho, total); }
   await setDoc(ref, {
-    nombre: archivo.name, tamano: archivo.size, paginas: paginas.length, subidoEn: Date.now(),
+    nombre: archivo.name, tamano: archivo.size, tipo: archivo.type || "application/pdf", paginas: paginas.length, subidoEn: Date.now(),
     trozosTexto: texto.length, trozosPdf: pdf.length, clase: lectura.clase || null, lectura: sinIndefinidos(lectura),
   });
   logAudit({ modulo: "Concursos", accion: "Subió un pliego", detalle: archivo.name });
@@ -104,7 +104,7 @@ export async function textoDocumento(concursoId, d) {
 export async function pdfDocumento(concursoId, d) {
   const partes = await Promise.all(Array.from({ length: d.trozosPdf || 0 }, (_, i) => getDoc(doc(db, "concursos", concursoId, "documentos", d._id, "pdf", String(i)))));
   const b64 = partes.map(p => p.data()?.d || "").join("");
-  return new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: "application/pdf" });
+  return new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: d.tipo || "application/pdf" });
 }
 export async function borrarDocumento(concursoId, d) {
   const base = ["concursos", concursoId, "documentos", d._id];

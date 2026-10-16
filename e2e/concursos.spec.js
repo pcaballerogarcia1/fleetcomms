@@ -23,7 +23,7 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await page.getByRole("button", { name: /Crear y abrir/ }).click();
   // un concurso empieza por sus documentos: se sube el pliego y Operanzia lo lee
   await page.waitForURL(/\/documentos/);
-  await page.locator('input[type="file"][accept="application/pdf,.pdf"]').setInputFiles({ name: "pliego-tecnico.pdf", mimeType: "application/pdf", buffer: pdfMini([
+  await page.locator('input[type="file"][accept="application/pdf,.pdf,.docx,.docm,.odt,.zip"]').setInputFiles({ name: "pliego-tecnico.pdf", mimeType: "application/pdf", buffer: pdfMini([
     ["PLIEGO DE PRESCRIPCIONES TECNICAS PARTICULARES", "1. OBJETO DEL CONTRATO", "El objeto del contrato es el servicio de lavado de contenedores en Salamanca.", "El total de contenedores alcanzan las 6.037 unidades.", "La duracion del contrato sera de tres anos (3), con una prorroga de un (1) ano.", "El presupuesto base de licitacion asciende a 1.200.000,00 euros."],
     ["ANEXO I - Unidades estimadas anuales", "LAVADO FRACCION 1r ANO 2ndo ANO 3r ANO", "SOTERRADO", "RSU 1.992 1.992 1.992", "PAPEL 230 230 230", "Los equipos deberan tener una antiguedad maxima de 15 anos."],
     ["CRITERIOS DE ADJUDICACION", "Oferta economica: hasta 60 puntos.", "Memoria tecnica del servicio: hasta 40 puntos.", "Se puntuara con la formula P = 60 x (Omin / Oi)."],
