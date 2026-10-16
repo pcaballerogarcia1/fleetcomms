@@ -7,7 +7,7 @@ import { Check, MapPin, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { C } from "../tema.js";
 import { CAMPOS, compararConPliego, entenderHoja, hojasDeArchivo, leerInventario } from "./inventario.js";
-import { aplicarCoordenadas, direccionesDe, geocodificar, marcadoresDe } from "./geocodificar.js";
+import { aplicarCoordenadas, direccionesDe, geocodificar, marcadoresDe, traeCoordenadas } from "./geocodificar.js";
 import { borrarInventario, guardarCoordenadas, guardarInventario, quitarCapaInventario, volcarInventarioAlMapa } from "./store.js";
 
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 1 }); } catch { return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }); } })();
@@ -21,7 +21,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
   const [municipio, setMunicipio] = useState(null); // null = el guardado o el sugerido
   const [progreso, setProgreso] = useState(null);   // { hechas, total }
   const muni = municipio ?? inventario?.municipio ?? municipioSugerido ?? "";
-  const yaConCoordenadas = (inventario?.contenedores || []).filter(c => Number.isFinite(c.lat) && Number.isFinite(c.lng)).length;
+  const yaConCoordenadas = (inventario?.contenedores || []).filter(traeCoordenadas).length;
 
   // Situar cada dirección en el mapa (CartoCiudad) y pasar el listado al mapa del Planning del concurso
   async function alMapa() {
@@ -33,7 +33,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
         setProgreso({ hechas: 0, total: dirs.size });
         const r = await geocodificar(dirs.keys(), { onProgreso: (hechas, total) => setProgreso({ hechas, total }) });
         contenedores = aplicarCoordenadas(contenedores, muni, r.porDireccion).map(c => Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)));
-        const geo = { en: Date.now(), portal: r.encontradas, calle: r.aproximadas, nada: r.sinEncontrar, sin: [...r.porDireccion].filter(([, x]) => !x).map(([d]) => d).slice(0, 200) };
+        const geo = { en: Date.now(), portal: r.encontradas, calle: r.aproximadas, nada: r.sinEncontrar, lejanos: r.lejanos.length, sin: [...r.porDireccion].filter(([, x]) => !x).map(([d]) => d).slice(0, 200) };
         setProgreso(null); setOcupado("Guardando las coordenadas…");
         await guardarCoordenadas(concursoId, { contenedores, municipio: muni || null, geocodificado: geo });
       }

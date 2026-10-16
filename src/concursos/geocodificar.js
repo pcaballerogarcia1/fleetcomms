@@ -36,11 +36,14 @@ export function direccionDe(c, municipio = "") {
   return [`${calle}${num ? ` ${num}` : ""}`, muni].filter(Boolean).join(", ");
 }
 
+/** ¿Las coordenadas vienen del archivo? (las buscadas aquí llevan `geo` y se vuelven a buscar) */
+export const traeCoordenadas = c => Number.isFinite(c.lat) && Number.isFinite(c.lng) && !c.geo;
+
 /** Las direcciones distintas del listado: Map<dirección, índices de contenedores> */
 export function direccionesDe(contenedores, municipio) {
   const m = new Map();
   contenedores.forEach((c, i) => {
-    if (Number.isFinite(c.lat) && Number.isFinite(c.lng)) return; // ya tiene coordenadas
+    if (traeCoordenadas(c)) return; // las coordenadas vienen en el archivo
     const d = direccionDe(c, municipio);
     if (!d) return;
     if (!m.has(d)) m.set(d, []);
@@ -71,24 +74,57 @@ async function json(url, fetchFn) {
   try { return JSON.parse(t); } catch { return null; }
 }
 
+/** ¿El municipio encontrado es el pedido? «Palma» = «Palma», pero no «Palma del Río» ni «La Palma de Cervelló».
+ *  Si se pidió «Palma de Mallorca», vale «Palma». */
+export function mismoMunicipio(pedido, encontrado) {
+  const p = sinAcentos(pedido).replace(/\s+/g, " ").trim(), e = sinAcentos(encontrado).replace(/\s+/g, " ").trim();
+  if (!p) return true;
+  if (!e) return false;
+  return p === e || p.startsWith(`${e} `) || e.split(/\s*\/\s*/).includes(p);
+}
+
 async function buscar(texto, fetchFn) {
-  // 1) la dirección tal cual: el portal exacto
+  const partes = texto.split(",");
+  const municipio = partes.length > 1 ? partes[partes.length - 1].trim() : "";
   const sinNumero = texto.replace(/\s\d+(?=,|$)/, "");
   const calle = sinNumero.split(",")[0];
-  const r = leerRespuesta(await json(`${BASE}/find?q=${encodeURIComponent(texto)}`, fetchFn));
-  if (r && r.calidad !== "municipio" && mismaCalle(calle, r.texto)) return r;
-  // 2) si no, la calle (sin número): su centro, aproximado
-  const cands = (await json(`${BASE}/candidates?limit=3&q=${encodeURIComponent(sinNumero)}`, fetchFn)) || [];
-  for (const c of Array.isArray(cands) ? cands : []) {
-    if (NO_SIRVE.test(c.type || "") || !mismaCalle(calle, c.address)) continue;
-    if (c.lat && c.lng) return { lat: c.lat, lng: c.lng, calidad: "calle", texto: c.address };
-    if (c.type === "callejero" && c.id) {
-      const f = await json(`${BASE}/find?id=${encodeURIComponent(c.id)}&type=callejero`, fetchFn);
-      const p = f && ((f.lat && f.lng) ? { lat: f.lat, lng: f.lng } : centroDe(f.geom));
-      if (p) return { ...p, calidad: "calle", texto: c.address };
+  const num = (texto.match(/\s(\d+)(?=,|$)/) || [])[1];
+  const vale = (c, muni) => !NO_SIRVE.test(c.type || "") && mismaCalle(calle, c.address) && mismoMunicipio(municipio, muni ?? c.muni);
+  // 1) la dirección tal cual: el portal exacto, en ese municipio
+  const crudo = await json(`${BASE}/find?q=${encodeURIComponent(texto)}`, fetchFn);
+  const r = leerRespuesta(crudo);
+  if (r && r.calidad !== "municipio" && mismaCalle(calle, r.texto) && mismoMunicipio(municipio, crudo.muni)) return r;
+  // 2) si el primero era de otro municipio, entre más candidatos: el portal; si no, la calle (su centro, aproximado)
+  for (const q of num ? [texto, sinNumero] : [sinNumero]) {
+    const cands = (await json(`${BASE}/candidates?limit=15&q=${encodeURIComponent(q)}`, fetchFn)) || [];
+    for (const c of (Array.isArray(cands) ? cands : []).filter(x => vale(x))) {
+      if (c.lat && c.lng) return { lat: c.lat, lng: c.lng, calidad: c.type === "portal" && !c.noNumber ? "portal" : "calle", texto: c.address };
+      if (c.type === "callejero" && c.id) {
+        const f = await json(`${BASE}/find?id=${encodeURIComponent(c.id)}&type=callejero`, fetchFn);
+        if (f && !mismoMunicipio(municipio, f.muni ?? c.muni)) continue;
+        const p = f && ((f.lat && f.lng) ? { lat: f.lat, lng: f.lng } : centroDe(f.geom));
+        if (p) return { ...p, calidad: "calle", texto: c.address };
+      }
     }
   }
   return null;
+}
+
+const km = (a, b) => {
+  const R = 6371, rad = x => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  return 2 * R * Math.asin(Math.sqrt(Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2));
+};
+const mediana = xs => { const o = [...xs].sort((a, b) => a - b); return o.length % 2 ? o[(o.length - 1) / 2] : (o[o.length / 2 - 1] + o[o.length / 2]) / 2; };
+
+/** Por si acaso: lo que cae a más de `maxKm` del centro (la mediana) de lo encontrado no se da por bueno */
+export function quitarLejanos(porDireccion, maxKm = 25) {
+  const ok = [...porDireccion.values()].filter(Boolean);
+  if (ok.length < 3) return [];
+  const centro = { lat: mediana(ok.map(r => r.lat)), lng: mediana(ok.map(r => r.lng)) };
+  const fuera = [];
+  for (const [d, r] of porDireccion) if (r && km(centro, r) > maxKm) { porDireccion.set(d, null); fuera.push(d); }
+  return fuera;
 }
 
 /**
@@ -111,21 +147,25 @@ export async function geocodificar(direcciones, { fetchFn = (...a) => fetch(...a
     }
   }
   await Promise.all(Array.from({ length: Math.min(aLaVez, lista.length) }, trabajador));
+  const lejanos = quitarLejanos(porDireccion);
   const vals = [...porDireccion.values()];
   return {
     porDireccion,
     encontradas: vals.filter(r => r?.calidad === "portal").length,
     aproximadas: vals.filter(r => r && r.calidad !== "portal").length,
     sinEncontrar: vals.filter(r => !r).length,
+    lejanos,
   };
 }
 
 /** Los contenedores con las coordenadas de su dirección (los que no se encuentran, sin tocar) */
 export function aplicarCoordenadas(contenedores, municipio, porDireccion) {
   return contenedores.map(c => {
-    if (Number.isFinite(c.lat) && Number.isFinite(c.lng)) return c;
+    if (traeCoordenadas(c)) return c;
+    const { lat, lng, geo, ...resto } = c; // lo buscado antes, fuera
+    void lat; void lng; void geo;
     const r = porDireccion.get(direccionDe(c, municipio));
-    return r ? { ...c, lat: r.lat, lng: r.lng, geo: r.calidad } : c;
+    return r ? { ...resto, lat: r.lat, lng: r.lng, geo: r.calidad } : resto;
   });
 }
 
