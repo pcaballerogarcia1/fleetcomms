@@ -86,7 +86,7 @@ export async function guardarDocumento(concursoId, { archivo, paginas, lectura, 
   for (const [i, d] of pdf.entries()) { await setDoc(doc(ref, "pdf", String(i)), { i, d }); onProgreso?.(++hecho, total); }
   await setDoc(ref, {
     nombre: archivo.name, tamano: archivo.size, paginas: paginas.length, subidoEn: Date.now(),
-    trozosTexto: texto.length, trozosPdf: pdf.length, clase: lectura.clase || null, lectura,
+    trozosTexto: texto.length, trozosPdf: pdf.length, clase: lectura.clase || null, lectura: sinIndefinidos(lectura),
   });
   logAudit({ modulo: "Concursos", accion: "Subió un pliego", detalle: archivo.name });
   return ref.id;
@@ -94,7 +94,7 @@ export async function guardarDocumento(concursoId, { archivo, paginas, lectura, 
 
 /** Lo leído de un documento, otra vez (con un lector mejor) */
 export function releerDocumento(concursoId, d, lectura) {
-  return updateDoc(doc(db, "concursos", concursoId, "documentos", d._id), { lectura, clase: lectura.clase || null });
+  return updateDoc(doc(db, "concursos", concursoId, "documentos", d._id), { lectura: sinIndefinidos(lectura), clase: lectura.clase || null });
 }
 
 export async function textoDocumento(concursoId, d) {
@@ -191,3 +191,10 @@ export async function volcarInventarioAlMapa(concursoId, { nombre, marcadores, c
 }
 /** Guarda las coordenadas encontradas en el inventario */
 export const guardarCoordenadas = (concursoId, cambios) => updateDoc(refInventario(concursoId), cambios);
+
+/** Sin campos vacíos (Firestore no admite undefined), a cualquier profundidad */
+export const sinIndefinidos = v => (Array.isArray(v) ? v.map(sinIndefinidos)
+  : v && typeof v === "object" && !(v instanceof Date) ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, sinIndefinidos(x)])) : v);
+
+/** El estudio de costes del Ayuntamiento que usa Cálculo (null = no usarlo) */
+export const fijarEstudio = (concursoId, estudio, docNombre) => cambiarFicha(concursoId, ["estudio"], estudio ? sinIndefinidos({ ...estudio, docNombre: docNombre || null, en: Date.now() }) : deleteField());

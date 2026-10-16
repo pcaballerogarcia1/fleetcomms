@@ -5,6 +5,7 @@
 // caería en baja anormal. La recomendada es la menor baja que gana sin perder
 // dinero ni caer en anormal. Y tres escenarios (base, adverso, tensión) para ver
 // cuánto aguanta el margen. Sin React ni Firebase.
+import { alarmasConcurso } from "./alarmas.js";
 import { calcularConcurso } from "./calculo.js";
 
 /** Baja en puntos porcentuales: 12 = un 12 % por debajo del presupuesto */
@@ -52,23 +53,42 @@ export function anormales(bajas, regla = { id: "art85" }) {
   return bajas.map(b => b > m2 + 10);
 }
 
-/** Los puntos que hay en juego: { precio, resto, total } */
+/** Los puntos que hay en juego: { precio, mejoras, resto (memoria y demás), total } */
 export function puntosEnJuego(criterios = []) {
-  const precio = criterios.filter(c => c.tipo === "precio").reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-  const resto = criterios.filter(c => c.tipo !== "precio").reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-  return { precio, resto, total: precio + resto };
+  const suma = f => criterios.filter(f).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+  const precio = suma(c => c.tipo === "precio"), mejoras = suma(c => c.tipo === "mejora");
+  const resto = suma(c => c.tipo !== "precio" && c.tipo !== "mejora");
+  return { precio, mejoras, resto, total: precio + mejoras + resto };
+}
+
+/** Los niveles de una mejora con escalones: [{ unidades, puntos }] (el primero, no ofrecer nada) */
+export function nivelesMejora(c) {
+  const esc = (c.escalones || []).filter(e => e.puntos > 0).sort((a, b) => a.desde - b.desde);
+  return [{ unidades: 0, puntos: 0 }, ...esc.map(e => ({ unidades: e.desde, puntos: Number(e.puntos) }))];
+}
+/** Lo que cuesta cada unidad de mejora, orientativo (al año) */
+export function costeUnidadOrientativo(unidad = "") {
+  if (/papeler/i.test(unidad)) return 250;            // papelera de madera colocada
+  if (/jornada|desbroce|brigada/i.test(unidad)) return 380; // una brigada de 2 personas 7,5 h con su furgón
+  if (/hora/i.test(unidad)) return 35;
+  if (/contenedor/i.test(unidad)) return 180;
+  return 100;
 }
 
 /**
  * Probar cada baja propia contra la competencia esperada.
- * @param o { criterios, formula, saciedad, regla, presupuesto (anual, sin IVA), coste (medio anual),
+ * @param o { criterios, formula, saciedad, regla, presupuesto (el del PRIMER año, sin IVA), coste (lo que cuesta el
+ *            contrato expresado en precio del primer año: total ÷ lo que pesan los años), mejorasPropias, mejorasCompetencia (puntos),
  *            competidores: [{ nombre, baja, tecnicaPct }], tecnicaPct (lo que se espera sacar del resto de puntos, %),
  *            margenMinimoPct, paso, hasta }
  * @returns { filas: [{ baja, precio, margen, puntosPrecio, puntos, puesto, anormal }], recomendada, maxima }
  */
 export function simularBajas(o) {
   const { criterios = [], formula = "lineal", saciedad = 15, regla = { id: "art85" }, presupuesto = 0, coste = 0, competidores = [], tecnicaPct = 70, margenMinimoPct = 0, paso = 0.5, hasta = 50 } = o;
-  const { precio: maximo, resto } = puntosEnJuego(criterios);
+  const { precio: maximo, resto, mejoras: mejorasMax } = puntosEnJuego(criterios);
+  // mejoras: las nuestras, las elegidas; las de la competencia, por defecto todas
+  const mejorasPropias = Number(o.mejorasPropias) || 0;
+  const mejorasCompetencia = o.mejorasCompetencia ?? mejorasMax;
   const filas = [];
   if (!(presupuesto > 0)) return { filas, recomendada: null, maxima: null };
   for (let b = 0; b <= hasta + 1e-9; b += paso) {
@@ -76,7 +96,7 @@ export function simularBajas(o) {
     const bajas = [baja, ...competidores.map(c => Number(c.baja) || 0)];
     const importes = bajas.map(x => presupuesto * (1 - x / 100));
     const pp = puntosPrecio(importes, { formula, maximo, presupuesto, saciedad });
-    const tecnica = [tecnicaPct, ...competidores.map(c => Number(c.tecnicaPct) || 0)].map(t => resto * t / 100);
+    const tecnica = [resto * tecnicaPct / 100 + mejorasPropias, ...competidores.map(c => resto * (Number(c.tecnicaPct) || 0) / 100 + (c.mejoras ?? mejorasCompetencia))];
     const totales = pp.map((p, i) => p + tecnica[i]);
     const anor = anormales(bajas, regla);
     // las anormales de la competencia se dan por justificadas (cuentan)
@@ -102,7 +122,7 @@ export const ESCENARIOS = [
 export function escenarios(precio, calcular) {
   return ESCENARIOS.map(e => {
     const { cuenta } = calcular(e.factores);
-    const coste = cuenta.costeMedioAnual;
+    const coste = cuenta.precios.equilibrio; // en precio del primer año (el contrato entero, repartido)
     return { ...e, coste, resultado: precio - coste, margen: precio > 0 ? (precio - coste) / precio * 100 : 0, caja: coste / 365 * (cuenta.parametros.diasCobro + e.diasCobroMas), personas: cuenta.plantilla.total, vehiculos: cuenta.vehiculos.reduce((s, v) => s + v.total, 0) };
   });
 }
@@ -114,18 +134,48 @@ export const COMPETIDORES_DEFECTO = [
 ];
 export const OFERTA_DEFECTO = { tecnicaPct: 75, margenMinimoPct: 3 };
 
-/** Todo lo de Alternativas a partir de lo guardado (lo usa también Resumen) */
+/**
+ * Todo lo de Alternativas a partir de lo guardado (lo usa también Resumen).
+ * Las mejoras con escalones se eligen solas (salvo que se fijen): se prueban
+ * todas las combinaciones de niveles, cada una con su coste, y se queda la que
+ * gana con más margen (o, si ninguna gana, la que mejor queda).
+ */
 export function analizarOferta({ ficha, dim, calc, concurso, oferta }) {
-  const r = calcularConcurso({ ficha, dim, calc, concurso });
   const adj = ficha?.adjudicacion || null;
   const o = { ...OFERTA_DEFECTO, ...Object.fromEntries(Object.entries(oferta || {}).filter(([, v]) => v != null)) };
   const competidores = oferta?.competidores || COMPETIDORES_DEFECTO;
+  const mejoras = (adj?.criterios || []).filter(c => c.tipo === "mejora" && c.escalones?.length).map(c => {
+    const cfg = oferta?.mejoras?.[c.nombre] || {};
+    const costeUnidad = Number(cfg.costeUnidad) > 0 ? Number(cfg.costeUnidad) : costeUnidadOrientativo(c.unidad || c.nombre);
+    const niveles = nivelesMejora(c);
+    const fijado = cfg.unidades != null && cfg.unidades !== "" ? niveles.filter(n => n.unidades === Number(cfg.unidades)) : null;
+    return { nombre: c.nombre, unidad: c.unidad || "unidades", costeUnidad, niveles: fijado?.length ? fijado : niveles, fijado: !!fijado?.length };
+  });
+  // las combinaciones de niveles (como mucho 81)
+  let combos = [[]];
+  for (const m of mejoras) combos = combos.flatMap(cb => m.niveles.map(n => [...cb, { ...n, nombre: m.nombre, unidad: m.unidad, costeAnio: n.unidades * m.costeUnidad }])).slice(0, 81);
+  const probar = combo => {
+    const mejorasAnio = combo.reduce((s, x) => s + x.costeAnio, 0);
+    const r = calcularConcurso({ ficha, dim, calc, concurso, mejorasAnio });
+    const presupuesto = r.presupuestoAnual;
+    const sim = adj && presupuesto ? simularBajas({
+      criterios: adj.criterios, formula: adj.formula, saciedad: adj.saciedad, regla: adj.baja || { id: "art85" },
+      presupuesto, coste: r.costeEquivalente, competidores, tecnicaPct: o.tecnicaPct, margenMinimoPct: o.margenMinimoPct,
+      mejorasPropias: combo.reduce((s, x) => s + x.puntos, 0),
+    }) : null;
+    return { combo, mejorasAnio, r, sim };
+  };
+  const pruebas = combos.map(probar);
+  const valor = p => {
+    const f = p.sim?.recomendada;
+    if (!f) return -1e9;
+    return (f.puesto === 1 && !f.empate ? 1e6 : 0) - f.puesto * 1e4 + f.margen * 10 + f.puntos / 100;
+  };
+  const mejor = pruebas.reduce((a, b) => (valor(b) > valor(a) ? b : a), pruebas[0]);
+  const { r, sim, combo, mejorasAnio } = mejor;
   const presupuesto = r.presupuestoAnual;
-  const sim = adj && presupuesto ? simularBajas({
-    criterios: adj.criterios, formula: adj.formula, saciedad: adj.saciedad, regla: adj.baja || { id: "art85" },
-    presupuesto, coste: r.cuenta.costeMedioAnual, competidores, tecnicaPct: o.tecnicaPct, margenMinimoPct: o.margenMinimoPct,
-  }) : null;
   const elegida = sim ? (o.bajaElegida != null ? sim.filas.find(f => Math.abs(f.baja - o.bajaElegida) < 1e-6) : null) || sim.recomendada : null;
-  const esc = elegida ? escenarios(elegida.precio, factores => calcularConcurso({ ficha, dim, calc, concurso, factores })) : null;
-  return { r, adj, o, competidores, presupuesto, sim, elegida, esc };
+  const esc = elegida ? escenarios(elegida.precio, factores => calcularConcurso({ ficha, dim, calc, concurso, factores, mejorasAnio })) : null;
+  const alarmas = alarmasConcurso({ r, ficha, concurso, calc, adj });
+  return { r, adj, o, competidores, presupuesto, sim, elegida, esc, mejoras, mejorasElegidas: combo, mejorasAnio, combinaciones: pruebas.length, alarmas, bloqueado: alarmas.some(a => a.nivel === "bloquea") };
 }

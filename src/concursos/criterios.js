@@ -9,7 +9,10 @@ const sinAcentos = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
 const numero = s => Number(String(s).replace(",", "."));
 const ES_PRECIO = /precio|econ[oó]mic|proposici[oó]n econ|oferta econ|importe/i;
 // rótulos y totales, no criterios
-const NO_ES_CRITERIO = /criterios?|total|puntuaci[oó]n m[aá]xima|m[aá]ximo de puntos|sobre\s*n?[º°]?\s*\d|umbral|m[ií]nim[oa] de \d+ puntos|obtener|alcanzar|superar|quedar[aá]n? excluid/i;
+const NO_ES_CRITERIO = /criterios?|total|puntuaci[oó]n m[aá]xima|m[aá]ximo de puntos|sobre\s*n?[º°]?\s*\d|umbral|m[ií]nim[oa] de \d+ puntos|obtener|alcanzar|superar|quedar[aá]n? excluid|^ponderaci[oó]n$|^f[oó]rmula|^descripci[oó]n|^(?:hasta|entre|desde|m[aá]s de)?\s*\d+(?:\s*(?:y|a)\s*\d+)?\s*(?:o m[aá]s)?\s+[a-záéíóúñ]/i;
+// escalones de una mejora: «Entre 6 y 10 papeleras: 1 puntos», «16 o más jornadas de desbroce: 5 puntos», «Hasta 5 papeleras de madera: 0 puntos»
+const ESCALON = /^(?:[•·\-–]\s*)?(hasta|entre|desde|m[aá]s de)?\s*(\d+)(?:\s*(?:y|a)\s*(\d+))?\s*(o m[aá]s)?\s+([a-záéíóúñ][a-záéíóúñ ]{2,60}?)\s*:\s*(\d{1,2}(?:,\d+)?)\s*puntos?\.?$/i;
+const ES_MEJORA = /mejora|bolsa de|sin coste adicional|adicional(?:es)? (?:a|sin)/i;
 const SECCION_JUICIO = /juicios? de valor|no evaluables mediante f[oó]rmulas|valoraci[oó]n subjetiva|criterios subjetivos/i;
 const SECCION_FORMULA = /mediante (?:la )?aplicaci[oó]n de f[oó]rmulas|evaluables (?:mediante|por) f[oó]rmulas|evaluables de forma autom[aá]tica|valoraci[oó]n autom[aá]tica|criterios objetivos|cuantificables (?:de forma )?autom/i;
 const RUIDO = /direcci[oó]n postal|^\(\d{5}\)|espa[nñ]a$|^ES\d{3}$|tel[eé]fono|correo|plaza de|^calle|^avda|^===/i;
@@ -27,12 +30,20 @@ export const BAJA_ANORMAL = [
 /**
  * Los criterios de adjudicación de un pliego o anuncio.
  * @param paginasCrudas [texto de cada página, con sus saltos de línea]
- * @returns { criterios: [{ nombre, puntos, tipo: "precio" | "formula" | "juicio", pagina, frase }],
+ * @returns { criterios: [{ nombre, puntos, tipo: "precio" | "formula" | "juicio" | "mejora", pagina, frase,
+ *              subcriterios?: [{ nombre, puntos }], escalones?: [{ desde, hasta, puntos }], unidad? }],
  *            formula: { id, pagina, frase } | null, baja: { id, valor, pagina, frase } | null }
  */
 export function criteriosDelPliego(paginasCrudas = []) {
   const lineas = [];
   paginasCrudas.forEach((p, i) => String(p || "").split("\n").forEach(l => { const t = l.replace(/\s+/g, " ").trim(); if (t) lineas.push({ t, pagina: i + 1 }); }));
+  // «… (hasta 2» + «puntos)»: una línea partida en dos
+  for (let i = lineas.length - 2; i >= 0; i--) {
+    if (/(?:hasta|m[aá]ximo(?: de)?)\s+\d{1,3}(?:,\d+)?\s*$/i.test(lineas[i].t) && /^puntos?\b/i.test(lineas[i + 1].t)) {
+      lineas[i] = { ...lineas[i], t: `${lineas[i].t} ${lineas[i + 1].t}` };
+      lineas.splice(i + 1, 1);
+    }
+  }
   const criterios = [];
   const anadir = c => {
     const nombre = c.nombre.replace(/^[\s:.\-–•·]+|[\s:.\-–,(]+$/g, "").replace(/^(?:[a-z\d]{1,3}[.)]|[ivx]{1,4}[.)])\s+/i, "").trim();
@@ -43,9 +54,27 @@ export function criteriosDelPliego(paginasCrudas = []) {
   };
 
   // 1) anuncio de la Plataforma: «NOMBRE» / «: Precio Subtipo Criterio» / «: 40 Ponderación»
-  let seccion = null, pendiente = null;
+  let seccion = null, pendiente = null, titulo = null;
+  const escalones = []; // [{ unidad, desde, hasta, puntos, pagina, k }]
   for (let k = 0; k < lineas.length; k++) {
     const { t, pagina } = lineas[k];
+    // escalones de una mejora
+    const esc = t.match(ESCALON);
+    if (esc) {
+      const a = Number(esc[2]), b = esc[3] ? Number(esc[3]) : null;
+      const [desde, hasta] = /hasta/i.test(esc[1] || "") ? [0, a] : esc[4] || /m[aá]s de|desde/i.test(esc[1] || "") ? [/m[aá]s de/i.test(esc[1] || "") ? a + 1 : a, null] : [a, b ?? a];
+      escalones.push({ unidad: esc[5].trim().replace(/\s+(anuales|al a[nñ]o)$/i, ""), desde, hasta, puntos: numero(esc[6]), pagina, k });
+      continue;
+    }
+    // un título de criterio sin puntos («• Mejoras – constitución de una bolsa anual de papeleras…»): sus puntos vienen luego en «Ponderación 5 puntos»
+    const tit = t.match(/^[•·]\s*(.{8,160}?)[:\s]*$/);
+    if (tit && !/\d+\s*puntos/i.test(t)) titulo = { nombre: tit[1], pagina, k };
+    const pondTabla = t.match(/^Ponderaci[oó]n\s+(\d{1,3}(?:,\d+)?)\s*puntos?$/i);
+    if (pondTabla && titulo && k - titulo.k < 25) {
+      anadir({ nombre: titulo.nombre, puntos: numero(pondTabla[1]), tipo: ES_MEJORA.test(titulo.nombre) ? "mejora" : ES_PRECIO.test(titulo.nombre) ? "precio" : seccion || "formula", pagina: titulo.pagina, frase: `${titulo.nombre} · ${t}` });
+      titulo = null;
+      continue;
+    }
     if (SECCION_JUICIO.test(t)) seccion = "juicio";
     else if (SECCION_FORMULA.test(t)) seccion = "formula";
     const sub = t.match(/^:?\s*(.*?)\s*Subtipo Criterio/i);
@@ -53,20 +82,54 @@ export function criteriosDelPliego(paginasCrudas = []) {
       // el nombre: la línea anterior que no es ruido
       let j = k - 1; while (j >= 0 && (RUIDO.test(lineas[j].t) || /ponderaci|subtipo/i.test(lineas[j].t))) j--;
       const nombre = j >= 0 ? lineas[j].t : "Criterio";
-      pendiente = { nombre, tipo: /precio/i.test(sub[1]) || ES_PRECIO.test(nombre) ? "precio" : seccion || "formula", pagina, frase: `${nombre} · ${sub[1]}` };
+      pendiente = { nombre, tipo: /precio/i.test(sub[1]) || ES_PRECIO.test(nombre) ? "precio" : ES_MEJORA.test(nombre) ? "mejora" : seccion || "formula", pagina, frase: `${nombre} · ${sub[1]}` };
       continue;
     }
     const pond = t.match(/^:?\s*(\d{1,3}(?:[.,]\d+)?)\s*Ponderaci[oó]n/i);
     if (pond && pendiente) { anadir({ ...pendiente, puntos: numero(pond[1]) }); pendiente = null; continue; }
 
     // 2) pliego: «Oferta económica: hasta 51 puntos», «Memoria técnica (máximo 25 puntos)»
-    const m = t.match(/^(.{3,120}?)[\s:.–\-(]*(?:hasta(?: un m[aá]ximo de)?|m[aá]ximo(?: de)?|m[aá]x\.?|con)?\s*(\d{1,3}(?:,\d{1,2})?)\s*(?:puntos|ptos\.?|p\.)\)?\.?$/i);
+    const m = t.match(/^(.{3,160}?)[\s:.–\-(]*(?:hasta(?: un m[aá]ximo de)?|m[aá]ximo(?: de)?|m[aá]x\.?|con)?\s*(\d{1,3}(?:,\d{1,2})?)\s*(?:puntos|ptos\.?|p\.)\s*\)?\s*[.:]?$/i);
     if (m && !/^\d+([.,]\d+)?$/.test(m[1].trim())) {
       const nombre = m[1];
-      const tipo = ES_PRECIO.test(nombre) ? "precio" : seccion || "formula";
-      anadir({ nombre, puntos: numero(m[2]), tipo, pagina, frase: t });
+      const tipo = ES_PRECIO.test(nombre) ? "precio" : ES_MEJORA.test(nombre) ? "mejora" : seccion || "formula";
+      anadir({ nombre, puntos: numero(m[2]), tipo, pagina, frase: t, k });
     }
   }
+
+  // apartados: los criterios seguidos que suman justo lo de uno anterior son sus apartados
+  // («Memoria técnica 45 puntos» = 12 + 12 + 3 + 3 + 9 + 2 + 2 + 2)
+  for (let i = 0; i < criterios.length; i++) {
+    const padre = criterios[i];
+    let suma = 0, j = i + 1;
+    while (j < criterios.length && suma < padre.puntos - 1e-9) suma += criterios[j++].puntos;
+    if (padre.tipo !== "precio" && padre.tipo !== "mejora" && j - i - 1 >= 2 && Math.abs(suma - padre.puntos) < 1e-9 && !criterios.slice(i + 1, j).some(c => c.tipo === "precio" || c.tipo === "mejora")) {
+      padre.subcriterios = criterios.slice(i + 1, j).map(({ nombre, puntos }) => ({ nombre, puntos }));
+      criterios.splice(i + 1, j - i - 1);
+    }
+  }
+  // los escalones, a su mejora (por la palabra de la unidad: «papeleras», «jornadas de desbroce»)
+  const grupos = [];
+  for (const e of escalones) {
+    const g = grupos.find(x => x.unidad === e.unidad || sinAcentos(x.unidad).split(" ")[0] === sinAcentos(e.unidad).split(" ")[0]);
+    if (g) g.escalones.push(e); else grupos.push({ unidad: e.unidad, escalones: [e] });
+  }
+  for (const g of grupos) {
+    const palabra = sinAcentos(g.unidad).split(" ").find(w => w.length > 4) || sinAcentos(g.unidad);
+    const c = criterios.find(x => sinAcentos(x.nombre).includes(palabra)) || null;
+    const lista = g.escalones.map(({ desde, hasta, puntos }) => ({ desde, hasta, puntos })).sort((a, b) => a.desde - b.desde);
+    if (c) { c.escalones = lista; c.unidad = g.unidad; c.tipo = "mejora"; }
+    g.lista = lista;
+  }
+  // dos mejoras de lo mismo (una de la frase del criterio y otra de su tabla): la que tiene escalones
+  for (let i = criterios.length - 1; i >= 0; i--) {
+    const c = criterios[i];
+    if (c.tipo !== "mejora") continue;
+    const palabra = (sinAcentos(c.nombre).match(/papeleras|desbroce|jornadas|contenedores|horas|vehiculos|barredora|personal|limpiezas?/) || [])[0];
+    const otra = palabra && criterios.find(x => x !== c && x.tipo === "mejora" && sinAcentos(x.nombre).includes(palabra) && x.puntos === c.puntos);
+    if (otra && (!c.escalones || otra.escalones)) criterios.splice(i, 1);
+  }
+  for (const c of criterios) delete c.k;
 
   // 3) la fórmula del precio y la baja anormal, en el texto seguido
   const paginas = paginasCrudas.map(p => String(p || "").replace(/\s+/g, " "));
@@ -88,5 +151,41 @@ export function criteriosDelPliego(paginasCrudas = []) {
     if (pct) baja = { id: "media", valor: numero(pct.m[1]), pagina: pct.pagina, frase: pct.frase };
     else baja = { id: "art85", valor: null, pagina: (art || anormal).pagina, frase: (art || anormal).frase };
   }
-  return { criterios, formula, baja };
+  // los escalones de cada mejora, también sueltos (por si la mejora está en otro documento, p. ej. el anuncio)
+  const escalonesMejoras = grupos.map(g => ({ unidad: g.unidad, escalones: g.lista }));
+  return { criterios, formula, baja, escalonesMejoras };
+}
+
+/**
+ * Los criterios a proponer, de entre los documentos subidos: el grupo que
+ * tiene precio y suma 100 (si no, el más completo), con los apartados y los
+ * escalones que traigan los otros documentos.
+ * @param docs [{ nombre, adjudicacion: criteriosDelPliego(…) }]
+ * @returns null | { criterios, formula, baja, docNombre, suma }
+ */
+export function mejorPropuesta(docs = []) {
+  const sumaDe = cs => cs.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+  const nota = cs => (cs.some(c => c.tipo === "precio") ? 2 : 0) + (Math.abs(sumaDe(cs) - 100) < 1e-6 ? 3 : 0) + (cs.length ? 1 : 0) + (cs.some(c => c.escalones || c.subcriterios) ? 0.5 : 0);
+  const cands = docs.filter(d => d.adjudicacion?.criterios?.length).map(d => ({ d, cs: d.adjudicacion.criterios, n: nota(d.adjudicacion.criterios) })).sort((a, b) => b.n - a.n);
+  const formula = docs.map(d => d.adjudicacion?.formula && { ...d.adjudicacion.formula, docNombre: d.nombre }).find(Boolean) || null;
+  const baja = docs.map(d => d.adjudicacion?.baja && { ...d.adjudicacion.baja, docNombre: d.nombre }).find(Boolean) || null;
+  if (!cands.length) return formula || baja ? { criterios: [], formula, baja, docNombre: null, suma: 0 } : null;
+  const mejor = cands[0];
+  const palabras = t => sinAcentos(t).split(/[^a-z0-9]+/).filter(w => w.length > 4 && !/mejora|constitucion|adicional|ayuntamiento|coste|bolsa/.test(w));
+  const otros = cands.slice(1).flatMap(x => x.cs.map(c => ({ ...c, docNombre: x.d.nombre })));
+  const sueltos = docs.flatMap(d => d.adjudicacion?.escalonesMejoras || []);
+  const criterios = mejor.cs.map(c => {
+    const out = { ...c, docNombre: mejor.d.nombre };
+    const ws = palabras(c.nombre);
+    const par = otros.find(o => o.puntos === c.puntos && o.tipo === c.tipo && palabras(o.nombre).some(w => ws.includes(w)))
+      || otros.find(o => o.puntos === c.puntos && palabras(o.nombre).filter(w => ws.includes(w)).length >= 2);
+    if (!out.subcriterios && par?.subcriterios) out.subcriterios = par.subcriterios;
+    if (!out.escalones && par?.escalones) { out.escalones = par.escalones; out.unidad = par.unidad; out.tipo = "mejora"; }
+    if (!out.escalones) {
+      const g = sueltos.find(s => palabras(s.unidad).some(w => ws.includes(w)) || ws.some(w => sinAcentos(s.unidad).includes(w)));
+      if (g) { out.escalones = g.escalones; out.unidad = g.unidad; out.tipo = "mejora"; }
+    }
+    return out;
+  });
+  return { criterios, formula, baja, docNombre: mejor.d.nombre, suma: sumaDe(criterios) };
 }

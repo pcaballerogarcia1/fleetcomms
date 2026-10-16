@@ -10,6 +10,7 @@ import { C, font } from "../tema.js";
 import { BAJA_ANORMAL, FORMULAS_PRECIO } from "./criterios.js";
 import { F1, eur, pct } from "./formato.js";
 import { OFERTA_DEFECTO, analizarOferta, puntosEnJuego } from "./oferta.js";
+import { PanelAlarmas } from "./alarmas-panel.jsx";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
 
 function Grafica({ sim, elegida }) {
@@ -71,10 +72,10 @@ export function AlternativasConcurso({ concursoId, irA }) {
       <button className="op-btn op-primario" style={{ marginTop: 12 }} onClick={() => irA?.("/documentos")}><FileText size={14} /> Ir a la Ficha de requisitos</button>
     </div>
   );
-  if (!a.r.dimension.lineas.length) return pagina(falta("Aún no hay servicios", "Las alternativas parten del coste del Cálculo, y este de los servicios de la Ficha de requisitos."));
+  if (!a.r.dimension.lineas.length && a.r.modo !== "estudio") return pagina(falta("Aún no hay servicios", "Las alternativas parten del coste del Cálculo, y este de los servicios de la Ficha de requisitos."));
   if (!a.adj) return pagina(falta("Faltan los criterios de adjudicación", "Para saber cuántos puntos da cada baja hacen falta los criterios: confírmalos en la Ficha de requisitos (los lee del anuncio o del pliego administrativo, o se ponen a mano)."));
 
-  const { r, adj, o, competidores, presupuesto, sim, elegida, esc } = a;
+  const { r, adj, o, competidores, presupuesto, sim, elegida, esc, mejoras, mejorasElegidas, alarmas, bloqueado } = a;
   const juego = puntosEnJuego(adj.criterios);
   const ponerCompetidores = f => cambiar({ competidores: f(competidores) });
 
@@ -82,7 +83,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
     {/* ── Criterios ── */}
     <div style={{ ...tarjeta, padding: "12px 16px", marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", alignItems: "center" }}>
       <Award size={18} color={C.blue} />
-      <div style={{ fontSize: 13, color: C.muted }}>Precio <b style={{ color: C.text }}>{juego.precio} puntos</b> · resto <b style={{ color: C.text }}>{juego.resto} puntos</b></div>
+      <div style={{ fontSize: 13, color: C.muted }}>Precio <b style={{ color: C.text }}>{juego.precio} puntos</b> · memoria y demás <b style={{ color: C.text }}>{juego.resto} puntos</b>{juego.mejoras ? <> · mejoras <b style={{ color: C.text }}>{juego.mejoras} puntos</b></> : null}</div>
       <div style={{ fontSize: 13, color: C.muted }}>Fórmula: <b style={{ color: C.text }}>{FORMULAS_PRECIO.find(f => f.id === adj.formula)?.nombre}{adj.formula === "saciedad" ? ` (umbral ${adj.saciedad ?? 15} %)` : ""}</b></div>
       <div style={{ fontSize: 13, color: C.muted }}>Baja anormal: <b style={{ color: C.text }}>{BAJA_ANORMAL.find(f => f.id === (adj.baja?.id || "art85"))?.nombre}{adj.baja?.id === "media" ? ` (+${adj.baja.valor ?? 10})` : ""}</b></div>
       <button className="op-btn op-fantasma" style={{ height: 28, marginLeft: "auto" }} onClick={() => irA?.("/documentos")}>Cambiar en la ficha</button>
@@ -99,7 +100,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
             <span style={{ flex: 1 }}>{l}</span>{num(oferta?.[k] ?? null, v => cambiar({ [k]: v }), w || 70, ph)}<span style={{ width: 16, fontSize: 11.5, color: C.dim }}>{u}</span>
           </label>
         ))}
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Del Cálculo: coste <b style={{ color: C.text }}>{eur(r.cuenta.costeMedioAnual)}</b> y presupuesto <b style={{ color: C.text }}>{presupuesto ? eur(presupuesto) : "sin confirmar"}</b> al año, sin IVA.</div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Del Cálculo: presupuesto del primer año <b style={{ color: C.text }}>{presupuesto ? eur(presupuesto) : "sin confirmar"}</b> sin IVA; el contrato cuesta <b style={{ color: C.text }}>{eur(r.cuenta.totalContrato)}</b> en {F1.format(r.anios)} años, que en precio del primer año son <b style={{ color: C.text }}>{eur(r.costeEquivalente)}</b>{a.mejorasAnio ? <> (con <b style={{ color: C.text }}>{eur(a.mejorasAnio)}</b> al año de mejoras)</> : null}.</div>
       </div>
       <div style={{ ...tarjeta, padding: "10px 14px" }}>
         <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>Competencia</div>
@@ -113,11 +114,52 @@ export function AlternativasConcurso({ concursoId, irA }) {
           </div>
         ))}
         <button className="op-btn op-fantasma" style={{ height: 28, marginTop: 4 }} onClick={() => ponerCompetidores(cs => [...cs, { nombre: `Competidor ${String.fromCharCode(65 + cs.length)}`, baja: 10, tecnicaPct: 70 }])}><Plus size={14} /> Añadir empresa</button>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 4 }}>Las bajas de concursos parecidos (adjudicaciones en la Plataforma) son la mejor pista. Técnica: el % de los {juego.resto} puntos que creemos que sacará.</div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 4 }}>Las bajas de concursos parecidos (adjudicaciones en la Plataforma) son la mejor pista. Técnica: el % de los {juego.resto} puntos de memoria que creemos que sacará.{juego.mejoras ? ` Se supone que ofrece todas las mejoras (${juego.mejoras} puntos).` : ""}</div>
       </div>
     </div>
 
-    {!sim ? <div style={{ fontSize: 13, color: C.amber, marginTop: 14 }}>Falta el presupuesto: confírmalo en la Ficha de requisitos o escríbelo en Cálculo.</div> : <>
+    {mejoras.length > 0 && <>
+      {titulo("Mejoras: cuánto cuestan y cuántos puntos dan")}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 12 }}>
+        {mejoras.map(m => {
+          const elegida = mejorasElegidas.find(x => x.nombre === m.nombre);
+          const cfg = oferta?.mejoras?.[m.nombre] || {};
+          const todos = (adj.criterios.find(c => c.nombre === m.nombre)?.escalones || []);
+          const niveles = [{ unidades: 0, puntos: 0 }, ...todos.filter(e => e.puntos > 0).map(e => ({ unidades: e.desde, puntos: e.puntos }))];
+          const ponerMejora = cambio => cambiar({ mejoras: { [m.nombre]: { ...cfg, ...cambio } } });
+          return (
+            <div key={m.nombre} style={{ ...tarjeta, padding: "10px 14px" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>{m.nombre}</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.muted, marginBottom: 6 }}>
+                <span style={{ flex: 1 }}>Lo que cuesta cada una ({m.unidad}), al año</span>{num(cfg.costeUnidad ?? null, v => ponerMejora({ costeUnidad: v }), 90, String(m.costeUnidad))}<span style={{ fontSize: 11.5, color: C.dim }}>€</span>
+              </label>
+              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                <thead><tr>{["Ofrecer", "Puntos", "Coste al año", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {niveles.map(n => {
+                    const es = elegida && elegida.unidades === n.unidades;
+                    return (
+                      <tr key={n.unidades} style={{ borderTop: `1px solid ${C.border}`, background: es ? "rgba(63,207,142,0.08)" : "transparent" }}>
+                        <td style={td}>{n.unidades ? `${n.unidades} ${m.unidad}` : "nada"}</td>
+                        <td style={td}>{n.puntos}</td>
+                        <td style={td}>{eur(n.unidades * m.costeUnidad)}</td>
+                        <td style={td}>{es ? <span style={{ fontSize: 12, color: C.green }}>{m.fijado ? "fijada" : "la mejor"}</span> : <button className="op-btn op-fantasma" style={{ height: 24, fontSize: 12 }} onClick={() => ponerMejora({ unidades: n.unidades })}>Fijar</button>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {m.fijado && <button className="op-btn op-fantasma" style={{ height: 24, fontSize: 12, marginTop: 4 }} onClick={() => ponerMejora({ unidades: null })}>Que la elija Operanzia</button>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Operanzia prueba todas las combinaciones ({a.combinaciones}) con su coste y se queda con la que gana con más margen.</div>
+    </>}
+
+    <PanelAlarmas alarmas={alarmas} irA={irA} titulo={bloqueado ? "Sin recomendación hasta resolver esto" : undefined} />
+
+    {!sim ? <div style={{ fontSize: 13, color: C.amber, marginTop: 14 }}>Falta el presupuesto: confírmalo en la Ficha de requisitos o escríbelo en Cálculo.</div> : bloqueado ? null : <>
       {/* ── Recomendación ── */}
       {titulo("Qué baja presentar")}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>

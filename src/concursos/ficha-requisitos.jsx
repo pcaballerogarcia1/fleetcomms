@@ -7,15 +7,16 @@ import { useState } from "react";
 import { C } from "../tema.js";
 import { CriteriosFicha } from "./criterios-ficha.jsx";
 import { equipoDe, precioDe, preciosDelPliego, serviciosDeDatos, tablasParaServicios } from "./ficha.js";
-import { cambiarConcurso, fijarDato, fijarServicio } from "./store.js";
+import { cambiarConcurso, fijarDato, fijarEstudio, fijarServicio } from "./store.js";
 
 const GRUPOS = [
-  ["Contrato", ["expediente", "organismo", "objeto", "procedimiento", "cpv", "lotes", "duracion", "prorroga", "fechaLimite", "presupuesto", "importeSinIva", "importeConIva", "valorEstimado", "importeAnual", "puntosPrecio"]],
-  ["Servicio", ["contenedores", "vecesAnio", "operacionesAnio", "jornadasAnio", "dias", "nocturno", "inicio", "habitantes", "lineas", "expediciones", "kmAnuales", "horasAnuales"]],
-  ["Medios y personal", ["vehiculos", "antiguedad", "subrogacion", "plantilla", "convenio"]],
+  ["Contrato", ["expediente", "organismo", "objeto", "procedimiento", "cpv", "lotes", "duracion", "prorroga", "fechaLimite", "presupuesto", "importeSinIva", "importeConIva", "valorEstimado", "precioPrimerAnio", "ivaPct", "importeAnual", "puntosPrecio", "garantia", "solvencia"]],
+  ["Servicio", ["contenedores", "vecesAnio", "operacionesAnio", "jornadasAnio", "dias", "temporadaAlta", "nocturno", "inicio", "habitantes", "lineas", "expediciones", "kmAnuales", "horasAnuales"]],
+  ["Medios y personal", ["vehiculos", "antiguedad", "revierte", "subrogacion", "plantilla", "convenio"]],
+  ["Quién paga qué", ["agua", "vertido"]],
 ];
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 2 }); } catch { return new Intl.NumberFormat("es-ES"); } })();
-const DINERO = new Set(["presupuesto", "valorEstimado", "importeAnual", "importeSinIva", "importeConIva"]);
+const DINERO = new Set(["presupuesto", "valorEstimado", "importeAnual", "importeSinIva", "importeConIva", "precioPrimerAnio"]);
 const txt = (clave, v) => (v == null ? "—" : DINERO.has(clave) ? `${FMT.format(v)} €` : clave === "fechaLimite" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T12:00:00`).toLocaleDateString("es-ES") : typeof v === "number" ? FMT.format(v) : String(v));
 // de texto a valor (cifras con punto de miles y coma decimal)
 const aValor = (clave, s) => { const t = String(s).trim(); if (DINERO.has(clave) || /^[\d.\s]+(,\d+)?$/.test(t)) { const n = Number(t.replace(/\s|€/g, "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : t; } return t; };
@@ -26,7 +27,9 @@ function alConcurso(clave, valor) {
   if (clave === "fechaLimite" && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return { fechaLimite: valor };
   if (clave === "expediente") return { expediente: valor };
   if (clave === "duracion") { const n = parseInt(valor, 10); return /mes/.test(valor) ? { duracionMeses: n, duracionAnios: Math.round((n / 12) * 10) / 10 } : n ? { duracionAnios: n, duracionMeses: n * 12 } : {}; }
-  if ((clave === "presupuesto" || clave === "importeSinIva") && typeof valor === "number") return { presupuestoSinIva: valor };
+  // el presupuesto base de licitación suele llevar el IVA; el «importe sin impuestos», no
+  if (clave === "presupuesto" && typeof valor === "number") return { presupuestoConIva: valor };
+  if (clave === "importeSinIva" && typeof valor === "number") return { presupuestoSinIva: valor };
   if (clave === "valorEstimado" && typeof valor === "number") return { valorEstimado: valor };
   return {};
 }
@@ -123,6 +126,9 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
                       )}
                       <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }} title={p?.frase || ""}>
                         {d?.estado === "corregido" ? `Corregido (el pliego decía ${txt(k, d.propuesto)})` : p ? `pág. ${p.pagina} · ${p.docNombre}` : "añadido a mano"}
+                        {d && d.estado === "confirmado" && p && JSON.stringify(p.valor) !== JSON.stringify(d.valor) && (
+                          <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> la lectura nueva dice {txt(k, p.valor)} <button className="op-btn op-fantasma" style={{ height: 22, fontSize: 11.5, padding: "0 6px" }} onClick={() => decidir(k, "confirmado", p.valor)}>Usar</button></span>
+                        )}
                         {distintos && <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> otro documento dice {ps.slice(1).map(x => `${txt(k, x.valor)} (pág. ${x.pagina})`).join(", ")}</span>}
                       </div>
                     </div>
@@ -150,6 +156,8 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
           </div>
         );
       })}
+
+      <EstudioFicha concursoId={concursoId} docs={docs} ficha={ficha} onError={onError} titulo={titulo} tarjeta={tarjeta} />
 
       <CriteriosFicha concursoId={concursoId} docs={docs} ficha={ficha} onError={onError} />
 
@@ -227,6 +235,57 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
           ))}
         </div>
         <button className="op-btn op-primario" style={{ marginTop: 10 }} disabled={!marcadas.size} onClick={anadirMarcadas}><Plus size={14} /> Añadir a la ficha las marcadas ({propuestas.filter(t => marcadas.has(t.clave)).reduce((a, t) => a + t.lineas.length, 0)} servicios)</button>
+      </>}
+    </div>
+  );
+}
+
+const EUR = n => (n == null ? "—" : `${FMT.format(Math.round(n))} €`);
+
+/** El estudio de costes del Ayuntamiento (si algún pliego lo trae) y los medios mínimos */
+function EstudioFicha({ concursoId, docs, ficha, onError, titulo, tarjeta }) {
+  const conEstudio = (docs || []).find(d => d.lectura?.estudio);
+  const enUso = ficha?.estudio || null;
+  const e = enUso || conEstudio?.lectura?.estudio || null;
+  const medios = (docs || []).flatMap(d => (d.lectura?.mediosMinimos || []).map(m => ({ ...m, docNombre: d.nombre })));
+  if (!e && !medios.length) return null;
+  const th = { textAlign: "right", padding: "6px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}` };
+  const td = { padding: "5px 10px", fontSize: 13, color: C.text, textAlign: "right" };
+  return (
+    <div>
+      {e && <>
+        {titulo("Estudio de costes del Ayuntamiento")}
+        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
+          Cómo ha calculado el Ayuntamiento el presupuesto (pág. {e.pagina}{conEstudio ? ` · ${conEstudio.nombre}` : ""}). Es la mejor referencia del coste: Cálculo parte de aquí y tú ajustas.
+          {" "}{e.cuadra ? <span style={{ color: C.green }}>✓ las partidas cuadran con el total</span> : <span style={{ color: C.amber }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> las partidas no cuadran con el total: revísalo</span>}
+        </div>
+        <div style={{ ...tarjeta, overflow: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead><tr><th style={{ ...th, textAlign: "left" }}>Partida</th><th style={th}>Al año (año 1)</th><th style={th}>Líneas</th></tr></thead>
+            <tbody>
+              {e.partidas.map(p => <tr key={p.id} style={{ borderTop: `1px solid ${C.border}` }}><td style={{ ...td, textAlign: "left" }}>{p.nombre}</td><td style={td}>{EUR(p.total)}</td><td style={{ ...td, color: C.dim }}>{p.lineas?.length || 0}</td></tr>)}
+              <tr style={{ borderTop: `1px solid ${C.border}` }}><td style={{ ...td, textAlign: "left", fontWeight: 600 }}>Coste del servicio</td><td style={{ ...td, fontWeight: 600 }}>{EUR(e.costeEjecucion)}</td><td /></tr>
+              {e.ggbi != null && <tr><td style={{ ...td, textAlign: "left", color: C.muted }}>Gastos generales y beneficio ({FMT.format(e.ggbiPct)} %)</td><td style={td}>{EUR(e.ggbi)}</td><td /></tr>}
+              <tr><td style={{ ...td, textAlign: "left", fontWeight: 650 }}>Presupuesto del primer año, sin IVA</td><td style={{ ...td, fontWeight: 650 }}>{EUR(e.baseImponible)}</td><td /></tr>
+              {e.ivaPct != null && <tr><td style={{ ...td, textAlign: "left", color: C.muted }}>Con IVA ({FMT.format(e.ivaPct)} %)</td><td style={td}>{EUR(e.totalConIva)}</td><td /></tr>}
+              {e.anios?.base?.length > 1 && <tr><td style={{ ...td, textAlign: "left", color: C.muted }}>{e.anios.base.length} años, sin IVA (sube cada año{e.incrementos?.manoObra?.length ? `: mano de obra ${e.incrementos.manoObra[0]} %…, resto ${e.incrementos.resto[0]} %…` : ""})</td><td style={td}>{EUR(e.anios.base.reduce((a, b) => a + b, 0))}</td><td /></tr>}
+              {e.valorEstimado != null && <tr><td style={{ ...td, textAlign: "left", color: C.muted }}>Valor estimado</td><td style={td}>{EUR(e.valorEstimado)}</td><td /></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+          {enUso ? <>
+            <span className="op-pastilla" style={{ background: "rgba(63,207,142,0.12)", color: C.green }}>En uso en Cálculo</span>
+            <button className="op-btn op-fantasma" style={{ height: 28 }} onClick={() => fijarEstudio(concursoId, null).catch(err => onError(err.message))}>No usarlo</button>
+          </> : <button className="op-btn op-primario" onClick={() => fijarEstudio(concursoId, conEstudio.lectura.estudio, conEstudio.nombre).catch(err => onError(err.message))}>Usar en Cálculo</button>}
+        </div>
+      </>}
+      {medios.length > 0 && <>
+        {titulo(`Medios mínimos que exige el pliego (${medios.length})`)}
+        <div style={{ ...tarjeta, padding: "10px 14px", columns: "2 300px", fontSize: 12.5, color: C.muted, lineHeight: 1.7 }}>
+          {medios.map((m, i) => <div key={i} style={{ breakInside: "avoid" }}><b style={{ color: C.text }}>{m.uds ?? "·"}</b> {m.concepto}</div>)}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>pág. {medios[0].pagina} · {medios[0].docNombre}. Lo que se oferte no puede quedarse por debajo.</div>
       </>}
     </div>
   );

@@ -12,9 +12,10 @@
 // Sin React ni Firebase.
 
 import { criteriosDelPliego } from "./criterios.js";
+import { estudioDeCostes } from "./estudio.js";
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 5;
+export const VERSION_LECTOR = 6;
 
 const NUM_LETRA = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciséis: 16, dieciseis: 16, veinte: 20, veinticinco: 25, treinta: 30 };
 const LETRAS = Object.keys(NUM_LETRA).join("|");
@@ -119,6 +120,8 @@ export function leerPliego(paginasCrudas) {
   // ── qué documento es ──
   const todo = paginas.join(" ");
   const clase = /plataforma de contrataci[oó]n|documento de pliegos|clasificaci[oó]n cpv/i.test(todo) && paginas.length < 20 ? "anuncio"
+    : /^[\s\S]{0,1500}pliego de cl[aá]usulas administrativas/i.test(todo) ? "administrativo"
+    : /^[\s\S]{0,1500}(?:pliego de (?:prescripciones|condiciones) t[eé]cnicas)/i.test(todo) ? "tecnico"
     : /prescripciones t[eé]cnicas/i.test(todo) ? "tecnico" : /cl[aá]usulas administrativas/i.test(todo) ? "administrativo" : null;
 
   // ── ficha del anuncio / expediente ──
@@ -152,19 +155,37 @@ export function leerPliego(paginasCrudas) {
   poner("objeto", "Objeto del contrato", obj, obj && objetoLimpio(obj.m[1]));
 
   // ── duración y prórrogas ──
-  // primero «duración del contrato», luego cualquier plazo de ejecución o vigencia
-  const durRe = pre => new RegExp(String.raw`${pre}[^.]{0,120}?(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os|mes(?:es|\(es\))?)`, "i");
-  const dur = buscar(paginas, durRe(String.raw`(?:duraci[oó]n|vigencia|plazo de ejecuci[oó]n) del (?:presente )?contrato`)) || buscar(paginas, new RegExp(String.raw`(?:duraci[oó]n|plazo de (?:ejecuci[oó]n|vigencia)|vigencia)[^.]{0,120}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os|mes(?:es|\(es\))?)`, "i"));
+  // Todas las frases candidatas, puntuadas por su contexto: «se establece un
+  // plazo de duración del contrato de diez (10) años» vale; «cuando su duración
+  // no sea superior a cuatro años» (el órgano de contratación) o «tendrán un
+  // plazo máximo de duración de cinco años» (la ley, en general) no.
+  const DUR = new RegExp(String.raw`(?:duraci[oó]n|vigencia|plazo de ejecuci[oó]n)[^.]{0,140}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os|mes(?:es|\(es\))?)`, "i");
+  const notaDuracion = c => {
+    const f = sinAcentos(c.frase);
+    let nota = 0;
+    if (/duracion del (presente )?contrato|plazo de duracion|vigencia del contrato|plazo de ejecucion del contrato/.test(f)) nota += 3;
+    if (/se establece|sera de|tendra una duracion|queda fijad|se fija/.test(f)) nota += 3;
+    if (/no sea superior|no superior a|plazo maximo de duracion|incluidas? las (posibles|eventuales)? ?prorrogas|organo de contratacion|articulo 29|art\. 29|cuando (su|la) duracion|recursos ordinarios|plurianual/.test(f)) nota -= 6;
+    if (/garantia|plazo de garantia|vida util|antiguedad|amortiz/.test(f)) nota -= 4;
+    return nota;
+  };
+  const durs = buscarTodas(paginas, DUR, 40).map(c => ({ ...c, nota: notaDuracion(c) })).filter(c => c.nota > -3).sort((x, y) => y.nota - x.nota || x.pagina - y.pagina);
+  const dur = durs[0];
   if (dur) {
     const n = enteroDe(dur.m[2] || dur.m[1]);
     const unidad = /^a/i.test(dur.m[3]) ? (n === 1 ? "año" : "años") : (n === 1 ? "mes" : "meses");
     poner("duracion", "Duración", dur, n ? `${n} ${unidad}` : null);
   }
-  const pro = buscar(paginas, new RegExp(String.raw`pr[oó]rrogas?[^.]{0,120}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os?|mes(?:es|\(es\))?|anualidad(?:es)?)`, "i"));
-  if (pro) {
-    const n = enteroDe(pro.m[2] || pro.m[1]);
-    const u = /^a[nñ]/i.test(pro.m[3]) ? (n === 1 ? "año" : "años") : /^mes/i.test(pro.m[3]) ? (n === 1 ? "mes" : "meses") : (n === 1 ? "anualidad" : "anualidades");
-    poner("prorroga", "Prórrogas", pro, n ? `${n} ${u}` : null);
+  const sinProrroga = buscar(paginas, /no (?:siendo|ser[aá]|es) susceptible de pr[oó]rroga|sin (?:posibilidad de )?pr[oó]rrogas?|no (?:se prev[eé]n?|habr[aá]|cabe|podr[aá]n?) (?:ninguna )?pr[oó]rroga|no podr[aá] (?:ser )?prorrogad/i);
+  if (sinProrroga) poner("prorroga", "Prórrogas", sinProrroga, "Sin prórroga");
+  else {
+    const pro = buscarTodas(paginas, new RegExp(String.raw`pr[oó]rrogas?[^.]{0,120}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os?|mes(?:es|\(es\))?|anualidad(?:es)?)`, "i"), 20)
+      .find(c => !/plazo m[aá]ximo|no sea superior|art[ií]culo 29|desde la (?:adjudicaci|firma|formalizaci)|plazo de (?:\d|dos|tres)/i.test(c.frase));
+    if (pro) {
+      const n = enteroDe(pro.m[2] || pro.m[1]);
+      const u = /^a[nñ]/i.test(pro.m[3]) ? (n === 1 ? "año" : "años") : /^mes/i.test(pro.m[3]) ? (n === 1 ? "mes" : "meses") : (n === 1 ? "anualidad" : "anualidades");
+      poner("prorroga", "Prórrogas", pro, n ? `${n} ${u}` : null);
+    }
   }
 
   // ── dinero ──
@@ -172,8 +193,15 @@ export function leerPliego(paginasCrudas) {
   if (pbl) poner("presupuesto", "Presupuesto base de licitación", pbl, numeroEs(pbl.m[1]));
   const ve = buscar(paginas, new RegExp(String.raw`valor estimado(?: del contrato)?[^.€]{0,160}?${IMPORTE}`, "i"));
   if (ve) poner("valorEstimado", "Valor estimado del contrato", ve, numeroEs(ve.m[1]));
-  const anual = buscar(paginas, new RegExp(String.raw`(?:importe|presupuesto|precio)\s+anual[^.€]{0,120}?${IMPORTE}`, "i"));
+  // (no el «importe anual de facturación» de la solvencia ni el «volumen anual de negocios»)
+  const anual = buscarTodas(paginas, new RegExp(String.raw`(?:importe|presupuesto|precio)\s+anual[^.€]{0,120}?${IMPORTE}`, "i"), 20)
+    .find(c => !/facturaci|volumen (?:anual )?de negocio|solvencia|seguro|cobertura|contratos? de (?:limpieza|recogida)/i.test(c.frase));
   if (anual) poner("importeAnual", "Importe anual", anual, numeroEs(anual.m[1]));
+  // el precio que se oferta: «el precio de licitación … referido a la primera anualidad (año 1º): 1.406.520,42 euros»
+  const primerAnio = buscar(paginas, new RegExp(String.raw`(?:primera anualidad|primer a[nñ]o|a[nñ]o 1)[^€]{0,80}?${IMPORTE}`, "i"));
+  if (primerAnio) poner("precioPrimerAnio", "Precio de licitación del primer año", primerAnio, numeroEs(primerAnio.m[1]));
+  const ivaTipo = buscar(paginas, /(?:\bIVA\b|impuesto sobre el valor a[nñ]adido)[^.%]{0,30}?\(?\s*(\d{1,2})\s*%|(\d{1,2})\s*%\s*(?:de\s+)?\bIVA\b/i);
+  if (ivaTipo) poner("ivaPct", "Tipo de IVA", ivaTipo, `${ivaTipo.m[1] || ivaTipo.m[2]} %`);
 
   // ── tamaño del servicio ──
   const hab = buscar(paginas, /(\d{1,3}(?:\.\d{3})+|\d{4,})\s*habitantes/i);
@@ -214,6 +242,20 @@ export function leerPliego(paginasCrudas) {
   if (trab.length) { const mayor = trab.reduce((a, b) => (Number(b.m[1]) > Number(a.m[1]) ? b : a)); poner("plantilla", "Plantilla (la cifra mayor que aparece)", mayor, Number(mayor.m[1])); }
   const conv = buscar(paginas, /convenio colectivo (?:de |del |para (?:el|la) )?([^.,;:()\d]{6,120})/i);
   if (conv) poner("convenio", "Convenio colectivo", conv, conv.m[1].trim());
+
+  // ── quién paga qué y otras condiciones que cambian el coste ──
+  const revierte = buscar(paginas, /(?:pasar[aá]n? a ser|revertir[aá]n?|revierte[n]?)[^.]{0,60}?(?:propiedad )?(?:municipal|del ayuntamiento|a la administraci)/i);
+  if (revierte) poner("revierte", "La maquinaria nueva pasa al Ayuntamiento al acabar", revierte, "Sí: se amortiza entera durante el contrato");
+  const agua = buscar(paginas, /(?:pondr[aá] a disposici[oó]n[^.]{0,60}agua|agua[^.]{0,120}sin coste para el adjudicatario)/i);
+  if (agua) poner("agua", "El agua la pone el Ayuntamiento", agua, "Sí, sin coste");
+  const vertido = buscar(paginas, /(?:canon de vertido|tasa o tarifa de tratamiento|tarifa de (?:tratamiento|vertido))[^.]{0,200}?(?:a cargo del|ser[aá] realizado (?:directamente )?por el|correr[aá] a cargo del|abonar[aá] el) Ayuntamiento/i);
+  if (vertido) poner("vertido", "El tratamiento o vertido lo paga el Ayuntamiento", vertido, "Sí");
+  const garantia = buscar(paginas, /garant[ií]a definitiva[^.]{0,40}?(\d{1,2})\s*%\s*(?:del|sobre el)?\s*([^.;]{0,80})/i);
+  if (garantia) poner("garantia", "Garantía definitiva", garantia, `${garantia.m[1]} % ${garantia.m[2].trim().replace(/,$/, "")}`.trim());
+  const solvencia = buscar(paginas, new RegExp(String.raw`volumen anual de negocios[^.]{0,200}?(?:(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)\s*(?:€|euros)|\((\d{1,3})\)\s*millones)`, "i"));
+  if (solvencia) poner("solvencia", "Solvencia: facturación mínima", solvencia, solvencia.m[1] ? `${solvencia.m[1]} €` : `${solvencia.m[2]} millones de €`);
+  const temporada = buscar(paginas, /temporada alta[:\s]+(?:del?\s+)?(\d{1,2} de [a-z]+)\s+al?\s+(\d{1,2} de [a-z]+)/i);
+  if (temporada) poner("temporadaAlta", "Temporada alta", temporada, `Del ${temporada.m[1]} al ${temporada.m[2]}`);
 
   // ── horarios ──
   const hor = buscarTodas(paginas, /(?:de|entre las?)\s+(\d{1,2})[:.,](\d{2})\s*(?:h(?:oras)?\.?)?\s*(?:a|y|hasta)\s*(?:las?\s+)?(\d{1,2})[:.,](\d{2})/i, 8);
@@ -267,14 +309,40 @@ export function leerPliego(paginasCrudas) {
 
   const tablas = tablasDeCantidades(paginasCrudas || []);
   const equipos = equiposDelPliego(paginasCrudas || []);
+  const estudio = estudioDeCostes(paginasCrudas || []);
+  const mediosMinimos = mediosMinimosDe(paginasCrudas || []);
   const adjudicacion = criteriosDelPliego(paginasCrudas || []);
 
   return {
-    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos, adjudicacion,
+    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos, adjudicacion, estudio, mediosMinimos,
     datos, requisitos: requisitos.slice(0, 40).map(({ texto, pagina }) => ({ texto, pagina })), indice: indice.slice(0, 120),
     listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL), frecuencias },
     paginas: paginas.length, conTexto,
   };
+}
+
+// ── Medios mínimos ──
+// La lista de lo que el pliego exige como mínimo: «o 1 Vehículo recolector de 18 m3», «- 463 Contenedores…»
+const MEDIOS = /(?:al menos|como m[ií]nimo|m[ií]nimo de)[^.:]{0,80}(?:maquinaria|medios|materiales|veh[ií]culos|equipos)[^.:]{0,60}:/i;
+export function mediosMinimosDe(paginasCrudas) {
+  const lineas = [];
+  (paginasCrudas || []).forEach((p, i) => String(p || "").split("\n").forEach(l => lineas.push({ t: l.replace(/\s+/g, " ").trim(), pagina: i + 1 })));
+  const out = [];
+  for (let k = 0; k < lineas.length; k++) {
+    if (!MEDIOS.test(lineas[k].t)) continue;
+    let fallos = 0;
+    for (let j = k + 1; j < lineas.length && fallos < 12; j++) {
+      const m = lineas[j].t.match(/^(?:[o•\-–·*]\s+)?(\d{1,5})\s+([A-ZÁÉÍÓÚÑa-záéíóúñ][^€]{2,90})$/);
+      if (m) { out.push({ uds: Number(m[1]), concepto: m[2].trim(), pagina: lineas[j].pagina }); fallos = 0; continue; }
+      const sinNum = lineas[j].t.match(/^[o•\-–·*]\s+([A-ZÁÉÍÓÚÑ][^€]{2,90})$/);
+      if (sinNum && out.length) { out.push({ uds: null, concepto: sinNum[1].trim(), pagina: lineas[j].pagina }); fallos = 0; continue; }
+      if (/^Art\.?\s*\d|^CAP[IÍ]TULO|^SECCI[OÓ]N/i.test(lineas[j].t)) break;
+      fallos++;
+    }
+    if (out.length >= 3) return out;
+    out.length = 0;
+  }
+  return [];
 }
 
 // ── Frecuencias ──

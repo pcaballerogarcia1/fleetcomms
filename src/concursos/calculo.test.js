@@ -26,3 +26,40 @@ describe("cuenta de explotación", () => {
     expect(peor.costeMedioAnual).toBeGreaterThan(base.costeMedioAnual);
   });
 });
+
+describe("desde el estudio de costes del Ayuntamiento (Gozón)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { estudioDeCostes } = await import("./estudio.js");
+  const { cuentaDesdeEstudio, ingresosBaseDe, presupuestoPrimerAnio, calcularConcurso } = await import("./calculo.js");
+  const estudio = estudioDeCostes(readFileSync(new URL("./__fixtures__/gozon-ppt-anexo.txt", import.meta.url), "utf8").split(/=== PÁGINA \d+ ===\n?/).slice(1));
+  it("el año 1 es su coste más nuestros gastos generales y contingencias; luego sube como dice el pliego", () => {
+    const c = cuentaDesdeEstudio(estudio, { anios: 10, gastosGeneralesPct: 6, contingenciasPct: 3 });
+    expect(c.porAnio).toHaveLength(10);
+    expect(c.anio1.total).toBeCloseTo(1111873.85 * 1.06 * 1.03, 0);
+    expect(c.porAnio[1].personal).toBeCloseTo(612918.33 * 1.0325, 1); // mano de obra +3,25 %
+    expect(c.porAnio[1].inversion).toBeCloseTo(229881.52, 1);        // la amortización no sube
+    expect(c.plantilla.total).toBeCloseTo(23.16, 1);                  // personas a jornada completa del estudio
+  });
+  it("ajustes: en % o con un importe propio", () => {
+    const c = cuentaDesdeEstudio(estudio, { anios: 1, gastosGeneralesPct: 0, contingenciasPct: 0, ajustes: { personal: { pct: -10 }, otros: { importe: 100000 } } });
+    expect(c.anio1.personal).toBeCloseTo(612918.33 * 0.9, 1);
+    expect(c.anio1.otros).toBe(100000);
+  });
+  it("los ingresos de cada año siguen la tabla del pliego", () => {
+    const ing = ingresosBaseDe(1278654.93, 10, estudio);
+    expect(ing[9]).toBeCloseTo(1586787.46, 1);
+  });
+  it("el presupuesto del primer año: el estudio manda sobre el total ÷ años", () => {
+    const p = presupuestoPrimerAnio({ ficha: { estudio, datos: {} }, concurso: { presupuestoSinIva: 14301991.99, duracionAnios: 4 } });
+    expect(p.valor).toBe(1278654.93);
+    expect(presupuestoPrimerAnio({ ficha: { datos: { precioPrimerAnio: { valor: 1406520.42 }, ivaPct: { valor: "10 %" } } } }).valor).toBeCloseTo(1278654.93, 1);
+  });
+  it("Gozón, estudio tal cual: el margen sale pequeño y creíble (no un 50 %)", () => {
+    const r = calcularConcurso({ ficha: { estudio, datos: {}, servicios: {} }, dim: {}, calc: {}, concurso: { duracionAnios: 10 } });
+    const precioSinBaja = r.presupuestoAnual * r.cuenta.factorIngresos;
+    const margen = (precioSinBaja - r.cuenta.totalContrato) / precioSinBaja * 100;
+    expect(r.modo).toBe("estudio");
+    expect(margen).toBeGreaterThan(2);
+    expect(margen).toBeLessThan(8);
+  });
+});

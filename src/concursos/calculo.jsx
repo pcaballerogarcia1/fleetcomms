@@ -8,7 +8,10 @@
 import { Calculator, FileText } from "lucide-react";
 import { useMemo } from "react";
 import { C, font } from "../tema.js";
-import { PARAMETROS_CALCULO, PARTIDAS, calcularConcurso, costeOrientativo } from "./calculo.js";
+import { alarmasConcurso } from "./alarmas.js";
+import { PanelAlarmas } from "./alarmas-panel.jsx";
+import { PARAMETROS_CALCULO, calcularConcurso, costeOrientativo } from "./calculo.js";
+import { PlantillaSubrogar } from "./plantilla-panel.jsx";
 import { F0, F1, eur, pct } from "./formato.js";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
 
@@ -41,13 +44,13 @@ export function CalculoConcurso({ concursoId, irA }) {
     </div>
   );
   if (!r) return <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>{cabecera}<div style={{ color: C.muted, marginTop: 20 }}>Cargando…</div></div>;
-  if (!r.dimension.lineas.length) {
+  if (!r.dimension.lineas.length && r.modo !== "estudio") {
     return (
       <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>
         {cabecera}
         <div style={{ ...tarjeta, padding: 20, marginTop: 18, maxWidth: 680 }}>
-          <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>Aún no hay servicios que calcular</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>El cálculo parte de los servicios de la Ficha de requisitos y de lo que rinde cada equipo en Planning. Sube el pliego y añade sus servicios a la ficha.</div>
+          <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>Aún no hay nada que calcular</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>El cálculo parte del <b style={{ color: C.text }}>estudio de costes del Ayuntamiento</b> (si el pliego lo trae: úsalo desde la Ficha de requisitos) o de los servicios de la ficha con lo que rinde cada equipo en Planning.</div>
           <button className="op-btn op-primario" style={{ marginTop: 12 }} onClick={() => irA?.("/documentos")}><FileText size={14} /> Ir a Documentos</button>
         </div>
       </div>
@@ -56,25 +59,37 @@ export function CalculoConcurso({ concursoId, irA }) {
 
   const { cuenta: c, presupuestoAnual, anios } = r;
   const p = c.parametros;
-  const vehiculosTotal = c.vehiculos.reduce((s, v) => s + v.total, 0);
+  const alarmas = alarmasConcurso({ r, ficha: datos.ficha, concurso: datos.concurso, calc, adj: datos.ficha?.adjudicacion }).filter(x => x.ruta !== "/documentos" || /duración|presupuesto|valor estimado|servicio/i.test(x.texto));
+  const vehiculosTotal = c.vehiculos.reduce((s, v) => s + (v.total || 0), 0);
   const bajaObjetivo = presupuestoAnual ? (1 - c.precios.objetivo / presupuestoAnual) * 100 : null;
   const cabe = presupuestoAnual ? c.precios.objetivo <= presupuestoAnual : null;
+  // lo que se cobra cada año con el precio objetivo: el presupuesto de ese año con la misma baja
+  const ingresosAnio = c.porAnio.map((a, k) => (presupuestoAnual ? (c.ingresosBase[k] ?? presupuestoAnual) * (c.precios.objetivo / presupuestoAnual) : c.precios.objetivo) * a.parte);
+  const ingresosTotal = ingresosAnio.reduce((s, v) => s + v, 0);
   const kpis = [
-    ["Coste al año", eur(c.costeMedioAnual), `${eur(c.totalContrato)} en ${F1.format(anios)} año${anios === 1 ? "" : "s"}`],
-    [`Precio objetivo (${F1.format(p.margenPct)} % de margen)`, eur(c.precios.objetivo), `al año · equilibrio ${eur(c.precios.equilibrio)}`],
-    ["Presupuesto del pliego", presupuestoAnual ? eur(presupuestoAnual) : "—", presupuestoAnual ? "al año, sin IVA" : "confírmalo en la ficha", true],
+    ["Coste del contrato", eur(c.totalContrato), `${F1.format(anios)} año${anios === 1 ? "" : "s"} · ${eur(c.costeMedioAnual)} de media al año`],
+    [`Precio objetivo del primer año (${F1.format(p.margenPct)} % de margen)`, eur(c.precios.objetivo), `equilibrio ${eur(c.precios.equilibrio)}${c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? " · sube cada año como el pliego" : ""}`],
+    ["Presupuesto del primer año", presupuestoAnual ? eur(presupuestoAnual) : "—", presupuestoAnual ? `sin IVA · ${r.fuentePresupuesto.fuente}` : "confírmalo en la ficha", r.fuentePresupuesto?.dudoso ? C.amber : null],
     ["Baja con el precio objetivo", bajaObjetivo != null ? pct(bajaObjetivo) : "—", cabe == null ? "" : cabe ? "cabe en el presupuesto" : "no cabe: pasa del presupuesto", cabe === false ? C.red : cabe ? C.green : null],
-    ["Plantilla", F1.format(c.plantilla.total), `${c.plantilla.servicio} de servicio · ${c.plantilla.encargados} encargado${c.plantilla.encargados === 1 ? "" : "s"} · jefe ${F1.format(c.plantilla.jefe)}`],
-    ["Vehículos", String(vehiculosTotal), `${vehiculosTotal - c.vehiculos.reduce((s, v) => s + v.reserva, 0)} trabajando + ${c.vehiculos.reduce((s, v) => s + v.reserva, 0)} de reserva`],
+    ["Plantilla", F1.format(c.plantilla.total), r.modo === "estudio" ? (calc.usarPlantilla && calc.plantilla ? `la plantilla a subrogar (${calc.plantilla.personas} personas)` : "personas a jornada completa del estudio") : `${c.plantilla.servicio} de servicio · ${c.plantilla.encargados} encargado${c.plantilla.encargados === 1 ? "" : "s"} · jefe ${F1.format(c.plantilla.jefe)}`],
+    ...(r.modo === "rendimientos" ? [["Vehículos", String(vehiculosTotal), `${vehiculosTotal - c.vehiculos.reduce((s, v) => s + v.reserva, 0)} trabajando + ${c.vehiculos.reduce((s, v) => s + v.reserva, 0)} de reserva`]] : []),
     ["Caja que hay que adelantar", eur(c.caja), `${p.diasCobro} días de gastos hasta cobrar`],
   ];
-
-  const ingresos = c.precios.objetivo;
-  const filasCuenta = PARTIDAS.map(([k, n]) => ({ k, n, anios: c.porAnio.map(a => a[k]), total: c.porAnio.reduce((s, a) => s + a[k], 0) }));
+  const filasCuenta = c.partidas.filter(([k]) => c.porAnio.some(a => a[k])).map(([k, n]) => ({ k, n, anios: c.porAnio.map(a => a[k] || 0), total: c.porAnio.reduce((s, a) => s + (a[k] || 0), 0) }));
 
   return (
     <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px 60px" }}>
       {cabecera}
+
+      {r.estudio && (
+        <div className="op-segmentado" style={{ display: "inline-flex", gap: 4, marginTop: 14, padding: 3, background: C.surface2, borderRadius: 10 }}>
+          {[["estudio", "Desde el estudio del Ayuntamiento"], ["rendimientos", "Por rendimientos (Planning)"]].map(([m, n]) => (
+            <button key={m} className={`op-btn ${r.modo === m ? "op-primario" : "op-fantasma"}`} style={{ height: 30 }} onClick={() => cambiar({ base: m })}>{n}</button>
+          ))}
+        </div>
+      )}
+
+      <PanelAlarmas alarmas={alarmas} irA={irA} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginTop: 18 }}>
         {kpis.map(([l, v, sub, color]) => (
@@ -85,7 +100,39 @@ export function CalculoConcurso({ concursoId, irA }) {
           </div>
         ))}
       </div>
-      {(presupuestoAnual == null || calc.presupuestoAnual != null) && <div style={{ fontSize: 12.5, color: C.amber, marginTop: 8 }}>Presupuesto al año sin IVA: confírmalo en la Ficha de requisitos («Presupuesto base de licitación» o «Importe sin impuestos») o escríbelo aquí: {numInput(calc.presupuestoAnual, v => cambiar({ presupuestoAnual: v }), 130, "€ al año")}</div>}
+      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>Presupuesto del primer año, sin IVA, escrito a mano (si el de arriba no es el bueno): {numInput(calc.presupuestoAnual, v => cambiar({ presupuestoAnual: v }), 130, "€")}</div>
+
+      {r.modo === "estudio" && <>
+        {titulo("Partidas: las del Ayuntamiento y las tuyas")}
+        <div style={{ ...tarjeta, overflow: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead><tr><th style={{ ...th, textAlign: "left" }}>Partida</th><th style={th}>Ayuntamiento (año 1)</th><th style={th}>Ajuste %</th><th style={th}>O tu importe</th><th style={th}>Tuyo (año 1)</th><th style={{ ...th, textAlign: "left" }}>Detalle</th></tr></thead>
+            <tbody>
+              {r.estudio.partidas.map(pa => {
+                const aj = calc.ajustes?.[pa.id] || {};
+                const tuyo = c.anio1[pa.id] ?? 0;
+                return (
+                  <tr key={pa.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={{ ...td, textAlign: "left" }}>{pa.nombre}{pa.id === "personal" && calc.usarPlantilla && calc.plantilla ? <div style={{ fontSize: 11, color: C.green }}>con la plantilla a subrogar</div> : null}</td>
+                    <td style={td}>{eur(pa.total)}</td>
+                    <td style={td}>{numInput(aj.pct ?? null, x => cambiar({ ajustes: { [pa.id]: { pct: x } } }), 70, "0")}</td>
+                    <td style={td}>{numInput(aj.importe ?? null, x => cambiar({ ajustes: { [pa.id]: { importe: x } } }), 110, "—")}</td>
+                    <td style={{ ...td, fontWeight: 600, color: Math.abs(tuyo - pa.total) > 1 ? C.amber : C.text }}>{eur(tuyo)}</td>
+                    <td style={{ ...td, textAlign: "left" }}>{pa.lineas?.length ? <details><summary style={{ cursor: "pointer", fontSize: 12, color: C.muted }}>{pa.lineas.length} líneas</summary><div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "normal", maxWidth: 520, lineHeight: 1.5, marginTop: 4 }}>{pa.lineas.map((l, i) => <div key={i}>{F1.format(l.uds)} × {l.concepto}: <b style={{ color: C.text }}>{eur(l.total)}</b></div>)}</div></details> : null}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{ borderTop: `1px solid ${C.border}` }}>
+                <td style={{ ...td, textAlign: "left", color: C.muted }}>Sus gastos generales y beneficio ({F1.format(r.estudio.ggbiPct)} %) / tus gastos generales ({F1.format(p.gastosGeneralesPct)} %) y contingencias ({F1.format(p.contingenciasPct)} %)</td>
+                <td style={td}>{eur(r.estudio.ggbi)}</td><td /><td />
+                <td style={td}>{eur((c.anio1.gastosGenerales || 0) + (c.anio1.contingencias || 0))}</td><td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada ajuste tiene que tener su porqué (mejor ruta, otra flota, otra plantilla…). Si tu coste baja mucho del suyo, la oferta puede quedar como anormalmente baja y habrá que justificarla.</div>
+        <PlantillaSubrogar calc={calc} cambiar={cambiar} personalEstudio={r.estudio.partidas.find(x => x.id === "personal")?.total} tarjeta={tarjeta} titulo={titulo} />
+      </>}
 
       {titulo("Cuenta de explotación")}
       <div style={{ ...tarjeta, overflow: "auto" }}>
@@ -98,8 +145,8 @@ export function CalculoConcurso({ concursoId, irA }) {
           <tbody>
             <tr style={{ background: "rgba(63,207,142,0.06)" }}>
               <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>Ingresos con el precio objetivo</td>
-              {c.porAnio.map(a => <td key={a.anio} style={{ ...td, fontWeight: 600 }}>{eur(ingresos * a.parte)}</td>)}
-              <td style={{ ...td, fontWeight: 600 }}>{eur(ingresos * anios)}</td><td style={td} />
+              {ingresosAnio.map((v, k) => <td key={k} style={{ ...td, fontWeight: 600 }}>{eur(v)}</td>)}
+              <td style={{ ...td, fontWeight: 600 }}>{eur(ingresosTotal)}</td><td style={td} />
             </tr>
             {filasCuenta.map(f => (
               <tr key={f.k} style={{ borderTop: `1px solid ${C.border}` }}>
@@ -115,15 +162,16 @@ export function CalculoConcurso({ concursoId, irA }) {
             </tr>
             <tr style={{ borderTop: `1px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: "left", fontWeight: 650 }}>Resultado</td>
-              {c.porAnio.map(a => { const v = ingresos * a.parte - a.total; return <td key={a.anio} style={{ ...td, fontWeight: 650, color: v < 0 ? C.red : C.green }}>{eur(v)}</td>; })}
-              {(() => { const v = ingresos * anios - c.totalContrato; return <td style={{ ...td, fontWeight: 650, color: v < 0 ? C.red : C.green }}>{eur(v)}</td>; })()}
-              <td style={{ ...td, color: C.dim }}>{pct((ingresos * anios - c.totalContrato) / (ingresos * anios) * 100)} s/ ingresos</td>
+              {c.porAnio.map((a, k) => { const v = ingresosAnio[k] - a.total; return <td key={a.anio} style={{ ...td, fontWeight: 650, color: v < 0 ? C.red : C.green }}>{eur(v)}</td>; })}
+              {(() => { const v = ingresosTotal - c.totalContrato; return <td style={{ ...td, fontWeight: 650, color: v < 0 ? C.red : C.green }}>{eur(v)}</td>; })()}
+              <td style={{ ...td, color: C.dim }}>{pct((ingresosTotal - c.totalContrato) / ingresosTotal * 100)} s/ ingresos</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>El precio de la oferta es el mismo todos los años; el coste sube con el convenio y el IPC, así que los primeros años dan más margen que los últimos. Precio objetivo = coste medio ÷ (1 − margen).</div>
+      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>{c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? "Se oferta el precio del primer año; la baja se aplica igual a los siguientes, que suben como dice el pliego." : "El precio de la oferta es el mismo todos los años."} El coste sube con {r.modo === "estudio" && r.estudio.incrementos?.manoObra?.length ? "las subidas del pliego (mano de obra y resto)" : "el convenio y el IPC"}. Precio objetivo = lo que cuesta el contrato ÷ (1 − margen), repartido como los ingresos.</div>
 
+      {r.modo === "rendimientos" && <>
       {titulo("Plantilla")}
       <div style={{ ...tarjeta, overflow: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -167,6 +215,8 @@ export function CalculoConcurso({ concursoId, irA }) {
         </table>
       </div>
       <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>En gris, valores orientativos: escribe encima los tuyos. La amortización incluye la financiación (cuota de un préstamo a {F1.format(p.interesPct)} % en {F1.format(p.aniosAmortizacion || anios)} años, quedando un {F1.format(p.residualPct)} % de valor).</div>
+
+      </>}
 
       {titulo("Parámetros")}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 12 }}>

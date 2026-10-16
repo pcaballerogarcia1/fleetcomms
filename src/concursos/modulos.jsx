@@ -42,7 +42,7 @@ export function ResumenConcurso({ concursoId, irA }) {
     comprobaciones.push(
       [!!docs.length, docs.length ? `${pl(docs.length, "documento subido", "documentos subidos")}` : "No hay pliegos subidos", "/documentos"],
       [!pendientes, pendientes ? `Quedan ${pl(pendientes, "dato", "datos")} del pliego por revisar en la ficha` : "Datos de la ficha revisados", "/documentos"],
-      [servicios.length > 0 && !noCuadran, !servicios.length ? "No hay servicios en la ficha" : noCuadran ? `${pl(noCuadran, "servicio no cuadra", "servicios no cuadran")} con las unidades y la frecuencia del pliego` : `${pl(servicios.length, "servicio", "servicios")} en la ficha`, "/documentos"],
+      [(servicios.length > 0 || a.r.modo === "estudio") && !noCuadran, !servicios.length ? (a.r.modo === "estudio" ? "Sin servicios en la ficha: el coste sale del estudio del Ayuntamiento" : "No hay servicios en la ficha") : noCuadran ? `${pl(noCuadran, "servicio no cuadra", "servicios no cuadran")} con las unidades y la frecuencia del pliego` : `${pl(servicios.length, "servicio", "servicios")} en la ficha`, "/documentos"],
       [!!juego && juego.total === 100 && juego.precio > 0, !juego ? "Faltan los criterios de adjudicación" : juego.total !== 100 ? `Los criterios suman ${juego.total} puntos, no 100` : `Criterios: ${juego.precio} puntos de precio y ${juego.resto} del resto`, "/documentos"],
       [!!a.presupuesto, a.presupuesto ? `Presupuesto: ${eur(a.presupuesto)} al año sin IVA` : "Falta el presupuesto", "/calculo"],
       [!!e && e.margen >= a.o.margenMinimoPct, !e ? "No hay baja elegida" : `Margen con la baja elegida: ${pct(e.margen)} (mínimo ${pct(a.o.margenMinimoPct)})`, "/alternativas"],
@@ -52,6 +52,8 @@ export function ResumenConcurso({ concursoId, irA }) {
       [!!tension && tension.resultado >= 0, !tension ? "Sin escenarios" : tension.resultado >= 0 ? `Aguanta también el de tensión (${eur(tension.resultado)} al año)` : `En el escenario de tensión pierde ${eur(-tension.resultado)} al año: ¿se puede asumir?`, "/alternativas", true],
     );
   }
+  // lo que no cuadra (alarmas.js), delante
+  if (a) for (const al of [...a.alarmas].reverse()) comprobaciones.unshift([false, al.texto, al.ruta, al.nivel !== "bloquea"]);
   const malas = comprobaciones.filter(([ok, , , aviso]) => !ok && !aviso).length;
 
   return (
@@ -67,22 +69,22 @@ export function ResumenConcurso({ concursoId, irA }) {
       {c && <div style={{ ...rejilla, marginTop: 18 }}>
         {[["Organismo", c.organismo || "—"], ["Servicio", TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Expediente", c.expediente || "—"],
           ["Duración", c.duracionMeses && c.duracionMeses % 12 ? `${c.duracionMeses} meses` : c.duracionAnios ? `${c.duracionAnios} año${c.duracionAnios === 1 ? "" : "s"}` : "—"],
-          ["Presupuesto sin IVA", c.presupuestoSinIva != null ? eur(c.presupuestoSinIva) : "—"], ["Valor estimado", c.valorEstimado != null ? eur(c.valorEstimado) : "—"],
+          ["Presupuesto con IVA", c.presupuestoConIva != null ? eur(c.presupuestoConIva) : "—", "todo el contrato"], ["Presupuesto sin IVA", c.presupuestoSinIva != null ? eur(c.presupuestoSinIva) : "—", "todo el contrato"], ["Valor estimado", c.valorEstimado != null ? eur(c.valorEstimado) : "—"],
           ["Presentar antes del", c.fechaLimite ? new Date(`${c.fechaLimite}T12:00:00`).toLocaleDateString("es-ES") : "—"], ["Estado", est?.nombre || "—", null, est?.color]].map(([l, v, s, col]) => tarjeta(l, v, s, col))}
       </div>}
 
-      {a && a.r.dimension.lineas.length > 0 && <>
+      {a && (a.r.dimension.lineas.length > 0 || a.r.modo === "estudio") && <>
         {titulo("La oferta")}
         <div style={rejilla}>
-          {tarjeta("Coste al año", eur(a.r.cuenta.costeMedioAnual), `${eur(a.r.cuenta.totalContrato)} el contrato`)}
-          {a.elegida ? <>
+          {tarjeta("Coste del contrato", eur(a.r.cuenta.totalContrato), `${eur(a.r.cuenta.costeMedioAnual)} de media al año`)}
+          {a.elegida && !a.bloqueado ? <>
             {tarjeta("Precio al año (sin IVA)", eur(a.elegida.precio), `baja del ${pct(a.elegida.baja)}`)}
-            {tarjeta("Precio del contrato", eur(a.elegida.precio * a.r.anios), `${F1.format(a.r.anios)} año${a.r.anios === 1 ? "" : "s"}, sin IVA`)}
-            {tarjeta("Margen", pct(a.elegida.margen), `${eur((a.elegida.precio - a.r.cuenta.costeMedioAnual) * a.r.anios)} en el contrato`, a.elegida.margen < 0 ? C.red : null)}
+            {tarjeta("Precio del contrato", eur(a.elegida.precio * a.r.cuenta.factorIngresos), `${F1.format(a.r.anios)} año${a.r.anios === 1 ? "" : "s"}, sin IVA, con las subidas del pliego`)}
+            {tarjeta("Margen", pct(a.elegida.margen), `${eur(a.elegida.precio * a.r.cuenta.factorIngresos - a.r.cuenta.totalContrato)} en el contrato`, a.elegida.margen < 0 ? C.red : null)}
             {tarjeta("Puntos esperados", F1.format(a.elegida.puntos), a.elegida.puesto === 1 && !a.elegida.empate ? "ganaría" : `quedaría ${a.elegida.puesto}.º`, a.elegida.puesto === 1 && !a.elegida.empate ? C.green : C.amber)}
-          </> : tarjeta("Precio", "—", a.adj ? "falta el presupuesto" : "faltan los criterios de adjudicación")}
+          </> : tarjeta("Precio", "—", a.bloqueado ? "hay que resolver lo que no cuadra (abajo)" : a.adj ? "falta el presupuesto" : "faltan los criterios de adjudicación", a.bloqueado ? C.red : null)}
           {tarjeta("Plantilla", F1.format(a.r.cuenta.plantilla.total), "personas a jornada completa")}
-          {tarjeta("Vehículos", String(a.r.cuenta.vehiculos.reduce((s, v) => s + v.total, 0)), a.r.cuenta.vehiculos.map(v => `${v.total} ${v.tipo}`).join(" · "))}
+          {tarjeta("Vehículos", String(a.r.cuenta.vehiculos.reduce((s, v) => s + (v.total || 0), 0)), (() => { const vs = a.r.cuenta.vehiculos; const t = vs.slice(0, 3).map(v => `${v.total} ${v.tipo}`).join(" · "); return vs.length > 3 ? `${t} y ${vs.length - 3} más` : t; })())}
         </div>
       </>}
 

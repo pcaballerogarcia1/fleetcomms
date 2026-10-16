@@ -10,6 +10,7 @@
 //     quiere (coste ÷ (1 − margen)) y lo que da el presupuesto del pliego.
 // Todo con valores orientativos que se cambian. Sin React ni Firebase.
 import { dimensionar, entradaDimension } from "./ficha.js";
+import { subidaAnio } from "./estudio.js";
 
 export const PARAMETROS_CALCULO = {
   salarioOperario: 25000,   // € brutos al año de una persona de servicio (con pluses del convenio)
@@ -143,7 +144,90 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
   // caja que hay que adelantar: lo que se gasta mientras se espera a cobrar
   const caja = costeMedioAnual / 365 * q.diasCobro;
 
-  return { plantilla, vehiculos, anio1, porAnio, totalContrato, costeMedioAnual, precios, caja, anios: aniosReales, parametros: q };
+  return { modo: "rendimientos", partidas: PARTIDAS, plantilla, vehiculos, anio1, porAnio, totalContrato, costeMedioAnual, precios, caja, anios: aniosReales, parametros: q };
+}
+
+// ── Desde el estudio de costes del Ayuntamiento ──────────────────────────
+export const PARTIDAS_ESTUDIO_CUENTA = [
+  ["personal", "Personal"],
+  ["inversion", "Vehículos, contenedores e instalaciones (amortización y financiación)"],
+  ["funcionamiento", "Combustible y mantenimiento"],
+  ["seguros", "Seguros"],
+  ["otros", "Otros gastos (nave, mando, alquileres de temporada…)"],
+  ["mejoras", "Mejoras ofertadas"],
+  ["gastosGenerales", "Gastos generales de la empresa"],
+  ["contingencias", "Contingencias"],
+];
+const VEHICULO = /veh[ií]culo|cami[oó]n|recolector|barredora|baldeadora|furg[oó]n|furgoneta|tractor|cribadora|autob|lavacontenedor|gr[uú]a/i;
+
+/**
+ * La cuenta del contrato partiendo del estudio del Ayuntamiento: sus partidas
+ * (con el ajuste que se quiera, en % o con un importe propio), lo que sube cada
+ * año (el del pliego: mano de obra y resto), nuestras mejoras, nuestros gastos
+ * generales (no su «gastos generales y beneficio») y contingencias.
+ * @param estudio estudioDeCostes()
+ * @param o { ajustes: { [partida]: { pct, importe } }, personalPropio (€ año 1, p. ej. de la plantilla a subrogar),
+ *            mejorasAnio, gastosGeneralesPct, contingenciasPct, margenPct, diasCobro, anios, factores }
+ */
+export function cuentaDesdeEstudio(estudio, o = {}) {
+  const { ajustes = {}, personalPropio = null, mejorasAnio = 0, gastosGeneralesPct = 6, contingenciasPct = 3, margenPct = 8, diasCobro = 60, anios = 1, factores = {}, subidaPorDefecto } = o;
+  const f = { personal: 1, operacion: 1, rendimiento: 1, ...factores };
+  const masTrabajo = 1 / Math.max(0.1, f.rendimiento);
+  const del = id => estudio.partidas.find(p => p.id === id)?.total || 0;
+  const ajustado = (id, v) => {
+    const a = ajustes[id] || {};
+    if (a.importe != null && a.importe !== "" && Number.isFinite(Number(a.importe))) return Number(a.importe);
+    return v * (1 + (Number(a.pct) || 0) / 100);
+  };
+  const base = {
+    personal: (personalPropio != null ? personalPropio : ajustado("personal", del("personal"))) * f.personal * masTrabajo,
+    inversion: ajustado("inversion", del("inversion")),
+    funcionamiento: ajustado("funcionamiento", del("funcionamiento")) * f.operacion * masTrabajo,
+    seguros: ajustado("seguros", del("seguros")),
+    otros: ajustado("otros", del("otros")),
+    mejoras: Number(mejorasAnio) || 0,
+  };
+  const n = Math.max(1, Math.ceil(anios || 1));
+  let mo = 1, re = 1;
+  const porAnio = [];
+  for (let k = 1; k <= n; k++) {
+    if (k > 1) { const s = subidaAnio(estudio, k - 1, subidaPorDefecto); mo *= 1 + s.manoObra / 100; re *= 1 + s.resto / 100; }
+    const parte = anios % 1 && k === n ? anios % 1 : 1;
+    const a = { personal: base.personal * mo * parte, inversion: base.inversion * parte, funcionamiento: base.funcionamiento * re * parte, seguros: base.seguros * re * parte, otros: base.otros * re * parte, mejoras: base.mejoras * re * parte };
+    const directos = a.personal + a.inversion + a.funcionamiento + a.seguros + a.otros + a.mejoras;
+    a.gastosGenerales = directos * gastosGeneralesPct / 100;
+    a.contingencias = (directos + a.gastosGenerales) * contingenciasPct / 100;
+    a.total = directos + a.gastosGenerales + a.contingencias;
+    porAnio.push({ anio: k, parte, ...a });
+  }
+  const totalContrato = porAnio.reduce((s, a) => s + a.total, 0);
+  const aniosReales = porAnio.reduce((s, a) => s + a.parte, 0);
+  const costeMedioAnual = totalContrato / aniosReales;
+  // plantilla y medios del estudio, para enseñarlos
+  const lineasPersonal = estudio.partidas.find(p => p.id === "personal")?.lineas || [];
+  const etc = lineasPersonal.filter(l => !/plus|antig[uü]edad|absentismo/i.test(l.concepto)).reduce((s, l) => s + (l.uds || 0), 0);
+  const vehiculos = (estudio.partidas.find(p => p.id === "inversion")?.lineas || []).filter(l => VEHICULO.test(l.concepto)).map(l => ({ tipo: l.concepto, total: l.uds, reserva: 0, unidades: l.uds, amortizacion: l.total }));
+  return {
+    modo: "estudio", partidas: PARTIDAS_ESTUDIO_CUENTA, porAnio, anio1: porAnio[0], totalContrato, costeMedioAnual, anios: aniosReales,
+    plantilla: { total: etc, servicio: Math.round(etc * 100) / 100, encargados: 0, jefe: 0, desdeEstudio: true },
+    vehiculos, caja: costeMedioAnual / 365 * diasCobro,
+    parametros: { margenPct, diasCobro, gastosGeneralesPct, contingenciasPct },
+  };
+}
+
+/**
+ * Lo que cobra cada año el contrato antes de la baja (sin IVA): la tabla de
+ * años del estudio si la trae (el precio sube cada año); si no, el mismo
+ * presupuesto todos los años.
+ */
+export function ingresosBaseDe(presupuestoAnual, anios, estudio) {
+  const n = Math.max(1, Math.ceil(anios || 1));
+  const tabla = estudio?.anios?.base || [];
+  if (tabla.length >= n && presupuestoAnual) {
+    const escala = presupuestoAnual / tabla[0]; // por si el presupuesto se ha corregido a mano
+    return tabla.slice(0, n).map(v => v * escala);
+  }
+  return Array.from({ length: n }, () => presupuestoAnual || 0);
 }
 
 /** Los años del contrato que figuran en el concurso */
@@ -152,15 +236,65 @@ export const aniosDelConcurso = c => (c?.duracionMeses ? c.duracionMeses / 12 : 
 /** El presupuesto anual sin IVA (el del pliego es del contrato entero, sin prórrogas) */
 export const presupuestoAnualDe = c => (c?.presupuestoSinIva ? c.presupuestoSinIva / aniosDelConcurso(c) : null);
 
+const valorDato = (ficha, clave) => { const d = ficha?.datos?.[clave]; return d && d.estado !== "descartado" ? d.valor : null; };
+const pctDe = v => (v == null ? null : Number(String(v).replace(",", ".").replace(/[^\d.]/g, "")) || null);
+
+/**
+ * El presupuesto del PRIMER año, sin IVA, y de dónde sale (lo más fiable primero):
+ * escrito a mano > estudio de costes > precio del primer año del pliego (sin el IVA) >
+ * importe anual > presupuesto total ÷ años.
+ */
+export function presupuestoPrimerAnio({ calc, ficha, concurso }) {
+  if (Number(calc?.presupuestoAnual) > 0) return { valor: Number(calc.presupuestoAnual), fuente: "escrito a mano" };
+  if (ficha?.estudio?.baseImponible) return { valor: ficha.estudio.baseImponible, fuente: "estudio de costes del pliego (año 1)" };
+  const iva = pctDe(valorDato(ficha, "ivaPct")) ?? ficha?.estudio?.ivaPct ?? null;
+  const primer = Number(valorDato(ficha, "precioPrimerAnio"));
+  if (primer > 0 && iva != null) return { valor: primer / (1 + iva / 100), fuente: `precio del primer año del pliego, sin el ${iva} % de IVA` };
+  if (primer > 0) return { valor: primer, fuente: "precio del primer año del pliego (¿lleva IVA? compruébalo)", dudoso: true };
+  const anual = Number(valorDato(ficha, "importeAnual"));
+  if (anual > 0) return { valor: anual, fuente: "importe anual del pliego", dudoso: true };
+  const p = presupuestoAnualDe(concurso);
+  if (p) return { valor: p, fuente: "presupuesto total sin IVA ÷ años del contrato", dudoso: true };
+  // solo el presupuesto base de licitación, que lleva el IVA
+  if (concurso?.presupuestoConIva) {
+    const t = iva ?? 21;
+    return { valor: concurso.presupuestoConIva / (1 + t / 100) / aniosDelConcurso(concurso), fuente: `presupuesto base con IVA, sin el ${t} %${iva == null ? " (el pliego no dice el tipo: supuesto)" : ""}, ÷ años`, dudoso: true };
+  }
+  return { valor: null, fuente: null };
+}
+
 /** Todo a partir de lo guardado: dimensionamiento y cuenta */
 // lo que está vacío no cambia el valor orientativo
 const sinVacios = o => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v != null && v !== "" && !Number.isNaN(v)));
 
-export function calcularConcurso({ ficha, dim, calc, concurso, factores } = {}) {
+export function calcularConcurso({ ficha, dim, calc, concurso, factores, mejorasAnio } = {}) {
   const { entrada, parametros } = entradaDimension(ficha, dim);
   const d = dimensionar(entrada, parametros);
   const anios = aniosDelConcurso(concurso);
-  const porVehiculo = Object.fromEntries(Object.entries(calc?.vehiculos || {}).map(([k, v]) => [k, sinVacios(v)]));
-  const cuenta = cuentaExplotacion(d, { ...PARAMETROS_CALCULO, ...sinVacios(calc?.parametros) }, porVehiculo, anios, factores);
-  return { dimension: d, parametrosDimension: parametros, cuenta, anios, presupuestoAnual: calc?.presupuestoAnual || presupuestoAnualDe(concurso) };
+  const p = { ...PARAMETROS_CALCULO, ...sinVacios(calc?.parametros) };
+  const estudio = ficha?.estudio || null;
+  const modo = calc?.base === "rendimientos" || !estudio ? "rendimientos" : "estudio";
+  const personalPropio = calc?.usarPlantilla && calc?.plantilla?.coste ? calc.plantilla.coste : null;
+  const mejoras = mejorasAnio ?? (Number(calc?.mejorasAnio) || 0);
+  let cuenta;
+  if (modo === "estudio") {
+    cuenta = cuentaDesdeEstudio(estudio, { ajustes: calc?.ajustes || {}, personalPropio, mejorasAnio: mejoras || 0, gastosGeneralesPct: p.gastosGeneralesPct, contingenciasPct: p.contingenciasPct, margenPct: p.margenPct, diasCobro: p.diasCobro, anios, factores, subidaPorDefecto: { manoObra: p.subidaSalarialPct, resto: p.ipcPct } });
+  } else {
+    const porVehiculo = Object.fromEntries(Object.entries(calc?.vehiculos || {}).map(([k, v]) => [k, sinVacios(v)]));
+    // si la maquinaria pasa al Ayuntamiento, no le queda valor
+    const revierte = valorDato(ficha, "revierte");
+    cuenta = cuentaExplotacion(d, { ...p, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
+    if (mejoras) for (const a of cuenta.porAnio) { a.mejoras = mejoras * a.parte; a.total += mejoras * a.parte; }
+    if (mejoras) { cuenta.totalContrato = cuenta.porAnio.reduce((s, a) => s + a.total, 0); cuenta.costeMedioAnual = cuenta.totalContrato / cuenta.anios; }
+  }
+  const pres = presupuestoPrimerAnio({ calc, ficha, concurso });
+  const ingresosBase = ingresosBaseDe(pres.valor, anios, estudio);
+  // lo que pesan los años en el precio del primero (si el precio sube cada año, más de un año por año)
+  const factorIngresos = pres.valor ? ingresosBase.reduce((s, v, k) => s + v * (cuenta.porAnio[k]?.parte ?? 1), 0) / pres.valor : cuenta.anios;
+  const margen = Math.min(0.9, Math.max(0, p.margenPct / 100));
+  const equilibrio = cuenta.totalContrato / Math.max(0.01, factorIngresos);
+  cuenta.precios = { equilibrio, objetivo: equilibrio / (1 - margen) };
+  cuenta.factorIngresos = factorIngresos;
+  cuenta.ingresosBase = ingresosBase;
+  return { dimension: d, parametrosDimension: parametros, cuenta, anios, modo, estudio, presupuestoAnual: pres.valor, fuentePresupuesto: pres, costeEquivalente: equilibrio };
 }

@@ -34,3 +34,25 @@ Se considerarán ofertas anormalmente bajas las que se encuentren en los supuest
     expect(r.baja).toMatchObject({ id: "media", valor: 8 });
   });
 });
+
+describe("criterios reales de Gozón (CON/2026/12)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { mejorPropuesta } = await import("./criterios.js");
+  const leer = f => readFileSync(new URL(`./__fixtures__/${f}`, import.meta.url), "utf8").split(/=== PÁGINA \d+ ===\n?/).slice(1);
+  const pcap = criteriosDelPliego(leer("gozon-pcap-criterios.txt"));
+  const anuncio = criteriosDelPliego(leer("gozon-anuncio.txt"));
+  it("pliego administrativo: precio, memoria con sus 8 apartados y dos mejoras con escalones; suma 100", () => {
+    expect(pcap.criterios.map(c => [c.tipo, c.puntos]).sort()).toEqual([["juicio", 45], ["mejora", 5], ["mejora", 5], ["precio", 45]]);
+    expect(pcap.criterios.find(c => c.tipo === "juicio").subcriterios.map(s => s.puntos)).toEqual([12, 12, 3, 3, 9, 2, 2, 2]);
+    expect(pcap.criterios.find(c => /papeleras/i.test(c.nombre)).escalones).toEqual([{ desde: 6, hasta: 10, puntos: 1 }, { desde: 11, hasta: 15, puntos: 3 }, { desde: 16, hasta: null, puntos: 5 }]);
+    expect(pcap.formula).toBeNull(); // el pliego no dice la fórmula del precio
+    expect(pcap.baja.id).toBe("art85");
+  });
+  it("con el anuncio: el grupo que suma 100, con los apartados y escalones del pliego", () => {
+    const p = mejorPropuesta([{ nombre: "anuncio.pdf", adjudicacion: anuncio }, { nombre: "PCAP.pdf", adjudicacion: pcap }]);
+    expect(p.suma).toBe(100);
+    expect(p.criterios.filter(c => c.tipo === "mejora").every(c => c.escalones?.length === 3)).toBe(true);
+    expect(p.criterios.find(c => c.tipo === "juicio").subcriterios).toHaveLength(8);
+    expect(p.baja.id).toBe("art85");
+  });
+});

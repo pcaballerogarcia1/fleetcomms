@@ -38,3 +38,34 @@ describe("qué baja presentar", () => {
     expect(r.recomendada.puesto).toBe(2);
   });
 });
+
+describe("Gozón de punta a punta: estudio + criterios del pliego", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { estudioDeCostes } = await import("./estudio.js");
+  const { criteriosDelPliego, mejorPropuesta } = await import("./criterios.js");
+  const { analizarOferta, nivelesMejora } = await import("./oferta.js");
+  const leer = f => readFileSync(new URL(`./__fixtures__/${f}`, import.meta.url), "utf8").split(/=== PÁGINA \d+ ===\n?/).slice(1);
+  const estudio = estudioDeCostes(leer("gozon-ppt-anexo.txt"));
+  const prop = mejorPropuesta([{ nombre: "anuncio", adjudicacion: criteriosDelPliego(leer("gozon-anuncio.txt")) }, { nombre: "PCAP", adjudicacion: criteriosDelPliego(leer("gozon-pcap-criterios.txt")) }]);
+  const ficha = { datos: {}, servicios: {}, estudio, adjudicacion: { criterios: prop.criterios, formula: "lineal", formulaSupuesta: true, baja: prop.baja } };
+  const concurso = { duracionAnios: 10, valorEstimado: 14301991.99 };
+  const a = analizarOferta({ ficha, dim: {}, calc: {}, concurso, oferta: {} });
+
+  it("los niveles de una mejora", () => {
+    expect(nivelesMejora(prop.criterios.find(c => /papeleras/i.test(c.nombre)))).toEqual([{ unidades: 0, puntos: 0 }, { unidades: 6, puntos: 1 }, { unidades: 11, puntos: 3 }, { unidades: 16, puntos: 5 }]);
+  });
+  it("nada bloquea; avisa de la fórmula supuesta", () => {
+    expect(a.bloqueado).toBe(false);
+    expect(a.alarmas.some(x => /fórmula/.test(x.texto))).toBe(true);
+  });
+  it("la baja recomendada es pequeña (el margen del estudio es poco) y las mejoras se eligen solas", () => {
+    expect(a.combinaciones).toBe(16);
+    expect(a.elegida).toBeTruthy();
+    expect(a.elegida.baja).toBeLessThan(8);
+    expect(a.mejorasElegidas).toHaveLength(2);
+  });
+  it("si los años o el presupuesto no cuadran con el valor estimado, bloquea", () => {
+    const mal = analizarOferta({ ficha, dim: {}, calc: {}, concurso: { duracionAnios: 10, valorEstimado: 5000000 }, oferta: {} });
+    expect(mal.bloqueado).toBe(true);
+  });
+});

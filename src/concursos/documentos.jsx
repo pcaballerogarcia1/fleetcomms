@@ -42,13 +42,20 @@ export function DocumentosConcurso({ concurso }) {
   const sel = docs?.find(d => d._id === selId) || docs?.[docs.length - 1] || null;
   const lectura = sel?.lectura;
   // leído con un lector más antiguo: se vuelve a leer solo (con el texto guardado)
-  const anticuado = sel && sel.lectura && (sel.lectura.version || 1) < VERSION_LECTOR ? sel : null;
+  // todos los pliegos leídos con un lector más viejo se vuelven a leer (uno detrás de otro)
+  const anticuados = (docs || []).filter(d => d.lectura && (d.lectura.version || 1) < VERSION_LECTOR).map(d => d._id).join(",");
   useEffect(() => {
-    if (!anticuado) return;
+    if (!anticuados) return;
     let vivo = true;
-    textoDocumento(id, anticuado).then(paginas => vivo && releerDocumento(id, anticuado, leerPliego(paginas))).catch(e => console.warn("[pliegos] releer:", e));
+    (async () => {
+      for (const d of (docs || []).filter(x => anticuados.split(",").includes(x._id))) {
+        if (!vivo) return;
+        try { const paginas = await textoDocumento(id, d); if (vivo) await releerDocumento(id, d, leerPliego(paginas)); }
+        catch (e) { console.warn("[pliegos] releer:", e); }
+      }
+    })();
     return () => { vivo = false; };
-  }, [id, anticuado]);
+  }, [id, anticuados]); // eslint-disable-line react-hooks/exhaustive-deps
   const resultados = useMemo(() => (texto.id === sel?._id && texto.paginas ? buscarEnPliego(texto.paginas, q) : []), [texto, sel?._id, q]);
 
   async function subir(files) {
