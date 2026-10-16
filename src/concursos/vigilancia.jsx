@@ -12,8 +12,9 @@ import { buscarLicitaciones, crearConcursoDesdePlataforma, licitacionDeEnlace } 
 import { escucharVigilancia, guardarVigilancia } from "./store.js";
 
 const CPV_SUGERIDOS = [
-  ["9051", "Recogida de residuos"], ["9061", "Limpieza viaria"], ["9068", "Limpieza de playas"], ["9091", "Limpieza de edificios"],
-  ["6011", "Transporte por carretera (autobús)"], ["6013", "Transporte especial (escolar)"], ["9052", "Tratamiento de residuos"],
+  ["9051", "Recogida de residuos"], ["9061", "Limpieza viaria"], ["90918", "Lavado de contenedores"], ["50514", "Reparación de contenedores"],
+  ["34928480", "Suministro de contenedores"], ["9068", "Limpieza de playas"], ["9091", "Limpieza de edificios"],
+  ["6011", "Transporte por carretera (autobús)"], ["6013", "Transporte especial (escolar)"], ["9052", "Residuos peligrosos y sanitarios"],
 ];
 const UNA_HORA = 3600e3;
 const enPlazo = l => (!l.estado || l.estado === "PUB") && (!l.fechaLimite || String(l.fechaLimite).slice(0, 10) >= new Date().toISOString().slice(0, 10));
@@ -32,11 +33,11 @@ export function Vigilancia({ orgId, onAbrir }) {
 
   async function buscar() {
     if (!cpvs.length || buscando) return;
-    setError(null); setBuscando("Buscando en la Plataforma de Contratación… (puede tardar un minuto)");
+    setError(null); setBuscando("Buscando en la Plataforma de Contratación…");
     try {
       const desde = v?.ultima || new Date(Date.now() - 3 * 864e5).toISOString();
       const ahora = new Date().toISOString();
-      const r = await buscarLicitaciones(cpvs, desde, 15);
+      const r = await buscarLicitaciones(cpvs, desde, 30, { onProgreso: (p, n) => setBuscando(`Buscando en la Plataforma de Contratación… ${p} páginas leídas, ${n} encontradas`) });
       const previas = v?.encontradas || [];
       const nuevas = r.licitaciones.filter(enPlazo).map(resumen).filter(l => !previas.some(p => p.id === l.id));
       const encontradas = [...nuevas, ...previas.filter(enPlazo)].slice(0, 60);

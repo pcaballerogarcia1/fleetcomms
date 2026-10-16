@@ -7,6 +7,7 @@
 // cuánto aguanta el margen. Sin React ni Firebase.
 import { alarmasConcurso } from "./alarmas.js";
 import { calcularConcurso } from "./calculo.js";
+import { familiaDeCpv } from "./familias-cpv.js";
 
 /** Baja en puntos porcentuales: 12 = un 12 % por debajo del presupuesto */
 export const bajaDe = (oferta, presupuesto) => (presupuesto > 0 ? (1 - oferta / presupuesto) * 100 : 0);
@@ -182,14 +183,14 @@ export function analizarOferta({ ficha, dim, calc, concurso, oferta }) {
 
 /**
  * La competencia según adjudicaciones reales de la Plataforma (bajas-referencia.json):
- * por la familia del CPV (los 4 primeros dígitos) y el tamaño del contrato.
- * @param ref el JSON de referencia; cpvs del concurso; presupuestoTotal sin IVA (todo el contrato)
+ * por la familia del CPV (familias-cpv.js) y el tamaño del contrato.
+ * @param ref el JSON de referencia; cpvs del concurso; presupuestoTotal sin IVA (todo el contrato); titulo (para los CPV genéricos)
  * @returns null | { familia, nombre, tramo, n, ofertas, unaSola (% con una sola oferta), baja: { p25, mediana, p75 },
  *            ganadores: [{ nombre, contratos, cuotaPct }], competidores: [{ nombre, baja, tecnicaPct }] }
  */
-export function competenciaDeReferencia(ref, cpvs = [], presupuestoTotal = null) {
-  const fam = (cpvs || []).map(c => String(c).replace(/\D/g, "").slice(0, 4)).find(c => ref?.familias?.[c]);
-  if (!fam) return null;
+export function competenciaDeReferencia(ref, cpvs = [], presupuestoTotal = null, titulo = null) {
+  const fam = familiaDeCpv(cpvs, { titulo })?.clave;
+  if (!fam || !ref?.familias?.[fam]) return null;
   const f = ref.familias[fam];
   const tramo = presupuestoTotal >= 1e6 && f.tramos?.mas1M ? "mas1M" : presupuestoTotal >= 2e5 && f.tramos?.mas200k ? "mas200k" : null;
   const t = tramo ? f.tramos[tramo] : f;

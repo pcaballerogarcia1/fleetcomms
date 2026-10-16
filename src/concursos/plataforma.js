@@ -19,8 +19,22 @@ async function pedir(params, { binario = false } = {}) {
 /** Los datos oficiales de una licitación a partir del enlace de su página en la Plataforma */
 export const licitacionDeEnlace = enlace => pedir({ accion: "licitacion", enlace: enlace.trim() });
 
-/** Las licitaciones nuevas (en plazo) con esos CPV desde una fecha */
-export const buscarLicitaciones = (cpvs, desde, paginas = 12) => pedir({ accion: "buscar", cpv: cpvs.join(","), ...(desde ? { desde } : {}), paginas: String(paginas) });
+/**
+ * Las licitaciones nuevas con esos CPV desde una fecha. El servidor lee el canal
+ * por tandas cortas; aquí se le llama hasta llegar a la fecha o a `paginas`.
+ */
+export async function buscarLicitaciones(cpvs, desde, paginas = 12, { onProgreso } = {}) {
+  const licitaciones = [];
+  let desdePagina = null, leidas = 0;
+  do {
+    const r = await pedir({ accion: "buscar", cpv: cpvs.join(","), ...(desde ? { desde } : {}), paginas: String(Math.max(1, paginas - leidas)), ...(desdePagina ? { desdePagina } : {}) });
+    for (const l of r.licitaciones) if (!licitaciones.some(x => x.id === l.id)) licitaciones.push(l);
+    leidas += r.paginasLeidas || 1;
+    desdePagina = r.siguiente;
+    onProgreso?.(leidas, licitaciones.length);
+  } while (desdePagina && leidas < paginas);
+  return { licitaciones, paginasLeidas: leidas, completo: !desdePagina };
+}
 
 // los anexos que sirven (cuadros, anexos del pliego, memorias económicas), no los modelos de declaración
 const UTIL = /cuadro|resumen|caracter[ií]stic|anexo\s*(?:i|1)\b|anexo i[^ivx]|pcap|pliego|prescrip|cl[aá]usulas|memoria econ|estudio econ|justificativ|subroga|personal/i;

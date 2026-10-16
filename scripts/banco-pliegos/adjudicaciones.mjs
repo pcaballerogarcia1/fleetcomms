@@ -1,6 +1,6 @@
 // Bajas reales por tipo de contrato: recorre el canal de la Plataforma de
-// Contratación, coge las licitaciones ADJUDICADAS de servicios de los sectores
-// de Operanzia (sin lotes: con lotes, las cifras no se pueden comparar) y
+// Contratación, coge las licitaciones ADJUDICADAS de los sectores de Operanzia
+// (servicios y, para contenedores y camiones, suministros; ver familias-cpv.js) (sin lotes: con lotes, las cifras no se pueden comparar) y
 // calcula, por familia de CPV, cuántas ofertas suele haber y cuánto bajan la
 // ganadora y la oferta más baja respecto al presupuesto. Lo usa Alternativas
 // para proponer la competencia. Uso:
@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { entradasDelCanal } from "../../api/_plataforma/codice.js";
+import { FAMILIAS_CPV, familiaDeCpv } from "../../src/concursos/familias-cpv.js";
 
 const opcion = n => { const i = process.argv.indexOf(n); if (i < 0) return null; const v = process.argv[i + 1]; process.argv.splice(i, 2); return v; };
 const MESES = opcion("--meses");
@@ -20,12 +21,8 @@ const CACHE = opcion("--cache") || "banco-adjudicaciones";
 const PAGINAS = MESES ? 0 : Number(process.argv[2] || 200);
 const SALIDA = (MESES ? process.argv[2] : process.argv[3]) || new URL("../../src/concursos/bajas-referencia.json", import.meta.url);
 const CRUDO = `${SALIDA}`.replace(/\.json$/, "") + ".crudo.json";
-export const FAMILIAS = {
-  9051: "Recogida de residuos", 9052: "Tratamiento de residuos", 9050: "Residuos (general)", 9061: "Limpieza viaria",
-  9068: "Limpieza de playas", 9091: "Limpieza de edificios", 9092: "Limpieza e higienización", 6011: "Transporte en autobús",
-  6013: "Transporte escolar y especial", 6017: "Alquiler de autobuses con conductor", 7731: "Jardinería", 9090: "Limpieza (general)",
-};
-const familia = cpvs => (cpvs || []).map(c => c.slice(0, 4)).find(c => FAMILIAS[c]) || null;
+// la familia de cada contrato: la misma tabla que usa la app
+const familia = e => familiaDeCpv(e.cpvs, { titulo: e.titulo || "", tipo: e.tipoContrato || "?" })?.clave || null;
 const pct = (n, d) => (d > 0 && n > 0 ? Math.round((1 - n / d) * 1000) / 10 : null);
 const cuantil = (xs, q) => { const o = [...xs].sort((a, b) => a - b); if (!o.length) return null; const i = (o.length - 1) * q; const a = Math.floor(i); return Math.round((o[a] + (o[Math.ceil(i)] - o[a]) * (i - a)) * 10) / 10; };
 
@@ -33,8 +30,8 @@ const crudo = existsSync(CRUDO) ? JSON.parse(readFileSync(CRUDO, "utf8")) : { re
 // una licitación sale muchas veces (cada vez que cambia): se queda la versión más reciente
 const porId = new Map(crudo.registros.map(r => [r.id, r]));
 function anotar(e) {
-  const fam = familia(e.cpvs);
-  if (!fam || e.tipoContrato !== "2" || (e.lotes || 0) > 1) return;
+  const fam = familia(e);
+  if (!fam || (e.lotes || 0) > 1) return;
   const r = e.resultado, pres = e.presupuesto?.sinIva;
   if (!r || !pres || !(r.adjudicado > 0 || r.ofertaMin > 0)) return;
   const reg = { id: e.id, familia: fam, cpvs: e.cpvs, titulo: (e.titulo || "").slice(0, 120), organo: e.organo, lugar: e.lugar || null, presupuesto: pres, ofertas: r.ofertas, bajaGanadora: pct(r.adjudicado, pres), bajaMinima: (b => (b != null && b > 90 ? null : b))(pct(r.ofertaMin, pres)), bajaMaxima: pct(r.ofertaMax, pres), ganador: r.ganador || null, fecha: (e.actualizado || "").slice(0, 10) };
@@ -88,7 +85,7 @@ const SIGLAS = /^(FCC|UTE|SA|SL|ISS|STV|OHL|EULEN|CLECE|TBF|ADDA|SRCL|CEE|GD)$/;
 const empresa = g => String(g).replace(/[.,]/g, " ").replace(/\s+(S\s?R\s?L|S\s?A\s?U|S\s?L\s?U|S\s?A|S\s?L|S\s?COOP\s?\w*)\s*$/i, "").replace(/\s+/g, " ").trim()
   .split(" ").map(p => (SIGLAS.test(p.toUpperCase()) || p.length <= 2 && p === p.toUpperCase() && !/^(DE|LA|EL|Y|DEL|LOS|LAS)$/.test(p) ? p.toUpperCase() : /^(DE|LA|EL|Y|DEL|LOS|LAS)$/i.test(p) ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())).join(" ");
 const familias = {};
-for (const [fam, nombre] of Object.entries(FAMILIAS)) {
+for (const { clave: fam, nombre } of FAMILIAS_CPV) {
   const todos = crudo.registros.filter(r => r.familia === fam);
   if (!todos.length) continue;
   const tramo = rs => {

@@ -80,7 +80,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
   const juego = puntosEnJuego(adj.criterios);
   // la competencia según adjudicaciones reales (por CPV y tamaño)
   const cpvs = datos.concurso?.cpvs?.length ? datos.concurso.cpvs : String(datos.ficha?.datos?.cpv?.valor || "").match(/\d{8}/g) || [];
-  const referencia = competenciaDeReferencia(bajasReferencia, cpvs, datos.concurso?.presupuestoSinIva || (presupuesto ? presupuesto * r.anios : null));
+  const referencia = competenciaDeReferencia(bajasReferencia, cpvs, datos.concurso?.presupuestoSinIva || (presupuesto ? presupuesto * r.anios : null), datos.ficha?.datos?.objeto?.valor || datos.concurso?.nombre || null);
   const ponerCompetidores = f => cambiar({ competidores: f(competidores) });
 
   return pagina(<>
