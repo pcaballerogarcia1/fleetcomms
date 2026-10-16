@@ -122,6 +122,8 @@ export function AlternativasConcurso({ concursoId, irA }) {
         {referencia && (
           <div style={{ marginTop: 8, background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
             <b style={{ color: C.text }}>Según adjudicaciones reales</b> de «{referencia.nombre}»{referencia.tramo === "mas1M" ? ", contratos de más de 1 M€" : referencia.tramo === "mas200k" ? ", contratos de más de 200.000 €" : ""} ({referencia.n} entre el {new Date(`${referencia.periodo.desde}T12:00:00`).toLocaleDateString("es-ES")} y el {new Date(`${referencia.periodo.hasta}T12:00:00`).toLocaleDateString("es-ES")}): mediana de <b style={{ color: C.text }}>{F1.format(referencia.ofertas.mediana)}</b> ofertas; la ganadora bajó <b style={{ color: C.text }}>{F1.format(referencia.baja.mediana)} %</b> (la mitad, entre {F1.format(referencia.baja.p25)} % y {F1.format(referencia.baja.p75)} %).
+            {referencia.unaSola != null && <> En el <b style={{ color: C.text }}>{referencia.unaSola} %</b> solo se presentó una empresa.</>}
+            {referencia.ganadores.length > 0 && <div>Quién se lleva más importe (contratos de más de 200.000 €): {referencia.ganadores.slice(0, 5).map(g => `${g.nombre} ${g.cuotaPct} %`).join(" · ")}.</div>}
             <button className="op-btn" style={{ height: 26, fontSize: 12, marginLeft: 8 }} onClick={() => cambiar({ competidores: referencia.competidores })}>Usar como competencia</button>
           </div>
         )}
