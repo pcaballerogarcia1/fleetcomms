@@ -179,3 +179,21 @@ export function analizarOferta({ ficha, dim, calc, concurso, oferta }) {
   const alarmas = alarmasConcurso({ r, ficha, concurso, calc, adj });
   return { r, adj, o, competidores, presupuesto, sim, elegida, esc, mejoras, mejorasElegidas: combo, mejorasAnio, combinaciones: pruebas.length, alarmas, bloqueado: alarmas.some(a => a.nivel === "bloquea") };
 }
+
+/**
+ * La competencia según adjudicaciones reales de la Plataforma (bajas-referencia.json):
+ * por la familia del CPV (los 4 primeros dígitos) y el tamaño del contrato.
+ * @param ref el JSON de referencia; cpvs del concurso; presupuestoTotal sin IVA (todo el contrato)
+ * @returns null | { familia, nombre, tramo, n, ofertas, baja: { p25, mediana, p75 }, competidores: [{ nombre, baja, tecnicaPct }] }
+ */
+export function competenciaDeReferencia(ref, cpvs = [], presupuestoTotal = null) {
+  const fam = (cpvs || []).map(c => String(c).replace(/\D/g, "").slice(0, 4)).find(c => ref?.familias?.[c]);
+  if (!fam) return null;
+  const f = ref.familias[fam];
+  const tramo = presupuestoTotal >= 1e6 && f.tramos?.mas1M ? "mas1M" : presupuestoTotal >= 2e5 && f.tramos?.mas200k ? "mas200k" : null;
+  const t = tramo ? f.tramos[tramo] : f;
+  const rivales = Math.max(1, Math.min(5, Math.round((t.ofertas.mediana || 1) - 1) || 1));
+  const bajas = [t.bajaGanadora.p75, t.bajaGanadora.mediana, t.bajaGanadora.p25, t.bajaMinima?.mediana, t.bajaGanadora.mediana].filter(x => x != null);
+  const competidores = Array.from({ length: rivales }, (_, i) => ({ nombre: `Rival ${i + 1} (según adjudicaciones)`, baja: Math.max(0, bajas[i % bajas.length] ?? 3), tecnicaPct: [75, 70, 80, 65, 72][i] }));
+  return { familia: fam, nombre: f.nombre, tramo, n: t.n, ofertas: t.ofertas, baja: { p25: t.bajaGanadora.p25, mediana: t.bajaGanadora.mediana, p75: t.bajaGanadora.p75 }, competidores, periodo: { desde: ref.desde, hasta: ref.hasta } };
+}

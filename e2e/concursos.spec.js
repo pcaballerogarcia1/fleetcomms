@@ -139,3 +139,52 @@ test("el superadmin elige la organización y crea el concurso en ella", async ({
   await expect(page.locator(".op-tarjeta").filter({ hasText: "Gozón" })).toBeVisible();
   expect(errores).toEqual([]);
 });
+
+// La Plataforma de Contratación, simulada: /api/plataforma devuelve una licitación (la del XML real de prueba) y un pliego
+async function simularPlataforma(page) {
+  const { readFileSync } = await import("node:fs");
+  const { licitacionDeCodice } = await import("../api/_plataforma/codice.js");
+  const l = licitacionDeCodice(readFileSync(new URL("../api/_plataforma/__fixtures__/pliego.xml", import.meta.url), "utf8"));
+  const lic = { ...l, id: "https://contrataciondelestado.es/sindicacion/licitacionesPerfilContratante/1", enlace: "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=prueba", estado: "PUB", fechaLimite: "2099-12-31",
+    documentos: [{ tipo: "pcap", nombre: "PCAP_28_2026.pdf", uri: "https://contrataciondelestado.es/FileSystem/servlet/GetDocumentByIdServlet?x=1" }] };
+  const pdf = pdfMini([["PLIEGO DE CLAUSULAS ADMINISTRATIVAS", "La duracion del contrato sera de dos (2) anos.", "Presupuesto base de licitacion 68.908,00 euros."]]);
+  await page.route("**/api/plataforma?**", ruta => {
+    const u = new URL(ruta.request().url());
+    const a = u.searchParams.get("accion");
+    if (a === "documento") return ruta.fulfill({ contentType: "application/pdf", body: pdf });
+    if (a === "buscar") return ruta.fulfill({ contentType: "application/json", body: JSON.stringify({ licitaciones: [lic], paginasLeidas: 1, completo: true }) });
+    return ruta.fulfill({ contentType: "application/json", body: JSON.stringify(lic) });
+  });
+  return lic;
+}
+
+test("nuevo concurso desde el enlace de la Plataforma: datos oficiales y pliegos leídos; y vigilancia por CPV", async ({ page }) => {
+  await sembrar();
+  const errores = vigilarErrores(page);
+  await simularPlataforma(page);
+  await entrarOficina(page);
+  await page.getByRole("button", { name: "Concursos", exact: true }).click();
+  await page.waitForURL(/\/concursos/);
+  await page.getByRole("button", { name: /Nuevo concurso/ }).click();
+  await page.getByLabel("Enlace de la Plataforma").fill("https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=prueba");
+  await page.getByRole("button", { name: "Traer datos" }).click();
+  await expect(page.getByText(/Datos oficiales:/)).toBeVisible();
+  await expect(page.getByText(/64\.400 € sin IVA/)).toBeVisible();
+  await page.getByRole("button", { name: /Crear y abrir/ }).click();
+  await page.waitForURL(/\/documentos/, { timeout: 30000 });
+  await page.getByRole("button", { name: "Ficha de requisitos", exact: true }).click();
+  await expect(page.getByText("dato oficial de la Plataforma de Contratación").first()).toBeVisible();
+  await expect(page.getByText(/Total 100 puntos · precio 26/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Pliegos \(1\)/ })).toBeVisible();
+
+  // vigilancia: un CPV, buscar, y crear el concurso con un clic
+  await page.getByRole("button", { name: "Concursos", exact: true }).click();
+  await page.getByText("Vigilar licitaciones por CPV").click();
+  await page.getByLabel("Añadir CPV").fill("71210000");
+  await page.getByRole("button", { name: "Añadir", exact: true }).click();
+  await page.getByRole("button", { name: /Buscar ahora/ }).click();
+  await expect(page.getByText("Asesoramiento en materia de arquitectura, urbanismo e infraestructura turística").first()).toBeVisible();
+  await page.getByRole("button", { name: "Crear concurso", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Abrir concurso" })).toBeVisible({ timeout: 30000 });
+  expect(errores).toEqual([]);
+});

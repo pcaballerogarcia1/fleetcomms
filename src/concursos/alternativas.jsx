@@ -9,7 +9,8 @@ import { useMemo } from "react";
 import { C, font } from "../tema.js";
 import { BAJA_ANORMAL, FORMULAS_PRECIO } from "./criterios.js";
 import { F1, eur, pct } from "./formato.js";
-import { OFERTA_DEFECTO, analizarOferta, puntosEnJuego } from "./oferta.js";
+import bajasReferencia from "./bajas-referencia.json";
+import { OFERTA_DEFECTO, analizarOferta, competenciaDeReferencia, puntosEnJuego } from "./oferta.js";
 import { PanelAlarmas } from "./alarmas-panel.jsx";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
 
@@ -77,6 +78,9 @@ export function AlternativasConcurso({ concursoId, irA }) {
 
   const { r, adj, o, competidores, presupuesto, sim, elegida, esc, mejoras, mejorasElegidas, alarmas, bloqueado } = a;
   const juego = puntosEnJuego(adj.criterios);
+  // la competencia según adjudicaciones reales (por CPV y tamaño)
+  const cpvs = datos.concurso?.cpvs?.length ? datos.concurso.cpvs : String(datos.ficha?.datos?.cpv?.valor || "").match(/\d{8}/g) || [];
+  const referencia = competenciaDeReferencia(bajasReferencia, cpvs, datos.concurso?.presupuestoSinIva || (presupuesto ? presupuesto * r.anios : null));
   const ponerCompetidores = f => cambiar({ competidores: f(competidores) });
 
   return pagina(<>
@@ -115,6 +119,12 @@ export function AlternativasConcurso({ concursoId, irA }) {
         ))}
         <button className="op-btn op-fantasma" style={{ height: 28, marginTop: 4 }} onClick={() => ponerCompetidores(cs => [...cs, { nombre: `Competidor ${String.fromCharCode(65 + cs.length)}`, baja: 10, tecnicaPct: 70 }])}><Plus size={14} /> Añadir empresa</button>
         <div style={{ fontSize: 11.5, color: C.dim, marginTop: 4 }}>Las bajas de concursos parecidos (adjudicaciones en la Plataforma) son la mejor pista. Técnica: el % de los {juego.resto} puntos de memoria que creemos que sacará.{juego.mejoras ? ` Se supone que ofrece todas las mejoras (${juego.mejoras} puntos).` : ""}</div>
+        {referencia && (
+          <div style={{ marginTop: 8, background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
+            <b style={{ color: C.text }}>Según adjudicaciones reales</b> de «{referencia.nombre}»{referencia.tramo === "mas1M" ? ", contratos de más de 1 M€" : referencia.tramo === "mas200k" ? ", contratos de más de 200.000 €" : ""} ({referencia.n} entre el {new Date(`${referencia.periodo.desde}T12:00:00`).toLocaleDateString("es-ES")} y el {new Date(`${referencia.periodo.hasta}T12:00:00`).toLocaleDateString("es-ES")}): mediana de <b style={{ color: C.text }}>{F1.format(referencia.ofertas.mediana)}</b> ofertas; la ganadora bajó <b style={{ color: C.text }}>{F1.format(referencia.baja.mediana)} %</b> (la mitad, entre {F1.format(referencia.baja.p25)} % y {F1.format(referencia.baja.p75)} %).
+            <button className="op-btn" style={{ height: 26, fontSize: 12, marginLeft: 8 }} onClick={() => cambiar({ competidores: referencia.competidores })}>Usar como competencia</button>
+          </div>
+        )}
       </div>
     </div>
 

@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { C, font } from "../tema.js";
+import { Vigilancia } from "./vigilancia.jsx";
+import { crearConcursoDesdePlataforma, documentosUtiles, licitacionDeEnlace, tipoPorCpv } from "./plataforma.js";
 import { ESTADOS, TIPOS_CONCURSO, cambiarConcurso, crearConcurso, escucharConcursos } from "./store.js";
 
 const fechaTxt = f => (f ? new Date(`${f}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : null);
@@ -39,10 +41,26 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
     if (!orgId) { setError("Elige primero la organización del concurso."); return; }
     setNuevo(n => ({ ...n, guardando: true }));
     try {
+      if (nuevo.licitacion) {
+        // desde la Plataforma: datos oficiales y pliegos leídos
+        const r = await crearConcursoDesdePlataforma({ orgId, licitacion: nuevo.licitacion, nombre: nuevo.nombre.trim(), onProgreso: t => setNuevo(n => ({ ...n, progreso: t })) });
+        setNuevo(null);
+        if (r.fallos.length) window.alert(`Concurso creado con ${r.documentos} documentos leídos. No se pudieron traer: ${r.fallos.join(" · ")}. Súbelos a mano en Documentos.`);
+        await abrir(r.concurso);
+        return;
+      }
       const { concurso } = await crearConcurso({ orgId, ...nuevo, nombre: nuevo.nombre.trim() });
       setNuevo(null);
       await abrir(concurso);
-    } catch (e) { setError(`No se pudo crear: ${e.message}`); setNuevo(n => ({ ...n, guardando: false })); }
+    } catch (e) { setError(`No se pudo crear: ${e.message}`); setNuevo(n => ({ ...n, guardando: false, progreso: null })); }
+  }
+  async function traer() {
+    setNuevo(n => ({ ...n, trayendo: true, errorEnlace: null }));
+    try {
+      const l = await licitacionDeEnlace(nuevo.enlace);
+      const meses = l.duracion?.meses;
+      setNuevo(n => ({ ...n, trayendo: false, licitacion: l, nombre: (l.titulo || n.nombre).slice(0, 120), organismo: l.organo || n.organismo, tipo: tipoPorCpv(l.cpvs), duracionAnios: meses ? Math.round((meses / 12) * 10) / 10 : n.duracionAnios, fechaLimite: l.fechaLimite ? String(l.fechaLimite).slice(0, 10) : n.fechaLimite }));
+    } catch (e) { setNuevo(n => ({ ...n, trayendo: false, errorEnlace: e.message || String(e) })); }
   }
 
   return (
@@ -64,6 +82,8 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
           </select>
         </div>
       )}
+
+      {orgId && <Vigilancia orgId={orgId} onAbrir={x => { const c = (lista || []).find(y => y._id === x._id); if (c) abrir(c); }} />}
 
       {error && <div className="op-tarjeta" style={{ padding: "10px 14px", color: C.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
@@ -107,6 +127,18 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
               <div style={{ fontSize: 16, fontWeight: 650, color: C.text, flex: 1 }}>Nuevo concurso</div>
               <button className="op-btn op-fantasma op-icono" onClick={() => setNuevo(null)}><X size={16} /></button>
             </div>
+            <label className="op-label">Enlace de la licitación en la Plataforma de Contratación (opcional)</label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+              <input className="op-input" value={nuevo.enlace || ""} onChange={e => setNuevo(n => ({ ...n, enlace: e.target.value, licitacion: null }))} placeholder="https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=…" aria-label="Enlace de la Plataforma" />
+              <button className="op-btn" disabled={!nuevo.enlace?.trim() || nuevo.trayendo || nuevo.guardando} onClick={traer}>{nuevo.trayendo ? <Loader2 size={14} className="op-girando" /> : null} Traer datos</button>
+            </div>
+            {nuevo.errorEnlace && <div style={{ fontSize: 12.5, color: C.red, marginBottom: 8 }}>{nuevo.errorEnlace}</div>}
+            {nuevo.licitacion && (
+              <div style={{ background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+                <b style={{ color: C.green }}>Datos oficiales:</b> presupuesto {nuevo.licitacion.presupuesto?.sinIva != null ? `${Math.round(nuevo.licitacion.presupuesto.sinIva).toLocaleString("es-ES")} € sin IVA` : "—"} · valor estimado {nuevo.licitacion.valorEstimado != null ? `${Math.round(nuevo.licitacion.valorEstimado).toLocaleString("es-ES")} €` : "—"} · {nuevo.licitacion.duracion?.meses ? `${nuevo.licitacion.duracion.meses} meses` : "duración sin dato"} · {nuevo.licitacion.criterios?.length || 0} criterios · CPV {(nuevo.licitacion.cpvs || []).join(", ")}
+                <br />Se bajarán y leerán {documentosUtiles(nuevo.licitacion).length} documentos (pliegos y anexos útiles).{nuevo.licitacion.lotes > 1 ? ` Ojo: va por ${nuevo.licitacion.lotes} lotes y las cifras son del total.` : ""}
+              </div>
+            )}
             <label className="op-label">Nombre</label>
             <input className="op-input" autoFocus value={nuevo.nombre} onChange={e => setNuevo(n => ({ ...n, nombre: e.target.value }))} placeholder="Recogida de residuos de Salamanca" style={{ marginBottom: 12 }} />
             <label className="op-label">Organismo que licita</label>
@@ -127,6 +159,7 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button className="op-btn" onClick={() => setNuevo(null)} disabled={nuevo.guardando}>Cancelar</button>
+              {nuevo.progreso && <div style={{ flex: 1, fontSize: 12, color: C.muted, alignSelf: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nuevo.progreso}</div>}
               <button className="op-btn op-primario" onClick={crear} disabled={nuevo.guardando || !nuevo.nombre.trim()}>{nuevo.guardando ? <Loader2 size={14} className="op-girando" /> : null} Crear y abrir</button>
             </div>
           </div>

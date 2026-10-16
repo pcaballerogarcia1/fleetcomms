@@ -66,4 +66,11 @@ describe("concursos", () => {
     await assertFails(getDoc(doc(como("adminB"), "concursos/c1/documentos/d1/texto/0")));
     await assertFails(setDoc(doc(como("adminB"), "concursos/c1/documentos/d2"), { nombre: "x" }));
   });
+  it("vigilancia por CPV: cada empresa la suya, y no los conductores", async () => {
+    await assertSucceeds(setDoc(doc(como("adminA"), "concursos_vigilancia/orgA"), { org_id: "orgA", cpvs: ["9051"] }));
+    await assertSucceeds(getDoc(doc(como("interA"), "concursos_vigilancia/orgA")));
+    await assertFails(getDoc(doc(como("condA"), "concursos_vigilancia/orgA")));
+    await assertFails(getDoc(doc(como("adminB"), "concursos_vigilancia/orgA")));
+    await assertFails(setDoc(doc(como("adminB"), "concursos_vigilancia/orgA"), { cpvs: [] }));
+  });
 });

@@ -69,3 +69,17 @@ describe("Gozón de punta a punta: estudio + criterios del pliego", async () => 
     expect(mal.bloqueado).toBe(true);
   });
 });
+
+describe("competencia según adjudicaciones reales", async () => {
+  const { competenciaDeReferencia } = await import("./oferta.js");
+  const ref = { desde: "2026-09-15", hasta: "2026-10-16", familias: { 9051: { nombre: "Recogida de residuos", n: 62, ofertas: { mediana: 1 }, bajaGanadora: { p25: 0.1, mediana: 2.8, p75: 7 }, bajaMinima: { mediana: 3.8 }, tramos: { mas1M: { n: 10, ofertas: { mediana: 3 }, bajaGanadora: { p25: 0.1, mediana: 2, p75: 4.7 }, bajaMinima: { mediana: 2 } } } } } };
+  it("por la familia del CPV y el tamaño del contrato", () => {
+    const c = competenciaDeReferencia(ref, ["90511000"], 12e6);
+    expect(c).toMatchObject({ familia: "9051", tramo: "mas1M", n: 10 });
+    expect(c.competidores.map(x => x.baja)).toEqual([4.7, 2]); // 3 ofertas → 2 rivales
+  });
+  it("contrato pequeño: todos; CPV sin datos: nada", () => {
+    expect(competenciaDeReferencia(ref, ["90511000"], 50000).tramo).toBeNull();
+    expect(competenciaDeReferencia(ref, ["71210000"], 50000)).toBeNull();
+  });
+});

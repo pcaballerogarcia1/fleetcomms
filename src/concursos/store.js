@@ -198,3 +198,12 @@ export const sinIndefinidos = v => (Array.isArray(v) ? v.map(sinIndefinidos)
 
 /** El estudio de costes del Ayuntamiento que usa Cálculo (null = no usarlo) */
 export const fijarEstudio = (concursoId, estudio, docNombre) => cambiarFicha(concursoId, ["estudio"], estudio ? sinIndefinidos({ ...estudio, docNombre: docNombre || null, en: Date.now() }) : deleteField());
+
+// ── Vigilancia de licitaciones por CPV (concursos_vigilancia/{org}) ──
+// { cpvs: ["9051", …], autoCrear, ultima (ISO), encontradas: [licitación resumida], descartadas: [id], creadas: { [id]: concursoId } }
+const refVigilancia = orgId => doc(db, "concursos_vigilancia", orgId);
+export function escucharVigilancia(orgId, cb) {
+  if (!orgId) { cb(null); return () => {}; }
+  return onSnapshot(refVigilancia(orgId), s => cb(s.exists() ? s.data() : {}), () => cb({}));
+}
+export const guardarVigilancia = (orgId, cambios) => setDoc(refVigilancia(orgId), sinIndefinidos({ ...cambios, org_id: orgId }), { merge: true });

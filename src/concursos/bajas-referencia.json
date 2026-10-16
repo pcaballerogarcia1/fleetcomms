@@ -1,0 +1,535 @@
+{
+ "generado": "2026-10-16",
+ "desde": "2026-09-15",
+ "hasta": "2026-10-16",
+ "total": 801,
+ "familias": {
+  "6011": {
+   "nombre": "Transporte en autobús",
+   "n": 14,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 3
+   },
+   "bajaGanadora": {
+    "mediana": 1.4,
+    "p25": 0.3,
+    "p75": 9.2
+   },
+   "bajaMinima": {
+    "mediana": 0.7,
+    "p75": 30.9
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 3,
+     "ofertas": {
+      "mediana": 5,
+      "p25": 3.5,
+      "p75": 5.5
+     },
+     "bajaGanadora": {
+      "mediana": 7.5,
+      "p25": 4.7,
+      "p75": 8.5
+     },
+     "bajaMinima": {
+      "mediana": 100,
+      "p75": 100
+     }
+    }
+   }
+  },
+  "6013": {
+   "nombre": "Transporte escolar y especial",
+   "n": 180,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 2
+   },
+   "bajaGanadora": {
+    "mediana": 2.6,
+    "p25": 0.1,
+    "p75": 13
+   },
+   "bajaMinima": {
+    "mediana": 7,
+    "p75": 20
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 13,
+     "ofertas": {
+      "mediana": 1,
+      "p25": 1,
+      "p75": 2
+     },
+     "bajaGanadora": {
+      "mediana": 8,
+      "p25": 2,
+      "p75": 20.4
+     },
+     "bajaMinima": {
+      "mediana": 7.7,
+      "p75": 21.5
+     }
+    },
+    "mas1M": {
+     "n": 4,
+     "ofertas": {
+      "mediana": 1.5,
+      "p25": 1,
+      "p75": 2.8
+     },
+     "bajaGanadora": {
+      "mediana": 8.5,
+      "p25": 6.1,
+      "p75": 13
+     },
+     "bajaMinima": {
+      "mediana": 8.5,
+      "p75": 16.8
+     }
+    }
+   }
+  },
+  "6017": {
+   "nombre": "Alquiler de autobuses con conductor",
+   "n": 49,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 2
+   },
+   "bajaGanadora": {
+    "mediana": 2.3,
+    "p25": 0,
+    "p75": 12.8
+   },
+   "bajaMinima": {
+    "mediana": 9,
+    "p75": 20.8
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 14,
+     "ofertas": {
+      "mediana": 1,
+      "p25": 1,
+      "p75": 2
+     },
+     "bajaGanadora": {
+      "mediana": 8.1,
+      "p25": 0,
+      "p75": 14.8
+     },
+     "bajaMinima": {
+      "mediana": 15.1,
+      "p75": 23.8
+     }
+    }
+   }
+  },
+  "7731": {
+   "nombre": "Jardinería",
+   "n": 93,
+   "ofertas": {
+    "mediana": 3,
+    "p25": 1,
+    "p75": 5
+   },
+   "bajaGanadora": {
+    "mediana": 9,
+    "p25": 1.5,
+    "p75": 21.7
+   },
+   "bajaMinima": {
+    "mediana": 16.3,
+    "p75": 27.9
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 28,
+     "ofertas": {
+      "mediana": 4,
+      "p25": 1,
+      "p75": 5.3
+     },
+     "bajaGanadora": {
+      "mediana": 7.2,
+      "p25": 0,
+      "p75": 15.8
+     },
+     "bajaMinima": {
+      "mediana": 22.2,
+      "p75": 41.2
+     }
+    },
+    "mas1M": {
+     "n": 15,
+     "ofertas": {
+      "mediana": 2,
+      "p25": 1,
+      "p75": 4.5
+     },
+     "bajaGanadora": {
+      "mediana": 0,
+      "p25": 0,
+      "p75": 14.8
+     },
+     "bajaMinima": {
+      "mediana": 25.4,
+      "p75": 52.4
+     }
+    }
+   }
+  },
+  "9050": {
+   "nombre": "Residuos (general)",
+   "n": 34,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 2
+   },
+   "bajaGanadora": {
+    "mediana": 5.7,
+    "p25": 0,
+    "p75": 15
+   },
+   "bajaMinima": {
+    "mediana": 7.4,
+    "p75": 17.4
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 8,
+     "ofertas": {
+      "mediana": 2.5,
+      "p25": 2,
+      "p75": 3
+     },
+     "bajaGanadora": {
+      "mediana": 8.6,
+      "p25": 6.9,
+      "p75": 17.8
+     },
+     "bajaMinima": {
+      "mediana": 14.6,
+      "p75": 23.6
+     }
+    },
+    "mas1M": {
+     "n": 3,
+     "ofertas": {
+      "mediana": 3,
+      "p25": 2.5,
+      "p75": 4
+     },
+     "bajaGanadora": {
+      "mediana": 6.9,
+      "p25": 6.6,
+      "p75": 7.3
+     },
+     "bajaMinima": {
+      "mediana": 7.7,
+      "p75": 7.9
+     }
+    }
+   }
+  },
+  "9051": {
+   "nombre": "Recogida de residuos",
+   "n": 62,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 2.8
+   },
+   "bajaGanadora": {
+    "mediana": 2.8,
+    "p25": 0.1,
+    "p75": 7.1
+   },
+   "bajaMinima": {
+    "mediana": 3.8,
+    "p75": 9.3
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 19,
+     "ofertas": {
+      "mediana": 1,
+      "p25": 1,
+      "p75": 3
+     },
+     "bajaGanadora": {
+      "mediana": 2.3,
+      "p25": 0,
+      "p75": 4.9
+     },
+     "bajaMinima": {
+      "mediana": 2,
+      "p75": 7.3
+     }
+    },
+    "mas1M": {
+     "n": 10,
+     "ofertas": {
+      "mediana": 2.5,
+      "p25": 1,
+      "p75": 3.8
+     },
+     "bajaGanadora": {
+      "mediana": 2,
+      "p25": 0.1,
+      "p75": 4.7
+     },
+     "bajaMinima": {
+      "mediana": 1.1,
+      "p75": 2.6
+     }
+    }
+   }
+  },
+  "9052": {
+   "nombre": "Tratamiento de residuos",
+   "n": 15,
+   "ofertas": {
+    "mediana": 2,
+    "p25": 1,
+    "p75": 2
+   },
+   "bajaGanadora": {
+    "mediana": 7.5,
+    "p25": 0,
+    "p75": 20.1
+   },
+   "bajaMinima": {
+    "mediana": 15.9,
+    "p75": 24.6
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 3,
+     "ofertas": {
+      "mediana": 2,
+      "p25": 1.5,
+      "p75": 2
+     },
+     "bajaGanadora": {
+      "mediana": 20.1,
+      "p25": 10.1,
+      "p75": 25.1
+     },
+     "bajaMinima": {
+      "mediana": 20.1,
+      "p75": 26.2
+     }
+    }
+   }
+  },
+  "9061": {
+   "nombre": "Limpieza viaria",
+   "n": 12,
+   "ofertas": {
+    "mediana": 3,
+    "p25": 1,
+    "p75": 3.3
+   },
+   "bajaGanadora": {
+    "mediana": 3.5,
+    "p25": 0.1,
+    "p75": 10.9
+   },
+   "bajaMinima": {
+    "mediana": 1.4,
+    "p75": 6.8
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 10,
+     "ofertas": {
+      "mediana": 3,
+      "p25": 1.5,
+      "p75": 3.8
+     },
+     "bajaGanadora": {
+      "mediana": 4.9,
+      "p25": 0.6,
+      "p75": 12.2
+     },
+     "bajaMinima": {
+      "mediana": 2.1,
+      "p75": 8.8
+     }
+    },
+    "mas1M": {
+     "n": 7,
+     "ofertas": {
+      "mediana": 3,
+      "p25": 2,
+      "p75": 3
+     },
+     "bajaGanadora": {
+      "mediana": 4.8,
+      "p25": 0.1,
+      "p75": 7.7
+     },
+     "bajaMinima": {
+      "mediana": 0.1,
+      "p75": 4.8
+     }
+    }
+   }
+  },
+  "9068": {
+   "nombre": "Limpieza de playas",
+   "n": 1,
+   "ofertas": {
+    "mediana": 2,
+    "p25": 2,
+    "p75": 2
+   },
+   "bajaGanadora": {
+    "mediana": 12,
+    "p25": 12,
+    "p75": 12
+   },
+   "bajaMinima": {
+    "mediana": 12,
+    "p75": 12
+   },
+   "tramos": {}
+  },
+  "9090": {
+   "nombre": "Limpieza (general)",
+   "n": 6,
+   "ofertas": {
+    "mediana": 1.5,
+    "p25": 1,
+    "p75": 3.5
+   },
+   "bajaGanadora": {
+    "mediana": 0.5,
+    "p25": 0,
+    "p75": 4.3
+   },
+   "bajaMinima": {
+    "mediana": 8.7,
+    "p75": 20.9
+   },
+   "tramos": {}
+  },
+  "9091": {
+   "nombre": "Limpieza de edificios",
+   "n": 256,
+   "ofertas": {
+    "mediana": 3,
+    "p25": 1,
+    "p75": 5
+   },
+   "bajaGanadora": {
+    "mediana": 9.6,
+    "p25": 0.6,
+    "p75": 19.4
+   },
+   "bajaMinima": {
+    "mediana": 12.1,
+    "p75": 22.8
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 95,
+     "ofertas": {
+      "mediana": 4,
+      "p25": 2,
+      "p75": 7
+     },
+     "bajaGanadora": {
+      "mediana": 8.1,
+      "p25": 0.6,
+      "p75": 19.4
+     },
+     "bajaMinima": {
+      "mediana": 14.7,
+      "p75": 22.7
+     }
+    },
+    "mas1M": {
+     "n": 28,
+     "ofertas": {
+      "mediana": 6,
+      "p25": 2,
+      "p75": 9
+     },
+     "bajaGanadora": {
+      "mediana": 7.2,
+      "p25": 0.9,
+      "p75": 16
+     },
+     "bajaMinima": {
+      "mediana": 10,
+      "p75": 19.9
+     }
+    }
+   }
+  },
+  "9092": {
+   "nombre": "Limpieza e higienización",
+   "n": 79,
+   "ofertas": {
+    "mediana": 3,
+    "p25": 2,
+    "p75": 5.5
+   },
+   "bajaGanadora": {
+    "mediana": 25,
+    "p25": 8.3,
+    "p75": 37.5
+   },
+   "bajaMinima": {
+    "mediana": 33.1,
+    "p75": 47.5
+   },
+   "tramos": {
+    "mas200k": {
+     "n": 12,
+     "ofertas": {
+      "mediana": 3,
+      "p25": 2,
+      "p75": 4.3
+     },
+     "bajaGanadora": {
+      "mediana": 15.1,
+      "p25": 5,
+      "p75": 25
+     },
+     "bajaMinima": {
+      "mediana": 16.8,
+      "p75": 27.4
+     }
+    },
+    "mas1M": {
+     "n": 3,
+     "ofertas": {
+      "mediana": 3,
+      "p25": 2.5,
+      "p75": 4
+     },
+     "bajaGanadora": {
+      "mediana": 1.9,
+      "p25": 1,
+      "p75": 11
+     },
+     "bajaMinima": {
+      "mediana": 14,
+      "p75": 17
+     }
+    }
+   }
+  }
+ }
+}

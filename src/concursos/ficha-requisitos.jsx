@@ -125,7 +125,7 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
                         <div style={{ fontSize: 13.5, color: C.text, fontWeight: 550, textDecoration: d?.estado === "descartado" ? "line-through" : "none" }}>{txt(k, valor)}</div>
                       )}
                       <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }} title={p?.frase || ""}>
-                        {d?.estado === "corregido" ? `Corregido (el pliego decía ${txt(k, d.propuesto)})` : p ? `pág. ${p.pagina} · ${p.docNombre}` : "añadido a mano"}
+                        {d?.doc === "plataforma" ? <span style={{ color: C.green }}>dato oficial de la Plataforma de Contratación</span> : d?.estado === "corregido" ? `Corregido (el pliego decía ${txt(k, d.propuesto)})` : p ? `pág. ${p.pagina} · ${p.docNombre}` : "añadido a mano"}
                         {d && d.estado === "confirmado" && p && JSON.stringify(p.valor) !== JSON.stringify(d.valor) && (
                           <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> la lectura nueva dice {txt(k, p.valor)} <button className="op-btn op-fantasma" style={{ height: 22, fontSize: 11.5, padding: "0 6px" }} onClick={() => decidir(k, "confirmado", p.valor)}>Usar</button></span>
                         )}

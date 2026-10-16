@@ -186,6 +186,11 @@ service cloud.firestore {
       }
     }
 
+    // Vigilancia de licitaciones por CPV: una ficha por empresa
+    match /concursos_vigilancia/{orgId} {
+      allow read, write: if sameOrg(orgId) && puedeWorkspace();
+    }
+
     match /scheduling_projects/{projectId} {
       allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
       allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
