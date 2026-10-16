@@ -2,7 +2,7 @@
  "generado": "2026-10-16",
  "desde": "2025-10-02",
  "hasta": "2026-10-16",
- "total": 7154,
+ "total": 7844,
  "familias": {
   "6011": {
    "nombre": "Transporte en autobús",
@@ -115,7 +115,7 @@
     {
      "nombre": "Sanivida",
      "contratos": 5,
-     "cuotaPct": 22
+     "cuotaPct": 21
     },
     {
      "nombre": "Grupo 5 Acción y Gestión Social",
@@ -130,7 +130,7 @@
     {
      "nombre": "Transvia",
      "contratos": 3,
-     "cuotaPct": 6
+     "cuotaPct": 5
     },
     {
      "nombre": "F P P D F y O Cocemfe Castellón",
@@ -293,22 +293,22 @@
     {
      "nombre": "UTE Acciona Medio Ambiente-manten",
      "contratos": 1,
-     "cuotaPct": 12
+     "cuotaPct": 11
     },
     {
      "nombre": "UTE STV Gestion - Albaida",
      "contratos": 1,
-     "cuotaPct": 10
+     "cuotaPct": 9
     },
     {
      "nombre": "Valoriza Servicios Medioambientales S A - Naturaleza y Tecnologia de la Mancha",
      "contratos": 1,
-     "cuotaPct": 10
+     "cuotaPct": 9
     },
     {
      "nombre": "TBF Espacios Verdes SL - Aqauterra Servicios Infraestructuras",
      "contratos": 1,
-     "cuotaPct": 6
+     "cuotaPct": 5
     },
     {
      "nombre": "S A Agricultores de la Vega de Valencia",
@@ -316,8 +316,8 @@
      "cuotaPct": 5
     },
     {
-     "nombre": "Valoriza Servicios Medioambientales",
-     "contratos": 5,
+     "nombre": "Actua Servicios y Medio Ambiente",
+     "contratos": 9,
      "cuotaPct": 4
     }
    ],
@@ -450,7 +450,7 @@
    }
   },
   "9051": {
-   "nombre": "Recogida de residuos",
+   "nombre": "Recogida y transporte de residuos",
    "n": 554,
    "ofertas": {
     "mediana": 1,
@@ -470,12 +470,12 @@
    "ganadores": [
     {
      "nombre": "FCC Medio Ambiente",
-     "contratos": 19,
+     "contratos": 20,
      "cuotaPct": 23
     },
     {
      "nombre": "Urbaser",
-     "contratos": 7,
+     "contratos": 9,
      "cuotaPct": 15
     },
     {
@@ -539,7 +539,7 @@
    }
   },
   "9052": {
-   "nombre": "Tratamiento de residuos",
+   "nombre": "Residuos peligrosos y sanitarios",
    "n": 136,
    "ofertas": {
     "mediana": 2,
@@ -560,12 +560,17 @@
     {
      "nombre": "Interlun",
      "contratos": 2,
-     "cuotaPct": 51
+     "cuotaPct": 42
     },
     {
      "nombre": "Etsa Global Logistics",
      "contratos": 1,
-     "cuotaPct": 28
+     "cuotaPct": 23
+    },
+    {
+     "nombre": "SRCL Consenur",
+     "contratos": 2,
+     "cuotaPct": 16
     },
     {
      "nombre": "Westinghouse Electric Sweden AB",
@@ -575,15 +580,10 @@
     {
      "nombre": "SRCL Consenur CEE",
      "contratos": 3,
-     "cuotaPct": 4
-    },
-    {
-     "nombre": "GD Energy Services",
-     "contratos": 1,
      "cuotaPct": 3
     },
     {
-     "nombre": "Marsein",
+     "nombre": "GD Energy Services",
      "contratos": 1,
      "cuotaPct": 3
     }
@@ -649,12 +649,12 @@
     {
      "nombre": "Acciona Servicios Urbanos",
      "contratos": 1,
-     "cuotaPct": 31
+     "cuotaPct": 30
     },
     {
      "nombre": "FCC Medio Ambiente",
      "contratos": 11,
-     "cuotaPct": 15
+     "cuotaPct": 14
     },
     {
      "nombre": "Urbaser",
@@ -664,11 +664,11 @@
     {
      "nombre": "Prezero España",
      "contratos": 5,
-     "cuotaPct": 13
+     "cuotaPct": 12
     },
     {
      "nombre": "STV Gestion",
-     "contratos": 2,
+     "contratos": 3,
      "cuotaPct": 6
     },
     {
@@ -896,7 +896,7 @@
   },
   "9091": {
    "nombre": "Limpieza de edificios",
-   "n": 2376,
+   "n": 2366,
    "ofertas": {
     "mediana": 3,
     "p25": 1,
@@ -910,22 +910,22 @@
    },
    "bajaMinima": {
     "mediana": 12.7,
-    "p75": 21.2
+    "p75": 21.3
    },
    "ganadores": [
     {
      "nombre": "Serveo Servicios",
-     "contratos": 21,
+     "contratos": 20,
      "cuotaPct": 7
+    },
+    {
+     "nombre": "EULEN",
+     "contratos": 23,
+     "cuotaPct": 5
     },
     {
      "nombre": "ISS Facility Services",
      "contratos": 26,
-     "cuotaPct": 5
-    },
-    {
-     "nombre": "EULEN",
-     "contratos": 21,
      "cuotaPct": 5
     },
     {
@@ -934,19 +934,19 @@
      "cuotaPct": 5
     },
     {
-     "nombre": "Sulo Ibérica",
-     "contratos": 1,
+     "nombre": "CLECE",
+     "contratos": 35,
      "cuotaPct": 4
     },
     {
-     "nombre": "CLECE",
-     "contratos": 32,
+     "nombre": "OHL Servicios - Ingesan",
+     "contratos": 20,
      "cuotaPct": 3
     }
    ],
    "tramos": {
     "mas200k": {
-     "n": 815,
+     "n": 811,
      "ofertas": {
       "mediana": 4,
       "p25": 2,
@@ -954,8 +954,8 @@
      },
      "unaSola": 24,
      "bajaGanadora": {
-      "mediana": 10.5,
-      "p25": 0.5,
+      "mediana": 10.6,
+      "p25": 0.6,
       "p75": 19.6
      },
      "bajaMinima": {
@@ -964,21 +964,21 @@
      }
     },
     "mas1M": {
-     "n": 231,
+     "n": 228,
      "ofertas": {
       "mediana": 5,
       "p25": 1,
-      "p75": 7.5
+      "p75": 8
      },
-     "unaSola": 26,
+     "unaSola": 25,
      "bajaGanadora": {
-      "mediana": 7.9,
+      "mediana": 8,
       "p25": 0,
       "p75": 17
      },
      "bajaMinima": {
-      "mediana": 11.3,
-      "p75": 19.9
+      "mediana": 11.2,
+      "p75": 19.8
      }
     }
    }
@@ -1005,7 +1005,7 @@
     {
      "nombre": "Imesapi",
      "contratos": 2,
-     "cuotaPct": 59
+     "cuotaPct": 57
     },
     {
      "nombre": "Serveo Servicios",
@@ -1068,6 +1068,305 @@
      "bajaMinima": {
       "mediana": 11.4,
       "p75": 19.3
+     }
+    }
+   }
+  },
+  "90918": {
+   "nombre": "Lavado de contenedores",
+   "n": 7,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 1.5
+   },
+   "unaSola": 71,
+   "bajaGanadora": {
+    "mediana": 0.1,
+    "p25": 0,
+    "p75": 2.3
+   },
+   "bajaMinima": {
+    "mediana": 0.2,
+    "p75": 5.2
+   },
+   "ganadores": [
+    {
+     "nombre": "Sulo Ibérica",
+     "contratos": 1,
+     "cuotaPct": 99
+    },
+    {
+     "nombre": "Contenur",
+     "contratos": 1,
+     "cuotaPct": 1
+    }
+   ],
+   "tramos": {}
+  },
+  "mant-contenedores": {
+   "nombre": "Mantenimiento y reparación de contenedores",
+   "n": 31,
+   "ofertas": {
+    "mediana": 1,
+    "p25": 1,
+    "p75": 2
+   },
+   "unaSola": 52,
+   "bajaGanadora": {
+    "mediana": 3.5,
+    "p25": 0,
+    "p75": 10.9
+   },
+   "bajaMinima": {
+    "mediana": 4.4,
+    "p75": 21.3
+   },
+   "ganadores": [
+    {
+     "nombre": "FCC Equal CEE Andalucía",
+     "contratos": 1,
+     "cuotaPct": 35
+    },
+    {
+     "nombre": "Sulo Ibérica",
+     "contratos": 1,
+     "cuotaPct": 32
+    },
+    {
+     "nombre": "Serveo Servicios",
+     "contratos": 1,
+     "cuotaPct": 15
+    },
+    {
+     "nombre": "Contenur",
+     "contratos": 1,
+     "cuotaPct": 12
+    },
+    {
+     "nombre": "Nuvicoan",
+     "contratos": 1,
+     "cuotaPct": 4
+    },
+    {
+     "nombre": "Acdesurbe",
+     "contratos": 1,
+     "cuotaPct": 2
+    }
+   ],
+   "tramos": {
+    "mas200k": {
+     "n": 6,
+     "ofertas": {
+      "mediana": 1.5,
+      "p25": 1,
+      "p75": 2
+     },
+     "unaSola": 50,
+     "bajaGanadora": {
+      "mediana": 8,
+      "p25": 3.2,
+      "p75": 14.2
+     },
+     "bajaMinima": {
+      "mediana": 17.8,
+      "p75": 20.4
+     }
+    },
+    "mas1M": {
+     "n": 4,
+     "ofertas": {
+      "mediana": 1.5,
+      "p25": 1,
+      "p75": 2.3
+     },
+     "unaSola": 50,
+     "bajaGanadora": {
+      "mediana": 6.1,
+      "p25": 1.7,
+      "p75": 12.5
+     },
+     "bajaMinima": {
+      "mediana": 15,
+      "p75": 17.5
+     }
+    }
+   }
+  },
+  "sum-contenedores": {
+   "nombre": "Suministro de contenedores",
+   "n": 256,
+   "ofertas": {
+    "mediana": 2,
+    "p25": 1,
+    "p75": 2
+   },
+   "unaSola": 50,
+   "bajaGanadora": {
+    "mediana": 2.7,
+    "p25": 0,
+    "p75": 14.6
+   },
+   "bajaMinima": {
+    "mediana": 4.3,
+    "p75": 17.5
+   },
+   "ganadores": [
+    {
+     "nombre": "Contenur",
+     "contratos": 9,
+     "cuotaPct": 44
+    },
+    {
+     "nombre": "Sanimobel",
+     "contratos": 4,
+     "cuotaPct": 13
+    },
+    {
+     "nombre": "Drago Ingeniería y Servicios",
+     "contratos": 1,
+     "cuotaPct": 5
+    },
+    {
+     "nombre": "Banco Bilbao Vizcaya Argentaria",
+     "contratos": 1,
+     "cuotaPct": 4
+    },
+    {
+     "nombre": "Grau Maquinaria I Servei Integral",
+     "contratos": 1,
+     "cuotaPct": 4
+    },
+    {
+     "nombre": "Nord Engineering Global España",
+     "contratos": 1,
+     "cuotaPct": 2
+    }
+   ],
+   "tramos": {
+    "mas200k": {
+     "n": 46,
+     "ofertas": {
+      "mediana": 2,
+      "p25": 1,
+      "p75": 2
+     },
+     "unaSola": 46,
+     "bajaGanadora": {
+      "mediana": 5.2,
+      "p25": 0,
+      "p75": 14.7
+     },
+     "bajaMinima": {
+      "mediana": 12.7,
+      "p75": 18.4
+     }
+    },
+    "mas1M": {
+     "n": 9,
+     "ofertas": {
+      "mediana": 1,
+      "p25": 1,
+      "p75": 2
+     },
+     "unaSola": 67,
+     "bajaGanadora": {
+      "mediana": 5,
+      "p25": 0,
+      "p75": 5.5
+     },
+     "bajaMinima": {
+      "mediana": 2.6,
+      "p75": 10.8
+     }
+    }
+   }
+  },
+  "camiones-recogida": {
+   "nombre": "Camiones de recogida y lavacontenedores",
+   "n": 406,
+   "ofertas": {
+    "mediana": 2,
+    "p25": 1,
+    "p75": 3
+   },
+   "unaSola": 50,
+   "bajaGanadora": {
+    "mediana": 2.8,
+    "p25": 0.1,
+    "p75": 10
+   },
+   "bajaMinima": {
+    "mediana": 4.6,
+    "p75": 13.4
+   },
+   "ganadores": [
+    {
+     "nombre": "Ffs Equipos Urbanos",
+     "contratos": 11,
+     "cuotaPct": 10
+    },
+    {
+     "nombre": "Grau Maquinaria I Servei Integral",
+     "contratos": 1,
+     "cuotaPct": 10
+    },
+    {
+     "nombre": "Ros Roca",
+     "contratos": 10,
+     "cuotaPct": 9
+    },
+    {
+     "nombre": "Volvo Group España",
+     "contratos": 4,
+     "cuotaPct": 8
+    },
+    {
+     "nombre": "Wasterent",
+     "contratos": 2,
+     "cuotaPct": 7
+    },
+    {
+     "nombre": "Volvo Trucks España",
+     "contratos": 3,
+     "cuotaPct": 6
+    }
+   ],
+   "tramos": {
+    "mas200k": {
+     "n": 95,
+     "ofertas": {
+      "mediana": 2,
+      "p25": 1.5,
+      "p75": 4
+     },
+     "unaSola": 25,
+     "bajaGanadora": {
+      "mediana": 6,
+      "p25": 1.1,
+      "p75": 14.5
+     },
+     "bajaMinima": {
+      "mediana": 9.3,
+      "p75": 18.5
+     }
+    },
+    "mas1M": {
+     "n": 14,
+     "ofertas": {
+      "mediana": 3.5,
+      "p25": 3,
+      "p75": 6
+     },
+     "unaSola": 14,
+     "bajaGanadora": {
+      "mediana": 8.4,
+      "p25": 4,
+      "p75": 18.1
+     },
+     "bajaMinima": {
+      "mediana": 14.6,
+      "p75": 18.5
      }
     }
    }
