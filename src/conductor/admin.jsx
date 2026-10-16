@@ -62,7 +62,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
           <div key={u._id} style={{...S.card,opacity:u.activo?1:0.4}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{avatarOf(u)}</div>
+                <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{u?.foto?<img src={u.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(u)}</div>
                 <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{roleLabel(u.rol)}</span></div></div>
               </div>
               <button onClick={()=>toggleActivo(u)} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
