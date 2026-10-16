@@ -1,6 +1,5 @@
 // El espacio de trabajo de la oficina: cabecera, rutas (/projects, /planning,
 // /scheduling, /rostering, /control, /analytics) y la sesión.
-import { MARCA } from "./tema.js";
 import { Marca } from "./ui/marca.jsx";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { LoginScheduling } from "./login-scheduling.jsx";
@@ -18,6 +17,7 @@ import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { setErrorUser } from "./error-report.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { sincronizarDepotsFichaje } from "./fichaje-depots.js";
+import { AvatarPerfil } from "./foto-perfil.jsx";
 import { C, font } from "./raiz-estilo.js";
 
 // Lazy: cada uno de estos es su propio chunk grande (App = app de
@@ -59,7 +59,6 @@ function go(path) {
 // ── Shared header ─────────────────────────────────────────────────
 function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject }) {
   const lang = useLang();
-  const initials = ((sesion?.nombre?.[0] ?? "") + (sesion?.apellidos?.[0] ?? "")).toUpperCase();
   const crumb = (label, href, active) => (
     <button onClick={() => go(href)} style={{
       background: active ? "rgba(255,255,255,0.07)" : "none",
@@ -136,15 +135,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
             </svg>
           </button>
         )}
-        <button onClick={onLogout} title={t("logout", lang)} style={{
-          width: 30, height: 30, borderRadius: "50%", background: MARCA.degradado,
-          border: "1px solid rgba(255,255,255,0.18)", color: "#fff", fontSize: 11, fontWeight: 650,
-          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "all .15s",
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-        >{initials}</button>
+        <AvatarPerfil sesion={sesion} size={30} onCerrarSesion={onLogout} />
       </div>
     </div>
   );

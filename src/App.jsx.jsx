@@ -14,7 +14,8 @@ import { MiTurno } from "./turno-conductor.jsx";
 import { watchServiciosFechas, watchMisCuadrantes } from "./lineas-servicio-store.js";
 import { fechaLocal, sumarDias, servicioVigente } from "./lineas-servicio.js";
 import { PanelAdminRutas } from "./conductor/admin.jsx";
-import { C, S, avatarOf, fbAdd, fbDelete, fbUpdate, font, useCollection } from "./conductor/comun.js";
+import { AvatarPerfil } from "./foto-perfil.jsx";
+import { C, S, fbAdd, fbDelete, fbUpdate, font, useCollection } from "./conductor/comun.js";
 import { ModuloIncidencias } from "./conductor/incidencias.jsx";
 import { ModuloInventario } from "./conductor/inventario.jsx";
 import { ListaPlanes } from "./conductor/rutas.jsx";
@@ -209,11 +210,7 @@ export default function App(){
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
             <div style={{fontSize:11,color:C.dim}}>{roleLabel(sesion.rol)}</div>
           </div>
-          <div onClick={()=>signOut(auth)} title="Cerrar sesión" style={{width:34,height:34,borderRadius:"50%",cursor:"pointer",background:"linear-gradient(135deg,#2563eb,#6d28d9)",border:"1px solid rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:650,color:"#fff",transition:"all .15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted;}}>
-            {avatarOf(sesion)}
-          </div>
+          <AvatarPerfil sesion={sesion} size={34} onCerrarSesion={()=>signOut(auth)}/>
         </div>
       </div>
 
