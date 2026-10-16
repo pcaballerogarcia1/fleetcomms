@@ -9,7 +9,8 @@
 import { verificarToken, AvisoError } from "./_avisos/core.js";
 import { documentosDeDetalle, entradasDelCanal, licitacionDeCodice } from "./_plataforma/codice.js";
 
-export const config = { maxDuration: 60 };
+// en Europa: la Plataforma responde mal (o nada) a servidores de fuera
+export const config = { maxDuration: 60, regions: ["cdg1"] };
 
 const PROYECTOS = [globalThis.process.env.FIREBASE_PROJECT_ID, globalThis.process.env.VITE_FIREBASE_PROJECT_ID, "fleetcomms-13d89", "operanzia-pruebas"];
 const HOSTS = /^https:\/\/(contrataciondelestado\.es|contrataciondelsectorpublico\.gob\.es)\//;
@@ -19,7 +20,11 @@ const MAX_DOC = 4.3 * 1024 * 1024; // lo que deja devolver Vercel
 async function traer(url, { texto = true } = {}) {
   if (!HOSTS.test(url)) throw new AvisoError(400, "Solo se pueden pedir enlaces de la Plataforma de Contratación");
   const r = await fetch(url, { headers: { "User-Agent": "Operanzia (licitaciones)" }, redirect: "follow", signal: AbortSignal.timeout(25000) })
-    .catch(e => { throw new AvisoError(504, e.name === "TimeoutError" ? "La Plataforma tarda demasiado en responder" : "No se pudo hablar con la Plataforma"); });
+    .catch(e => {
+      const causa = [e.cause?.code, e.cause?.message || e.message].filter(Boolean).join(": ");
+      console.error("Plataforma: fallo al pedir", url, causa);
+      throw new AvisoError(504, e.name === "TimeoutError" ? "La Plataforma tarda demasiado en responder" : `No se pudo hablar con la Plataforma (${causa || "sin detalle"})`);
+    });
   if (!r.ok) throw new AvisoError(502, `La Plataforma respondió ${r.status}`);
   return texto ? r.text() : { tipo: r.headers.get("content-type") || "application/octet-stream", datos: Buffer.from(await r.arrayBuffer()) };
 }
