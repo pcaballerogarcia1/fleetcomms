@@ -10,6 +10,7 @@
 //     quiere (coste ÷ (1 − margen)) y lo que da el presupuesto del pliego.
 // Todo con valores orientativos que se cambian. Sin React ni Firebase.
 import { dimensionar, entradaDimension } from "./ficha.js";
+import { minimoDePersonal } from "./tecnico.js";
 import { subidaAnio } from "./estudio.js";
 
 export const PARAMETROS_CALCULO = {
@@ -81,11 +82,13 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
 
   // ── plantilla ──
   const servicioETC = (dim?.resumen?.personasExactas || 0) * masTrabajo;
-  const servicio = Math.ceil(servicioETC - 1e-9);
-  const encargados = servicio ? Math.max(1, Math.ceil(servicio / Math.max(1, q.personasPorEncargado) - 1e-9)) : 0;
-  const jefe = servicio ? q.jefeDedicacion : 0;
+  // el personal mínimo que exige el pliego (minimoDePersonal): nunca por debajo
+  const min = q.minimoPliego || null;
+  const servicio = Math.max(Math.ceil(servicioETC - 1e-9), Math.ceil((min?.operarios || 0) - 1e-9));
+  const encargados = servicio ? Math.max(min?.encargados || 0, min ? 0 : Math.max(1, Math.ceil(servicio / Math.max(1, q.personasPorEncargado) - 1e-9))) : 0;
+  const jefe = servicio ? (min?.jefe || q.jefeDedicacion) : 0;
   const plantilla = {
-    servicioETC, servicio, encargados, jefe, total: servicio + encargados + jefe,
+    servicioETC, servicio, encargados, jefe, total: servicio + encargados + jefe, minimoPliego: min,
     costeServicio: servicio * q.salarioOperario * (1 + q.ssPct / 100),
     costeEncargados: encargados * q.salarioEncargado * (1 + q.ssPct / 100),
     costeJefe: jefe * q.salarioJefe * (1 + q.ssPct / 100),
@@ -283,7 +286,8 @@ export function calcularConcurso({ ficha, dim, calc, concurso, factores, mejoras
     const porVehiculo = Object.fromEntries(Object.entries(calc?.vehiculos || {}).map(([k, v]) => [k, sinVacios(v)]));
     // si la maquinaria pasa al Ayuntamiento, no le queda valor
     const revierte = valorDato(ficha, "revierte");
-    cuenta = cuentaExplotacion(d, { ...p, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
+    const minimoPliego = minimoDePersonal(valorDato(ficha, "personalMinimo"));
+    cuenta = cuentaExplotacion(d, { ...p, minimoPliego, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
     if (mejoras) for (const a of cuenta.porAnio) { a.mejoras = mejoras * a.parte; a.total += mejoras * a.parte; }
     if (mejoras) { cuenta.totalContrato = cuenta.porAnio.reduce((s, a) => s + a.total, 0); cuenta.costeMedioAnual = cuenta.totalContrato / cuenta.anios; }
   }

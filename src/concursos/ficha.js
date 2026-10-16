@@ -35,6 +35,13 @@ export function ubicacionDe(texto) {
 
 // Nombre del servicio a partir del título de la tabla
 const SERVICIOS = [
+  // limpieza viaria y transporte (pliegos por frecuencias o por mediciones)
+  ["Barrido manual", /barrido manual/],
+  ["Barrido mecánico", /barrido mec/],
+  ["Baldeo", /baldeo/],
+  ["Fregado", /fregado/],
+  ["Vaciado de papeleras", /papeleras/],
+  ["Transporte de residuos", /^(?:servicio de )?transporte|transporte de (?:fangos|lodos)/],
   ["Mantenimiento correctivo", /mantenimiento correctivo|correctivo/],
   ["Mantenimiento preventivo", /mantenimiento preventivo|preventivo|mantenimiento/],
   ["Rehabilitación de contenedores", /rehabilitaci/],
@@ -173,6 +180,49 @@ export function serviciosDeDatos(datos = [], docId = null) {
   }];
 }
 
+/**
+ * Servicios de la parte técnica (lectura.tecnico de pliego.js): por
+ * frecuencias (Barrido manual · Zona 1: 6 veces por semana = 312 al año) y por
+ * mediciones del presupuesto (260 t de transporte a 21,08 €/t). Mismo formato
+ * que tablasParaServicios; vienen marcados.
+ */
+export function serviciosDelTecnico(tecnico, docId = null) {
+  const out = [];
+  const fr = tecnico?.frecuencias || [], me = tecnico?.mediciones || [];
+  if (fr.length) out.push({
+    indice: "frecuencias", titulo: "Frecuencias del pliego", pagina: fr[0].pagina, servicio: "Servicios por frecuencia", usar: true, motivo: null,
+    lineas: fr.map((s, i) => ({ id: `d${docId || "x"}_f${i}`, nombre: servicioDe(s.nombre) || s.nombre, fraccion: null, ubicacion: s.zona || null, cantidadAnual: s.cantidadAnual,
+      unidades: null, frecuencia: s.frecuencia, concepto: `${s.frecuencia} = ${FMT_ES(s.cantidadAnual)} al año`, tabla: "frecuencias", pagina: s.pagina, doc: docId })),
+  });
+  if (me.length) out.push({
+    indice: "mediciones", titulo: "Mediciones del presupuesto", pagina: me[0].pagina, servicio: "Servicios por mediciones", usar: true,
+    motivo: "Las cantidades son las del presupuesto (si el presupuesto no es de un año, corrige la cantidad al año)",
+    lineas: me.map((s, i) => ({ id: `d${docId || "x"}_m${i}`, nombre: servicioDe(s.nombre) || s.nombre.slice(0, 60), fraccion: null,
+      ubicacion: servicioDe(s.nombre) ? s.nombre.replace(/^(?:servicio de )?transporte de \S+\s*/i, "").slice(0, 80) : null,
+      cantidadAnual: s.cantidad, unidad: s.unidad, precioUnitario: s.precio, unidades: null, frecuencia: null,
+      concepto: `${FMT_ES(s.cantidad)} ${s.unidad} × ${FMT_ES(s.precio)} €`, tabla: "mediciones", pagina: s.pagina, doc: docId })),
+  });
+  return out;
+}
+
+/** Una línea propuesta → lo que se guarda en la ficha (con el equipo y el precio del pliego si los hay) */
+export function servicioParaGuardar(l, { equipos = [], precios = [], orden = 0 } = {}) {
+  const e = equipoDe(l, equipos), pr = precioDe(l, precios);
+  return {
+    nombre: l.nombre, fraccion: l.fraccion ?? null, ubicacion: l.ubicacion || null, temporada: l.temporada ?? null,
+    cantidadAnual: l.cantidadAnual, unidades: l.unidades ?? null, unidad: l.unidad ?? null, frecuencia: l.frecuencia ?? null, cuenta: l.cuenta ?? null, cuadra: l.cuadra ?? null,
+    vehiculo: e?.vehiculo ?? null, personas: e?.personas ?? null, equipoPagina: e?.pagina ?? null,
+    precioUnitario: pr?.precio ?? l.precioUnitario ?? null, precioPagina: pr?.pagina ?? (l.precioUnitario != null ? l.pagina : null),
+    concepto: l.concepto, pagina: l.pagina, doc: l.doc, orden,
+  };
+}
+
+/** Todas las propuestas de servicios de los documentos leídos: [{ …propuesta, clave, docNombre }] */
+export function propuestasDeServicios(docs = []) {
+  return (docs || []).flatMap(d => [...serviciosDelTecnico(d.lectura?.tecnico, d._id), ...serviciosDeDatos(d.lectura?.datos || [], d._id), ...tablasParaServicios(d.lectura?.tablas || [], d._id)]
+    .map(t => ({ ...t, clave: `${d._id}|${t.indice}`, docNombre: d.nombre })));
+}
+
 // ── Rendimientos orientativos (por turno de ~7 h) ──
 // Valores de partida para dimensionar sin inventario; se cambian en Planning
 // con la experiencia de cada empresa (y, más adelante, con los datos reales).
@@ -190,6 +240,14 @@ export const RENDIMIENTOS = [
   { servicio: "Achiques", ubicacion: null, porTurno: 10, vehiculo: "furgoneta de taller", personas: 2, nota: "achique de fosos de soterrados" },
   { servicio: "Recogida", ubicacion: "Soterrado", porTurno: 120, vehiculo: "camión recolector", personas: 1, nota: "carga bilateral / grúa" },
   { servicio: "Recogida", ubicacion: null, porTurno: 250, vehiculo: "camión recolector", personas: 1, nota: "carga lateral" },
+  // limpieza viaria: la cantidad son pasadas por zona; el rendimiento, cuántas pasadas de zona hace un equipo en un turno
+  { servicio: "Barrido manual", ubicacion: null, porTurno: 1, vehiculo: "carro de barrido manual", personas: 1, nota: "una pasada de la zona por turno: ajústalo con el tamaño de la zona" },
+  { servicio: "Barrido mecánico", ubicacion: null, porTurno: 1, vehiculo: "barredora", personas: 1, nota: "una pasada de la zona por turno: ajústalo con el tamaño de la zona" },
+  { servicio: "Baldeo", ubicacion: null, porTurno: 1, vehiculo: "baldeadora", personas: 1, nota: "una pasada de la zona por turno" },
+  { servicio: "Fregado", ubicacion: null, porTurno: 1, vehiculo: "fregadora", personas: 1, nota: "una pasada de la zona por turno" },
+  { servicio: "Vaciado de papeleras", ubicacion: null, porTurno: 1, vehiculo: "vehículo auxiliar", personas: 1, nota: "una pasada de la zona por turno" },
+  // transporte por mediciones: toneladas por turno (2 viajes de unas 20 t)
+  { servicio: "Transporte de residuos", ubicacion: null, porTurno: 40, vehiculo: "camión bañera / portacontenedores", personas: 1, nota: "toneladas por turno: depende de la distancia a la planta" },
   { servicio: null, ubicacion: null, porTurno: 50, vehiculo: null, personas: 2, nota: "valor genérico: ajústalo" },
 ];
 export function rendimientoOrientativo(s) {

@@ -6,13 +6,13 @@ import { Check, Pencil, Plus, Trash2, TriangleAlert, Truck, X } from "lucide-rea
 import { useState } from "react";
 import { C } from "../tema.js";
 import { CriteriosFicha } from "./criterios-ficha.jsx";
-import { equipoDe, precioDe, preciosDelPliego, serviciosDeDatos, tablasParaServicios } from "./ficha.js";
+import { equipoDe, preciosDelPliego, propuestasDeServicios, servicioParaGuardar } from "./ficha.js";
 import { cambiarConcurso, fijarDato, fijarEstudio, fijarServicio } from "./store.js";
 
 const GRUPOS = [
   ["Contrato", ["expediente", "organismo", "objeto", "procedimiento", "cpv", "lotes", "duracion", "prorroga", "fechaLimite", "presupuesto", "importeSinIva", "importeConIva", "valorEstimado", "precioPrimerAnio", "ivaPct", "importeAnual", "puntosPrecio", "garantia", "solvencia"]],
   ["Servicio", ["contenedores", "vecesAnio", "operacionesAnio", "jornadasAnio", "dias", "temporadaAlta", "nocturno", "inicio", "habitantes", "lineas", "expediciones", "kmAnuales", "horasAnuales"]],
-  ["Medios y personal", ["vehiculos", "antiguedad", "revierte", "subrogacion", "plantilla", "convenio"]],
+  ["Medios y personal", ["vehiculos", "antiguedad", "revierte", "subrogacion", "personalMinimo", "plantilla", "convenio"]],
   ["Quién paga qué", ["agua", "vertido"]],
 ];
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 2 }); } catch { return new Intl.NumberFormat("es-ES"); } })();
@@ -66,7 +66,7 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
   // ── servicios ──
   const servicios = Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || a.nombre.localeCompare(b.nombre));
   const yaEn = new Set(servicios.map(s => s.id));
-  const propuestas = (docs || []).flatMap(d => [...serviciosDeDatos(d.lectura?.datos || [], d._id), ...tablasParaServicios(d.lectura?.tablas || [], d._id)].map(t => ({ ...t, clave: `${d._id}|${t.indice}`, docNombre: d.nombre })))
+  const propuestas = propuestasDeServicios(docs)
     .map(t => ({ ...t, lineas: t.lineas.filter(l => !yaEn.has(l.id)) })).filter(t => t.lineas.length);
   const marcadas = elegidas ?? new Set(propuestas.filter(t => t.usar).map(t => t.clave));
   // equipos y precios del pliego (de todos los documentos subidos)
@@ -76,16 +76,7 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
     let orden = servicios.length;
     try {
       for (const t of propuestas.filter(x => marcadas.has(x.clave))) {
-        for (const l of t.lineas) {
-          const e = equipoDe(l, equipos), pr = precioDe(l, precios);
-          await fijarServicio(concursoId, l.id, {
-            nombre: l.nombre, fraccion: l.fraccion ?? null, ubicacion: l.ubicacion || null, temporada: l.temporada ?? null,
-            cantidadAnual: l.cantidadAnual, unidades: l.unidades ?? null, frecuencia: l.frecuencia ?? null, cuenta: l.cuenta ?? null, cuadra: l.cuadra ?? null,
-            vehiculo: e?.vehiculo ?? null, personas: e?.personas ?? null, equipoPagina: e?.pagina ?? null,
-            precioUnitario: pr?.precio ?? null, precioPagina: pr?.pagina ?? null,
-            concepto: l.concepto, pagina: l.pagina, doc: l.doc, orden: orden++,
-          });
-        }
+        for (const l of t.lineas) await fijarServicio(concursoId, l.id, servicioParaGuardar(l, { equipos, precios, orden: orden++ }));
       }
       setElegidas(null); onNota("Servicios añadidos a la ficha. Revísalos y corrige lo que haga falta.");
     } catch (e) { onError(e.message || String(e)); }
@@ -227,7 +218,7 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
                 <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.servicio || t.lineas[0].nombre} <span style={{ color: C.dim, fontWeight: 400, fontSize: 11.5 }}>· {t.titulo} · pág. {t.pagina} · {t.docNombre}</span></div>
                 {t.motivo && <div style={{ fontSize: 12, color: C.amber, marginTop: 2 }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> {t.motivo}</div>}
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.6 }}>
-                  {t.lineas.map((l, i) => <span key={i}>{i ? " · " : ""}{[l.temporada || l.fraccion, l.ubicacion].filter(Boolean).join(" ")}: <b style={{ color: C.text }}>{FMT.format(l.cantidadAnual)}</b>{l.cuenta ? <span style={{ color: l.cuadra === false ? C.red : C.green }}> ({l.cuenta} {l.cuadra === false ? "✗" : "✓"})</span> : null}</span>)}
+                  {t.lineas.map((l, i) => <span key={i}>{i ? " · " : ""}{[t.indice === "frecuencias" || t.indice === "mediciones" ? l.nombre : null, l.temporada || l.fraccion, l.ubicacion].filter(Boolean).join(" ")}: <b style={{ color: C.text }}>{FMT.format(l.cantidadAnual)}{l.unidad ? ` ${l.unidad}` : ""}</b>{l.cuenta ? <span style={{ color: l.cuadra === false ? C.red : C.green }}> ({l.cuenta} {l.cuadra === false ? "✗" : "✓"})</span> : null}</span>)}
                 </div>
                 {(() => { const e = equipoDe(t.lineas[0], equipos); return e ? <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}><Truck size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />El pliego exige: {e.vehiculo}{e.personas ? ` + ${e.personas} persona${e.personas > 1 ? "s" : ""}` : ""} <span style={{ color: C.dim }}>(pág. {e.pagina})</span></div> : null; })()}
               </div>

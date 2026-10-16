@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
 import { VERSION_LECTOR, buscarEnPliego, leerPliego } from "./pliego.js";
 import { ACEPTA_PLIEGOS, documentosDeArchivo } from "./documento-texto.js";
+import { prepararDimension, traerLoQueFalta } from "./plataforma.js";
 import { PDF_MAX, borrarDocumento, escucharDocumentos, escucharFicha, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
 import { FichaRequisitos } from "./ficha-requisitos.jsx";
 
@@ -81,6 +82,23 @@ export function DocumentosConcurso({ concurso }) {
     }
     setSubiendo(null);
   }
+  // concurso de la Plataforma: traer los documentos que faltan y, si la ficha
+  // aún no tiene servicios, prepararlos con lo leído
+  async function traerDePlataforma() {
+    setError(null);
+    try {
+      const r = await traerLoQueFalta(id, concurso.plataforma.enlace, (docs || []).map(d => d.nombre), { onProgreso: setSubiendo });
+      let extra = "";
+      if (!Object.keys(ficha?.servicios || {}).length) {
+        setSubiendo("Preparando los servicios para dimensionar…");
+        const p = await prepararDimension(id, [...(docs || []), ...r.leidos]);
+        extra = ` ${p.servicios} servicios en la ficha${p.estudio ? ", estudio de costes en uso" : ""}${p.personal ? `, personal mínimo: ${p.personal}` : ""}.`;
+      }
+      if (r.fallos.length) setError(`No se pudieron traer: ${r.fallos.join(" · ")}`);
+      setNota(`${r.nuevos ? `${r.leidos.length} documentos nuevos de la Plataforma.` : "Ya estaban todos los documentos de la Plataforma."}${extra}`);
+    } catch (e) { setError(e.message || String(e)); }
+    setSubiendo(null);
+  }
   async function cargarTexto() {
     if (!sel || texto.id === sel._id) return;
     setTexto({ id: sel._id, paginas: null });
@@ -100,7 +118,10 @@ export function DocumentosConcurso({ concurso }) {
           <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Documentos</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3, maxWidth: 620 }}>Sube el pliego de prescripciones técnicas (y, si quieres, el de cláusulas administrativas o el anuncio). Operanzia lo lee y te enseña lo importante con la página de donde sale.</div>
         </div>
-        <button className="op-btn op-primario" disabled={!!subiendo} onClick={() => fileRef.current?.click()}>{subiendo ? <Loader2 size={15} className="op-girando" /> : <Upload size={15} />} Subir pliego (PDF)</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {concurso?.plataforma?.enlace && <button className="op-btn" disabled={!!subiendo || docs === null} onClick={traerDePlataforma} title="Baja de la Plataforma de Contratación los pliegos y anexos que aún no están aquí"><ExternalLink size={15} /> Traer de la Plataforma lo que falta</button>}
+          <button className="op-btn op-primario" disabled={!!subiendo} onClick={() => fileRef.current?.click()}>{subiendo ? <Loader2 size={15} className="op-girando" /> : <Upload size={15} />} Subir pliego (PDF)</button>
+        </div>
         <input ref={fileRef} type="file" accept={ACEPTA_PLIEGOS} multiple style={{ display: "none" }} onChange={e => { const f = [...e.target.files]; e.target.value = ""; subir(f); }} />
       </div>
 

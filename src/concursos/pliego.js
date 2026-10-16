@@ -13,9 +13,10 @@
 
 import { criteriosDelPliego } from "./criterios.js";
 import { estudioDeCostes } from "./estudio.js";
+import { personalExigido, serviciosPorFrecuencia, serviciosPorMediciones, textoPersonal } from "./tecnico.js";
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 8;
+export const VERSION_LECTOR = 9;
 
 const NUM_LETRA = {
   un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
@@ -373,10 +374,13 @@ export function leerPliego(paginasCrudas) {
   const equipos = equiposDelPliego(paginasCrudas || []);
   const estudio = estudioDeCostes(paginasCrudas || []);
   const mediosMinimos = mediosMinimosDe(paginasCrudas || []);
+  // la parte técnica para dimensionar: servicios por frecuencias o por mediciones, y el personal que exige
+  const tecnico = { frecuencias: serviciosPorFrecuencia(paginasCrudas || []), mediciones: serviciosPorMediciones(paginasCrudas || []), personal: personalExigido(paginasCrudas || []) };
+  if (tecnico.personal.length) poner("personalMinimo", "Personal mínimo que exige", { pagina: tecnico.personal[0].pagina, frase: tecnico.personal[0].frase }, textoPersonal(tecnico.personal));
   const adjudicacion = criteriosDelPliego(paginasCrudas || []);
 
   return {
-    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos, adjudicacion, estudio, mediosMinimos,
+    version: VERSION_LECTOR, tipo: tipo && tipo[1] > 3 ? tipo[0] : null, clase, tablas, equipos, adjudicacion, estudio, mediosMinimos, tecnico,
     datos, requisitos: requisitos.slice(0, 40).map(({ texto, pagina }) => ({ texto, pagina })), indice: indice.slice(0, 120),
     listas: { fracciones: lista(FRACCIONES), limpieza: lista(SERVICIOS_LIMPIEZA), ambiental: lista(AMBIENTAL), frecuencias },
     paginas: paginas.length, conTexto,

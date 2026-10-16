@@ -7,7 +7,8 @@
 import { auth } from "../firebase.js";
 import { documentosDeArchivo } from "./documento-texto.js";
 import { leerPliego } from "./pliego.js";
-import { cambiarConcurso, crearConcurso, fijarAdjudicacion, fijarDato, guardarDocumento } from "./store.js";
+import { preciosDelPliego, propuestasDeServicios, servicioParaGuardar } from "./ficha.js";
+import { cambiarConcurso, crearConcurso, fijarAdjudicacion, fijarDato, fijarEstudio, fijarServicio, guardarDocumento } from "./store.js";
 
 async function pedir(params, { binario = false } = {}) {
   const token = await auth.currentUser?.getIdToken();
@@ -36,10 +37,24 @@ export async function buscarLicitaciones(cpvs, desde, paginas = 12, { onProgreso
   return { licitaciones, paginasLeidas: leidas, completo: !desdePagina };
 }
 
-// los anexos que sirven (cuadros, anexos del pliego, memorias económicas), no los modelos de declaración
-const UTIL = /cuadro|resumen|caracter[ií]stic|anexo\s*(?:i|1)\b|anexo i[^ivx]|pcap|pliego|prescrip|cl[aá]usulas|memoria econ|estudio econ|justificativ|subroga|personal/i;
-const NO = /modelo|declaraci|deuc|oferta econ|proposici|aval|seguro|cauci|conflicto|prohibic|instrucci|formulario|solicitud|plano|mapa|foto|iae/i;
-export const documentosUtiles = l => (l.documentos || []).filter(d => d.tipo !== "anexo" || (UTIL.test(d.nombre) && !NO.test(d.nombre)));
+// los documentos que sirven: los pliegos, todos los anexos menos los modelos
+// para rellenar, y de lo publicado en el expediente la memoria justificativa y
+// los informes de costes (ahí suele estar el estudio económico)
+const NO = /modelo|declaraci|deuc|oferta econ|proposici|aval|cauci|conflicto|prohibic|instrucci|formulario|solicitud|plano|mapa|foto|iae|insuficiencia|composici[oó]n de la mesa|acuerdo de inicio|acuerdo de iniciaci|aprobaci[oó]n del expediente|resoluci[oó]n|certificad|anuncio/i;
+const PUBLICADO_UTIL = /memoria|estudio|informe (?:t[eé]cnico|econ|de costes|justificativ)|estructura de costes|costes/i;
+export const documentosUtiles = l => [
+  ...(l.documentos || []).filter(d => d.tipo !== "anexo" || !NO.test(d.nombre)),
+  ...(l.publicados || []).filter(p => p.pdf && PUBLICADO_UTIL.test(p.nombre) && !NO.test(p.nombre)).map(p => ({ tipo: "publicado", nombre: `${p.nombre}.pdf`, uri: p.pdf })),
+];
+
+/** Un documento de la Plataforma (en trozos si es grande) → Blob */
+async function bajarDocumento(uri) {
+  const primero = await pedir({ accion: "documento", url: uri, parte: "0" }, { binario: true });
+  const partes = Number(primero.headers.get("X-Partes")) || 1;
+  const trozos = [await primero.blob()];
+  for (let i = 1; i < partes; i++) trozos.push(await (await pedir({ accion: "documento", url: uri, parte: String(i) }, { binario: true })).blob());
+  return new Blob(trozos, { type: trozos[0].type || "application/pdf" });
+}
 
 const duracionTexto = d => (!d?.meses ? null : d.meses % 12 === 0 ? `${d.meses / 12} año${d.meses === 12 ? "" : "s"}` : `${d.meses} meses`);
 
@@ -66,33 +81,83 @@ export function datosOficiales(l) {
   return { datos, adjudicacion, concurso };
 }
 
+/** Baja, lee y guarda en el concurso esos documentos de la Plataforma. @returns { leidos: [{ _id, nombre, lectura }], fallos } */
+async function bajarYLeer(concursoId, lista, onProgreso) {
+  const fallos = [], leidos = [];
+  for (const doc of lista) {
+    try {
+      onProgreso?.(`Bajando ${doc.nombre}…`);
+      const blob = await bajarDocumento(doc.uri);
+      const archivo = new File([blob], doc.nombre || `${doc.tipo}.pdf`, { type: blob.type || "application/pdf" });
+      const docs = await documentosDeArchivo(archivo, { onProgreso: (i, t) => onProgreso?.(`Leyendo ${doc.nombre}: página ${i} de ${t}…`) });
+      for (const { archivo: a, paginas } of docs) {
+        onProgreso?.(`Guardando ${a.name}…`);
+        const lectura = leerPliego(paginas);
+        const id = await guardarDocumento(concursoId, { archivo: a, paginas, lectura });
+        leidos.push({ _id: id, nombre: a.name, lectura });
+      }
+    } catch (e) { fallos.push(`${doc.nombre}: ${e.message || e}`); }
+  }
+  return { leidos, fallos };
+}
+
+const mismoNombre = (a, b) => String(a).toLowerCase().replace(/\.[a-z]{3,4}$/, "").replace(/[^a-z0-9]/g, "") === String(b).toLowerCase().replace(/\.[a-z]{3,4}$/, "").replace(/[^a-z0-9]/g, "");
+/**
+ * Un concurso ya creado desde la Plataforma: baja los documentos útiles que
+ * aún no tiene (los que no llegaron, o los que antes no se traían).
+ * @param yaTiene [nombre de cada documento del concurso]
+ * @returns { leidos, fallos, nuevos: n }
+ */
+export async function traerLoQueFalta(concursoId, enlace, yaTiene, { onProgreso } = {}) {
+  onProgreso?.("Mirando la licitación en la Plataforma…");
+  const l = await licitacionDeEnlace(enlace);
+  const faltan = documentosUtiles(l).filter(d => !yaTiene.some(n => mismoNombre(n, d.nombre)));
+  const r = await bajarYLeer(concursoId, faltan, onProgreso);
+  return { ...r, nuevos: faltan.length };
+}
+
+/**
+ * Con los documentos recién leídos, deja el concurso listo para dimensionar:
+ * los servicios que propone la parte técnica (frecuencias, mediciones,
+ * tablas marcadas), el estudio de costes del Ayuntamiento y el personal mínimo.
+ * @param docs [{ _id, nombre, lectura }]
+ * @returns { servicios: n, estudio: bool, personal: texto | null }
+ */
+export async function prepararDimension(concursoId, docs) {
+  const equipos = docs.flatMap(d => d.lectura?.equipos || []);
+  const precios = docs.flatMap(d => preciosDelPliego(d.lectura?.tablas || []));
+  let orden = 0;
+  for (const t of propuestasDeServicios(docs).filter(t => t.usar)) {
+    for (const l of t.lineas) await fijarServicio(concursoId, l.id, servicioParaGuardar(l, { equipos, precios, orden: orden++ }));
+  }
+  const conEstudio = docs.find(d => d.lectura?.estudio?.cuadra) || docs.find(d => d.lectura?.estudio);
+  if (conEstudio) await fijarEstudio(concursoId, conEstudio.lectura.estudio, conEstudio.nombre);
+  // el personal mínimo: del pliego técnico antes que del administrativo
+  const pm = [...docs].sort((a, b) => (b.lectura?.clase === "tecnico") - (a.lectura?.clase === "tecnico"))
+    .map(d => ({ d, x: (d.lectura?.datos || []).find(x => x.id === "personalMinimo") })).find(o => o.x);
+  if (pm) await fijarDato(concursoId, "personalMinimo", { nombre: pm.x.nombre, valor: pm.x.valor, estado: "confirmado", propuesto: pm.x.valor, pagina: pm.x.pagina, frase: pm.x.frase || null, doc: pm.d._id });
+  return { servicios: orden, estudio: !!conEstudio, personal: pm?.x.valor || null };
+}
+
 /**
  * Pone en el concurso los datos oficiales y baja y lee sus pliegos.
- * @returns { documentos: n leídos, fallos: [texto] }
+ * @param opciones.preparar true: además, servicios, estudio y personal (concurso nuevo)
+ * @returns { documentos: n leídos, fallos: [texto], preparado }
  */
-export async function importarLicitacion(concursoId, l, { onProgreso } = {}) {
+export async function importarLicitacion(concursoId, l, { onProgreso, preparar = false } = {}) {
   const { datos, adjudicacion, concurso } = datosOficiales(l);
   onProgreso?.("Guardando los datos oficiales…");
   await cambiarConcurso(concursoId, concurso, "Trajo una licitación de la Plataforma");
   for (const [k, v] of Object.entries(datos)) await fijarDato(concursoId, k, v);
   if (adjudicacion) await fijarAdjudicacion(concursoId, adjudicacion);
-  const fallos = [];
-  let n = 0;
-  for (const doc of documentosUtiles(l)) {
-    try {
-      onProgreso?.(`Bajando ${doc.nombre}…`);
-      const r = await pedir({ accion: "documento", url: doc.uri }, { binario: true });
-      const blob = await r.blob();
-      const archivo = new File([blob], doc.nombre || `${doc.tipo}.pdf`, { type: blob.type || "application/pdf" });
-      const leidos = await documentosDeArchivo(archivo, { onProgreso: (i, t) => onProgreso?.(`Leyendo ${doc.nombre}: página ${i} de ${t}…`) });
-      for (const { archivo: a, paginas } of leidos) {
-        onProgreso?.(`Guardando ${a.name}…`);
-        await guardarDocumento(concursoId, { archivo: a, paginas, lectura: leerPliego(paginas) });
-        n++;
-      }
-    } catch (e) { fallos.push(`${doc.nombre}: ${e.message || e}`); }
+  const { fallos, leidos: leidosTodos } = await bajarYLeer(concursoId, documentosUtiles(l), onProgreso);
+  const n = leidosTodos.length;
+  let preparado = null;
+  if (preparar && leidosTodos.length) {
+    onProgreso?.("Preparando los servicios para dimensionar…");
+    try { preparado = await prepararDimension(concursoId, leidosTodos); } catch (e) { fallos.push(`Servicios: ${e.message || e}`); }
   }
-  return { documentos: n, fallos };
+  return { documentos: n, fallos, preparado };
 }
 
 /** El tipo de concurso por sus CPV: autobuses (6011…, 6013…, 6017…) o por puntos */
@@ -105,6 +170,6 @@ export async function crearConcursoDesdePlataforma({ orgId, licitacion: l, nombr
     orgId, nombre: (nombre || l.titulo || "Licitación").slice(0, 120), tipo: tipoPorCpv(l.cpvs), organismo: l.organo || "",
     duracionAnios: meses ? Math.round((meses / 12) * 10) / 10 : null, fechaLimite: l.fechaLimite ? String(l.fechaLimite).slice(0, 10) : "",
   });
-  const r = await importarLicitacion(concurso._id, l, { onProgreso });
+  const r = await importarLicitacion(concurso._id, l, { onProgreso, preparar: true });
   return { concurso, ...r };
 }

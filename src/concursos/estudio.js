@@ -19,12 +19,12 @@ const junta = t => t.replace(/\bT\s?O\s?T\s?A\s?L\b/g, "TOTAL").replace(/T OTAL/
 export const PARTIDAS_ESTUDIO = [
   { id: "personal", nombre: "Personal", re: /PERSONAL|MANO DE OBRA/ },
   { id: "inversion", nombre: "Inversión (amortización y financiación)", re: /INVERSI|AMORTIZ/ },
-  { id: "funcionamiento", nombre: "Funcionamiento y mantenimiento", re: /FUNCIONAMIENTO|MANTENIMIENTO|EXPLOTACI/ },
+  { id: "funcionamiento", nombre: "Funcionamiento y mantenimiento", re: /FUNCIONAMIENTO|MANTENIMIENTO|EXPLOTACI|BIENES CORRIENTES/ },
   { id: "seguros", nombre: "Seguros", re: /SEGUROS/ },
   { id: "otros", nombre: "Otros gastos", re: /OTROS GASTOS|GASTOS VARIOS|OTROS/ },
 ];
 const partidaDe = t => PARTIDAS_ESTUDIO.find(p => p.re.test(sinAcentos(t)));
-const CLAVES = /PERSONAL|INVERSI|AMORTIZ|FUNCIONAMIENTO|SEGUROS|OTROS GASTOS|GASTOS GENERALES|BENEFICIO INDUSTRIAL|BASE IMPONIBLE|\bIVA\b/g;
+const CLAVES = /PERSONAL|INVERSI|AMORTIZ|FUNCIONAMIENTO|BIENES CORRIENTES|SEGUROS|OTROS GASTOS|OTROS COSTES|GASTOS GENERALES|BENEFICIO INDUSTRIAL|BASE IMPONIBLE|\bIVA\b/g;
 
 /**
  * El estudio de costes de un pliego, si lo trae.
@@ -51,6 +51,30 @@ export function estudioDeCostes(paginasCrudas = []) {
     if (!t) continue;
     const T = sinAcentos(t);
     const euros = [...t.matchAll(EUROS)].map(m => n(m[1]));
+    // título de partida con su total en la misma línea: «1.GASTOS DE PERSONAL 260.672,50 €»
+    const titTotal = t.match(/^(\d{1,2})\s*[.\-–]*\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ()/,.´'-]{3,80}?)\s+(\d[\d.,]*)\s*€$/);
+    if (titTotal && partidaDe(titTotal[2])) {
+      const p = partidaDe(titTotal[2]);
+      actual = r.partidas.find(x => x.id === p.id) || { id: p.id, nombre: p.nombre, titulo: titTotal[2].trim(), total: null, lineas: [] };
+      if (!r.partidas.includes(actual)) r.partidas.push(actual);
+      if (actual.total == null) actual.total = n(titTotal[3]);
+      pendiente = ""; continue;
+    }
+    // el final de esa forma: «SUMA 420.505,15 €», «BENEFICIO INDUSTRIAL (8%) 33.640,41 €», «Total Coste Contrato …», «IVA (10%) …»
+    if (euros.length === 1) {
+      if (/^SUMA\b|^TOTAL COSTES? (?:DE )?EJECUCION/.test(T) && r.costeEjecucion == null) { r.costeEjecucion = euros[0]; continue; }
+      const bi = T.match(/^(?:GASTOS GENERALES Y )?BENEFICIO INDUSTRIAL\s*\((\d{1,2}(?:,\d+)?)\s*%\)/);
+      if (bi && r.ggbi == null) { r.ggbiPct = n(bi[1]); r.ggbi = euros[0]; continue; }
+      if (/^TOTAL COSTE (?:DEL )?CONTRATO/.test(T) && r.baseImponible == null) { r.baseImponible = euros[0]; continue; }
+      const iv = T.match(/^IVA\s*\((\d{1,2}(?:,\d+)?)\s*%\)/);
+      if (iv && r.ivaPct == null) { r.ivaPct = n(iv[1]); r.iva = euros[0]; continue; }
+      if (/^IMPORTE TOTAL DEL CONTRATO/.test(T) && r.totalConIva == null) { r.totalConIva = euros[0]; continue; }
+      // una línea de la partida sin unidades: «Carburantes y lubricantes 33.288,61 €» (no los subtotales «2.1 …»)
+      if (actual && /^[A-ZÁÉÍÓÚÑa-záéíóúñ]/.test(t) && !/^TOTAL|VALOR ESTIMADO|PRESUPUESTO|BASE IMPONIBLE|LICITACION/.test(T)) {
+        actual.lineas.push({ uds: null, concepto: t.replace(/\s*\d[\d.,]*\s*€\s*$/, "").trim(), unitario: null, total: euros[0] });
+        continue;
+      }
+    }
     // título de partida: «1.- PERSONAL», «2.- INVERSIÓN (AMORTIZACIÓN Y FINANCIACIÓN)»
     const tit = t.match(/^(\d{1,2})\s*[.\-–]+\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ()/,.-]{3,80})$/);
     if (tit && partidaDe(tit[2])) {

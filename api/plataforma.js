@@ -3,7 +3,8 @@
 // Solo con sesión de Operanzia, y solo habla con la Plataforma.
 //  · ?accion=licitacion&enlace=<enlace de la licitación>: sus datos oficiales
 //    (del XML del anuncio y del pliego) y sus documentos.
-//  · ?accion=documento&url=<enlace de un documento>: el documento (para leerlo).
+//  · ?accion=documento&url=<enlace de un documento>&parte=N: el documento (para
+//    leerlo), en trozos de 4 MB (Vercel no deja devolver más): X-Partes dice cuántos.
 //  · ?accion=buscar&cpv=9051,9061&desde=<fecha ISO>: las licitaciones nuevas
 //    del canal con esos CPV desde esa fecha (las más recientes primero).
 import { verificarToken, AvisoError } from "./_avisos/core.js";
@@ -15,7 +16,8 @@ export const config = { maxDuration: 60, regions: ["cdg1"] };
 const PROYECTOS = [globalThis.process.env.FIREBASE_PROJECT_ID, globalThis.process.env.VITE_FIREBASE_PROJECT_ID, "fleetcomms-13d89", "operanzia-pruebas"];
 const HOSTS = /^https:\/\/(contrataciondelestado\.es|contrataciondelsectorpublico\.gob\.es)\//;
 const CANAL = "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom";
-const MAX_DOC = 4.3 * 1024 * 1024; // lo que deja devolver Vercel
+const TROZO = 4 * 1024 * 1024; // Vercel no deja devolver más de 4,5 MB
+const MAX_DOC = 60 * 1024 * 1024;
 
 async function traer(url, { texto = true } = {}) {
   if (!HOSTS.test(url)) throw new AvisoError(400, "Solo se pueden pedir enlaces de la Plataforma de Contratación");
@@ -98,8 +100,11 @@ export default async function handler(req, res) {
       if (!/GetDocumentByIdServlet/.test(url)) throw new AvisoError(400, "Ese no es el enlace de un documento de la Plataforma");
       const { tipo, datos } = await traer(url, { texto: false });
       if (datos.length > MAX_DOC) throw new AvisoError(413, "El documento es demasiado grande para traerlo desde aquí: bájalo de la Plataforma y súbelo a mano");
+      const partes = Math.max(1, Math.ceil(datos.length / TROZO)), parte = Math.min(partes - 1, Math.max(0, Number(q.parte) || 0));
       res.setHeader("Content-Type", tipo);
-      return res.status(200).send(datos);
+      res.setHeader("X-Partes", String(partes));
+      res.setHeader("Access-Control-Expose-Headers", "X-Partes");
+      return res.status(200).send(datos.subarray(parte * TROZO, (parte + 1) * TROZO));
     }
     throw new AvisoError(400, "Acción desconocida");
   } catch (e) {
