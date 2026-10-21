@@ -54,15 +54,18 @@ async function trazadoPorCarretera(pts){
   const clave=pts.map(p=>`${(+p.lng).toFixed(5)},${(+p.lat).toFixed(5)}`).join(";");
   if(TRAZADOS.has(clave))return TRAZADOS.get(clave);
   const linea=[];
+  let km=0,min=0;
   for(let i=0;i<pts.length-1;i+=79){
     const tramo=pts.slice(i,i+80);
     const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${tramo.map(p=>`${p.lng},${p.lat}`).join(";")}?overview=full&geometries=geojson`);
     const j=await r.json();
     if(j.code!=="Ok"||!j.routes?.[0]?.geometry)return null;
     linea.push(...j.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]));
+    km+=j.routes[0].distance/1000; min+=j.routes[0].duration/60;
   }
-  TRAZADOS.set(clave,linea);
-  return linea;
+  const r={linea,km,min};
+  TRAZADOS.set(clave,r);
+  return r;
 }
 
 export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
@@ -72,7 +75,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     const pts=ubicaciones.filter(u=>u.lat&&u.lng);
     if(pts.length<2)return;
     let vivo=true;
-    trazadoPorCarretera(pts).then(linea=>{if(vivo)setTrazado({clave:clavePts,linea});}).catch(()=>{if(vivo)setTrazado({clave:clavePts,linea:null});});
+    trazadoPorCarretera(pts).then(r=>{if(vivo)setTrazado({clave:clavePts,linea:r?.linea||null,km:r?.km??null});}).catch(()=>{if(vivo)setTrazado({clave:clavePts,linea:null,km:null});});
     return()=>{vivo=false;};
   },[clavePts]); // eslint-disable-line react-hooks/exhaustive-deps
   const divRef=useRef(null);
@@ -161,7 +164,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   return (
     <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>
       <div ref={divRef} style={{height,background:"#151a26"}}/>
-      <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`}}>
+      <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",gap:12}}>
           {[[C.green,"Realizada"],[C.blue,"Pendiente"],[C.orange,"Seleccionada"]].map(([c,l])=>(
             <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
@@ -170,6 +173,10 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
             </div>
           ))}
         </div>
+        {/* los km del recorrido por carretera (de la primera parada a la última, en orden) */}
+        <span style={{fontSize:11,color:C.text,fontWeight:650,fontFamily:mono}} title="Recorrido por carretera de la primera parada a la última, en orden">
+          {trazado?.clave===clavePts&&trazado.km!=null?`${trazado.km.toLocaleString("es-ES",{maximumFractionDigits:1})} km por carretera`:ubicaciones.filter(u=>u.lat&&u.lng).length>1?<span style={{color:C.dim,fontWeight:400}}>calculando km…</span>:null}
+        </span>
         <span style={{fontSize:10,color:C.dim}}>{ubicaciones.filter(u=>u.realizado).length}/{ubicaciones.length}</span>
       </div>
     </div>
