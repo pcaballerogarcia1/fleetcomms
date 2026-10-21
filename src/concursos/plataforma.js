@@ -7,7 +7,8 @@
 import { auth } from "../firebase.js";
 import { documentosDeArchivo } from "./documento-texto.js";
 import { leerPliego } from "./pliego.js";
-import { preciosDelPliego, propuestasDeServicios, servicioParaGuardar } from "./ficha.js";
+import { kmDeTransportes } from "./distancias.js";
+import { esTransporte, preciosDelPliego, propuestasDeServicios, servicioParaGuardar } from "./ficha.js";
 import { cambiarConcurso, crearConcurso, fijarAdjudicacion, fijarDato, fijarEstudio, fijarServicio, guardarDocumento } from "./store.js";
 
 async function pedir(params, { binario = false } = {}) {
@@ -81,6 +82,9 @@ export function datosOficiales(l) {
   return { datos, adjudicacion, concurso };
 }
 
+/** De la licitación oficial: el presupuesto sin IVA y los meses (para pasar las mediciones al año) */
+const contextoLicitacion = l => ({ presupuestoSinIva: l.presupuesto?.sinIva ?? null, meses: l.duracion?.meses ?? null });
+
 /** Baja, lee y guarda en el concurso esos documentos de la Plataforma. @returns { leidos: [{ _id, nombre, lectura }], fallos } */
 async function bajarYLeer(concursoId, lista, onProgreso) {
   const fallos = [], leidos = [];
@@ -123,20 +127,52 @@ export async function traerLoQueFalta(concursoId, enlace, yaTiene, { onProgreso 
  * @param docs [{ _id, nombre, lectura }]
  * @returns { servicios: n, estudio: bool, personal: texto | null }
  */
-export async function prepararDimension(concursoId, docs) {
+export async function prepararDimension(concursoId, docs, contexto = {}, { onProgreso, conServicios = true, ficha = null } = {}) {
   const equipos = docs.flatMap(d => d.lectura?.equipos || []);
   const precios = docs.flatMap(d => preciosDelPliego(d.lectura?.tablas || []));
   let orden = 0;
-  for (const t of propuestasDeServicios(docs).filter(t => t.usar)) {
-    for (const l of t.lineas) await fijarServicio(concursoId, l.id, servicioParaGuardar(l, { equipos, precios, orden: orden++ }));
+  const nuevos = [];
+  if (conServicios) {
+    for (const t of propuestasDeServicios(docs, contexto).filter(t => t.usar)) {
+      for (const l of t.lineas) { const s = servicioParaGuardar(l, { equipos, precios, orden: orden++ }); nuevos.push({ id: l.id, ...s }); }
+    }
+    // transporte: los km por carretera de cada origen a su destino
+    const transportes = nuevos.filter(s => esTransporte(s) && s.origen && s.destino);
+    if (transportes.length) {
+      onProgreso?.("Midiendo los km por carretera…");
+      await ponerKm(transportes);
+    }
+    for (const s of nuevos) { const { id, ...resto } = s; await fijarServicio(concursoId, id, resto); }
   }
   const conEstudio = docs.find(d => d.lectura?.estudio?.cuadra) || docs.find(d => d.lectura?.estudio);
-  if (conEstudio) await fijarEstudio(concursoId, conEstudio.lectura.estudio, conEstudio.nombre);
+  if (conEstudio && !ficha?.estudio) await fijarEstudio(concursoId, conEstudio.lectura.estudio, conEstudio.nombre);
   // el personal mínimo: del pliego técnico antes que del administrativo
   const pm = [...docs].sort((a, b) => (b.lectura?.clase === "tecnico") - (a.lectura?.clase === "tecnico"))
     .map(d => ({ d, x: (d.lectura?.datos || []).find(x => x.id === "personalMinimo") })).find(o => o.x);
-  if (pm) await fijarDato(concursoId, "personalMinimo", { nombre: pm.x.nombre, valor: pm.x.valor, estado: "confirmado", propuesto: pm.x.valor, pagina: pm.x.pagina, frase: pm.x.frase || null, doc: pm.d._id });
-  return { servicios: orden, estudio: !!conEstudio, personal: pm?.x.valor || null };
+  if (pm && !ficha?.datos?.personalMinimo) await fijarDato(concursoId, "personalMinimo", { nombre: pm.x.nombre, valor: pm.x.valor, estado: "confirmado", propuesto: pm.x.valor, pagina: pm.x.pagina, frase: pm.x.frase || null, doc: pm.d._id });
+  // a demanda: cambia el coste (sin equipo fijo)
+  const dem = docs.map(d => ({ d, x: (d.lectura?.datos || []).find(x => x.id === "aDemanda") })).find(o => o.x);
+  if (dem && !ficha?.datos?.aDemanda) await fijarDato(concursoId, "aDemanda", { nombre: dem.x.nombre, valor: dem.x.valor, estado: "confirmado", propuesto: dem.x.valor, pagina: dem.x.pagina, frase: dem.x.frase || null, doc: dem.d._id });
+  // la subrogación que el lector viejo veía en cualquier «subrogación» (cláusulas de impagos): fuera si ya nadie la propone
+  const sub = ficha?.datos?.subrogacion;
+  if (sub && sub.estado === "confirmado" && sub.valor === sub.propuesto && !docs.some(d => (d.lectura?.datos || []).some(x => x.id === "subrogacion"))) await fijarDato(concursoId, "subrogacion", null);
+  return { servicios: nuevos.length, estudio: !!conEstudio, personal: pm?.x.valor || null, aDemanda: !!dem };
+}
+
+/** Pone a cada transporte sus km (y minutos) por carretera de su origen a su destino */
+export async function ponerKm(servicios) {
+  const porDestino = new Map();
+  for (const s of servicios) { if (!porDestino.has(s.destino)) porDestino.set(s.destino, []); porDestino.get(s.destino).push(s); }
+  const fallos = [];
+  for (const [destino, lista] of porDestino) {
+    const r = await kmDeTransportes(lista.map(s => s.origen), destino);
+    lista.forEach((s, k) => {
+      const ruta = r.rutas[k];
+      if (ruta?.km) Object.assign(s, { kmIda: ruta.km, minutosIda: ruta.minutos, kmDesde: ruta.desde, kmMetodo: ruta.metodo, kmHasta: r.destino?.texto || destino });
+      else fallos.push(ruta?.error || `Sin km para ${s.origen?.nombre}`);
+    });
+  }
+  return fallos;
 }
 
 /**
@@ -155,7 +191,7 @@ export async function importarLicitacion(concursoId, l, { onProgreso, preparar =
   let preparado = null;
   if (preparar && leidosTodos.length) {
     onProgreso?.("Preparando los servicios para dimensionar…");
-    try { preparado = await prepararDimension(concursoId, leidosTodos); } catch (e) { fallos.push(`Servicios: ${e.message || e}`); }
+    try { preparado = await prepararDimension(concursoId, leidosTodos, contextoLicitacion(l), { onProgreso }); } catch (e) { fallos.push(`Servicios: ${e.message || e}`); }
   }
   return { documentos: n, fallos, preparado };
 }

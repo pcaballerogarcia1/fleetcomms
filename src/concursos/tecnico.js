@@ -170,3 +170,64 @@ export function minimoDePersonal(texto) {
   }
   return r.operarios || r.encargados || r.jefe ? r : null;
 }
+
+// ── Servicio a demanda ──
+// «Tragsa no tendrá obligación de solicitar un determinado número de unidades»,
+// «se prestará de manera discrecional, en función de las necesidades»: se pide
+// cuando hace falta y se paga por unidad. Cambia el coste: no hay equipo fijo.
+const A_DEMANDA = [
+  /no tendr[aá] (?:la )?obligaci[oó]n de (?:solicitar|agotar|pedir)/i,
+  /(?:de manera|de forma) discrecional/i,
+  /\ba demanda\b|seg[uú]n (?:las )?necesidades del servicio|en funci[oó]n de las necesidades/i,
+  /presupuesto (?:global m[aá]ximo )?(?:de la licitaci[oó]n )?(?:es |sea )?estimado|☒\s*presupuesto estimado/i,
+  /precios unitarios se entender[aá]n como m[aá]ximos/i,
+];
+/** ¿Se pide a demanda? → { frase, pagina, pistas } o null (hacen falta dos pistas distintas) */
+export function aDemanda(paginas) {
+  const vistas = [];
+  (paginas || []).forEach((p, i) => {
+    const t = String(p || "").replace(/\s+/g, " ");
+    A_DEMANDA.forEach((re, k) => { const m = re.exec(t); if (m && !vistas.some(v => v.k === k)) vistas.push({ k, pagina: i + 1, frase: t.slice(Math.max(0, m.index - 80), m.index + 160).trim() }); });
+  });
+  return vistas.length >= 2 ? { frase: vistas[0].frase, pagina: vistas[0].pagina, pistas: vistas.length } : null;
+}
+
+// ── Transporte: de dónde a dónde ──
+const LUGAR = String.raw`(?:EDAR|ETAP|EBAR|depuradora|planta|punto limpio|estaci[oó]n de transferencia|ecoparque|complejo ambiental)`;
+/** «Servicio de transporte de fangos EDAR Arguineguín a instalación…» → «EDAR Arguineguín» */
+export function origenDe(texto) {
+  const t = String(texto || "");
+  const ini = new RegExp(String.raw`\b${LUGAR}\s+`, "i").exec(t);
+  if (!ini) return null;
+  // detrás, las palabras con mayúscula (y «de», «del», «la» entre medias): el nombre del sitio
+  const m = /^(?:(?:de|del|la|las|los)\s+)?[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ'’.-]*(?:\s+(?:(?:de|del|la|las|los)\s+)?[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ'’.-]*){0,3}/.exec(t.slice(ini.index + ini[0].length));
+  return m ? `${ini[0]}${m[0]}`.replace(/\s+/g, " ").trim() : null;
+}
+/** A dónde se lleva: «transportados hasta el vertedero de Salto del Negro en la isla…» → «Salto del Negro» */
+export function destinoDelTransporte(paginas) {
+  const re = /(?:transportad[oa]s|trasladad[oa]s|depositad[oa]s|entregad[oa]s|llevad[oa]s)\s+(?:hasta|a|en)\s+(?:el|la)\s+(vertedero|planta|complejo ambiental|ecoparque|centro de tratamiento|instalaci[oó]n)\s+(?:de\s+|del\s+)?([A-ZÁÉÍÓÚÑ][^,.;()]{2,60}?)(?=\s+(?:en|de la isla|o |,|\.|situad|ubicad)|[,.;]|$)/;
+  for (const [i, p] of (paginas || []).entries()) {
+    const m = re.exec(String(p || "").replace(/\s+/g, " "));
+    if (m) return { tipo: m[1].toLowerCase(), nombre: m[2].trim(), pagina: i + 1 };
+  }
+  return null;
+}
+/** «- EDAR Arguineguín: Lomo Las Casas, Carretera GC-505, Cercados de Espinos s/n (San Bartolomé de Tirajana)» → { nombre, direccion, municipio } */
+export function lugaresDeRealizacion(paginas) {
+  const out = [];
+  const t = (paginas || []).join("\n").replace(/[ \t]+/g, " ").replace(/\n(?![-•·]\s)/g, " ");
+  const re = new RegExp(String.raw`[-•·]\s*(${LUGAR}[^:\n]{2,40}):\s*([^()\n]{3,140}?)\s*\(([^)]{3,60})\)`, "gi");
+  for (const m of t.matchAll(re)) {
+    if (!out.some(o => o.nombre === m[1].trim())) out.push({ nombre: m[1].trim(), direccion: m[2].trim().replace(/[,\s]+$/, ""), municipio: m[3].trim() });
+  }
+  return out;
+}
+
+/** El periodo de las mediciones: si suman el presupuesto y el contrato no dura un año, la cantidad al año es otra */
+export function periodoDeMediciones(mediciones, { presupuestoSinIva = null, meses = null } = {}) {
+  const suma = (mediciones || []).reduce((s, m) => s + (m.importe || (m.cantidad || 0) * (m.precio || 0)), 0);
+  if (!suma || !presupuestoSinIva || !meses) return { factorAnual: 1, meses: null, motivo: null };
+  const cuadra = Math.abs(suma - presupuestoSinIva) <= Math.max(5, presupuestoSinIva * 0.02);
+  if (!cuadra || Math.abs(meses - 12) < 0.01) return { factorAnual: 1, meses: cuadra ? meses : null, motivo: null };
+  return { factorAnual: 12 / meses, meses, motivo: `Las mediciones suman el presupuesto (${Math.round(suma).toLocaleString("es-ES")} €), que es de ${meses} ${meses === 1 ? "mes" : "meses"}: al año, × ${Math.round((12 / meses) * 100) / 100}` };
+}

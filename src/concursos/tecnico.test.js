@@ -54,3 +54,68 @@ describe("de la ficha al coste", () => {
     expect([e.costeEjecucion, e.ggbiPct, e.baseImponible, e.ivaPct, e.totalConIva, e.cuadra]).toEqual([420505.15, 8, 454145.57, 10, 499560.12, true]);
   });
 });
+
+describe("transporte a demanda (UT4, lodos de Gran Canaria)", () => {
+  it("a demanda, de dónde y a dónde, y las mediciones de un mes pasadas al año", async () => {
+    const { aDemanda, destinoDelTransporte, lugaresDeRealizacion, origenDe, periodoDeMediciones } = await import("./tecnico.js");
+    const texto = ["El servicio se prestará de manera discrecional, en función de las necesidades de cada una de las plantas. Tragsa no tendrá obligación de solicitar un determinado número de unidades. Los fangos serán transportados hasta el vertedero de Salto del Negro en la isla de Gran Canaria.\n- EDAR Arguineguín: Lomo Las Casas, Carretera GC-505, Cercados de Espinos s/n (San Bartolomé de\nTirajana) CP: 35128\n- EDAR La Aldea: C/ Las Marciégas no2 (San Nicolás de Tolentino) CP: 35470"];
+    expect(aDemanda(texto)).toBeTruthy();
+    expect(aDemanda(["Se prestará en función de las necesidades del servicio."])).toBeNull();
+    expect(destinoDelTransporte(texto)).toMatchObject({ tipo: "vertedero", nombre: "Salto del Negro" });
+    expect(lugaresDeRealizacion(texto)).toEqual([
+      { nombre: "EDAR Arguineguín", direccion: "Lomo Las Casas, Carretera GC-505, Cercados de Espinos s/n", municipio: "San Bartolomé de Tirajana" },
+      { nombre: "EDAR La Aldea", direccion: "C/ Las Marciégas no2", municipio: "San Nicolás de Tolentino" },
+    ]);
+    expect(origenDe("Servicio de transporte de fangos EDAR La Aldea a instalación autorizada")).toBe("EDAR La Aldea");
+    const m = serviciosPorMediciones(paginas("lodos-mediciones.txt"));
+    expect(periodoDeMediciones(m, { presupuestoSinIva: 13738.14, meses: 1 }).factorAnual).toBe(12);
+    expect(periodoDeMediciones(m, { presupuestoSinIva: 13738.14, meses: 12 }).factorAnual).toBe(1);
+    expect(periodoDeMediciones(m, { presupuestoSinIva: 50000, meses: 1 }).factorAnual).toBe(1); // no suman el presupuesto: no se toca
+  });
+
+  it("servicios guardados con las cantidades del mes: se detecta y se dice cuánto multiplicar", async () => {
+    const { revisarPeriodo, contextoDelConcurso } = await import("./ficha.js");
+    const servicios = [{ id: "a", cantidadAnual: 260, precioUnitario: 21.08 }, { id: "b", cantidadAnual: 130, precioUnitario: 44.75 }, { id: "c", cantidadAnual: 78, precioUnitario: 31.28 }];
+    const ctx = contextoDelConcurso({ datos: { importeSinIva: { valor: 13738.14, estado: "confirmado" }, duracion: { valor: "1 meses", estado: "confirmado" } } }, {});
+    expect(revisarPeriodo(servicios, ctx)).toMatchObject({ factor: 12, meses: 1, ids: ["a", "b", "c"] });
+    expect(revisarPeriodo(servicios.map(s => ({ ...s, periodoMeses: 1 })), ctx)).toBeNull(); // ya pasadas
+  });
+
+  it("por viajes: km, carga y horas; a demanda solo cuenta lo que se usa; el camión no se amortiza en un mes", async () => {
+    const { viajesDe } = await import("./ficha.js");
+    const v = viajesDe({ nombre: "Transporte de residuos", unidad: "t", cantidadAnual: 3120, kmIda: 61.2, minutosIda: 50 });
+    expect(v.viajesAnio).toBe(156);
+    expect(v.horasViaje).toBeCloseTo((100 / 60) * 1.15 + 1, 6);
+    expect(v.kmAnio).toBeCloseTo(156 * 2 * 61.2, 6);
+    expect(viajesDe({ nombre: "Transporte de residuos", unidad: "t", cantidadAnual: 100 })).toBeNull(); // sin km: no se inventa
+    const lineas = [{ id: "a", nombre: "Transporte de residuos", unidad: "t", cantidadAnual: 3120, kmIda: 61.2, minutosIda: 50, vehiculo: "camión bañera", precioUnitario: 21.08 }];
+    const d = dimensionar(lineas);
+    expect(d.lineas[0].sinKm).toBeUndefined();
+    const fijo = cuentaExplotacion(d, {}, {}, 1 / 12);
+    const dem = cuentaExplotacion(d, { aDemanda: true }, {}, 1 / 12);
+    expect(fijo.plantilla.encargados).toBe(1);
+    expect(dem.plantilla).toMatchObject({ encargados: 0, jefe: 0 });
+    expect(dem.plantilla.servicio).toBeLessThan(1);
+    expect(dem.vehiculos[0].unidades).toBeLessThan(1);
+    expect(dem.vehiculos[0].combustible).toBeCloseTo(v.kmAnio * 0.55, 6); // por km
+    // un contrato de un mes no paga el camión entero: se reparte en su vida útil
+    expect(fijo.amortizacionCorta).toBe(8);
+    expect(fijo.vehiculos[0].amortizacion).toBeLessThan(140000 / 5);
+    expect(dem.anio1.total).toBeLessThan(fijo.anio1.total);
+  });
+});
+
+describe("clase del documento", () => {
+  it("un pliego técnico que nombra el administrativo sigue siendo técnico", async () => {
+    const { leerPliego } = await import("./pliego.js");
+    expect(leerPliego(["PLIEGO DE PRESCRIPCIONES TÉCNICAS PARTICULARES PARA LA CONTRATACIÓN DEL SERVICIO. Este pliego, junto con el Pliego de Cláusulas Administrativas Particulares, rigen la adjudicación."]).clase).toBe("tecnico");
+    expect(leerPliego(["PLIEGO DE CLÁUSULAS ADMINISTRATIVAS PARTICULARES. El pliego de prescripciones técnicas define el servicio."]).clase).toBe("administrativo");
+  });
+  it("la subrogación de verdad, no la cláusula de impagos", async () => {
+    const { leerPliego } = await import("./pliego.js");
+    const impagos = leerPliego(["Resolución por impago de salarios a trabajadores en los que procediera la subrogación de conformidad con el artículo 130 de la LCSP."]);
+    expect(impagos.datos.find(d => d.id === "subrogacion")).toBeUndefined();
+    const si = leerPliego(["El adjudicatario deberá subrogar al personal que presta actualmente el servicio, según el anexo."]);
+    expect(si.datos.find(d => d.id === "subrogacion")).toBeTruthy();
+  });
+});

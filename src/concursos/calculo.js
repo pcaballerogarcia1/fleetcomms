@@ -24,7 +24,8 @@ export const PARAMETROS_CALCULO = {
   reservaPct: 10,           // vehículos de reserva, % de los necesarios (redondeado)
   residualPct: 10,          // valor que les queda a los vehículos al acabar
   interesPct: 5,            // interés de la financiación de los vehículos
-  aniosAmortizacion: null,  // null = los años del contrato
+  aniosAmortizacion: null,  // null = los años del contrato (en contratos cortos, la vida útil: el vehículo sigue en la empresa)
+  vidaUtil: 8,              // años de vida de un vehículo, para contratos de menos de 3 años
   instalacionesAnio: 18000, // nave, vestuarios, punto de lavado…
   sistemasAnio: 6000,       // GPS, software, comunicaciones
   seguroRCAnio: 4000,       // responsabilidad civil y otros seguros del contrato
@@ -38,6 +39,7 @@ export const PARAMETROS_CALCULO = {
 
 // Coste orientativo de cada tipo de vehículo (por el nombre)
 const VEHICULOS = [
+  [/ba[ñn]era|portacontenedor|volquete|cami[oó]n de transporte|bote|cuba/i, { precio: 140000, combustibleTurno: 60, combustibleKm: 0.55, consumiblesTurno: 5, mantenimientoAnio: 9000, seguroAnio: 3500 }],
   [/lavacontenedor|lava ?contenedor/i, { precio: 250000, combustibleTurno: 55, consumiblesTurno: 25, mantenimientoAnio: 12000, seguroAnio: 3000 }],
   [/recolector|recogida|compactador/i, { precio: 230000, combustibleTurno: 70, consumiblesTurno: 5, mantenimientoAnio: 14000, seguroAnio: 3500 }],
   [/hidrolimpiadora|baldeadora|cisterna|agua a presi/i, { precio: 95000, combustibleTurno: 30, consumiblesTurno: 15, mantenimientoAnio: 6000, seguroAnio: 2000 }],
@@ -84,9 +86,11 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
   const servicioETC = (dim?.resumen?.personasExactas || 0) * masTrabajo;
   // el personal mínimo que exige el pliego (minimoDePersonal): nunca por debajo
   const min = q.minimoPliego || null;
-  const servicio = Math.max(Math.ceil(servicioETC - 1e-9), Math.ceil((min?.operarios || 0) - 1e-9));
-  const encargados = servicio ? Math.max(min?.encargados || 0, min ? 0 : Math.max(1, Math.ceil(servicio / Math.max(1, q.personasPorEncargado) - 1e-9))) : 0;
-  const jefe = servicio ? (min?.jefe || q.jefeDedicacion) : 0;
+  // a demanda (se pide cuando hace falta y se paga por unidad): las horas que se usan, sin equipo fijo ni mandos propios
+  const demanda = !!q.aDemanda;
+  const servicio = demanda ? Math.max(servicioETC, min?.operarios || 0) : Math.max(Math.ceil(servicioETC - 1e-9), Math.ceil((min?.operarios || 0) - 1e-9));
+  const encargados = demanda ? (min?.encargados || 0) : servicio ? Math.max(min?.encargados || 0, min ? 0 : Math.max(1, Math.ceil(servicio / Math.max(1, q.personasPorEncargado) - 1e-9))) : 0;
+  const jefe = demanda ? (min?.jefe || 0) : servicio ? (min?.jefe || q.jefeDedicacion) : 0;
   const plantilla = {
     servicioETC, servicio, encargados, jefe, total: servicio + encargados + jefe, minimoPliego: min,
     costeServicio: servicio * q.salarioOperario * (1 + q.ssPct / 100),
@@ -95,20 +99,29 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
   };
 
   // ── vehículos ──
-  const aniosAm = q.aniosAmortizacion || anios || 1;
+  // contratos de menos de 3 años: el vehículo sigue en la empresa al acabar, se reparte en su vida útil
+  // (salvo que pase al Ayuntamiento); si no, en los años del contrato con su valor residual
+  const corto = !q.aniosAmortizacion && (anios || 0) < 3 && !q.revierte;
+  const aniosAm = q.aniosAmortizacion || (corto ? q.vidaUtil : anios || 1);
+  const residual = corto ? 0 : q.residualPct;
   const vehiculos = (dim?.equipos || []).map(e => {
     const o = { ...costeOrientativo(e.equipo), ...(porVehiculo[e.equipo] || {}) };
     const turnosAnio = e.turnosAnio * masTrabajo;
-    const unidades = Math.max(1, Math.ceil(e.porDia * (f.flotaFija ? 1 : masTrabajo) - 1e-9));
-    const reserva = o.reserva != null && o.reserva !== "" ? Number(o.reserva) : Math.round(unidades * q.reservaPct / 100);
+    // a demanda: la parte del vehículo que se usa (el resto del tiempo trabaja en otros contratos)
+    const unidades = demanda ? Math.min(1, e.porDia * masTrabajo) || 0 : Math.max(1, Math.ceil(e.porDia * (f.flotaFija ? 1 : masTrabajo) - 1e-9));
+    const reserva = demanda ? 0 : o.reserva != null && o.reserva !== "" ? Number(o.reserva) : Math.round(unidades * q.reservaPct / 100);
     const total = unidades + reserva;
-    const cuota = cuotaAnual(Number(o.precio) || 0, aniosAm, q.interesPct, q.residualPct);
+    const cuota = cuotaAnual(Number(o.precio) || 0, aniosAm, q.interesPct, residual);
+    // combustible: por km si se saben (transporte), si no por turno
+    const kmAnio = (e.kmAnio || 0) * masTrabajo;
+    const combustible = kmAnio && Number(o.combustibleKm) > 0 ? kmAnio * Number(o.combustibleKm) : turnosAnio * (Number(o.combustibleTurno) || 0);
     return {
       tipo: e.equipo, servicios: e.servicios, turnosAnio, unidades, reserva, total,
       precio: Number(o.precio) || 0, combustibleTurno: Number(o.combustibleTurno) || 0, consumiblesTurno: Number(o.consumiblesTurno) || 0,
       mantenimientoAnio: Number(o.mantenimientoAnio) || 0, seguroAnio: Number(o.seguroAnio) || 0,
       amortizacion: cuota * total,
-      operacion: (turnosAnio * (Number(o.combustibleTurno) || 0)) * f.operacion + total * ((Number(o.mantenimientoAnio) || 0) + (Number(o.seguroAnio) || 0)),
+      kmAnio, combustibleKm: Number(o.combustibleKm) || 0, combustible,
+      operacion: combustible * f.operacion + total * ((Number(o.mantenimientoAnio) || 0) + (Number(o.seguroAnio) || 0)),
       consumibles: turnosAnio * (Number(o.consumiblesTurno) || 0) * f.operacion,
     };
   });
@@ -120,7 +133,8 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
     vehiculos: vehiculos.reduce((s, v) => s + v.amortizacion, 0),
     operacion: vehiculos.reduce((s, v) => s + v.operacion, 0),
     consumibles: vehiculos.reduce((s, v) => s + v.consumibles, 0),
-    estructura: q.instalacionesAnio + q.sistemasAnio + q.seguroRCAnio + personas * q.uniformesPersona,
+    // a demanda no hay nave, sistemas ni seguros propios del contrato: la parte de lo que se usa
+    estructura: (q.instalacionesAnio + q.sistemasAnio + q.seguroRCAnio) * (demanda ? Math.min(1, plantilla.total) : 1) + Math.ceil(personas - 1e-9) * q.uniformesPersona,
   };
   const conIndirectos = b => {
     const directos = b.personal + b.vehiculos + b.operacion + b.consumibles + b.estructura;
@@ -147,7 +161,7 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
   // caja que hay que adelantar: lo que se gasta mientras se espera a cobrar
   const caja = costeMedioAnual / 365 * q.diasCobro;
 
-  return { modo: "rendimientos", partidas: PARTIDAS, plantilla, vehiculos, anio1, porAnio, totalContrato, costeMedioAnual, precios, caja, anios: aniosReales, parametros: q };
+  return { modo: "rendimientos", partidas: PARTIDAS, plantilla, vehiculos, anio1, porAnio, totalContrato, costeMedioAnual, precios, caja, anios: aniosReales, parametros: q, aDemanda: demanda, amortizacionCorta: corto ? aniosAm : null };
 }
 
 // ── Desde el estudio de costes del Ayuntamiento ──────────────────────────
@@ -266,6 +280,23 @@ export function presupuestoPrimerAnio({ calc, ficha, concurso }) {
   return { valor: null, fuente: null };
 }
 
+/**
+ * El precio por unidad de cada servicio que tiene precio máximo en el pliego
+ * (€/t, €/servicio…): su parte del coste (por el tiempo de equipo que se lleva)
+ * entre su cantidad, con el margen; y la baja que supone sobre el máximo.
+ * @returns [{ id, nombre, ubicacion, unidad, cantidadAnual, coste, objetivo, maximo, bajaPct }]
+ */
+export function preciosUnitarios(d, cuenta, margen = 0) {
+  const lineas = d?.lineas || [];
+  const turnos = lineas.reduce((s, l) => s + (l.turnosAnio || 0), 0);
+  const total = cuenta?.porAnio?.length ? cuenta.totalContrato / Math.max(0.01, cuenta.anios) : cuenta?.anio1?.total || 0;
+  if (!turnos || !total) return [];
+  return lineas.filter(l => Number(l.precioUnitario) > 0 && Number(l.cantidadAnual) > 0).map(l => {
+    const coste = (total * (l.turnosAnio / turnos)) / l.cantidadAnual, objetivo = coste / (1 - margen), maximo = Number(l.precioUnitario);
+    return { id: l.id, nombre: l.nombre, ubicacion: l.ubicacion || null, unidad: l.unidad || "ud", cantidadAnual: l.cantidadAnual, coste, objetivo, maximo, bajaPct: (1 - objetivo / maximo) * 100 };
+  });
+}
+
 /** Todo a partir de lo guardado: dimensionamiento y cuenta */
 // lo que está vacío no cambia el valor orientativo
 const sinVacios = o => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v != null && v !== "" && !Number.isNaN(v)));
@@ -287,7 +318,8 @@ export function calcularConcurso({ ficha, dim, calc, concurso, factores, mejoras
     // si la maquinaria pasa al Ayuntamiento, no le queda valor
     const revierte = valorDato(ficha, "revierte");
     const minimoPliego = minimoDePersonal(valorDato(ficha, "personalMinimo"));
-    cuenta = cuentaExplotacion(d, { ...p, minimoPliego, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
+    const demanda = calc?.aDemanda ?? !!valorDato(ficha, "aDemanda");
+    cuenta = cuentaExplotacion(d, { ...p, minimoPliego, aDemanda: demanda, revierte: !!revierte, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
     if (mejoras) for (const a of cuenta.porAnio) { a.mejoras = mejoras * a.parte; a.total += mejoras * a.parte; }
     if (mejoras) { cuenta.totalContrato = cuenta.porAnio.reduce((s, a) => s + a.total, 0); cuenta.costeMedioAnual = cuenta.totalContrato / cuenta.anios; }
   }
@@ -300,5 +332,6 @@ export function calcularConcurso({ ficha, dim, calc, concurso, factores, mejoras
   cuenta.precios = { equilibrio, objetivo: equilibrio / (1 - margen) };
   cuenta.factorIngresos = factorIngresos;
   cuenta.ingresosBase = ingresosBase;
+  cuenta.preciosUnitarios = preciosUnitarios(d, cuenta, margen);
   return { dimension: d, parametrosDimension: parametros, cuenta, anios, modo, estudio, presupuestoAnual: pres.valor, fuentePresupuesto: pres, costeEquivalente: equilibrio };
 }

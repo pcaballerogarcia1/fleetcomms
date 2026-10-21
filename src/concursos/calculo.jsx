@@ -12,7 +12,7 @@ import { alarmasConcurso } from "./alarmas.js";
 import { PanelAlarmas } from "./alarmas-panel.jsx";
 import { PARAMETROS_CALCULO, calcularConcurso, costeOrientativo } from "./calculo.js";
 import { PlantillaSubrogar } from "./plantilla-panel.jsx";
-import { F0, F1, eur, pct } from "./formato.js";
+import { F0, F1, F2, eur, pct } from "./formato.js";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
 
 const GRUPOS_PARAM = [
@@ -21,7 +21,7 @@ const GRUPOS_PARAM = [
   ["Estructura y riesgo", [["instalacionesAnio", "Instalaciones (nave, vestuarios…)", "€/año"], ["sistemasAnio", "Sistemas (GPS, software…)", "€/año"], ["seguroRCAnio", "Seguros del contrato", "€/año"], ["ipcPct", "IPC cada año (lo que no es personal)", "%"], ["gastosGeneralesPct", "Gastos generales", "%"], ["contingenciasPct", "Contingencias", "%"]]],
   ["Precio", [["margenPct", "Margen que se quiere sobre lo que se cobra", "%"], ["diasCobro", "Días que se tarda en cobrar", "días"]]],
 ];
-const CAMPOS_VEHICULO = [["precio", "Precio de compra", "€"], ["combustibleTurno", "Combustible", "€/turno"], ["consumiblesTurno", "Consumibles", "€/turno"], ["mantenimientoAnio", "Mantenimiento", "€/año"], ["seguroAnio", "Seguro e impuestos", "€/año"]];
+const CAMPOS_VEHICULO = [["precio", "Precio de compra", "€"], ["combustibleTurno", "Combustible", "€/turno"], ["combustibleKm", "Combustible (si hay km)", "€/km"], ["consumiblesTurno", "Consumibles", "€/turno"], ["mantenimientoAnio", "Mantenimiento", "€/año"], ["seguroAnio", "Seguro e impuestos", "€/año"]];
 
 export function CalculoConcurso({ concursoId, irA }) {
   const datos = useDatosConcurso(concursoId);
@@ -71,8 +71,8 @@ export function CalculoConcurso({ concursoId, irA }) {
     [`Precio objetivo del primer año (${F1.format(p.margenPct)} % de margen)`, eur(c.precios.objetivo), `equilibrio ${eur(c.precios.equilibrio)}${c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? " · sube cada año como el pliego" : ""}`],
     ["Presupuesto del primer año", presupuestoAnual ? eur(presupuestoAnual) : "—", presupuestoAnual ? `sin IVA · ${r.fuentePresupuesto.fuente}` : "confírmalo en la ficha", r.fuentePresupuesto?.dudoso ? C.amber : null],
     ["Baja con el precio objetivo", bajaObjetivo != null ? pct(bajaObjetivo) : "—", cabe == null ? "" : cabe ? "cabe en el presupuesto" : "no cabe: pasa del presupuesto", cabe === false ? C.red : cabe ? C.green : null],
-    ["Plantilla", F1.format(c.plantilla.total), r.modo === "estudio" ? (calc.usarPlantilla && calc.plantilla ? `la plantilla a subrogar (${calc.plantilla.personas} personas)` : "personas a jornada completa del estudio") : `${c.plantilla.servicio} de servicio · ${c.plantilla.encargados} encargado${c.plantilla.encargados === 1 ? "" : "s"} · jefe ${F1.format(c.plantilla.jefe)}`],
-    ...(r.modo === "rendimientos" ? [["Vehículos", String(vehiculosTotal), `${vehiculosTotal - c.vehiculos.reduce((s, v) => s + v.reserva, 0)} trabajando + ${c.vehiculos.reduce((s, v) => s + v.reserva, 0)} de reserva`]] : []),
+    ["Plantilla", F1.format(c.plantilla.total), r.modo === "estudio" ? (calc.usarPlantilla && calc.plantilla ? `la plantilla a subrogar (${calc.plantilla.personas} personas)` : "personas a jornada completa del estudio") : c.aDemanda ? "a demanda: solo las horas que se usan" : `${F1.format(c.plantilla.servicio)} de servicio · ${c.plantilla.encargados} encargado${c.plantilla.encargados === 1 ? "" : "s"} · jefe ${F1.format(c.plantilla.jefe)}`],
+    ...(r.modo === "rendimientos" ? [["Vehículos", F1.format(vehiculosTotal), c.aDemanda ? "la parte del año que se usan" : `${vehiculosTotal - c.vehiculos.reduce((s, v) => s + v.reserva, 0)} trabajando + ${c.vehiculos.reduce((s, v) => s + v.reserva, 0)} de reserva`]] : []),
     ["Caja que hay que adelantar", eur(c.caja), `${p.diasCobro} días de gastos hasta cobrar`],
   ];
   const filasCuenta = c.partidas.filter(([k]) => c.porAnio.some(a => a[k])).map(([k, n]) => ({ k, n, anios: c.porAnio.map(a => a[k] || 0), total: c.porAnio.reduce((s, a) => s + (a[k] || 0), 0) }));
@@ -171,8 +171,33 @@ export function CalculoConcurso({ concursoId, irA }) {
       </div>
       <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>{c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? "Se oferta el precio del primer año; la baja se aplica igual a los siguientes, que suben como dice el pliego." : "El precio de la oferta es el mismo todos los años."} El coste sube con {r.modo === "estudio" && r.estudio.incrementos?.manoObra?.length ? "las subidas del pliego (mano de obra y resto)" : "el convenio y el IPC"}. Precio objetivo = lo que cuesta el contrato ÷ (1 − margen), repartido como los ingresos.</div>
 
+      {c.preciosUnitarios?.length > 0 && <>
+        {titulo("Precio por unidad para la oferta")}
+        <div style={{ ...tarjeta, overflow: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead><tr><th style={{ ...th, textAlign: "left" }}>Servicio</th><th style={th}>Al año</th><th style={th}>Coste por unidad</th><th style={th}>Precio objetivo</th><th style={th}>Máximo del pliego</th><th style={th}>Baja sobre el máximo</th></tr></thead>
+            <tbody>
+              {c.preciosUnitarios.map(u => (
+                <tr key={u.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td style={{ ...td, textAlign: "left" }}>{u.nombre}{u.ubicacion ? <span style={{ color: C.dim }}> · {u.ubicacion}</span> : null}</td>
+                  <td style={td}>{F0.format(u.cantidadAnual)} {u.unidad}</td>
+                  <td style={td}>{F2.format(u.coste)} €/{u.unidad}</td>
+                  <td style={{ ...td, fontWeight: 650 }}>{F2.format(u.objetivo)} €/{u.unidad}</td>
+                  <td style={td}>{F2.format(u.maximo)} €/{u.unidad}</td>
+                  <td style={{ ...td, color: u.bajaPct < 0 ? C.red : u.bajaPct > 25 ? C.amber : C.green }}>{u.bajaPct < 0 ? "no cabe" : pct(u.bajaPct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada servicio se lleva la parte del coste que le toca por el tiempo de equipo que ocupa (en los transportes, por sus viajes y kilómetros). Una baja muy grande puede ser anormalmente baja: mira en Alternativas dónde empieza.</div>
+      </>}
+
       {r.modo === "rendimientos" && <>
       {titulo("Plantilla")}
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: C.text, marginBottom: 8 }} title="Se pide cuando hace falta y se paga por unidad: se cuentan solo las horas de personas y vehículos que se usan">
+        <input type="checkbox" checked={!!c.aDemanda} onChange={e => cambiar({ aDemanda: e.target.checked })} style={{ accentColor: C.blue }} /> Contrato a demanda (sin equipo fijo: solo las horas que se usan)
+      </label>
       <div style={{ ...tarjeta, overflow: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead><tr><th style={{ ...th, textAlign: "left" }}>Puesto</th><th style={th}>Personas</th><th style={th}>Coste al año (con S. Social)</th><th style={{ ...th, textAlign: "left" }}>De dónde sale</th></tr></thead>
@@ -204,7 +229,7 @@ export function CalculoConcurso({ concursoId, irA }) {
                 <tr key={v.tipo} style={{ borderTop: `1px solid ${C.border}` }}>
                   <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{v.tipo}<div style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>{v.servicios.join(", ")}</div></td>
                   <td style={td}>{F1.format(v.turnosAnio)}</td>
-                  <td style={td}>{v.unidades}</td>
+                  <td style={td}>{c.aDemanda ? `${F0.format(v.unidades * 100)} %` : v.unidades}{v.kmAnio ? <div style={{ fontSize: 11, color: C.dim }}>{F0.format(v.kmAnio)} km/año</div> : null}</td>
                   <td style={td}>{numInput(cambiado.reserva ?? null, x => cambiar({ vehiculos: { [v.tipo]: { reserva: x } } }), 60, String(v.reserva))}</td>
                   {CAMPOS_VEHICULO.map(([k]) => <td key={k} style={td}>{numInput(cambiado[k] ?? null, x => cambiar({ vehiculos: { [v.tipo]: { [k]: x } } }), k === "precio" ? 100 : 80, F0.format(o[k]))}</td>)}
                   <td style={td}>{eur(v.amortizacion)}</td>
@@ -214,7 +239,7 @@ export function CalculoConcurso({ concursoId, irA }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>En gris, valores orientativos: escribe encima los tuyos. La amortización incluye la financiación (cuota de un préstamo a {F1.format(p.interesPct)} % en {F1.format(p.aniosAmortizacion || anios)} años, quedando un {F1.format(p.residualPct)} % de valor).</div>
+      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>En gris, valores orientativos: escribe encima los tuyos. La amortización incluye la financiación ({c.amortizacionCorta ? `contrato corto: el vehículo sigue en la empresa, se reparte en ${F1.format(c.amortizacionCorta)} años de vida útil, a ${F1.format(p.interesPct)} %` : `cuota de un préstamo a ${F1.format(p.interesPct)} % en ${F1.format(p.aniosAmortizacion || anios)} años, quedando un ${F1.format(p.residualPct)} % de valor`}).</div>
 
       </>}
 

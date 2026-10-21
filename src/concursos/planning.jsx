@@ -8,7 +8,9 @@
 import { FileText, Map as IconoMapa, Calculator } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
-import { dimensionar, entradaDimension, parqueDelPliego, rendimientoOrientativo } from "./ficha.js";
+import { dimensionar, entradaDimension, esTransporte, parqueDelPliego, rendimientoOrientativo } from "./ficha.js";
+import { ponerKm } from "./plataforma.js";
+import { origenDe } from "./tecnico.js";
 import { DESPLAZAMIENTO_DEFECTO, UTIL_DEFECTO, minutosOrientativos, rendimientoConInventario, resumenInventario, vanJuntas } from "./inventario.js";
 import { PanelInventario } from "./inventario-panel.jsx";
 import { escucharDimension, escucharDocumentos, escucharFicha, escucharInventario, guardarDimension } from "./store.js";
@@ -20,6 +22,11 @@ const PARAMS = [
   ["horasTurno", "Horas de trabajo por turno", "h"],
   ["horasAnualesConvenio", "Horas al año de un trabajador (convenio)", "h"],
   ["absentismoPct", "Absentismo (bajas y ausencias)", "%"],
+];
+// con transportes: los viajes
+const PARAMS_TRANSPORTE = [
+  ["cargaViaje", "Carga de un viaje (si no se dice en el servicio)", "t"],
+  ["horasCargaDescarga", "Carga, descarga y esperas por viaje", "h"],
 ];
 // con inventario: para estimar lo que rinde un equipo con los puntos reales
 const PARAMS_INVENTARIO = [
@@ -74,6 +81,34 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
 
   const cambiarParam = (k, v) => setLocal(l => ({ ...(l || {}), parametros: { ...(l?.parametros || {}), [k]: v } }));
   const cambiarServicio = (id, k, v) => setLocal(l => ({ ...(l || {}), porServicio: { ...(l?.porServicio || {}), [id]: { ...(porServicio[id] || {}), [k]: v } } }));
+  const cambiarVarios = (id, o) => setLocal(l => ({ ...(l || {}), porServicio: { ...(l?.porServicio || {}), [id]: { ...(porServicio[id] || {}), ...(l?.porServicio?.[id] || {}), ...o } } }));
+
+  // transporte: los km por carretera de cada origen a su destino (con los sitios y el destino que da el pliego)
+  const transportes = r.lineas.filter(l => esTransporte(l));
+  const [km, setKm] = useState(null); // { ocupado, error }
+  async function calcularKm() {
+    const lugares = docs.flatMap(d => d.lectura?.tecnico?.lugares || []);
+    const destinoPliego = docs.map(d => d.lectura?.tecnico?.destino?.nombre).find(Boolean) || null;
+    const lista = transportes.map(l => {
+      const nombre = l.origen?.nombre || origenDe(l.ubicacion || "") || origenDe(l.nombre) || l.ubicacion;
+      const lugar = lugares.find(x => x.nombre === nombre || origenDe(x.nombre) === nombre);
+      return { id: l.id, origen: l.origen?.direccion ? l.origen : { nombre, direccion: lugar?.direccion || null, municipio: lugar?.municipio || null }, destino: l.destino || destinoPliego };
+    }).filter(x => x.origen?.nombre && x.destino);
+    if (!lista.length) { setKm({ error: "El pliego no dice de dónde a dónde: pon los km a mano." }); return; }
+    setKm({ ocupado: true });
+    try {
+      const fallos = await ponerKm(lista);
+      for (const x of lista) if (x.kmIda) cambiarVarios(x.id, { kmIda: x.kmIda, minutosIda: x.minutosIda, kmDesde: x.kmDesde, kmHasta: x.kmHasta });
+      setKm(fallos.length ? { error: `${fallos.join(" · ")}. Ponlos a mano.` } : null);
+    } catch (e) { setKm({ error: e.message || String(e) }); }
+  }
+  // la primera vez, solos
+  const kmLanzado = useRef(false);
+  useEffect(() => {
+    if (kmLanzado.current || !ficha || !docs.length || !transportes.length || transportes.some(l => Number(l.kmIda) > 0)) return;
+    kmLanzado.current = true;
+    setTimeout(calcularKm, 0);
+  });
 
   const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
   const th = { textAlign: "left", padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
@@ -117,7 +152,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
 
             {/* parámetros */}
             <div style={{ ...tarjeta, padding: "12px 16px", display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
-              {[...PARAMS, ...(resumen ? PARAMS_INVENTARIO : [])].map(([k, l, u]) => (
+              {[...PARAMS, ...(resumen ? PARAMS_INVENTARIO : []), ...(transportes.length ? PARAMS_TRANSPORTE : [])].map(([k, l, u]) => (
                 <label key={k} style={{ display: "grid", gap: 4, fontSize: 12, color: C.muted }}>
                   {l}{k === "jornadasAnio" && jornadasPliego ? <span style={{ fontSize: 11, color: C.dim }}>(el pliego dice {jornadasPliego})</span> : null}
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -132,6 +167,8 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
               <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Servicios de la ficha</div>
               {resumen && <button className="op-btn" onClick={usarTodosInventario} title="Pone en cada servicio lo que rinde con los puntos del inventario">Usar los rendimientos del inventario</button>}
+              {transportes.length > 0 && <button className="op-btn" disabled={km?.ocupado} onClick={calcularKm} title="Busca cada origen y el destino que da el pliego y mide la ruta por carretera">{km?.ocupado ? "Midiendo…" : "Calcular km por carretera"}</button>}
+              {km?.error && <span style={{ fontSize: 12, color: C.amber }}>{km.error}</span>}
             </div>
             <div style={{ ...tarjeta, overflow: "auto", marginBottom: 18 }}>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -143,7 +180,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                     return (
                       <tr key={l.id} style={{ borderTop: `1px solid ${C.border}` }}>
                         <td style={td}>{l.nombre}</td><td style={{ ...td, color: C.muted }}>{l.fraccion || "—"}</td><td style={{ ...td, color: C.muted }}>{l.ubicacion || "—"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{num(l.cantidadAnual)}</td>
+                        <td style={{ ...td, textAlign: "right" }} title={l.cantidadPresupuesto ? `${num(l.cantidadPresupuesto)} en el presupuesto de ${l.periodoMeses} meses` : ""}>{num(l.cantidadAnual)}{l.unidad ? ` ${l.unidad}` : ""}</td>
                         {resumen && (() => {
                           const e = conInventario(l.id);
                           return <>
@@ -151,10 +188,22 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                             <td style={td}>{e ? <span title={`${num(e.porPunto)} contenedores por punto en ${e.puntos} puntos; ${e.minPorContenedor} min por contenedor`}><b>{e.porTurno}</b> <span style={{ color: C.dim, fontSize: 11.5 }}>({num(e.porPunto)}/punto{vanJuntas(servicios.find(x => x.id === l.id), servicios, resumen) ? ", todas las fracciones" : ""})</span> <button className="op-btn op-fantasma" style={{ height: 24, padding: "0 6px", fontSize: 11 }} onClick={() => cambiarServicio(l.id, "porTurno", e.porTurno)}>Usar</button></span> : <span style={{ color: C.dim, fontSize: 12 }}>no va por puntos</span>}</td>
                           </>;
                         })()}
+                        {esTransporte(l) ? (
+                          <td style={td} title={l.kmDesde || porServicio[l.id]?.kmDesde ? `Ruta por carretera desde «${porServicio[l.id]?.kmDesde || l.kmDesde}» hasta «${porServicio[l.id]?.kmHasta || l.kmHasta}»` : "Km de ida y toneladas por viaje"}>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <input className="op-input" type="number" min={0} value={l.kmIda ?? ""} placeholder="km" onChange={e => cambiarVarios(l.id, { kmIda: e.target.value === "" ? null : Number(e.target.value), minutosIda: null })} style={{ width: 70, height: 30 }} />
+                              <span style={{ fontSize: 11.5, color: C.dim }}>km ida ·</span>
+                              <input className="op-input" type="number" min={1} value={porServicio[l.id]?.cargaViaje ?? ""} placeholder={String(parametros.cargaViaje)} onChange={e => cambiarServicio(l.id, "cargaViaje", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 60, height: 30 }} />
+                              <span style={{ fontSize: 11.5, color: C.dim }}>{l.unidad || "t"}/viaje</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: l.viajesAnio ? C.muted : C.amber, marginTop: 2 }}>{l.viajesAnio ? `${num(l.viajesAnio)} viajes al año · ${num(l.horasViaje)} h por viaje${l.minutosIda ? ` (${l.minutosIda} min de ida)` : ""}` : "sin km: pon los km de ida o pulsa «Calcular km»"}</div>
+                          </td>
+                        ) : (
                         <td style={td} title={ori.nota}>
                           <input className="op-input" type="number" min={1} value={porServicio[l.id]?.porTurno ?? ""} placeholder={String(ori.porTurno)} onChange={e => cambiarServicio(l.id, "porTurno", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 80, height: 30 }} />
                           <span style={{ fontSize: 11, color: propio ? C.green : C.amber, marginLeft: 8 }}>{propio ? "tuyo" : "orientativo"}</span>
                         </td>
+                        )}
                         <td style={td}>
                           <input className="op-input" value={porServicio[l.id]?.vehiculo ?? l.vehiculo} onChange={e => cambiarServicio(l.id, "vehiculo", e.target.value)} style={{ width: 220, height: 30 }} />
                           <span style={{ fontSize: 11, marginLeft: 8, color: servicios.find(x => x.id === l.id)?.vehiculo ? C.green : C.amber }} title={servicios.find(x => x.id === l.id)?.equipoPagina ? `pág. ${servicios.find(x => x.id === l.id).equipoPagina}` : "el pliego no lo fija"}>{servicios.find(x => x.id === l.id)?.vehiculo ? "pliego" : "orientativo"}</span>
@@ -190,7 +239,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
               </table>
             </div>
             <div style={{ fontSize: 11.5, color: C.dim, marginTop: 10, lineHeight: 1.5, maxWidth: 820 }}>
-              Turnos al año = cantidad al año ÷ lo que rinde un equipo en un turno. Vehículos = turnos que hacen falta cada día de servicio, por tipo de vehículo, redondeado hacia arriba. Personas = horas al año (cada turno con las personas de su equipo) ÷ horas de un trabajador (convenio, descontando el absentismo). El vehículo y las personas de cada servicio vienen del pliego cuando lo exige («pliego»); si no, orientativos. Se guarda solo y lo usa Cálculo.
+              Turnos al año = cantidad al año ÷ lo que rinde un equipo en un turno (en los transportes: viajes × horas por viaje ÷ horas del turno; viajes = cantidad ÷ carga; horas = ida y vuelta por carretera, un 15 % más lento que un coche, más la carga y descarga). Vehículos = turnos que hacen falta cada día de servicio, por tipo de vehículo, redondeado hacia arriba. Personas = horas al año (cada turno con las personas de su equipo) ÷ horas de un trabajador (convenio, descontando el absentismo). El vehículo y las personas de cada servicio vienen del pliego cuando lo exige («pliego»); si no, orientativos. Se guarda solo y lo usa Cálculo.
             </div>
           </>}
         </div>

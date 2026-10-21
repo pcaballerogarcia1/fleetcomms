@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
 import { VERSION_LECTOR, buscarEnPliego, leerPliego } from "./pliego.js";
 import { ACEPTA_PLIEGOS, documentosDeArchivo } from "./documento-texto.js";
+import { contextoDelConcurso } from "./ficha.js";
 import { prepararDimension, traerLoQueFalta } from "./plataforma.js";
 import { PDF_MAX, borrarDocumento, escucharDocumentos, escucharFicha, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
 import { FichaRequisitos } from "./ficha-requisitos.jsx";
@@ -88,12 +89,13 @@ export function DocumentosConcurso({ concurso }) {
     setError(null);
     try {
       const r = await traerLoQueFalta(id, concurso.plataforma.enlace, (docs || []).map(d => d.nombre), { onProgreso: setSubiendo });
-      let extra = "";
-      if (!Object.keys(ficha?.servicios || {}).length) {
-        setSubiendo("Preparando los servicios para dimensionar…");
-        const p = await prepararDimension(id, [...(docs || []), ...r.leidos]);
-        extra = ` ${p.servicios} servicios en la ficha${p.estudio ? ", estudio de costes en uso" : ""}${p.personal ? `, personal mínimo: ${p.personal}` : ""}.`;
-      }
+      // con lo leído al día (los pliegos guardados con un lector viejo se leen otra vez aquí mismo)
+      setSubiendo("Repasando los pliegos…");
+      const aldia = await Promise.all((docs || []).map(async d => ((d.lectura?.version || 1) < VERSION_LECTOR ? { ...d, lectura: leerPliego(await textoDocumento(id, d)) } : d)));
+      const sinServicios = !Object.keys(ficha?.servicios || {}).length;
+      setSubiendo(sinServicios ? "Preparando los servicios para dimensionar…" : "Repasando los datos del pliego…");
+      const p = await prepararDimension(id, [...aldia, ...r.leidos], contextoDelConcurso(ficha, concurso), { onProgreso: setSubiendo, conServicios: sinServicios, ficha });
+      const extra = ` ${sinServicios ? `${p.servicios} servicios en la ficha` : "Servicios: los que ya tenías"}${p.estudio ? ", estudio de costes" : ""}${p.personal ? `, personal mínimo: ${p.personal}` : ""}${p.aDemanda ? ", a demanda" : ""}.`;
       if (r.fallos.length) setError(`No se pudieron traer: ${r.fallos.join(" · ")}`);
       setNota(`${r.nuevos ? `${r.leidos.length} documentos nuevos de la Plataforma.` : "Ya estaban todos los documentos de la Plataforma."}${extra}`);
     } catch (e) { setError(e.message || String(e)); }
@@ -143,7 +145,7 @@ export function DocumentosConcurso({ concurso }) {
             <button className={pestana === "pliegos" ? "op-on" : ""} onClick={() => setPestana("pliegos")}>Pliegos ({docs.length})</button>
           </div>
           {pestana === "ficha" ? (
-            ficha ? <FichaRequisitos concursoId={id} docs={docs} ficha={ficha} onError={setError} onNota={setNota} /> : <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div>
+            ficha ? <FichaRequisitos concursoId={id} concurso={concurso} docs={docs} ficha={ficha} onError={setError} onNota={setNota} /> : <div style={{ color: C.muted, fontSize: 13 }}>Cargando…</div>
           ) : (
           <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
             {/* documentos subidos */}

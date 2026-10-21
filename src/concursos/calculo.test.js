@@ -10,7 +10,7 @@ describe("cuenta de explotación", () => {
   });
   it("plantilla, vehículos, partidas y precio objetivo = coste ÷ (1 − margen)", () => {
     // 200 turnos × 7 h × 2 personas = 2.800 h ÷ 1.720 = 1,63 → 2 personas; 0,8 turnos al día → 1 camión
-    const c = cuentaExplotacion(d, { ...PARAMETROS_CALCULO, reservaPct: 0, subidaSalarialPct: 0, ipcPct: 0, interesPct: 0, residualPct: 0 }, {}, 2);
+    const c = cuentaExplotacion(d, { ...PARAMETROS_CALCULO, reservaPct: 0, subidaSalarialPct: 0, ipcPct: 0, interesPct: 0, residualPct: 0, aniosAmortizacion: 2 }, {}, 2);
     expect(c.plantilla).toMatchObject({ servicio: 2, encargados: 1, jefe: 0.5 });
     expect(c.vehiculos[0]).toMatchObject({ unidades: 1, reserva: 0, total: 1, amortizacion: 125000 });
     expect(c.porAnio).toHaveLength(2);

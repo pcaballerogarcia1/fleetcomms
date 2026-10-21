@@ -6,7 +6,7 @@ import { Check, Pencil, Plus, Trash2, TriangleAlert, Truck, X } from "lucide-rea
 import { useState } from "react";
 import { C } from "../tema.js";
 import { CriteriosFicha } from "./criterios-ficha.jsx";
-import { equipoDe, preciosDelPliego, propuestasDeServicios, servicioParaGuardar } from "./ficha.js";
+import { contextoDelConcurso, equipoDe, preciosDelPliego, propuestasDeServicios, revisarPeriodo, servicioParaGuardar } from "./ficha.js";
 import { cambiarConcurso, fijarDato, fijarEstudio, fijarServicio } from "./store.js";
 
 const GRUPOS = [
@@ -46,7 +46,7 @@ function propuestasDe(docs) {
   return out;
 }
 
-export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
+export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, concurso }) {
   const [editando, setEditando] = useState(null); // { clave, texto }
   const [elegidas, setElegidas] = useState(null);  // tablas marcadas para añadir
   const [manual, setManual] = useState(null);
@@ -66,7 +66,18 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
   // ── servicios ──
   const servicios = Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || a.nombre.localeCompare(b.nombre));
   const yaEn = new Set(servicios.map(s => s.id));
-  const propuestas = propuestasDeServicios(docs)
+  const contexto = contextoDelConcurso(ficha, concurso);
+  const periodo = revisarPeriodo(servicios, contexto);
+  async function corregirPeriodo() {
+    try {
+      for (const s of servicios.filter(x => periodo.ids.includes(x.id))) {
+        const { id, ...resto } = s;
+        await fijarServicio(concursoId, id, { ...resto, cantidadPresupuesto: s.cantidadAnual, periodoMeses: periodo.meses, cantidadAnual: Math.round(s.cantidadAnual * periodo.factor * 1000) / 1000 });
+      }
+      onNota("Cantidades pasadas al año.");
+    } catch (e) { onError(e.message || String(e)); }
+  }
+  const propuestas = propuestasDeServicios(docs, contexto)
     .map(t => ({ ...t, lineas: t.lineas.filter(l => !yaEn.has(l.id)) })).filter(t => t.lineas.length);
   const marcadas = elegidas ?? new Set(propuestas.filter(t => t.usar).map(t => t.clave));
   // equipos y precios del pliego (de todos los documentos subidos)
@@ -154,6 +165,13 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota }) {
 
       {/* ── Servicios y cantidades al año ── */}
       {titulo(`Servicios y cantidades al año (${servicios.length})`)}
+      {periodo && (
+        <div style={{ ...tarjeta, padding: "10px 14px", marginBottom: 10, borderColor: "rgba(242,109,109,0.45)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <TriangleAlert size={16} color={C.red} />
+          <div style={{ flex: "1 1 320px", fontSize: 13, color: C.text }}><b>Estas cantidades no son de un año.</b> {periodo.motivo}.</div>
+          <button className="op-btn op-primario" style={btn} onClick={corregirPeriodo}>Pasar al año (× {FMT.format(Math.round(periodo.factor * 100) / 100)})</button>
+        </div>
+      )}
       <div style={{ ...tarjeta, overflow: "auto" }}>
         {!servicios.length ? <div style={{ padding: 16, fontSize: 13, color: C.muted }}>Aún no hay servicios en la ficha. Añádelos desde las tablas del pliego (abajo) o a mano.</div> : (
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>

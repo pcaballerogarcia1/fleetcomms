@@ -13,10 +13,10 @@
 
 import { criteriosDelPliego } from "./criterios.js";
 import { estudioDeCostes } from "./estudio.js";
-import { personalExigido, serviciosPorFrecuencia, serviciosPorMediciones, textoPersonal } from "./tecnico.js";
+import { aDemanda, destinoDelTransporte, lugaresDeRealizacion, personalExigido, serviciosPorFrecuencia, serviciosPorMediciones, textoPersonal } from "./tecnico.js";
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 9;
+export const VERSION_LECTOR = 10;
 
 const NUM_LETRA = {
   un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
@@ -124,6 +124,9 @@ const AMBIENTAL = [
  *            requisitos: [{ texto, pagina }], indice: [{ titulo, pagina }],
  *            tablas: [{ titulo, pagina, cabecera, filas: [{ grupo, concepto, valores }] }], paginas, conTexto }
  */
+// cuál de las dos clases aparece antes en el texto
+const primero = (t, adm, tec) => { const a = t.search(adm), b = t.search(tec); return a < 0 && b < 0 ? null : a < 0 ? "tecnico" : b < 0 ? "administrativo" : a < b ? "administrativo" : "tecnico"; };
+
 export function leerPliego(paginasCrudas) {
   const paginas = (paginasCrudas || []).map(limpia);
   const conTexto = paginas.reduce((s, p) => s + p.replace(/\s/g, "").length, 0) > 200 * Math.max(1, paginas.length) * 0.05;
@@ -137,9 +140,9 @@ export function leerPliego(paginasCrudas) {
   // ── qué documento es ──
   const todo = paginas.join(" ");
   const clase = /plataforma de contrataci[oó]n|documento de pliegos|clasificaci[oó]n cpv/i.test(todo) && paginas.length < 20 ? "anuncio"
-    : /^[\s\S]{0,1500}pliego de cl[aá]usulas administrativas/i.test(todo) ? "administrativo"
-    : /^[\s\S]{0,1500}(?:pliego de (?:prescripciones|condiciones) t[eé]cnicas)/i.test(todo) ? "tecnico"
-    : /prescripciones t[eé]cnicas/i.test(todo) ? "tecnico" : /cl[aá]usulas administrativas/i.test(todo) ? "administrativo" : null;
+    // el título que sale antes al principio («Este pliego técnico, junto con el de cláusulas administrativas…» es técnico)
+    : primero(todo.slice(0, 1500), /pliego de cl[aá]usulas administrativas/i, /pliego de (?:prescripciones|condiciones) t[eé]cnicas/i)
+      ?? (/prescripciones t[eé]cnicas/i.test(todo) ? "tecnico" : /cl[aá]usulas administrativas/i.test(todo) ? "administrativo" : null);
 
   // ── ficha del anuncio / expediente ──
   const expd = buscar(paginas, /(?:n[uú]mero de expediente|exp(?:te|ediente)?\.?)\s*(?:n[ºo°.]*\s*)?:?\s*([A-Z][A-Z0-9 .-]{0,15}?\d{1,6}\/\d{2,4}|\d[\d.-]{2,20})/i);
@@ -299,7 +302,7 @@ export function leerPliego(paginasCrudas) {
   if (tdias) poner("dias", "Días de servicio", tdias, `De lunes a ${tdias.m[1].toLowerCase()}`);
 
   // ── personal ──
-  const sub = buscar(paginas, /subrogaci[oó]n|subrogar/i);
+  const sub = buscar(paginas, /subrogaci[oó]n (?:de|del) (?:la )?(?:personal|plantilla|trabajadores)|subrogar (?:al|a los|a las|el|la) (?:personal|trabajadores|plantilla)|(?:personal|trabajadores) (?:a|objeto de|sujetos? a) (?:la )?subroga|obligaci[oó]n de subrogar|deber[aá] subrogar|se subrogar[aá]|relaci[oó]n (?:nominal )?(?:del|de) personal (?:a subrogar|actual|que presta)/i);
   if (sub) poner("subrogacion", "Subrogación del personal", sub, "Sí, el pliego habla de subrogar plantilla");
   const trab = buscarTodas(paginas, /(\d{1,4})\s+(?:trabajadores|operarios|conductores|personas)/i);
   if (trab.length) { const mayor = trab.reduce((a, b) => (Number(b.m[1]) > Number(a.m[1]) ? b : a)); poner("plantilla", "Plantilla (la cifra mayor que aparece)", mayor, Number(mayor.m[1])); }
@@ -375,7 +378,13 @@ export function leerPliego(paginasCrudas) {
   const estudio = estudioDeCostes(paginasCrudas || []);
   const mediosMinimos = mediosMinimosDe(paginasCrudas || []);
   // la parte técnica para dimensionar: servicios por frecuencias o por mediciones, y el personal que exige
-  const tecnico = { frecuencias: serviciosPorFrecuencia(paginasCrudas || []), mediciones: serviciosPorMediciones(paginasCrudas || []), personal: personalExigido(paginasCrudas || []) };
+  const tecnico = {
+    frecuencias: serviciosPorFrecuencia(paginasCrudas || []), mediciones: serviciosPorMediciones(paginasCrudas || []), personal: personalExigido(paginasCrudas || []),
+    // transporte: dónde se recoge (con la dirección del pliego) y a dónde se lleva
+    lugares: lugaresDeRealizacion(paginasCrudas || []), destino: destinoDelTransporte(paginasCrudas || []),
+  };
+  const demanda = aDemanda(paginasCrudas || []);
+  if (demanda) poner("aDemanda", "Se pide a demanda", { pagina: demanda.pagina, frase: demanda.frase }, "Sí: se pide cuando hace falta y se paga por unidad (sin equipo fijo)");
   if (tecnico.personal.length) poner("personalMinimo", "Personal mínimo que exige", { pagina: tecnico.personal[0].pagina, frase: tecnico.personal[0].frase }, textoPersonal(tecnico.personal));
   const adjudicacion = criteriosDelPliego(paginasCrudas || []);
 

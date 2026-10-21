@@ -7,6 +7,8 @@
 // Las que «bloquean» impiden recomendar una baja hasta resolverlas.
 // Sin React ni Firebase.
 
+import { contextoDelConcurso, revisarPeriodo } from "./ficha.js";
+
 const valorDato = (ficha, clave) => { const d = ficha?.datos?.[clave]; return d && d.estado !== "descartado" ? d.valor : null; };
 const eur = n => `${Math.round(n).toLocaleString("es-ES")} €`;
 
@@ -34,10 +36,18 @@ export function alarmasConcurso({ r, ficha, concurso, calc, adj } = {}) {
     else if (total < vec * 0.6) aviso(`Presupuesto × años = ${eur(total)}, bastante menos que el valor estimado (${eur(vec)}): ¿hay prórrogas o modificaciones? ¿La duración es la buena?`, "/documentos");
   }
 
+  // ── los servicios ──
+  const servicios = Object.entries(ficha?.servicios || {}).map(([id, s]) => ({ id, ...s }));
+  const periodo = revisarPeriodo(servicios, contextoDelConcurso(ficha, concurso));
+  if (periodo) bloquea(`Las cantidades de los servicios son las del presupuesto (${periodo.meses} ${periodo.meses === 1 ? "mes" : "meses"}), no las de un año: pásalas al año en la Ficha de requisitos.`, "/documentos");
+  const sinKm = (r.dimension?.lineas || []).filter(l => l.sinKm);
+  if (sinKm.length) bloquea(`${sinKm.length === 1 ? "Un transporte no tiene" : `${sinKm.length} transportes no tienen`} los km: sin ellos no se saben los viajes ni las horas. Pulsa «Calcular km por carretera» en Planning o ponlos a mano.`, "/planning");
+
   // ── el coste ──
   if (pres && r.costeEquivalente) {
     const ratio = r.costeEquivalente / pres;
-    if (ratio < 0.6) bloquea(`Tu coste es solo el ${Math.round(ratio * 100)} % del presupuesto: casi seguro que falta algo (servicios, plantilla a subrogar, medios mínimos, temporada alta…).`, "/calculo");
+    if (ratio < 0.6 && r.cuenta?.aDemanda) aviso(`Tu coste es el ${Math.round(ratio * 100)} % del presupuesto. A demanda puede ser, pero revisa la carga por viaje, las horas por viaje y estar disponible cuando avisen.`, "/planning");
+    else if (ratio < 0.6) bloquea(`Tu coste es solo el ${Math.round(ratio * 100)} % del presupuesto: casi seguro que falta algo (servicios, plantilla a subrogar, medios mínimos, temporada alta…).`, "/calculo");
     else if (ratio > 1) aviso(`Tu coste supera el presupuesto en un ${Math.round((ratio - 1) * 100)} %: con este coste no cabe.`, "/calculo");
   }
   if (r.estudio && r.modo === "estudio") {

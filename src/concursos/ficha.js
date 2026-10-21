@@ -7,6 +7,8 @@
 //   datos:     { [clave]: { valor, estado: "confirmado" | "corregido" | "descartado", propuesto, pagina, frase, doc } }
 //   servicios: { [id]: { nombre, fraccion, ubicacion, cantidadAnual, unidades, frecuencia, pagina, doc, orden } }
 
+import { origenDe, periodoDeMediciones } from "./tecnico.js";
+
 const sinAcentos = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 // Fracción a partir de cómo la llama el pliego
@@ -186,9 +188,12 @@ export function serviciosDeDatos(datos = [], docId = null) {
  * mediciones del presupuesto (260 t de transporte a 21,08 €/t). Mismo formato
  * que tablasParaServicios; vienen marcados.
  */
-export function serviciosDelTecnico(tecnico, docId = null) {
+export function serviciosDelTecnico(tecnico, docId = null, contexto = {}) {
   const out = [];
   const fr = tecnico?.frecuencias || [], me = tecnico?.mediciones || [];
+  // si las mediciones son las del presupuesto de un mes (o de 2 años…), al año
+  const per = periodoDeMediciones(me, contexto);
+  const lugar = n => (tecnico?.lugares || []).find(l => origenDe(l.nombre) === n || l.nombre === n) || null;
   if (fr.length) out.push({
     indice: "frecuencias", titulo: "Frecuencias del pliego", pagina: fr[0].pagina, servicio: "Servicios por frecuencia", usar: true, motivo: null,
     lineas: fr.map((s, i) => ({ id: `d${docId || "x"}_f${i}`, nombre: servicioDe(s.nombre) || s.nombre, fraccion: null, ubicacion: s.zona || null, cantidadAnual: s.cantidadAnual,
@@ -196,11 +201,19 @@ export function serviciosDelTecnico(tecnico, docId = null) {
   });
   if (me.length) out.push({
     indice: "mediciones", titulo: "Mediciones del presupuesto", pagina: me[0].pagina, servicio: "Servicios por mediciones", usar: true,
-    motivo: "Las cantidades son las del presupuesto (si el presupuesto no es de un año, corrige la cantidad al año)",
-    lineas: me.map((s, i) => ({ id: `d${docId || "x"}_m${i}`, nombre: servicioDe(s.nombre) || s.nombre.slice(0, 60), fraccion: null,
-      ubicacion: servicioDe(s.nombre) ? s.nombre.replace(/^(?:servicio de )?transporte de \S+\s*/i, "").slice(0, 80) : null,
-      cantidadAnual: s.cantidad, unidad: s.unidad, precioUnitario: s.precio, unidades: null, frecuencia: null,
-      concepto: `${FMT_ES(s.cantidad)} ${s.unidad} × ${FMT_ES(s.precio)} €`, tabla: "mediciones", pagina: s.pagina, doc: docId })),
+    motivo: per.motivo || (per.meses ? null : "Comprueba que las cantidades son de un año (son las del presupuesto)"),
+    lineas: me.map((s, i) => {
+      const origen = origenDe(s.nombre), l = origen ? lugar(origen) : null;
+      const anual = Math.round(s.cantidad * per.factorAnual * 1000) / 1000;
+      return {
+        id: `d${docId || "x"}_m${i}`, nombre: servicioDe(s.nombre) || s.nombre.slice(0, 60), fraccion: null,
+        ubicacion: origen || (servicioDe(s.nombre) ? s.nombre.replace(/^(?:servicio de )?transporte de \S+\s*/i, "").slice(0, 80) : null),
+        cantidadAnual: anual, cantidadPresupuesto: s.cantidad, periodoMeses: per.meses, unidad: s.unidad, precioUnitario: s.precio, unidades: null, frecuencia: null,
+        origen: origen ? { nombre: origen, direccion: l?.direccion || null, municipio: l?.municipio || null } : null, destino: tecnico?.destino?.nombre || null,
+        concepto: per.factorAnual !== 1 ? `${FMT_ES(s.cantidad)} ${s.unidad} en ${per.meses} ${per.meses === 1 ? "mes" : "meses"} × ${FMT_ES(Math.round(per.factorAnual * 100) / 100)} = ${FMT_ES(anual)} ${s.unidad} al año, a ${FMT_ES(s.precio)} €` : `${FMT_ES(s.cantidad)} ${s.unidad} × ${FMT_ES(s.precio)} €`,
+        tabla: "mediciones", pagina: s.pagina, doc: docId,
+      };
+    }),
   });
   return out;
 }
@@ -211,6 +224,7 @@ export function servicioParaGuardar(l, { equipos = [], precios = [], orden = 0 }
   return {
     nombre: l.nombre, fraccion: l.fraccion ?? null, ubicacion: l.ubicacion || null, temporada: l.temporada ?? null,
     cantidadAnual: l.cantidadAnual, unidades: l.unidades ?? null, unidad: l.unidad ?? null, frecuencia: l.frecuencia ?? null, cuenta: l.cuenta ?? null, cuadra: l.cuadra ?? null,
+    cantidadPresupuesto: l.cantidadPresupuesto ?? null, periodoMeses: l.periodoMeses ?? null, origen: l.origen ?? null, destino: l.destino ?? null, tabla: l.tabla ?? null,
     vehiculo: e?.vehiculo ?? null, personas: e?.personas ?? null, equipoPagina: e?.pagina ?? null,
     precioUnitario: pr?.precio ?? l.precioUnitario ?? null, precioPagina: pr?.pagina ?? (l.precioUnitario != null ? l.pagina : null),
     concepto: l.concepto, pagina: l.pagina, doc: l.doc, orden,
@@ -218,8 +232,11 @@ export function servicioParaGuardar(l, { equipos = [], precios = [], orden = 0 }
 }
 
 /** Todas las propuestas de servicios de los documentos leídos: [{ …propuesta, clave, docNombre }] */
-export function propuestasDeServicios(docs = []) {
-  return (docs || []).flatMap(d => [...serviciosDelTecnico(d.lectura?.tecnico, d._id), ...serviciosDeDatos(d.lectura?.datos || [], d._id), ...tablasParaServicios(d.lectura?.tablas || [], d._id)]
+export function propuestasDeServicios(docs = [], contexto = {}) {
+  // los sitios y el destino del transporte pueden venir en otro documento (anexo, pliego técnico)
+  const lugares = (docs || []).flatMap(d => d.lectura?.tecnico?.lugares || []);
+  const destino = (docs || []).map(d => d.lectura?.tecnico?.destino).find(Boolean) || null;
+  return (docs || []).flatMap(d => [...serviciosDelTecnico(d.lectura?.tecnico && { ...d.lectura.tecnico, lugares, destino }, d._id, contexto), ...serviciosDeDatos(d.lectura?.datos || [], d._id), ...tablasParaServicios(d.lectura?.tablas || [], d._id)]
     .map(t => ({ ...t, clave: `${d._id}|${t.indice}`, docNombre: d.nombre })));
 }
 
@@ -258,10 +275,37 @@ export function rendimientoOrientativo(s) {
 export const PARAMETROS_DEFECTO = {
   jornadasAnio: 357,        // días de servicio al año (los del pliego si los trae)
   horasTurno: 7,            // horas de trabajo efectivo por turno
+  cargaViaje: 20,           // transporte: toneladas (o m³) por viaje de un camión
+  horasCargaDescarga: 1,    // transporte: carga, báscula, descarga y esperas en cada viaje
+  velocidadMedia: 50,       // transporte: km/h si no se sabe el tiempo por carretera
+  factorCamion: 1.15,       // transporte: un camión tarda más que el tiempo de la ruta (pensado para coches)
   personasPorEquipo: 2,     // si el pliego no dice cuántas personas lleva el equipo
   horasAnualesConvenio: 1720, // horas de trabajo al año de un trabajador (convenio)
   absentismoPct: 6,         // bajas y ausencias, en % de las horas
 };
+
+/** ¿Es un transporte (se mide en toneladas o m³ y se hace en viajes)? */
+export const esTransporte = s => /transporte|traslado|acarreo/i.test(s?.nombre || "") || /^(t|tn|kg|m3|m³)$/i.test(s?.unidad || "") && /residu|lodo|fango|rsu|tierra/i.test(`${s?.nombre} ${s?.ubicacion}`);
+
+/**
+ * Un transporte por viajes: con los km de ida (o los minutos por carretera),
+ * la carga de cada viaje y lo que se tarda en cargar y descargar.
+ *   viajes = cantidad ÷ carga; horas por viaje = ida y vuelta + carga y descarga;
+ *   turnos = viajes × horas ÷ horas del turno; km = viajes × 2 × km de ida.
+ * @returns null (no es transporte o no tiene km) | { viajesAnio, horasViaje, porTurno, turnosAnio, kmAnio, cargaViaje }
+ */
+export function viajesDe(s, q = PARAMETROS_DEFECTO) {
+  if (!esTransporte(s)) return null;
+  const km = Number(s.kmIda), min = Number(s.minutosIda);
+  if (!(km > 0)) return null;
+  const p = { ...PARAMETROS_DEFECTO, ...q };
+  const carga = Number(s.cargaViaje) > 0 ? Number(s.cargaViaje) : p.cargaViaje;
+  const horasRuta = min > 0 ? (2 * min / 60) * p.factorCamion : (2 * km) / p.velocidadMedia;
+  const cargaDescarga = s.horasCargaDescarga != null && s.horasCargaDescarga !== "" ? Number(s.horasCargaDescarga) : p.horasCargaDescarga;
+  const horasViaje = horasRuta + cargaDescarga;
+  const viajesAnio = (Number(s.cantidadAnual) || 0) / carga;
+  return { viajesAnio, horasViaje, cargaViaje: carga, porTurno: carga * p.horasTurno / horasViaje, turnosAnio: viajesAnio * horasViaje / p.horasTurno, kmAnio: viajesAnio * 2 * km };
+}
 
 /**
  * Dimensionar por rendimientos (sin inventario ni rutas).
@@ -274,24 +318,26 @@ export const PARAMETROS_DEFECTO = {
 export function dimensionar(servicios, p = PARAMETROS_DEFECTO) {
   const q = { ...PARAMETROS_DEFECTO, ...p };
   const lineas = servicios.map(s => {
-    const porTurno = Number(s.porTurno) > 0 ? Number(s.porTurno) : rendimientoOrientativo(s).porTurno;
     const ori = rendimientoOrientativo(s);
     const personas = Number(s.personas) > 0 ? Number(s.personas) : ori.personas || q.personasPorEquipo;
     const vehiculo = s.vehiculo || ori.vehiculo || s.nombre;
-    return { ...s, porTurno, personas, vehiculo, turnosAnio: (Number(s.cantidadAnual) || 0) / porTurno };
+    const t = viajesDe(s, q);
+    if (t) return { ...s, ...t, personas, vehiculo };
+    const porTurno = Number(s.porTurno) > 0 ? Number(s.porTurno) : ori.porTurno;
+    return { ...s, porTurno, personas, vehiculo, turnosAnio: (Number(s.cantidadAnual) || 0) / porTurno, sinKm: esTransporte(s) || undefined };
   });
   const porEquipo = new Map();
   for (const l of lineas) {
     // los servicios que hace el mismo tipo de vehículo lo comparten
     const e = l.equipo || l.vehiculo || l.nombre;
-    const x = porEquipo.get(e) || { turnosAnio: 0, personas: 0, servicios: new Set() };
-    x.turnosAnio += l.turnosAnio; x.personas = Math.max(x.personas, l.personas); x.servicios.add(l.nombre);
+    const x = porEquipo.get(e) || { turnosAnio: 0, personas: 0, servicios: new Set(), kmAnio: 0 };
+    x.turnosAnio += l.turnosAnio; x.personas = Math.max(x.personas, l.personas); x.servicios.add(l.nombre); x.kmAnio += l.kmAnio || 0;
     porEquipo.set(e, x);
   }
-  const equipos = [...porEquipo.entries()].map(([equipo, { turnosAnio, personas, servicios }]) => {
+  const equipos = [...porEquipo.entries()].map(([equipo, { turnosAnio, personas, servicios, kmAnio }]) => {
     const porDia = turnosAnio / q.jornadasAnio;     // turnos que hacen falta cada día de servicio
     const unidades = Math.max(1, Math.ceil(porDia - 1e-9)); // vehículos (un turno al día cada uno)
-    return { equipo, turnosAnio, porDia, unidades, ocupacion: porDia / unidades, personas, servicios: [...servicios] };
+    return { equipo, turnosAnio, porDia, unidades, ocupacion: porDia / unidades, personas, servicios: [...servicios], ...(kmAnio ? { kmAnio } : {}) };
   });
   const turnosAnio = lineas.reduce((s, l) => s + l.turnosAnio, 0);
   // horas de las personas: cada turno, con las personas que lleva su equipo
@@ -321,7 +367,14 @@ export function entradaDimension(ficha, dim, extra = {}) {
   const parametros = { ...extra, ...PARAMETROS_DEFECTO, ...(jornadasPliego ? { jornadasAnio: jornadasPliego } : {}), ...(dim?.parametros || {}) };
   const porServicio = dim?.porServicio || {};
   // vehículo y personas: lo cambiado en Planning > lo que exige el pliego (ficha) > orientativo
-  const entrada = servicios.map(s => ({ ...s, porTurno: porServicio[s.id]?.porTurno ?? null, vehiculo: porServicio[s.id]?.vehiculo || s.vehiculo || null, personas: porServicio[s.id]?.personas ?? s.personas ?? null }));
+  const entrada = servicios.map(s => {
+    const ps = porServicio[s.id] || {};
+    return {
+      ...s, porTurno: ps.porTurno ?? null, vehiculo: ps.vehiculo || s.vehiculo || null, personas: ps.personas ?? s.personas ?? null,
+      // transporte: km, minutos y carga cambiados en Planning > los calculados (ficha)
+      kmIda: ps.kmIda ?? s.kmIda ?? null, minutosIda: ps.kmIda != null ? (ps.minutosIda ?? null) : (s.minutosIda ?? null), cargaViaje: ps.cargaViaje ?? s.cargaViaje ?? null,
+    };
+  });
   return { servicios, parametros, porServicio, entrada };
 }
 
@@ -337,4 +390,25 @@ export function parqueDelPliego(tablas = []) {
     }
   });
   return out;
+}
+
+const mesesDeTexto = t => { const m = /(\d+(?:[.,]\d+)?)\s*(mes|a[nñ]o)/i.exec(String(t || "")); return m ? Number(m[1].replace(",", ".")) * (/a[nñ]o/i.test(m[2]) ? 12 : 1) : null; };
+/** Lo que hace falta saber del concurso para pasar las mediciones al año: { presupuestoSinIva, meses } */
+export function contextoDelConcurso(ficha, concurso) {
+  const dato = k => { const d = ficha?.datos?.[k]; return d && d.estado !== "descartado" ? d.valor : null; };
+  const pres = Number(dato("importeSinIva")) || Number(concurso?.presupuestoSinIva) || null;
+  const meses = Number(concurso?.duracionMeses) || mesesDeTexto(dato("duracion")) || (Number(concurso?.duracionAnios) ? Number(concurso.duracionAnios) * 12 : null);
+  return { presupuestoSinIva: pres, meses };
+}
+
+/**
+ * Servicios ya guardados con las cantidades del presupuesto (de 1 mes, de 2
+ * años…) como si fueran del año: lo que suman a su precio es el presupuesto y
+ * el contrato no dura un año. @returns null | { factor, meses, ids, motivo }
+ */
+export function revisarPeriodo(servicios, contexto) {
+  const conPrecio = (servicios || []).filter(s => Number(s.precioUnitario) > 0 && Number(s.cantidadAnual) > 0 && !s.periodoMeses);
+  if (!conPrecio.length) return null;
+  const per = periodoDeMediciones(conPrecio.map(s => ({ cantidad: s.cantidadAnual, precio: s.precioUnitario })), contexto);
+  return per.factorAnual !== 1 ? { factor: per.factorAnual, meses: per.meses, ids: conPrecio.map(s => s.id), motivo: per.motivo } : null;
 }
