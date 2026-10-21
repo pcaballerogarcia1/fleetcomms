@@ -47,7 +47,34 @@ export const CTip = ({active,payload,label}) => {
 };
 
 // ── MAPA LEAFLET ──────────────────────────────────────────────────
+// El recorrido por carretera de las paradas, en orden (OSRM, en tramos de 80
+// puntos): la línea sigue las calles, no va recta de una parada a otra.
+const TRAZADOS = new Map();
+async function trazadoPorCarretera(pts){
+  const clave=pts.map(p=>`${(+p.lng).toFixed(5)},${(+p.lat).toFixed(5)}`).join(";");
+  if(TRAZADOS.has(clave))return TRAZADOS.get(clave);
+  const linea=[];
+  for(let i=0;i<pts.length-1;i+=79){
+    const tramo=pts.slice(i,i+80);
+    const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${tramo.map(p=>`${p.lng},${p.lat}`).join(";")}?overview=full&geometries=geojson`);
+    const j=await r.json();
+    if(j.code!=="Ok"||!j.routes?.[0]?.geometry)return null;
+    linea.push(...j.routes[0].geometry.coordinates.map(([lng,lat])=>[lat,lng]));
+  }
+  TRAZADOS.set(clave,linea);
+  return linea;
+}
+
 export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
+  const [trazado,setTrazado]=useState(null); // { clave, linea }
+  const clavePts=ubicaciones.filter(u=>u.lat&&u.lng).map(u=>`${u.lat},${u.lng}`).join(";");
+  useEffect(()=>{
+    const pts=ubicaciones.filter(u=>u.lat&&u.lng);
+    if(pts.length<2)return;
+    let vivo=true;
+    trazadoPorCarretera(pts).then(linea=>{if(vivo)setTrazado({clave:clavePts,linea});}).catch(()=>{if(vivo)setTrazado({clave:clavePts,linea:null});});
+    return()=>{vivo=false;};
+  },[clavePts]); // eslint-disable-line react-hooks/exhaustive-deps
   const divRef=useRef(null);
   const mapRef=useRef(null);
   const layersRef=useRef([]);
@@ -92,7 +119,13 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       layersRef.current.push(l);
     }
     const pts=ubicaciones.filter(u=>u.lat&&u.lng);
-    if(pts.length>1){
+    const porCarretera=trazado?.clave===clavePts?trazado.linea:null;
+    if(porCarretera?.length>1){
+      // por las calles, como irá el camión
+      const l=L.polyline(porCarretera,{color:C.blue,weight:4,opacity:0.75}).addTo(map);
+      layersRef.current.push(l);
+    } else if(pts.length>1){
+      // mientras llega (o si no hay servicio de rutas): de parada a parada, a trazos
       const l=L.polyline(pts.map(u=>[u.lat,u.lng]),{color:"#2a3142",weight:1.5,opacity:0.4,dashArray:"4,8"}).addTo(map);
       layersRef.current.push(l);
     }
@@ -116,7 +149,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   useEffect(()=>{
     if(window.L&&mapRef.current) drawLayersRef.current();
     else { const t=setTimeout(()=>{if(window.L&&!mapRef.current)initMapRef.current();else if(window.L)drawLayersRef.current();},600); return()=>clearTimeout(t); }
-  },[ubicaciones, selId, recorrido, drawLayersRef, initMapRef]);
+  },[ubicaciones, selId, recorrido, trazado, drawLayersRef, initMapRef]);
 
   const ubicacionesRef = useUltimo(ubicaciones);
   useEffect(()=>{
