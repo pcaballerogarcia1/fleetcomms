@@ -165,7 +165,10 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
           {/* Progreso real del auto-escalado — sin esto, un proyecto grande
               en fase "vrp" es indistinguible de uno colgado durante los
               minutos (a veces bastantes) que tarda cada ronda. */}
-          {genPhase === "vrp" && scaleProgress && (
+          {genPhase === "carretera" && scaleProgress?.texto && (
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{scaleProgress.texto}</div>
+          )}
+          {genPhase === "vrp" && scaleProgress && !scaleProgress.texto && (
             <div style={{ marginTop: 8, fontSize: 10.5, color: C.dim, fontFamily: "monospace", display: "flex", gap: 10, flexWrap: "wrap" }}>
               <span style={{ color: C.blueText, fontWeight: 700 }}>
                 {scaleProgress.stage === "growth" ? `Ronda ${scaleProgress.round}` : `Afinando`}

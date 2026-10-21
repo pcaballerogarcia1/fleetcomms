@@ -125,19 +125,32 @@ function rodeo(d) {
   }
   return RODEOS[RODEOS.length - 1][1];
 }
-export function kmRuta(lat1, lng1, lat2, lng2) { const d = haversineKm(lat1, lng1, lat2, lng2); return d * rodeo(d); }
+// la carretera real entre paradas vecinas (scheduling/vecinos.js): Map<clave, Map<clave, km>>
+let VECINOS = null, VECINOS_MAX = 0;
+/** Clave numérica de un punto (para buscarlo deprisa en la tabla de vecinos) */
+export const claveCoord = (lat, lng) => Math.round(+lat * 1e5) * 1e8 + Math.round((+lng + 180) * 1e5);
+export function kmRuta(lat1, lng1, lat2, lng2) {
+  const d = haversineKm(lat1, lng1, lat2, lng2);
+  if (VECINOS && d <= VECINOS_MAX && d > 0) {
+    const km = VECINOS.get(claveCoord(lat1, lng1))?.get(claveCoord(lat2, lng2));
+    if (km !== undefined) return km;
+  }
+  return d * rodeo(d);
+}
 /** Minutos para esos km: entre paradas a la velocidad de la zona; en trayectos largos (a la base, a la planta) más deprisa */
 export function minutosRuta(km) {
   const corto = 2 * RODEO;
   const v = KMH_LARGO && km > corto ? TRAVEL_SPEED_KMH + (KMH_LARGO - TRAVEL_SPEED_KMH) * Math.min(1, (km - corto) / 10) : TRAVEL_SPEED_KMH;
   return km / v * 60;
 }
-/** { factor, rodeos, kmh, kmhLargo } medidos (o nada: línea recta a 30 km/h, como antes) */
+/** { factor, rodeos, kmh, kmhLargo, vecinos, vecinosMaxKm } medidos (o nada: línea recta a 30 km/h, como antes) */
 export function fijarCarretera(c) {
   RODEO = c?.factor >= 1 && c.factor <= 3 ? c.factor : 1;
   // { d, f } (como se guarda: Firestore no admite listas dentro de listas) o [d, f]
   const r = Array.isArray(c?.rodeos) ? c.rodeos.map(x => (Array.isArray(x) ? x : [x?.d, x?.f])).filter(x => x[0] > 0 && x[1] >= 1 && x[1] <= 5).sort((x, y) => x[0] - y[0]) : [];
   RODEOS = r.length ? r : null;
+  VECINOS = c?.vecinos instanceof Map && c.vecinos.size ? c.vecinos : null;
+  VECINOS_MAX = VECINOS ? Number(c.vecinosMaxKm) || 2 : 0;
   TRAVEL_SPEED_KMH = c?.kmh >= 8 && c.kmh <= 90 ? c.kmh : 30;
   KMH_LARGO = c?.kmhLargo > TRAVEL_SPEED_KMH && c.kmhLargo <= 110 ? c.kmhLargo : null;
 }

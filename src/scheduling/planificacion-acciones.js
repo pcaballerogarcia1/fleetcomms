@@ -18,6 +18,7 @@ import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./
 import { NOMBRE_DIA } from "./frecuencias.js";
 import { enrichWithOSRM } from "./osrm.js";
 import { medirCarretera, textoCarretera } from "./carretera.js";
+import { cargarVecinos } from "./vecinos-guardados.js";
 import { fijarCarretera } from "../vrp-engine.js";
 
 // La librería de Excel se descarga solo cuando se usa
@@ -225,10 +226,16 @@ export async function runGenerate(ctx) {
     // La carretera de la zona: el motor mide en línea recta; con el rodeo y la
     // velocidad medidos aquí, las distancias y los tiempos son de carretera
     setGenPhase("carretera");
-    const medida = await medirCarretera([...tasks, ...vehiclesForVRP.map(v => ({ lat: v.depotLat, lng: v.depotLng }))]);
-    const carretera = medida.medido ? medida : null;
-    fijarCarretera(carretera); // también aquí: la capacidad y lo que se mueve a mano usan el mismo modelo
+    const puntosRed = [...tasks, ...vehiclesForVRP.map(v => ({ lat: v.depotLat, lng: v.depotLng }))];
+    const medida = await medirCarretera(puntosRed);
+    // y la carretera real entre paradas vecinas (guardada en este ordenador: la segunda vez, al momento)
+    const vec = medida.medido ? await cargarVecinos(puntosRed, (i, n) => setScaleProgress({ texto: `Carretera real entre paradas vecinas: ${i} de ${n}`, i, n })) : null;
+    setScaleProgress(null);
+    const carretera = medida.medido ? { ...medida, vecinosPares: vec?.pares || 0, vecinosHuella: vec?.huella || null } : null; // lo que se guarda
+    const carreteraMotor = carretera && vec?.pares ? { ...carretera, vecinos: vec.vecinos, vecinosMaxKm: vec.maxKm } : carretera;
+    fijarCarretera(carreteraMotor); // también aquí: la capacidad y lo que se mueve a mano usan el mismo modelo
     constraints = { ...constraints, carretera };
+    const consMotor = { ...constraints, carretera: carreteraMotor }; // al motor, con la tabla (no se guarda)
     setGenPhase("vrp");
     // Capacidad del camión: cada parada reserva su parte del viaje a descargar
     const opcCapacidad = capacidadDe(constraints);
@@ -236,15 +243,15 @@ export async function runGenerate(ctx) {
     let maestra = null;
     if (vehiclesForVRP.length > 0 && constraints.usarFrecuencias) {
       // Ruta maestra: la semana tipo con las frecuencias de cada parada y cada vehículo en su zona
-      vr = await rutaMaestraBg(tasksVRP, vehiclesForVRP, constraints);
+      vr = await rutaMaestraBg(tasksVRP, vehiclesForVRP, consMotor);
       maestra = vr.resumen;
     } else if (vehiclesForVRP.length > 0) {
-      vr = await generateScenarioBg(tasksVRP, vehiclesForVRP, constraints);
+      vr = await generateScenarioBg(tasksVRP, vehiclesForVRP, consMotor);
 
       // Días máximos de escenario: si sobran paradas dentro de ese límite,
       // añade vehículos virtuales "Vehículo necesario N" hasta que quepan todas.
       if (constraints.maxDays > 0 && vr.unassigned.length > 0) {
-        const scaled = await autoScaleFleetBg(tasksVRP, vehiclesForVRP, constraints, setScaleProgress);
+        const scaled = await autoScaleFleetBg(tasksVRP, vehiclesForVRP, consMotor, setScaleProgress);
         vr = scaled.result;
         vehiclesForSchedule = scaled.resources;
         addedVehicles = scaled.resources.slice(vehiclesForVRP.length);

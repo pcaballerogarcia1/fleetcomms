@@ -12,6 +12,7 @@ import {
 import { scenarioKpis } from "../scenario-metrics.js";
 import { loadScenarioCloud, watchScenarioMeta } from "../scenario-store.js";
 import { applyTaskMove, fijarCarretera, turnoWindow } from "../vrp-engine.js";
+import { leerVecinos } from "./vecinos-guardados.js";
 import { ROSTER_TURNO, applyShiftMoves, deriveWorkerRows, lastScenarioDay, loadTasksFromLayers, spliceWorkerWindowIntoVehicle } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
 import { GanttChart } from "./gantt.jsx";
@@ -83,11 +84,18 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const genStartRef = useRef(null);
 
   // los cambios a mano (mover paradas) con la misma carretera con la que se generó el escenario
-  useEffect(() => { fijarCarretera(constraints.carretera || null); }, [constraints.carretera]);
+  useEffect(() => {
+    const c = constraints.carretera || null;
+    fijarCarretera(c);
+    // y la carretera real entre vecinas, si está guardada en este ordenador
+    let vivo = true;
+    if (c?.vecinosHuella) leerVecinos(c.vecinosHuella).then(v => { if (vivo && v) fijarCarretera({ ...c, vecinos: v.vecinos, vecinosMaxKm: v.maxKm }); });
+    return () => { vivo = false; };
+  }, [constraints.carretera]);
 
   const GEN_PHASES = {
     vrp:     { label: constraints.optimizarAFondo ? "Calculando y mejorando rutas a fondo (hasta minuto y medio más)…" : "Calculando y mejorando rutas…", pct: 20 },
-    carretera: { label: "Midiendo la carretera de la zona…", pct: 10 },
+    carretera: { label: "Midiendo la carretera de la zona (la primera vez, con muchos puntos, puede tardar unos minutos)…", pct: 10 },
     osrm:    { label: "Calculando km reales por carretera…", pct: 55 },
     workers: { label: "Asignando trabajadores…",          pct: 78 },
   };

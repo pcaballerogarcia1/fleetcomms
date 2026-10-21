@@ -136,4 +136,4 @@ export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cu
 /** Para enseñar lo medido, en una frase */
 const coma = n => String(n).replace(".", ",");
 export const textoCarretera = c => (!c?.medido ? `en línea recta a 30 km/h${c?.motivo ? ` (${c.motivo})` : ""}`
-  : `por carretera (medido con ${c.pares.toLocaleString("es-ES")} trayectos de la zona): de parada a parada ${c.rodeos?.length > 1 ? `${coma(c.rodeos[0].f ?? c.rodeos[0][1])} veces la línea recta` : `${coma(c.factor)} veces la línea recta`}, en trayectos largos ${coma(c.factor)}; a ${coma(c.kmh)} km/h entre paradas${c.kmhLargo ? ` y ${coma(c.kmhLargo)} km/h en los largos` : ""}`);
+  : `por carretera (medido con ${c.pares.toLocaleString("es-ES")} trayectos de la zona): de parada a parada ${c.rodeos?.length > 1 ? `${coma(c.rodeos[0].f ?? c.rodeos[0][1])} veces la línea recta` : `${coma(c.factor)} veces la línea recta`}, en trayectos largos ${coma(c.factor)}; a ${coma(c.kmh)} km/h entre paradas${c.kmhLargo ? ` y ${coma(c.kmhLargo)} km/h en los largos` : ""}${c.vecinosPares ? `; entre paradas vecinas, la carretera real (${c.vecinosPares.toLocaleString("es-ES")} trayectos)` : ""}`);
