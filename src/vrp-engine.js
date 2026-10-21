@@ -135,7 +135,8 @@ export function minutosRuta(km) {
 /** { factor, rodeos, kmh, kmhLargo } medidos (o nada: línea recta a 30 km/h, como antes) */
 export function fijarCarretera(c) {
   RODEO = c?.factor >= 1 && c.factor <= 3 ? c.factor : 1;
-  const r = Array.isArray(c?.rodeos) ? c.rodeos.filter(x => x?.[0] > 0 && x[1] >= 1 && x[1] <= 5).sort((x, y) => x[0] - y[0]) : [];
+  // { d, f } (como se guarda: Firestore no admite listas dentro de listas) o [d, f]
+  const r = Array.isArray(c?.rodeos) ? c.rodeos.map(x => (Array.isArray(x) ? x : [x?.d, x?.f])).filter(x => x[0] > 0 && x[1] >= 1 && x[1] <= 5).sort((x, y) => x[0] - y[0]) : [];
   RODEOS = r.length ? r : null;
   TRAVEL_SPEED_KMH = c?.kmh >= 8 && c.kmh <= 90 ? c.kmh : 30;
   KMH_LARGO = c?.kmhLargo > TRAVEL_SPEED_KMH && c.kmhLargo <= 110 ? c.kmhLargo : null;

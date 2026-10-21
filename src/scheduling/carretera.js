@@ -87,7 +87,8 @@ export async function medirCarretera(puntos, { fetchFn = (...a) => fetch(...a), 
   const res = {
     medido: true, pares: pares + cortosVecinos.reduce((s, b) => s + b.n, 0), factor,
     // [[km en línea recta, rodeo]]: los cortos medidos con vecinos y, al final, el general
-    rodeos: [...cortosVecinos.map(b => [b.d, b.f]), [largo, factor]].filter((x, i, a) => !i || x[0] > a[i - 1][0]),
+    // [{ d: km en línea recta, f: rodeo }] (objetos: se guarda con el escenario y Firestore no admite listas dentro de listas)
+    rodeos: [...cortosVecinos.map(b => ({ d: b.d, f: b.f })), { d: largo, f: factor }].filter((x, i, a) => !i || x.d > a[i - 1].d),
     kmh: Math.round(Math.min(70, Math.max(10, vel(base) * camion)) * 10) / 10,
     kmhLargo: largos.length ? Math.round(vel(largos) * camion * 10) / 10 : null,
   };
@@ -135,4 +136,4 @@ export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cu
 /** Para enseñar lo medido, en una frase */
 const coma = n => String(n).replace(".", ",");
 export const textoCarretera = c => (!c?.medido ? `en línea recta a 30 km/h${c?.motivo ? ` (${c.motivo})` : ""}`
-  : `por carretera (medido con ${c.pares.toLocaleString("es-ES")} trayectos de la zona): de parada a parada ${c.rodeos?.length > 1 ? `${coma(c.rodeos[0][1])} veces la línea recta` : `${coma(c.factor)} veces la línea recta`}, en trayectos largos ${coma(c.factor)}; a ${coma(c.kmh)} km/h entre paradas${c.kmhLargo ? ` y ${coma(c.kmhLargo)} km/h en los largos` : ""}`);
+  : `por carretera (medido con ${c.pares.toLocaleString("es-ES")} trayectos de la zona): de parada a parada ${c.rodeos?.length > 1 ? `${coma(c.rodeos[0].f ?? c.rodeos[0][1])} veces la línea recta` : `${coma(c.factor)} veces la línea recta`}, en trayectos largos ${coma(c.factor)}; a ${coma(c.kmh)} km/h entre paradas${c.kmhLargo ? ` y ${coma(c.kmhLargo)} km/h en los largos` : ""}`);

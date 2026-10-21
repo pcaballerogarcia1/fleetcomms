@@ -26,7 +26,8 @@ describe("la carretera de la zona", () => {
     const r = await medirCarretera(rejilla, { fetchFn: osrm });
     expect(r.medido).toBe(true);
     expect(r.factor).toBeCloseTo(1.5, 1);
-    expect(r.rodeos[0][1]).toBeCloseTo(2, 1); // lo corto rodea más
+    expect(r.rodeos[0].f).toBeCloseTo(2, 1); // lo corto rodea más
+    expect(r.rodeos.every(x => !Array.isArray(x))).toBe(true); // se puede guardar en Firestore
     expect(r.kmh).toBeCloseTo(30 * 0.8, 0); // un camión, al 80 % de un coche
     expect(textoCarretera(r)).toMatch(/por carretera/);
     expect((await rodeosCortos(rejilla, { fetchFn: osrm })).length).toBeGreaterThan(0);
@@ -46,7 +47,7 @@ describe("el motor con la carretera medida", () => {
     expect(minutosRuta(10)).toBeCloseTo(20, 6);
   });
   it("con el rodeo por tramos y dos velocidades", () => {
-    fijarCarretera({ factor: 1.4, rodeos: [[0.1, 3], [1, 2], [5, 1.4]], kmh: 20, kmhLargo: 40 });
+    fijarCarretera({ factor: 1.4, rodeos: [{ d: 0.1, f: 3 }, { d: 1, f: 2 }, [5, 1.4]], kmh: 20, kmhLargo: 40 });
     const corto = haversineKm(39.55, 2.62, 39.5505, 2.62); // ~55 m
     expect(kmRuta(39.55, 2.62, 39.5505, 2.62) / corto).toBeCloseTo(3, 6);
     expect(kmRuta(39.55, 2.62, 39.6, 2.62) / haversineKm(39.55, 2.62, 39.6, 2.62)).toBeCloseTo(1.4, 1); // ~5,6 km
