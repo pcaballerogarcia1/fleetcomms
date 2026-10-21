@@ -5,13 +5,15 @@
 // página no responde"). Aquí corre el MISMO motor (vrp-engine.js, sin
 // cambios) y la pantalla sigue respondiendo mientras tanto.
 // Mensajes: { op: "generate" | "autoscale" | "maestra", args } → { progress } * → { result } | { error }
-import { generateScenario, autoScaleFleet } from "./vrp-engine.js";
+import { generateScenario, autoScaleFleet, fijarCarretera } from "./vrp-engine.js";
 import { generarRutaMaestra } from "./scheduling/frecuencias.js";
 import { conMejora } from "./scheduling/mejora-rutas.js";
 
 self.onmessage = async ({ data }) => {
   const { op, args } = data;
   try {
+    // la carretera de la zona (medida antes en la pantalla): distancias y tiempos de carretera
+    fijarCarretera(args?.[2]?.carretera);
     let result;
     if (op === "generate") result = await generateScenario(...args);
     else if (op === "maestra") result = await generarRutaMaestra(...args, generateScenario);

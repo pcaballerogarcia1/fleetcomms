@@ -15,9 +15,9 @@
 // Los días con relevo de conductor y vuelta obligatoria a mitad de turno
 // (circular + turno partido) se dejan como están.
 // Sin React ni Firebase.
-import { haversineKm, hasCoords, shiftForDay, windowWait, TRAVEL_SPEED_KMH } from "../vrp-engine.js";
+import { hasCoords, kmRuta, minutosRuta, shiftForDay, windowWait } from "../vrp-engine.js";
 
-const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil((km / TRAVEL_SPEED_KMH) * 60)) : 0);
+const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(km))) : 0);
 const esParada = a => !a._travel && !a._break && !a._wait;
 const DIA = 1440;
 const sinHora = a => { const t = { ...a }; delete t._start; delete t._end; return t; };
@@ -46,7 +46,7 @@ export function simular(ruta, cons) {
       cur += breakDur; desde = 0;
     }
     let vk = 0, vm = 0;
-    if (hasCoords(lat, lng) && hasCoords(t.lat, t.lng)) { vk = haversineKm(lat, lng, t.lat, t.lng); vm = minutos(vk); }
+    if (hasCoords(lat, lng) && hasCoords(t.lat, t.lng)) { vk = kmRuta(lat, lng, t.lat, t.lng); vm = minutos(vk); }
     const espera = windowWait(t, cur + vm, off);
     if (espera == null) return { ok: false };
     if (vm > 0) {
@@ -61,7 +61,7 @@ export function simular(ruta, cons) {
     if (circular && !ancla) ancla = { lat, lng };
   }
   if (ancla && hasCoords(lat, lng) && (lat !== ancla.lat || lng !== ancla.lng)) {
-    const rk = haversineKm(lat, lng, ancla.lat, ancla.lng);
+    const rk = kmRuta(lat, lng, ancla.lat, ancla.lng);
     const rm = minutos(rk);
     if (rm > 0) { items.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rm, duracion: rm, km: +rk.toFixed(3) }); cur += rm; km += rk; }
   }
@@ -70,7 +70,7 @@ export function simular(ruta, cons) {
   return { ok: true, items, km, fin: cur };
 }
 
-const distancia = (a, b) => (a && b && hasCoords(a.lat, a.lng) && hasCoords(b.lat, b.lng) ? haversineKm(a.lat, a.lng, b.lat, b.lng) : 0);
+const distancia = (a, b) => (a && b && hasCoords(a.lat, a.lng) && hasCoords(b.lat, b.lng) ? kmRuta(a.lat, a.lng, b.lat, b.lng) : 0);
 
 /**
  * Mejora un escenario ya generado.

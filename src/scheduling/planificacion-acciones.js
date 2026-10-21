@@ -17,6 +17,8 @@ import { idbSave } from "./idb.js";
 import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
 import { NOMBRE_DIA } from "./frecuencias.js";
 import { enrichWithOSRM } from "./osrm.js";
+import { medirCarretera, textoCarretera } from "./carretera.js";
+import { fijarCarretera } from "../vrp-engine.js";
 
 // La librería de Excel se descarga solo cuando se usa
 const loadXLSX = () => import("xlsx");
@@ -134,7 +136,9 @@ export async function importFromPlanning(ctx) {
 }
 
 export async function runGenerate(ctx) {
-  const { activeProject, appliedMovesRef, constraints, onProjectUpdate, orgId, rosterGrid, scenarioProjectRef, scenarioStampRef, schedDaysInMonth, setConstraints, setGenError, setGenPhase, setGenerating, setHistoryIndex, setMoveHistory, setOsrmRunning, setSaveSummaryError, setSavingSummary, setScaleInfo, setScaleProgress, setScenarioRosterMode, setSchedules, setUnassigneds, tasks, vehicleRosterGrid, vehicles, workers } = ctx;
+  const { activeProject, appliedMovesRef, constraints: constraintsProyecto, onProjectUpdate, orgId, rosterGrid, scenarioProjectRef, scenarioStampRef, schedDaysInMonth, setConstraints, setGenError, setGenPhase, setGenerating, setHistoryIndex, setMoveHistory, setOsrmRunning, setSaveSummaryError, setSavingSummary, setScaleInfo, setScaleProgress, setScenarioRosterMode, setSchedules, setUnassigneds, tasks, vehicleRosterGrid, vehicles, workers } = ctx;
+  // se le añade la carretera medida de la zona al generar
+  let constraints = constraintsProyecto;
   if (!tasks.length) return;
   if (!vehicles.length && !workers.length) return;
   setGenerating(true);
@@ -218,6 +222,14 @@ export async function runGenerate(ctx) {
     let vr = { schedule: [], unassigned: [...tasks], daysUsed: 1 };
     let vehiclesForSchedule = vehiclesForVRP;
     let addedVehicles = [];
+    // La carretera de la zona: el motor mide en línea recta; con el rodeo y la
+    // velocidad medidos aquí, las distancias y los tiempos son de carretera
+    setGenPhase("carretera");
+    const medida = await medirCarretera([...tasks, ...vehiclesForVRP.map(v => ({ lat: v.depotLat, lng: v.depotLng }))]);
+    const carretera = medida.medido ? medida : null;
+    fijarCarretera(carretera); // también aquí: la capacidad y lo que se mueve a mano usan el mismo modelo
+    constraints = { ...constraints, carretera };
+    setGenPhase("vrp");
     // Capacidad del camión: cada parada reserva su parte del viaje a descargar
     const opcCapacidad = capacidadDe(constraints);
     const tasksVRP = reservarDescargas(tasks, vehiclesForVRP, plantas, opcCapacidad);
@@ -370,6 +382,7 @@ export async function runGenerate(ctx) {
     const coverDaysCount = usedCoverWorkers.reduce((s, w) =>
       s + new Set(w.assignments.map(a => Math.floor((a._start - constraints.startMin) / 1440))).size, 0);
     const scaleMsgs = [
+      `Distancias y tiempos ${textoCarretera(medida)}.`,
       addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
         : null,

@@ -6,13 +6,9 @@ import { hasCoords } from "../vrp-engine.js";
 // After VRP generation (which uses fast Haversine), replace travel block km
 // with real road distances from OSRM. Time layout stays unchanged.
 export async function enrichWithOSRM(schedule) {
-  // Skip OSRM entirely when routes are too large — the URL would exceed 100KB,
-  // causing fetch to hang regardless of the timeout signal in some environments.
-  const OSRM_MAX_STOPS = 80;
-  const maxStopsAny = Math.max(0, ...schedule.map(row =>
-    row.assignments.filter(a => !a._travel && !a._break && !a._wait).length
-  ));
-  if (maxStopsAny > OSRM_MAX_STOPS) return schedule;
+  // Las rutas largas se piden en tramos de hasta 80 puntos (cada tramo empieza
+  // donde acabó el anterior): una URL enorme se cuelga en algunos navegadores.
+  const TRAMO = 80;
 
   return Promise.all(schedule.map(async (row) => {
     const depot = (row.depotLat && row.depotLng)
@@ -30,20 +26,22 @@ export async function enrichWithOSRM(schedule) {
     if (waypoints.filter(w => !w.isDepot).length < 1) return row;
     if (waypoints.length < 2) return row;
 
-    // Manual timeout via AbortController — more reliable than AbortSignal.timeout
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 10000);
-    const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
     try {
-      const resp = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`,
-        { signal: ctrl.signal }
-      );
-      clearTimeout(tid);
-      const data = await resp.json();
-      if (data.code !== 'Ok' || !data.routes?.[0]?.legs) return row;
-
-      const legs = data.routes[0].legs;
+      const legs = [];
+      for (let ini = 0; ini < waypoints.length - 1; ini += TRAMO - 1) {
+        const tramo = waypoints.slice(ini, ini + TRAMO);
+        // Manual timeout via AbortController — more reliable than AbortSignal.timeout
+        const ctrl = new AbortController();
+        const tid  = setTimeout(() => ctrl.abort(), 10000);
+        const coords = tramo.map(w => `${w.lng},${w.lat}`).join(';');
+        const resp = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`,
+          { signal: ctrl.signal }
+        ).finally(() => clearTimeout(tid));
+        const data = await resp.json();
+        if (data.code !== 'Ok' || !data.routes?.[0]?.legs) return row;
+        legs.push(...data.routes[0].legs);
+      }
       const newAssignments = [...row.assignments];
 
       // Each leg[i] = waypoints[i] → waypoints[i+1]
@@ -70,7 +68,6 @@ export async function enrichWithOSRM(schedule) {
 
       return { ...row, assignments: newAssignments, totalKm: +totalKm.toFixed(2) };
     } catch {
-      clearTimeout(tid);
       return row;
     }
   }));

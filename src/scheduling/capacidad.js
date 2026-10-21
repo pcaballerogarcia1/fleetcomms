@@ -10,7 +10,7 @@
 //    depósito. Se rehacen las horas (con las franjas y las pausas) y se avisa
 //    si alguna ruta se pasa de la jornada.
 // Sin React ni Firebase.
-import { haversineKm, hasCoords, windowWait, TRAVEL_SPEED_KMH } from "../vrp-engine.js";
+import { hasCoords, kmRuta, minutosRuta, windowWait } from "../vrp-engine.js";
 
 export const CAPACIDAD_DEFECTO = { usarCapacidad: false, llenadoPct: 70, compactacion: 3, litrosPorDefecto: 1000, tiempoDescarga: 20 };
 /** Las opciones de capacidad que hay en las restricciones del escenario */
@@ -21,7 +21,7 @@ export const sinReserva = t => {
   const { _durOrig, ...resto } = t;
   return { ...resto, duracion: _durOrig, ...(t._start != null ? { _end: t._start + _durOrig } : {}) };
 };
-const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil((km / TRAVEL_SPEED_KMH) * 60)) : 0);
+const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(km))) : 0);
 
 /** Litros del contenedor: de una columna (litros / volumen / capacidad) o del tipo («Carga lateral 3200L») */
 export function litrosDe(task) {
@@ -44,7 +44,7 @@ export function cargaDe(task, c) {
 
 const plantaMasCercana = (lat, lng, plantas) => {
   let mejor = null, d = Infinity;
-  for (const pl of plantas) { const k = haversineKm(lat, lng, pl.lat, pl.lng); if (k < d) { d = k; mejor = pl; } }
+  for (const pl of plantas) { const k = kmRuta(lat, lng, pl.lat, pl.lng); if (k < d) { d = k; mejor = pl; } }
   return mejor ? { planta: mejor, km: d } : null;
 };
 
@@ -107,7 +107,7 @@ export function aplicarDescargas(schedule, plantas, opciones) {
       const poner = b => { out.push({ ...b, _start: cursor, _end: cursor + b.duracion }); cursor += b.duracion; };
       const viajeA = (hacia, extra = {}) => {
         if (!pos || !hasCoords(hacia.lat, hacia.lng)) return 0;
-        const km = haversineKm(pos.lat, pos.lng, +hacia.lat, +hacia.lng), m = minutos(km);
+        const km = kmRuta(pos.lat, pos.lng, +hacia.lat, +hacia.lng), m = minutos(km);
         if (m > 0) poner({ _travel: true, duracion: m, km: +km.toFixed(3), ...extra });
         return km;
       };

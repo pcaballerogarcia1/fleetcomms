@@ -108,6 +108,38 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
           + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// ── Carretera ──
+// El motor mide en línea recta; antes de optimizar se mide en la zona cuánto
+// más larga es la carretera (factor de rodeo) y a qué velocidad va el camión
+// (scheduling/carretera.js), y se fija aquí: las distancias del motor son de
+// carretera estimada y los tiempos, con la velocidad real de la zona.
+// el rodeo depende de la distancia: de un contenedor al siguiente (sentidos únicos,
+// dar la vuelta a la manzana) es mucho mayor que en un trayecto largo
+let RODEO = 1, RODEOS = null, KMH_LARGO = null; // RODEOS: [[km en línea recta, factor], …] de corto a largo
+function rodeo(d) {
+  if (!RODEOS) return RODEO;
+  if (d <= RODEOS[0][0]) return RODEOS[0][1];
+  for (let i = 1; i < RODEOS.length; i++) {
+    if (d <= RODEOS[i][0]) { const [d0, f0] = RODEOS[i - 1], [d1, f1] = RODEOS[i]; return f0 + (f1 - f0) * (d - d0) / (d1 - d0); }
+  }
+  return RODEOS[RODEOS.length - 1][1];
+}
+export function kmRuta(lat1, lng1, lat2, lng2) { const d = haversineKm(lat1, lng1, lat2, lng2); return d * rodeo(d); }
+/** Minutos para esos km: entre paradas a la velocidad de la zona; en trayectos largos (a la base, a la planta) más deprisa */
+export function minutosRuta(km) {
+  const corto = 2 * RODEO;
+  const v = KMH_LARGO && km > corto ? TRAVEL_SPEED_KMH + (KMH_LARGO - TRAVEL_SPEED_KMH) * Math.min(1, (km - corto) / 10) : TRAVEL_SPEED_KMH;
+  return km / v * 60;
+}
+/** { factor, rodeos, kmh, kmhLargo } medidos (o nada: línea recta a 30 km/h, como antes) */
+export function fijarCarretera(c) {
+  RODEO = c?.factor >= 1 && c.factor <= 3 ? c.factor : 1;
+  const r = Array.isArray(c?.rodeos) ? c.rodeos.filter(x => x?.[0] > 0 && x[1] >= 1 && x[1] <= 5).sort((x, y) => x[0] - y[0]) : [];
+  RODEOS = r.length ? r : null;
+  TRAVEL_SPEED_KMH = c?.kmh >= 8 && c.kmh <= 90 ? c.kmh : 30;
+  KMH_LARGO = c?.kmhLargo > TRAVEL_SPEED_KMH && c.kmhLargo <= 110 ? c.kmhLargo : null;
+}
 // Returns true only for valid numeric coordinates
 export function hasCoords(lat, lng) {
   return isFinite(+lat) && isFinite(+lng) && (+lat !== 0 || +lng !== 0);
@@ -158,16 +190,16 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
     const nextLng    = next ? next.lng    : depotLng;
     if (prevEnd > nextStart || hasBreakIn(prevEnd, nextStart) || crossesShiftBoundary(prevEnd, nextStart)) continue;
 
-    const inKm  = haversineKm(prevLat, prevLng, task.lat, task.lng);
-    const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(inKm / TRAVEL_SPEED_KMH * 60)) : 0;
+    const inKm  = kmRuta(prevLat, prevLng, task.lat, task.lng);
+    const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(inKm))) : 0;
     const earliestArrival = prevEnd + inMin;
     const wait = windowWait(task, earliestArrival, dayOffset);
     if (wait === null) continue; // se llegaría después de que cierre su franja
     const arrival = earliestArrival + wait;
     const taskEnd = arrival + (task.duracion || 15);
 
-    const outKm  = haversineKm(task.lat, task.lng, nextLat, nextLng);
-    const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(outKm / TRAVEL_SPEED_KMH * 60)) : 0;
+    const outKm  = kmRuta(task.lat, task.lng, nextLat, nextLng);
+    const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(outKm))) : 0;
     if (taskEnd + outMin > nextStart) continue; // solaparía la siguiente parada / fin de turno
 
     // "Duración máxima de turno" (maxShiftMin): el reparto principal la
@@ -178,7 +210,7 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
     // 8h aunque el límite estuviera puesto.
     if (maxShiftMin > 0 && (taskEnd - dayStart) > maxShiftMin) continue;
 
-    const originalDirectKm = haversineKm(prevLat, prevLng, nextLat, nextLng);
+    const originalDirectKm = kmRuta(prevLat, prevLng, nextLat, nextLng);
     slots.push({
       prevStop: prev, nextStop: next, prevEnd, nextStart,
       inKm, inMin, outKm, outMin, wait, arrival, taskEnd,
@@ -209,9 +241,9 @@ export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
 
   let closingBlock = null;
   if (origPrev && origNext) {
-    const km = haversineKm(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
+    const km = kmRuta(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
     if (km >= 0.05) {
-      const min = Math.max(1, Math.ceil(km / TRAVEL_SPEED_KMH * 60));
+      const min = Math.max(1, Math.ceil(minutosRuta(km)));
       closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + min, duracion: min, km: +km.toFixed(3) };
     }
   }
@@ -244,7 +276,7 @@ export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
 }
 
 // ── VRP ALGORITHM HELPERS ─────────────────────────────────────────
-export const TRAVEL_SPEED_KMH = 30;
+export let TRAVEL_SPEED_KMH = 30; // la cambia fijarCarretera
 
 // Fast squared euclidean distance (no sqrt, no trig) — sufficient for clustering comparisons
 export function distSq(a, b) {
@@ -321,7 +353,7 @@ export function nnTSP(stops, depotPt = null) {
     let bd = Infinity;
     rem.forEach((s, i) => {
       if (!hasCoords(s.lat, s.lng)) return;
-      const d = haversineKm(depotPt.lat, depotPt.lng, s.lat, s.lng);
+      const d = kmRuta(depotPt.lat, depotPt.lng, s.lat, s.lng);
       if (d < bd) { bd = d; firstIdx = i; }
     });
   }
@@ -331,7 +363,7 @@ export function nnTSP(stops, depotPt = null) {
     let bi = 0, bd = Infinity;
     for (let i = 0; i < rem.length; i++) {
       const d = hasCoords(last.lat, last.lng) && hasCoords(rem[i].lat, rem[i].lng)
-        ? haversineKm(last.lat, last.lng, rem[i].lat, rem[i].lng) : 999;
+        ? kmRuta(last.lat, last.lng, rem[i].lat, rem[i].lng) : 999;
       if (d < bd) { bd = d; bi = i; }
     }
     route.push(rem.splice(bi, 1)[0]);
@@ -361,7 +393,7 @@ export function stripSort(stops, strips = 30) {
 export async function twoOpt(route) {
   if (route.length < 4) return route;
   const d = (a, b) => (!a || !b || !hasCoords(a.lat, a.lng) || !hasCoords(b.lat, b.lng)) ? 0
-    : haversineKm(a.lat, a.lng, b.lat, b.lng);
+    : kmRuta(a.lat, a.lng, b.lat, b.lng);
   let best = [...route];
   let improved = true;
   let passes = 0;
@@ -563,7 +595,7 @@ export async function generateScenario(tasks, resources, constraints) {
         const gLat = group.reduce((s, t) => s + t.lat, 0) / group.length;
         const gLng = group.reduce((s, t) => s + t.lng, 0) / group.length;
         const neighborOrder = centroids
-          .map((c, ci) => ({ ci, d: ci === soleCi ? Infinity : haversineKm(gLat, gLng, c.lat, c.lng) }))
+          .map((c, ci) => ({ ci, d: ci === soleCi ? Infinity : kmRuta(gLat, gLng, c.lat, c.lng) }))
           .sort((a, b) => a.d - b.d);
 
         const perVehicle = Math.max(1, Math.ceil(group.length / neededVehicles));
@@ -725,15 +757,15 @@ export async function generateScenario(tasks, resources, constraints) {
             const tdur = t.duracion || 15;
             let ttMin = 0;
             if (hasCoords(lastLat, lastLng) && hasCoords(t.lat, t.lng)) {
-              const tkm = haversineKm(lastLat, lastLng, t.lat, t.lng);
-              if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(tkm / TRAVEL_SPEED_KMH * 60));
+              const tkm = kmRuta(lastLat, lastLng, t.lat, t.lng);
+              if (tkm >= 0.05) ttMin = Math.max(1, Math.ceil(minutosRuta(tkm)));
             }
             const tWait = windowWait(t, cursor + ttMin, dayOffset);
             if (tWait == null || tWait >= bestWait) continue; // inviable hoy, o ya hay algo igual o mejor
             let tRet = 0;
             if (anchor && hasCoords(t.lat, t.lng)) {
-              const rkm = haversineKm(+t.lat, +t.lng, anchor.lat, anchor.lng);
-              if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(rkm / TRAVEL_SPEED_KMH * 60));
+              const rkm = kmRuta(+t.lat, +t.lng, anchor.lat, anchor.lng);
+              if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(minutosRuta(rkm)));
             }
             const fits = cursor + ttMin + tWait + tdur + tRet <= effSegEnd
               && !(maxShiftMin > 0 && tWorkSoFar + ttMin + tWait + tdur + tRet > maxShiftMin);
@@ -775,8 +807,8 @@ export async function generateScenario(tasks, resources, constraints) {
 
           let travelMin = 0, travelKm = 0;
           if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
-            travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-            if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+            travelKm = kmRuta(lastLat, lastLng, task.lat, task.lng);
+            if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(minutosRuta(travelKm)));
           }
 
           // Franja horaria (Timetable de Planning): si se llega antes de que
@@ -801,8 +833,8 @@ export async function generateScenario(tasks, resources, constraints) {
             const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
             const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
             if (hasCoords(refLat, refLng)) {
-              const retKmEst = haversineKm(refLat, refLng, anchor.lat, anchor.lng);
-              if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(retKmEst / TRAVEL_SPEED_KMH * 60));
+              const retKmEst = kmRuta(refLat, refLng, anchor.lat, anchor.lng);
+              if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(minutosRuta(retKmEst)));
             }
           }
 
@@ -845,9 +877,9 @@ export async function generateScenario(tasks, resources, constraints) {
 
         // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
         if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
-          const retKm = haversineKm(lastLat, lastLng, anchor.lat, anchor.lng);
+          const retKm = kmRuta(lastLat, lastLng, anchor.lat, anchor.lng);
           if (retKm >= 0.05) {
-            const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+            const retMin = Math.max(1, Math.ceil(minutosRuta(retKm)));
             res.assignments.push({
               _travel: true, _depot_return: true,
               _start: cursor, _end: cursor + retMin,
@@ -916,8 +948,8 @@ export async function generateScenario(tasks, resources, constraints) {
 
           let tMin = 0, tKm = 0;
           if (hasCoords(lLat, lLng) && hasCoords(task.lat, task.lng)) {
-            tKm = haversineKm(lLat, lLng, task.lat, task.lng);
-            if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(tKm / TRAVEL_SPEED_KMH * 60));
+            tKm = kmRuta(lLat, lLng, task.lat, task.lng);
+            if (tKm >= 0.05) tMin = Math.max(1, Math.ceil(minutosRuta(tKm)));
           }
 
           const tWait = windowWait(task, cur + tMin, dOff);
@@ -943,9 +975,9 @@ export async function generateScenario(tasks, resources, constraints) {
         }
 
         if (anchor && hasCoords(lLat, lLng) && (lLat !== anchor.lat || lLng !== anchor.lng)) {
-          const rKm = haversineKm(lLat, lLng, anchor.lat, anchor.lng);
+          const rKm = kmRuta(lLat, lLng, anchor.lat, anchor.lng);
           if (rKm >= 0.05) {
-            const rMin = Math.max(1, Math.ceil(rKm / TRAVEL_SPEED_KMH * 60));
+            const rMin = Math.max(1, Math.ceil(minutosRuta(rKm)));
             res.assignments.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rMin, duracion: rMin, km: +rKm.toFixed(3) });
             cur += rMin; res.totalKm += rKm;
           }
@@ -1043,7 +1075,7 @@ export async function generateScenario(tasks, resources, constraints) {
           if (over.res === under.res && over.seg === under.seg) continue;
           if (over.seg.dayOffset !== under.seg.dayOffset) continue; // no mezclar días distintos
           const candidates = segRealStops(over.res, over.seg)
-            .map(t => ({ t, d: haversineKm(centroid.lat, centroid.lng, t.lat, t.lng) }))
+            .map(t => ({ t, d: kmRuta(centroid.lat, centroid.lng, t.lat, t.lng) }))
             .sort((a, b) => a.d - b.d)
             .slice(0, 8); // solo las más cercanas al hueco que se quiere llenar — acota el coste
           for (const { t } of candidates) {
@@ -1123,8 +1155,8 @@ export async function generateScenario(tasks, resources, constraints) {
 
             let travelMin = 0, travelKm = 0;
             if (hasCoords(lastLat, lastLng) && hasCoords(task.lat, task.lng)) {
-              travelKm = haversineKm(lastLat, lastLng, task.lat, task.lng);
-              if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(travelKm / TRAVEL_SPEED_KMH * 60));
+              travelKm = kmRuta(lastLat, lastLng, task.lat, task.lng);
+              if (travelKm >= 0.05) travelMin = Math.max(1, Math.ceil(minutosRuta(travelKm)));
             }
 
             const wait = windowWait(task, cursor + travelMin, dayOffset);
@@ -1159,9 +1191,9 @@ export async function generateScenario(tasks, resources, constraints) {
 
           // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
           if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
-            const retKm = haversineKm(lastLat, lastLng, anchor.lat, anchor.lng);
+            const retKm = kmRuta(lastLat, lastLng, anchor.lat, anchor.lng);
             if (retKm >= 0.05) {
-              const retMin = Math.max(1, Math.ceil(retKm / TRAVEL_SPEED_KMH * 60));
+              const retMin = Math.max(1, Math.ceil(minutosRuta(retKm)));
               res.assignments.push({ _travel: true, _depot_return: true, _start: cursor, _end: cursor + retMin, duracion: retMin, km: +retKm.toFixed(3) });
               cursor += retMin; res.totalKm += retKm;
             }
@@ -1245,9 +1277,9 @@ export async function generateScenario(tasks, resources, constraints) {
       const gapEnd   = origNext ? origNext._start : origDayEnd;
       let closingBlock = null;
       if (origPrev && origNext) {
-        const cKm = haversineKm(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
+        const cKm = kmRuta(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
         if (cKm >= 0.05) {
-          const cMin = Math.max(1, Math.ceil(cKm / TRAVEL_SPEED_KMH * 60));
+          const cMin = Math.max(1, Math.ceil(minutosRuta(cKm)));
           closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + cMin, duracion: cMin, km: +cKm.toFixed(3) };
         }
       }
@@ -1372,8 +1404,8 @@ export async function generateScenario(tasks, resources, constraints) {
             const prevLat = prev ? prev.lat : depotLat;
             const prevLng = prev ? prev.lng : depotLng;
 
-            const inKm  = haversineKm(prevLat, prevLng, task.lat, task.lng);
-            const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(inKm / TRAVEL_SPEED_KMH * 60)) : 0;
+            const inKm  = kmRuta(prevLat, prevLng, task.lat, task.lng);
+            const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(inKm))) : 0;
             const earliestArrival = prevEnd + inMin;
             const wait = windowWait(task, earliestArrival, dOff);
             if (wait === null) continue;
@@ -1381,8 +1413,8 @@ export async function generateScenario(tasks, resources, constraints) {
             const taskEnd = arrival + (task.duracion || 15);
             if (crosses(prevEnd, taskEnd)) continue;
 
-            const outKm  = haversineKm(task.lat, task.lng, next.lat, next.lng);
-            const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(outKm / TRAVEL_SPEED_KMH * 60)) : 0;
+            const outKm  = kmRuta(task.lat, task.lng, next.lat, next.lng);
+            const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(outKm))) : 0;
             const carry = (taskEnd + outMin) - next._start;
             if (carry <= 0) continue; // cabría sin empujar nada — eso ya lo cubre tryInsertOrphan/tryEvictAndInsertOrphan
 
@@ -1409,7 +1441,7 @@ export async function generateScenario(tasks, resources, constraints) {
             const slot = {
               prevStop: prev, nextStop: next, prevEnd, nextStart: newNextStart,
               inKm, inMin, outKm, outMin, wait, arrival, taskEnd,
-              kmDelta: +((inKm + outKm) - haversineKm(prevLat, prevLng, next.lat, next.lng)).toFixed(3),
+              kmDelta: +((inKm + outKm) - kmRuta(prevLat, prevLng, next.lat, next.lng)).toFixed(3),
             };
             insertAtSlot(res, task, slot, dOff);
             return true;

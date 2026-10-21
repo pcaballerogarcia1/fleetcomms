@@ -11,7 +11,7 @@ import {
 } from "../rostering/datos.js";
 import { scenarioKpis } from "../scenario-metrics.js";
 import { loadScenarioCloud, watchScenarioMeta } from "../scenario-store.js";
-import { applyTaskMove, turnoWindow } from "../vrp-engine.js";
+import { applyTaskMove, fijarCarretera, turnoWindow } from "../vrp-engine.js";
 import { ROSTER_TURNO, applyShiftMoves, deriveWorkerRows, lastScenarioDay, loadTasksFromLayers, spliceWorkerWindowIntoVehicle } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
 import { GanttChart } from "./gantt.jsx";
@@ -82,8 +82,12 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [segundosGen,  setSegundosGen] = useState(0);
   const genStartRef = useRef(null);
 
+  // los cambios a mano (mover paradas) con la misma carretera con la que se generó el escenario
+  useEffect(() => { fijarCarretera(constraints.carretera || null); }, [constraints.carretera]);
+
   const GEN_PHASES = {
     vrp:     { label: constraints.optimizarAFondo ? "Calculando y mejorando rutas a fondo (hasta minuto y medio más)…" : "Calculando y mejorando rutas…", pct: 20 },
+    carretera: { label: "Midiendo la carretera de la zona…", pct: 10 },
     osrm:    { label: "Calculando km reales por carretera…", pct: 55 },
     workers: { label: "Asignando trabajadores…",          pct: 78 },
   };
