@@ -389,7 +389,7 @@ export async function runGenerate(ctx) {
     const coverDaysCount = usedCoverWorkers.reduce((s, w) =>
       s + new Set(w.assignments.map(a => Math.floor((a._start - constraints.startMin) / 1440))).size, 0);
     const scaleMsgs = [
-      `Distancias y tiempos ${textoCarretera(medida)}.`,
+      `Distancias y tiempos ${textoCarretera(carretera || medida)}.`,
       addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
         : null,

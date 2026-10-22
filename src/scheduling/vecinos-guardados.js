@@ -19,7 +19,7 @@ export async function cargarVecinos(puntos, onProgreso) {
     if (!r.pares) return null;
     await localPut(`vecinos2_${huella}`, { vecinos: r.vecinos, tiempos: r.tiempos, pares: r.pares, maxKm: r.maxKm, completa: r.completa });
     return { ...r, huella };
-  } catch { return null; }
+  } catch (e) { console.warn("[vecinos] no se pudo medir la carretera real:", e); return null; }
 }
 /** La tabla guardada en este ordenador (por la huella de los puntos) o null */
 export async function leerVecinos(huella) {
