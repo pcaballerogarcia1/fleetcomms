@@ -17,13 +17,13 @@ export async function cargarVecinos(puntos, onProgreso) {
   try {
     const r = await vecinosPorCarretera(pts, { onProgreso });
     if (!r.pares) return null;
-    await localPut(`vecinos_${huella}`, { vecinos: r.vecinos, pares: r.pares, maxKm: r.maxKm });
+    await localPut(`vecinos2_${huella}`, { vecinos: r.vecinos, tiempos: r.tiempos, pares: r.pares, maxKm: r.maxKm, completa: r.completa });
     return { ...r, huella };
   } catch { return null; }
 }
 /** La tabla guardada en este ordenador (por la huella de los puntos) o null */
 export async function leerVecinos(huella) {
   if (!huella) return null;
-  const g = await localGet(`vecinos_${huella}`).catch(() => null);
+  const g = await localGet(`vecinos2_${huella}`).catch(() => null); // «2»: ya con los minutos reales
   return g?.vecinos instanceof Map && g.vecinos.size ? { ...g, huella } : null;
 }

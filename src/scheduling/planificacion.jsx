@@ -89,7 +89,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     fijarCarretera(c);
     // y la carretera real entre vecinas, si está guardada en este ordenador
     let vivo = true;
-    if (c?.vecinosHuella) leerVecinos(c.vecinosHuella).then(v => { if (vivo && v) fijarCarretera({ ...c, vecinos: v.vecinos, vecinosMaxKm: v.maxKm }); });
+    if (c?.vecinosHuella) leerVecinos(c.vecinosHuella).then(v => { if (vivo && v) fijarCarretera({ ...c, vecinos: v.vecinos, tiempos: v.tiempos, vecinosMaxKm: v.maxKm }); });
     return () => { vivo = false; };
   }, [constraints.carretera]);
 

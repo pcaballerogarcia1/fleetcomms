@@ -137,6 +137,20 @@ export function kmRuta(lat1, lng1, lat2, lng2) {
   }
   return d * rodeo(d);
 }
+// y los minutos reales (de camión) de la misma tabla, cuando los hay: Map<clave, Map<clave, min>>
+let TIEMPOS = null;
+/** Minutos de un trayecto: los reales de la tabla si están; si no, los de los km estimados */
+export function tiempoRuta(lat1, lng1, lat2, lng2) {
+  if (TIEMPOS) {
+    const d = haversineKm(lat1, lng1, lat2, lng2);
+    if (d <= VECINOS_MAX && d > 0) {
+      const t = TIEMPOS.get(claveCoord(lat1, lng1))?.get(claveCoord(lat2, lng2));
+      if (t !== undefined) return t;
+    }
+  }
+  const km = kmRuta(lat1, lng1, lat2, lng2);
+  return km >= 0.05 ? minutosRuta(km) : 0;
+}
 /** Minutos para esos km: entre paradas a la velocidad de la zona; en trayectos largos (a la base, a la planta) más deprisa */
 // velocidades medidas por tramos de km por carretera: [[km, km/h], …] (los trayectos muy cortos van más despacio)
 let VELS = null;
@@ -161,6 +175,7 @@ export function fijarCarretera(c) {
   VELS = vs.length >= 2 ? vs : null;
   VECINOS = c?.vecinos instanceof Map && c.vecinos.size ? c.vecinos : null;
   VECINOS_MAX = VECINOS ? Number(c.vecinosMaxKm) || 2 : 0;
+  TIEMPOS = VECINOS && c?.tiempos instanceof Map && c.tiempos.size ? c.tiempos : null;
   TRAVEL_SPEED_KMH = c?.kmh >= 8 && c.kmh <= 90 ? c.kmh : 30;
   KMH_LARGO = c?.kmhLargo > TRAVEL_SPEED_KMH && c.kmhLargo <= 110 ? c.kmhLargo : null;
 }

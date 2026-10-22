@@ -29,7 +29,7 @@ describe("la carretera de la zona", () => {
     expect(r.rodeos[0].f).toBeCloseTo(2, 1); // lo corto rodea más
     expect(r.rodeos.every(x => !Array.isArray(x))).toBe(true); // se puede guardar en Firestore
     expect(r.kmh).toBeCloseTo(30 * 0.8, 0); // un camión, al 80 % de un coche
-    expect(textoCarretera(r)).toMatch(/por carretera/);
+    expect(textoCarretera(r)).toMatch(/carretera de la zona/);
     expect((await rodeosCortos(rejilla, { fetchFn: osrm })).length).toBeGreaterThan(0);
   });
   it("si no hay servicio de rutas, sigue en línea recta y lo dice", async () => {

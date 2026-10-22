@@ -231,8 +231,8 @@ export async function runGenerate(ctx) {
     // y la carretera real entre paradas vecinas (guardada en este ordenador: la segunda vez, al momento)
     const vec = medida.medido ? await cargarVecinos(puntosRed, (i, n) => setScaleProgress({ texto: `Carretera real entre paradas vecinas: ${i} de ${n}`, i, n })) : null;
     setScaleProgress(null);
-    const carretera = medida.medido ? { ...medida, vecinosPares: vec?.pares || 0, vecinosHuella: vec?.huella || null } : null; // lo que se guarda
-    const carreteraMotor = carretera && vec?.pares ? { ...carretera, vecinos: vec.vecinos, vecinosMaxKm: vec.maxKm } : carretera;
+    const carretera = medida.medido ? { ...medida, vecinosPares: vec?.pares || 0, vecinosHuella: vec?.huella || null, vecinosCompleta: !!vec?.completa } : null; // lo que se guarda
+    const carreteraMotor = carretera && vec?.pares ? { ...carretera, vecinos: vec.vecinos, tiempos: vec.tiempos, vecinosMaxKm: vec.maxKm } : carretera;
     fijarCarretera(carreteraMotor); // también aquí: la capacidad y lo que se mueve a mano usan el mismo modelo
     constraints = { ...constraints, carretera };
     const consMotor = { ...constraints, carretera: carreteraMotor }; // al motor, con la tabla (no se guarda)
