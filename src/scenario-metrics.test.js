@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dayMetrics, dayIssues, pvr, scenarioKpis } from "./scenario-metrics.js";
+import { dayMetrics, dayIssues, pvr, rutasLargas, scenarioKpis } from "./scenario-metrics.js";
 
 // Fila tipo: sale de cochera 06:00, paradas y viajes, vuelve 14:00
 const T = (h, m = 0) => h * 60 + m;
@@ -64,5 +64,16 @@ describe("indicadores del escenario", () => {
     expect(k.eficPersonal).toBeCloseTo(1); // sin esperas ni pausas: todo es productivo
     expect(k.coste).toBeCloseTo((k.pagado / 60) * 20 + 30);
     expect(scenarioKpis({ vehicles: [v1] }).coste).toBe(null); // sin tarifas no se inventa un coste
+  });
+});
+
+describe("rutasLargas", () => {
+  it("cuenta las rutas de un día que pasan del límite, por vehículo y día", () => {
+    const rows = [
+      { assignments: [{ _start: 360, _end: 400 }, { _start: 1200, _end: 1300 }, { _start: 1440 + 360, _end: 1440 + 500 }] },
+      { assignments: [{ _start: 360, _end: 800 }] },
+    ];
+    expect(rutasLargas(rows, 540)).toEqual({ n: 1, max: 940 });
+    expect(rutasLargas(rows, 1000)).toEqual({ n: 0, max: 0 });
   });
 });

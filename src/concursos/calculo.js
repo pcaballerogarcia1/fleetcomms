@@ -42,14 +42,39 @@ const VEHICULOS = [
   [/ba[ñn]era|portacontenedor|volquete|cami[oó]n de transporte|bote|cuba/i, { precio: 140000, combustibleTurno: 60, combustibleKm: 0.55, consumiblesTurno: 5, mantenimientoAnio: 9000, seguroAnio: 3500 }],
   [/lavacontenedor|lava ?contenedor/i, { precio: 250000, combustibleTurno: 55, consumiblesTurno: 25, mantenimientoAnio: 12000, seguroAnio: 3000 }],
   [/recolector|recogida|compactador/i, { precio: 230000, combustibleTurno: 70, consumiblesTurno: 5, mantenimientoAnio: 14000, seguroAnio: 3500 }],
-  [/hidrolimpiadora|baldeadora|cisterna|agua a presi/i, { precio: 95000, combustibleTurno: 30, consumiblesTurno: 15, mantenimientoAnio: 6000, seguroAnio: 2000 }],
+  [/carros?\b|carritos?|cubos? de barrido/i, { precio: 900, combustibleTurno: 0, consumiblesTurno: 1, mantenimientoAnio: 100, seguroAnio: 0 }],
+  [/desbrozadora|soplador|sopladora|motosierra|cortac[eé]sped|cortasetos/i, { precio: 600, combustibleTurno: 2, consumiblesTurno: 1, mantenimientoAnio: 120, seguroAnio: 0 }],
+  [/hidrolimpi|baldeadora|cisterna|agua a presi/i, { precio: 95000, combustibleTurno: 30, consumiblesTurno: 15, mantenimientoAnio: 6000, seguroAnio: 2000 }],
   [/barredora/i, { precio: 180000, combustibleTurno: 35, consumiblesTurno: 10, mantenimientoAnio: 10000, seguroAnio: 2500 }],
+  [/fregadora/i, { precio: 70000, combustibleTurno: 20, consumiblesTurno: 10, mantenimientoAnio: 5000, seguroAnio: 1500 }],
+  [/caja abierta|multiprop|auxiliar|pick.?up|volteo/i, { precio: 40000, combustibleTurno: 15, consumiblesTurno: 2, mantenimientoAnio: 2500, seguroAnio: 1200 }],
   [/gr[uú]a|pluma/i, { precio: 160000, combustibleTurno: 40, consumiblesTurno: 5, mantenimientoAnio: 8000, seguroAnio: 2500 }],
   [/autob|microb|minib/i, { precio: 300000, combustibleTurno: 90, consumiblesTurno: 5, mantenimientoAnio: 15000, seguroAnio: 4000 }],
   [/furgoneta|furg[oó]n|taller/i, { precio: 45000, combustibleTurno: 15, consumiblesTurno: 40, mantenimientoAnio: 3000, seguroAnio: 1200 }],
 ];
 const VEHICULO_GENERICO = { precio: 100000, combustibleTurno: 30, consumiblesTurno: 10, mantenimientoAnio: 6000, seguroAnio: 2000 };
 export const costeOrientativo = tipo => (VEHICULOS.find(([re]) => re.test(tipo || ""))?.[1]) || VEHICULO_GENERICO;
+/** El tipo de vehículo o equipo (posición en la lista de costes), o -1 si no se reconoce */
+export const categoriaDe = tipo => (/^contenedor|^papelera|^sistema\b/i.test(String(tipo || "").trim()) ? -1 : VEHICULOS.findIndex(([re]) => re.test(tipo || "")));
+
+/**
+ * La maquinaria mínima del pliego (el dato «maquinariaMinima»), por tipos:
+ * «1 Barredora 5m3 · 1 Barredora V20 · 5 Carros (mín.)» → [{ cat, uds, conceptos }]
+ * Lo que no es un vehículo o equipo conocido (contenedores, sistemas…) no cuenta.
+ */
+export function flotaDelPliego(texto) {
+  const porCat = new Map();
+  for (const parte of String(texto || "").split(/·|;|\n/)) {
+    const m = /^\s*(\d{1,3})\s+(.+?)\s*$/.exec(parte);
+    if (!m) continue;
+    const cat = categoriaDe(m[2]);
+    if (cat < 0) continue;
+    const x = porCat.get(cat) || { cat, uds: 0, conceptos: [] };
+    x.uds += Number(m[1]); x.conceptos.push(m[2].replace(/\s*\(m[ií]n\.\)$/, ""));
+    porCat.set(cat, x);
+  }
+  return [...porCat.values()];
+}
 
 /** Cuota anual de un vehículo financiado: lo que pierde de valor más los intereses */
 export function cuotaAnual(precio, anios, interesPct = 0, residualPct = 0) {
@@ -104,11 +129,24 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
   const corto = !q.aniosAmortizacion && (anios || 0) < 3 && !q.revierte;
   const aniosAm = q.aniosAmortizacion || (corto ? q.vidaUtil : anios || 1);
   const residual = corto ? 0 : q.residualPct;
-  const vehiculos = (dim?.equipos || []).map(e => {
+  // la maquinaria mínima del pliego manda en lo que la exige: el Ayuntamiento ya ha
+  // dimensionado el servicio (lo que el pliego pide y no hace ningún servicio, se añade)
+  const flota = demanda ? [] : (q.flotaPliego || []);
+  const usadas = new Set();
+  const equipos = [...(dim?.equipos || []).map(e => {
+    const cat = categoriaDe(e.equipo), p = flota.find(x => x.cat === cat && !usadas.has(x.cat));
+    if (!p) return e;
+    usadas.add(p.cat);
+    return { ...e, pliego: p.uds, conceptosPliego: p.conceptos };
+  }), ...flota.filter(p => !usadas.has(p.cat)).map(p => ({
+    equipo: p.conceptos[0], servicios: [], porDia: 0, turnosAnio: p.uds * (q.jornadasAnio || 0), pliego: p.uds, conceptosPliego: p.conceptos, soloPliego: true,
+  }))];
+  const vehiculos = equipos.map(e => {
     const o = { ...costeOrientativo(e.equipo), ...(porVehiculo[e.equipo] || {}) };
     const turnosAnio = e.turnosAnio * masTrabajo;
     // a demanda: la parte del vehículo que se usa (el resto del tiempo trabaja en otros contratos)
-    const unidades = demanda ? Math.min(1, e.porDia * masTrabajo) || 0 : Math.max(1, Math.ceil(e.porDia * (f.flotaFija ? 1 : masTrabajo) - 1e-9));
+    const calculadas = demanda ? Math.min(1, e.porDia * masTrabajo) || 0 : Math.max(1, Math.ceil(e.porDia * (f.flotaFija ? 1 : masTrabajo) - 1e-9));
+    const unidades = o.unidades != null && o.unidades !== "" ? Number(o.unidades) : e.pliego ?? calculadas;
     const reserva = demanda ? 0 : o.reserva != null && o.reserva !== "" ? Number(o.reserva) : Math.round(unidades * q.reservaPct / 100);
     const total = unidades + reserva;
     const cuota = cuotaAnual(Number(o.precio) || 0, aniosAm, q.interesPct, residual);
@@ -117,6 +155,7 @@ export function cuentaExplotacion(dim, p = PARAMETROS_CALCULO, porVehiculo = {},
     const combustible = kmAnio && Number(o.combustibleKm) > 0 ? kmAnio * Number(o.combustibleKm) : turnosAnio * (Number(o.combustibleTurno) || 0);
     return {
       tipo: e.equipo, servicios: e.servicios, turnosAnio, unidades, reserva, total,
+      ...(e.pliego != null ? { pliego: e.pliego, calculadas: e.soloPliego ? null : calculadas, conceptosPliego: e.conceptosPliego } : {}),
       precio: Number(o.precio) || 0, combustibleTurno: Number(o.combustibleTurno) || 0, consumiblesTurno: Number(o.consumiblesTurno) || 0,
       mantenimientoAnio: Number(o.mantenimientoAnio) || 0, seguroAnio: Number(o.seguroAnio) || 0,
       amortizacion: cuota * total,
@@ -319,7 +358,8 @@ export function calcularConcurso({ ficha, dim, calc, concurso, factores, mejoras
     const revierte = valorDato(ficha, "revierte");
     const minimoPliego = minimoDePersonal(valorDato(ficha, "personalMinimo"));
     const demanda = calc?.aDemanda ?? !!valorDato(ficha, "aDemanda");
-    cuenta = cuentaExplotacion(d, { ...p, minimoPliego, aDemanda: demanda, revierte: !!revierte, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
+    const flotaPliego = calc?.sinFlotaPliego ? [] : flotaDelPliego(valorDato(ficha, "maquinariaMinima"));
+    cuenta = cuentaExplotacion(d, { ...p, minimoPliego, flotaPliego, jornadasAnio: parametros.jornadasAnio, aDemanda: demanda, revierte: !!revierte, ...(revierte && calc?.parametros?.residualPct == null ? { residualPct: 0 } : {}) }, porVehiculo, anios, factores);
     if (mejoras) for (const a of cuenta.porAnio) { a.mejoras = mejoras * a.parte; a.total += mejoras * a.parte; }
     if (mejoras) { cuenta.totalContrato = cuenta.porAnio.reduce((s, a) => s + a.total, 0); cuenta.costeMedioAnual = cuenta.totalContrato / cuenta.anios; }
   }

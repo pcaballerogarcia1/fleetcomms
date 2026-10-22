@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buscarEnPliego, frecuenciasDelServicio, leerPliego, numeroEs, tablasDeCantidades } from "./pliego.js";
+import { buscarEnPliego, frecuenciasDelServicio, leerPliego, mediosMinimosDe, numeroEs, tablasDeCantidades } from "./pliego.js";
 
 // Trozos con la forma de pliegos reales (técnico, anuncio de la Plataforma de Contratación y anexo)
 const TECNICO = [
@@ -94,5 +94,30 @@ describe("lector de pliegos", () => {
       "Frecuencia trimestral para contenedores de envases y vidrio",
       "Frecuencia mensual para contenedores de RSU y FORM",
     ]);
+  });
+});
+
+describe("tabla de maquinaria con la cantidad al final", () => {
+  it("lee las unidades sin confundir «Ver Anexo 5»", () => {
+    const p = ["23 MÁQUINARIA Caracteristicas Finalidad Cantidad\nBarredora CityCat V20 o similar Ver Anexo 5 Servicio de limpieza 1\nSistema quitanieves Ver Anexo 5\nVehiculo hidrolimpiador agua caliente Ver Anexo 5 Servicio de limpieza 1\nCarros limpieza manual Servicio M in. 5\nPROPUESTA MINIMA"];
+    expect(mediosMinimosDe(p).map(m => [m.uds, m.concepto])).toEqual([[1, "Barredora CityCat V20 o similar"], [1, "Vehiculo hidrolimpiador agua caliente"], [5, "Carros limpieza manual (mín.)"]]);
+  });
+});
+
+describe("prórroga del art. 29.4 LCSP", () => {
+  it("los 9 meses mientras se adjudica el nuevo contrato no son una prórroga", () => {
+    const p = ["La duración del contrato será de DIEZ (10) años, sin que esté contemplada la posibilidad de prórrogas.", "Por otro lado, y de conformidad con el articulo 29.4 LCSP, cuando al vencimiento de un contrato no se hubiera formalizado el nuevo contrato, se podrá prorrogar el contrato originario hasta que comience la ejecución del nuevo contrato y en todo caso por un periodo máximo de nueve meses."];
+    expect(leerPliego(p).datos.find(d => d.id === "prorroga").valor).toBe("Sin prórroga");
+  });
+});
+
+describe("memoria justificativa, objeto y tipo", () => {
+  it("la memoria no es el anuncio, el objeto sale del «Asunto:» y el título manda en el tipo", () => {
+    const p = ["Expediente n.º: 376/2025 Procedimiento: Contrataciones Asunto: Contratación del servicio de limpieza viaria, Punto Limpio y prestaciones accesorias en el municipio de Santo Domingo A la vista de lo dispuesto se expide la presente, MEMORIA JUSTIFICATIVA. Publicado en la Plataforma de Contratación del Sector Público.",
+      "Cuestión que podría verse imposibilitada por su división en lotes. El objeto del contrato es la recogida de contenedores, contenedores, contenedores del punto limpio, residuos, residuos, contenedor. Barrido manual, barrido mecánico, baldeo y papeleras."];
+    const l = leerPliego(p);
+    expect(l.clase).toBe("memoria");
+    expect(l.tipo).toBe("limpieza");
+    expect(l.datos.find(d => d.id === "objeto").valor).toMatch(/^Contratación del servicio de limpieza viaria/);
   });
 });

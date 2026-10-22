@@ -87,13 +87,13 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
   );
 
   return (
-    <div style={{
+    <div className="op-cabecera" style={{
       height: 52, flexShrink: 0, background: C.bg,
       borderBottom: `1px solid ${C.border}`,
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "0 16px", fontFamily: font, gap: 6,
     }}>
-      <div className="op-sin-barra" style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 auto", minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
+      <div className="op-sin-barra op-cabecera-migas" style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 auto", minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
         <button onClick={() => go("/projects")} title="Proyectos" style={{ background: "none", border: "none", padding: "0 6px 0 0", cursor: "pointer", display: "flex" }}><Marca size={22} /></button>
         <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 6px", fontSize: 18, fontWeight: 300 }}>/</span>
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
@@ -123,14 +123,14 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+      <div className="op-cabecera-derecha" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         {/* Quién más está conectado (su organización; el superadmin, todas) */}
         <OnlineUsers sesion={sesion} />
         {/* Historial de cambios de la organización */}
         <AuditButton sesion={sesion} activeProject={activeProject} />
         {/* Ayuda del módulo abierto: preguntas frecuentes con buscador */}
         <HelpButton sesion={sesion} path={path} tipo={activeProject?.tipo} />
-        <div style={{ textAlign: "right" }}>
+        <div className="op-cabecera-quien" style={{ textAlign: "right" }}>
           <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{sesion?.nombre}</div>
           <div style={{ fontSize: 11, color: C.dim }}>{roleLabel(sesion?.rol)}</div>
         </div>

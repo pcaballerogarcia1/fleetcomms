@@ -168,12 +168,22 @@ export function criteriosDelPliego(paginasCrudas = []) {
 
   // 3) la fórmula del precio y la baja anormal, en el texto seguido
   const paginas = paginasCrudas.map(p => String(p || "").replace(/\s+/g, " "));
-  const busca = re => { for (let i = 0; i < paginas.length; i++) { const m = paginas[i].match(re); if (m) return { m, pagina: i + 1, frase: paginas[i].slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).trim() }; } return null; };
+  // también a caballo entre dos páginas (el final de una y el principio de la siguiente)
+  const busca = re => {
+    for (let i = 0; i < paginas.length; i++) { const m = paginas[i].match(re); if (m) return { m, pagina: i + 1, frase: paginas[i].slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).trim() }; }
+    for (let i = 0; i + 1 < paginas.length; i++) {
+      const fin = paginas[i].slice(-700), t = `${fin} ${paginas[i + 1].slice(0, 700)}`, m = t.match(re);
+      if (m && m.index < fin.length && m.index + m[0].length > fin.length) return { m, pagina: i + 1, frase: t.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).trim() };
+    }
+    return null;
+  };
   let formula = null;
   const prop = busca(/(?:o(?:ferta)?\s*(?:m[aá]s baja|min|m[ií]nima)|pmin|omin|precio m[aá]s bajo)\s*\/\s*(?:o(?:ferta)?\s*(?:i|a valorar|del licitador)|pi|oi|precio (?:ofertado|de la oferta))/i)
     || busca(/oferta m[aá]s baja (?:dividid[ao]|entre) (?:por )?(?:la oferta|el precio) (?:a valorar|de cada licitador|ofertad)/i);
   const saciedad = busca(/umbral de saciedad|baja de saciedad|saciedad/i);
-  const lineal = busca(/\((?:pbl|pl|presupuesto(?: base)?(?: de licitaci[oó]n)?|ib|pb)\s*[-–]\s*(?:oi|pi|of|o)\)\s*\/\s*\((?:pbl|pl|presupuesto(?: base)?(?: de licitaci[oó]n)?|ib|pb)\s*[-–]\s*(?:omin|pmin|o ?min|om)\)|bi\s*\/\s*b\s*max|baja (?:de la oferta|ofertada) (?:a valorar )?\/\s*baja m[aá]xima|proporcional(?:mente)? a la baja/i);
+  const lineal = busca(/\((?:pbl|pl|presupuesto(?: base)?(?: de licitaci[oó]n)?|ib|pb)\s*[-–]\s*(?:oi|pi|of|o)\)\s*\/\s*\((?:pbl|pl|presupuesto(?: base)?(?: de licitaci[oó]n)?|ib|pb)\s*[-–]\s*(?:omin|pmin|o ?min|om)\)|bi\s*\/\s*b\s*max|baja (?:de la oferta|ofertada) (?:a valorar )?\/\s*baja m[aá]xima|proporcional(?:mente)? a la baja/i)
+    // con palabras: «(precio licitación − precio oferta) / (precio licitación − mejor oferta)»
+    || busca(/\(\s*(?:precio (?:de )?licitaci[oó]n|presupuesto(?: base)?(?: de licitaci[oó]n)?|importe (?:de )?licitaci[oó]n)\s*[-–]\s*(?:precio (?:de (?:la )?)?oferta|oferta(?: a valorar| del licitador)?|precio ofertado)\s*\)\s*\/\s*\(\s*(?:precio (?:de )?licitaci[oó]n|presupuesto(?: base)?(?: de licitaci[oó]n)?|importe (?:de )?licitaci[oó]n)\s*[-–]\s*(?:mejor oferta|oferta m[aá]s (?:baja|econ[oó]mica)|precio m[aá]s bajo|oferta m[ií]nima)\s*\)/i);
   if (saciedad) formula = { id: "saciedad", pagina: saciedad.pagina, frase: saciedad.frase };
   else if (prop) formula = { id: "proporcional", pagina: prop.pagina, frase: prop.frase };
   else if (lineal) formula = { id: "lineal", pagina: lineal.pagina, frase: lineal.frase };

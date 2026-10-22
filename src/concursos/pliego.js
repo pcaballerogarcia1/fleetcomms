@@ -16,7 +16,7 @@ import { estudioDeCostes } from "./estudio.js";
 import { aDemanda, destinoDelTransporte, lugaresDeRealizacion, personalExigido, serviciosPorFrecuencia, serviciosPorMediciones, textoPersonal } from "./tecnico.js";
 
 // Versión del lector: si sube, los pliegos ya guardados se vuelven a leer al abrirlos
-export const VERSION_LECTOR = 10;
+export const VERSION_LECTOR = 11;
 
 const NUM_LETRA = {
   un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
@@ -135,11 +135,17 @@ export function leerPliego(paginasCrudas) {
 
   // ── qué servicio ──
   const cuenta = Object.fromEntries(Object.entries(TIPOS).map(([k, re]) => [k, paginas.reduce((s, p) => s + (p.match(re) || []).length, 0)]));
-  const tipo = Object.entries(cuenta).sort((a, b) => b[1] - a[1])[0];
+  let tipo = Object.entries(cuenta).sort((a, b) => b[1] - a[1])[0];
+  // el título manda: un contrato «de limpieza viaria» que habla mucho de contenedores y del punto limpio sigue siendo de limpieza
+  const inicio = paginas.slice(0, 2).join(" ").slice(0, 2500);
+  const delTitulo = [["limpieza", /limpieza (?:viaria|urbana|de (?:calles|v[ií]as p[uú]blicas))/i], ["residuos", /recogida (?:y transporte )?(?:de )?(?:los )?residuos|residuos (?:s[oó]lidos )?(?:urbanos|municipales|dom[eé]sticos)/i], ["autobuses", /transporte (?:regular |urbano )?(?:colectivo )?de viajeros|servicio de autob[uú]s/i]]
+    .map(([k, re]) => [k, inicio.search(re)]).filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1])[0];
+  if (delTitulo && cuenta[delTitulo[0]] > 3) tipo = [delTitulo[0], cuenta[delTitulo[0]]];
 
   // ── qué documento es ──
   const todo = paginas.join(" ");
-  const clase = /plataforma de contrataci[oó]n|documento de pliegos|clasificaci[oó]n cpv/i.test(todo) && paginas.length < 20 ? "anuncio"
+  const clase = /memoria justificativa|informe (?:de )?(?:necesidad|justificativo)|estudio (?:de )?viabilidad econ[oó]mica/i.test(todo.slice(0, 2500)) ? "memoria"
+    : /plataforma de contrataci[oó]n|documento de pliegos|clasificaci[oó]n cpv/i.test(todo) && paginas.length < 20 ? "anuncio"
     // el título que sale antes al principio («Este pliego técnico, junto con el de cláusulas administrativas…» es técnico)
     : primero(todo.slice(0, 1500), /pliego de cl[aá]usulas administrativas/i, /pliego de (?:prescripciones|condiciones) t[eé]cnicas/i)
       ?? (/prescripciones t[eé]cnicas/i.test(todo) ? "tecnico" : /cl[aá]usulas administrativas/i.test(todo) ? "administrativo" : null);
@@ -170,7 +176,14 @@ export function leerPliego(paginasCrudas) {
   // ── objeto ──
   // (no el del índice del PDF, que va en mayúsculas)
   const mayusculas = t => { const l = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, ""); return l.replace(/[^A-ZÁÉÍÓÚÑ]/g, "").length / Math.max(1, l.length); };
-  const obj = buscarTodas(paginas, /(?:tiene por objeto|objeto del (?:presente )?(?:contrato|pliego)(?: es| ser[aá])?)\s*[:,]?\s*(?:la |el |regular |definir )?([^.]{15,500})/i, 20).find(o => mayusculas(o.m[1]) < 0.5);
+  const NO_ES_OBJETO = /se define en|\bautor\b|propiedad intelectual|legislaci[oó]n del estado|por cualquier medio|se indican? en el pliego|^que (?:deben|debe|ha|han)\b|definido en el anexo|lotes|imposibilitad|\bCPV\b|\bSI NO\b|pluralidad de contratistas|justificaci[oó]n|no se divide/i;
+  const asunto = buscar(paginas.slice(0, 2), /(?:^|\s)(?:asunto|t[ií]tulo del contrato|denominaci[oó]n del contrato)\s*:\s*([^.]{15,300}?)(?=\s(?:A la vista|Expediente|Procedimiento|Tipo de contrato|Fecha)\b|\.|$)/i);
+  const obj = (asunto && !NO_ES_OBJETO.test(asunto.m[1]) ? asunto : null)
+    || buscarTodas(paginas, /(?:tiene por objeto|objeto del (?:presente )?(?:contrato|pliego)(?: es| ser[aá])?)\s*[:,]?\s*(?:la |el |regular |definir )?([^.]{15,500})/i, 20)
+      .map(o => ({ ...o, m: [o.m[0], o.m[1].split(/\s(?:Divisi[oó]n en lotes|Lotes?:|CPV|C[oó]digo CPV)/i)[0].replace(/\s*\*\s*/g, (x, i) => (i ? ", " : "")).replace(/^,\s*/, "")
+        // «Definición del objeto del contrato: …», «Objeto del presente Pliego … para la contratación del servicio de …»
+        .replace(/^(?:definici[oó]n del )?objeto del (?:presente )?(?:contrato|pliego)\s*:\s*,?\s*/i, "").replace(/^objeto del presente pliego\b.{0,160}?para la contrataci[oó]n del?\s+/i, "")] }))
+      .find(o => mayusculas(o.m[1]) < 0.5 && o.m[1].length >= 15 && !NO_ES_OBJETO.test(o.m[1]) && /servicio|limpieza|recogida|transporte|gesti[oó]n|mantenimiento|explotaci|suministro|lavado|retirada|conservaci/i.test(o.m[1]));
   const objetoLimpio = t => { const x = corta(t.replace(/^[:,\s]+/, "").replace(/^(?:el )?objeto del (?:presente )?(?:contrato|pliego) (?:es|ser[aá])\s+(?:el |la )?/i, "")); return x.charAt(0).toUpperCase() + x.slice(1); };
   poner("objeto", "Objeto del contrato", obj, obj && objetoLimpio(obj.m[1]));
 
@@ -206,11 +219,11 @@ export function leerPliego(paginasCrudas) {
     if (n === 1) unidad = unidad === "años" ? "año" : unidad === "meses" ? "mes" : "día";
     poner("duracion", "Duración", dur, n ? `${n} ${unidad}` : null);
   }
-  const sinProrroga = buscar(paginas, /no (?:siendo|ser[aá]|es) susceptible de pr[oó]rroga|sin (?:posibilidad de )?pr[oó]rrogas?|no (?:se prev[eé]n?|habr[aá]|cabe|podr[aá]n?) (?:ninguna )?pr[oó]rroga|no podr[aá] (?:ser )?prorrogad/i);
+  const sinProrroga = buscar(paginas, /no (?:siendo|ser[aá]|es) susceptible de pr[oó]rroga|sin (?:posibilidad de )?pr[oó]rrogas?|no (?:se prev[eé]n?|habr[aá]|cabe|podr[aá]n?) (?:ninguna )?pr[oó]rroga|no podr[aá] (?:ser )?prorrogad|sin que (?:est[eé] contemplada|se contemple) la posibilidad de pr[oó]rrogas?|no (?:est[aá]|se) contempla(?:da)? (?:la posibilidad de )?pr[oó]rrogas?/i);
   if (sinProrroga) poner("prorroga", "Prórrogas", sinProrroga, "Sin prórroga");
   else {
     const pro = buscarTodas(paginas, new RegExp(String.raw`pr[oó]rrogas?[^.]{0,120}?\b(\d{1,2}|${LETRAS})\s*(?:\((\d{1,2})\)\s*)?(a[nñ]os?|mes(?:es|\(es\))?|anualidad(?:es)?)`, "i"), 20)
-      .find(c => !/plazo m[aá]ximo|no sea superior|art[ií]culo 29|desde la (?:adjudicaci|firma|formalizaci)|plazo de (?:\d|dos|tres)/i.test(c.frase));
+      .find(c => !/plazo m[aá]ximo|no sea superior|art[ií]culo 29|29\.4|hasta que comience la ejecuci[oó]n del nuevo|nuevo contrato|continuidad de la prestaci|periodo m[aá]ximo de nueve meses|desde la (?:adjudicaci|firma|formalizaci)|plazo de (?:\d|dos|tres)/i.test(c.frase));
     if (pro) {
       const n = enteroDe(pro.m[2] || pro.m[1]);
       const u = /^a[nñ]/i.test(pro.m[3]) ? (n === 1 ? "año" : "años") : /^mes/i.test(pro.m[3]) ? (n === 1 ? "mes" : "meses") : (n === 1 ? "anualidad" : "anualidades");
@@ -385,6 +398,8 @@ export function leerPliego(paginasCrudas) {
   };
   const demanda = aDemanda(paginasCrudas || []);
   if (demanda) poner("aDemanda", "Se pide a demanda", { pagina: demanda.pagina, frase: demanda.frase }, "Sí: se pide cuando hace falta y se paga por unidad (sin equipo fijo)");
+  const conUds = mediosMinimos.filter(m => m.uds);
+  if (conUds.length >= 2) poner("maquinariaMinima", "Maquinaria mínima que exige", { pagina: conUds[0].pagina, frase: null }, textoMedios(conUds));
   if (tecnico.personal.length) poner("personalMinimo", "Personal mínimo que exige", { pagina: tecnico.personal[0].pagina, frase: tecnico.personal[0].frase }, textoPersonal(tecnico.personal));
   const adjudicacion = criteriosDelPliego(paginasCrudas || []);
 
@@ -417,7 +432,33 @@ export function mediosMinimosDe(paginasCrudas) {
     if (out.length >= 3) return out;
     out.length = 0;
   }
+  return mediosEnTabla(lineas);
+}
+
+// La tabla de maquinaria con la cantidad al final:
+// «MAQUINARIA Características Finalidad Cantidad» / «Barredora CityCat V20 o similar Ver Anexo 5 Servicio de limpieza 1» / «Carros limpieza manual Servicio Mín. 5»
+const CABECERA_MAQUINARIA = /^(?:\d{1,3}\s+)?(?:M[AÁ]QUINARIA|MEDIOS MATERIALES|VEH[IÍ]CULOS(?: Y MAQUINARIA)?|MATERIAL M[OÓ]VIL)\b.*\b(?:cantidad|unidades|uds|n[uú]mero)\b/i;
+function mediosEnTabla(lineas) {
+  for (let k = 0; k < lineas.length; k++) {
+    if (!CABECERA_MAQUINARIA.test(lineas[k].t)) continue;
+    const out = [];
+    let fallos = 0;
+    for (let j = k + 1; j < lineas.length && fallos < 3; j++) {
+      const m = lineas[j].t.match(/^([A-ZÁÉÍÓÚÑ][^€]{2,140}?)\s+(M\s?[ií]n\.?\s*)?(\d{1,3})$/);
+      if (!m || /^(?:total|propuesta|p[aá]gina)/i.test(m[1])) { if (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(lineas[j].t) && !/^propuesta/i.test(lineas[j].t)) { fallos++; continue; } break; }
+      if (/(?:anexo|art[ií]culo|cap[ií]tulo|p[aá]g\.?|apartado)$/i.test(m[1])) continue; // «Ver Anexo 5»: no es la cantidad
+      const concepto = m[1].replace(/\s+(?:Ver Anexo\b.*|Servicio\b.*|Voluminosos)$/i, "").trim();
+      out.push({ uds: Number(m[3]), concepto: m[2] ? `${concepto} (mín.)` : concepto, pagina: lineas[j].pagina });
+      fallos = 0;
+    }
+    if (out.length >= 3) return out;
+  }
   return [];
+}
+
+/** Los medios mínimos como dato de la ficha: «1 Barredora… · 5 Carros limpieza manual (mín.)» */
+export function textoMedios(medios) {
+  return (medios || []).filter(m => m.uds).map(m => `${m.uds} ${m.concepto}`).join(" · ");
 }
 
 // ── Frecuencias ──

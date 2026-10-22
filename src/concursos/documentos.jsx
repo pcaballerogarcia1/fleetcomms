@@ -13,7 +13,7 @@ import { prepararDimension, traerLoQueFalta } from "./plataforma.js";
 import { PDF_MAX, borrarDocumento, escucharDocumentos, escucharFicha, guardarDocumento, pdfDocumento, releerDocumento, textoDocumento } from "./store.js";
 import { FichaRequisitos } from "./ficha-requisitos.jsx";
 
-const CLASE = { tecnico: "Pliego de prescripciones técnicas", administrativo: "Pliego de cláusulas administrativas", anuncio: "Anuncio de licitación" };
+const CLASE = { tecnico: "Pliego de prescripciones técnicas", administrativo: "Pliego de cláusulas administrativas", anuncio: "Anuncio de licitación", memoria: "Memoria justificativa" };
 const TIPO = { residuos: "Residuos", limpieza: "Limpieza viaria", autobuses: "Autobuses" };
 // con punto de miles también en las cifras de 4 (en español, el navegador no lo pone: «6037»)
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 2 }); } catch { return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }); } })();

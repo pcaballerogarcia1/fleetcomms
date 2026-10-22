@@ -297,7 +297,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
 
 export function PublishModal({ targets, mes, onClose, onConfirm }) {
   const [tipo, setTipo] = useState(() => {
-    try { return localStorage.getItem("rostering_pub_tipo") || "prev"; } catch { return "prev"; }
+    try { return localStorage.getItem("rostering_pub_tipo") || "ruta"; } catch { return "ruta"; }
   });
   const [trabajo, setTrabajo] = useState(() => trabajoRecordado(tipo));
   const names = targets.map(w => [w.nombre, w.apellidos].filter(Boolean).join(" "));

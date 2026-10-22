@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cuentaExplotacion, cuotaAnual, PARAMETROS_CALCULO } from "./calculo.js";
+import { cuentaExplotacion, cuotaAnual, flotaDelPliego, PARAMETROS_CALCULO } from "./calculo.js";
 import { dimensionar } from "./ficha.js";
 
 describe("cuenta de explotación", () => {
@@ -61,5 +61,25 @@ describe("desde el estudio de costes del Ayuntamiento (Gozón)", async () => {
     expect(r.modo).toBe("estudio");
     expect(margen).toBeGreaterThan(2);
     expect(margen).toBeLessThan(8);
+  });
+});
+
+describe("maquinaria mínima del pliego", () => {
+  const texto = "1 Barredora 5m3 con tres cepillos · 1 Barredora CityCat V20 · 1 Vehiculo hidrolimpiador agua caliente · 1 Vehiculo caja abierta multiproposito · 5 Carros limpieza manual (mín.) · 463 Contenedores de 1000 l";
+  it("se agrupa por tipo y deja fuera lo que no es maquinaria", () => {
+    const f = flotaDelPliego(texto);
+    expect(f.map(x => x.uds)).toEqual([2, 1, 1, 5]);
+    expect(f.find(x => x.uds === 5).conceptos).toEqual(["Carros limpieza manual"]);
+  });
+  it("manda sobre los rendimientos y añade lo que ningún servicio usa", () => {
+    const d = dimensionar([
+      { id: "b", nombre: "Barrido mecánico", cantidadAnual: 900, porTurno: 1, vehiculo: "barredora", personas: 1 },
+      { id: "m", nombre: "Barrido manual", cantidadAnual: 1500, porTurno: 1, vehiculo: "carro de barrido manual", personas: 1 },
+    ], { jornadasAnio: 300 });
+    const c = cuentaExplotacion(d, { ...PARAMETROS_CALCULO, reservaPct: 0, flotaPliego: flotaDelPliego(texto), jornadasAnio: 300 });
+    const barredora = c.vehiculos.find(v => v.tipo === "barredora");
+    expect([barredora.unidades, barredora.calculadas, barredora.pliego]).toEqual([2, 3, 2]);
+    expect(c.vehiculos.find(v => v.tipo === "carro de barrido manual").precio).toBe(900);
+    expect(c.vehiculos.filter(v => v.servicios.length === 0).map(v => v.tipo)).toEqual(["Vehiculo hidrolimpiador agua caliente", "Vehiculo caja abierta multiproposito"]);
   });
 });

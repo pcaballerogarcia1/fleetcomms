@@ -59,7 +59,7 @@ export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, can
             <input ref={xlsxUploadRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUploadXLSX} />
             <button onClick={() => xlsxUploadRef.current?.click()} className="op-btn op-fantasma" title="Importar un escenario de vehículos o de trabajadores desde Excel"><FileUp size={14} /> {t("importar", lang)}</button>
             <div className="op-sep" />
-            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "prev", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn"><Send size={14} /> {t("publicarRutas", lang)}</button>
+            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn"><Send size={14} /> {t("publicarRutas", lang)}</button>
             {/* Deshacer / rehacer movimientos manuales del Gantt */}
             <div style={{ display: "flex", gap: 2 }}>
               <button onClick={undoMove} disabled={!canUndoMove} className="op-btn op-fantasma op-icono" title={canUndoMove ? `Deshacer: ${moveHistory[historyIndex]?.label || "último movimiento"}` : "Nada que deshacer"}><Undo2 size={15} /></button>
@@ -294,7 +294,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Tipo de plan</div>
               <div style={{ display: "flex", gap: 6 }}>
-                {[["prev","Prev. Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
+                {[["ruta","Ruta"],["prev","Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
                   <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k, trabajo: trabajoRecordado(k) }))} style={{
                     flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${publishModal.tipo === k ? C.blue : C.border}`,
                     background: publishModal.tipo === k ? C.blueDim : "none",

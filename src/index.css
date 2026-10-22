@@ -142,3 +142,10 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 /* Barra de pestañas que se desplaza en horizontal sin enseñar la barra de desplazamiento */
 .op-sin-barra { scrollbar-width: none; }
 .op-sin-barra::-webkit-scrollbar { display: none; }
+/* Cabecera en el móvil: los módulos en su propia fila (si no, se quedan sin sitio) */
+@media (max-width: 760px) {
+  .op-cabecera { height: auto !important; flex-wrap: wrap !important; padding: 6px 12px !important; row-gap: 4px !important; }
+  .op-cabecera-derecha { order: 1; margin-left: auto; gap: 8px !important; }
+  .op-cabecera-migas { order: 2; flex: 1 1 100% !important; padding-bottom: 2px; }
+  .op-cabecera-quien { display: none; }
+}

@@ -8,7 +8,7 @@ import { db } from "../firebase.js";
 import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
-import { scenarioKpis } from "../scenario-metrics.js";
+import { rutasLargas, scenarioKpis } from "../scenario-metrics.js";
 import { loadScenarioCloud, newScenarioVersion, saveScenarioCloud } from "../scenario-store.js";
 import { autoScaleFleetBg, generateScenarioBg, rutaMaestraBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
@@ -388,6 +388,8 @@ export async function runGenerate(ctx) {
     const usedCoverWorkers = usedWorkerRows.filter(w => w._onlyDayWindows);
     const coverDaysCount = usedCoverWorkers.reduce((s, w) =>
       s + new Set(w.assignments.map(a => Math.floor((a._start - constraints.startMin) / 1440))).size, 0);
+    const horasMin = m => { const t = Math.round(m); return `${Math.floor(t / 60)} h${t % 60 ? ` ${t % 60} min` : ""}`; };
+    const largas = rutasLargas(vehicleSchedule, constraints.maxShiftMin > 0 ? constraints.maxShiftMin + 15 : 540);
     const scaleMsgs = [
       `Distancias y tiempos ${textoCarretera(carretera || medida)}.`,
       addedVehicles.length > 0
@@ -398,6 +400,10 @@ export async function runGenerate(ctx) {
         : null,
       descargas.descargas > 0
         ? `${descargas.descargas} viaje(s) a descargar${plantas.length ? "" : " (sin plantas marcadas en Planning: se descarga en el depósito)"}${descargas.rutasPasadas ? ` · ${descargas.rutasPasadas} ruta(s) acaban hasta ${descargas.minPasados} min más tarde de lo previsto por las descargas` : ""}.`
+        : null,
+      // rutas larguísimas: sin límite de turno el motor llena el día entero (06:00–22:00)
+      largas.n > 0
+        ? `Atención: ${largas.n} ruta(s) duran más de ${constraints.maxShiftMin > 0 ? horasMin(constraints.maxShiftMin) : "9 h"} (la más larga, ${horasMin(largas.max)}).${constraints.maxShiftMin > 0 ? "" : " No hay duración máxima de turno: ponla en Restricciones → «Duración máxima de turno» y vuelve a generar."}`
         : null,
       usedCoverWorkers.length > 0
         ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Rostering — cubiertos por "Conductor necesario".`
@@ -833,6 +839,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
     // — antes se descartaban en silencio; ahora se avisa antes de escribir.
     const skipped = []; // { label, day, stops }
     const unstaffed = []; // modo libre: tramos publicados sin conductor asignado en Rostering
+    const sinConductor = []; // vehículo-día sin ningún conductor real (solo «conductor necesario» o nadie): nadie lo verá en Rutas
     for (const row of vehicleSchedule) {
       const allStops = row.assignments.filter(a => !a._break && !a._travel && !a._wait);
       if (allStops.length === 0) continue;
@@ -907,11 +914,13 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
         // Modo libre: paradas cuyo tramo no tiene conductor asignado en
         // Rostering — se publican igual (el plan es del vehículo) pero se
         // avisa, que si no nadie las haría.
+        let avisado = false;
         if (scenarioRosterMode === "libre" && !row._virtual) {
           const noDriver = stops.filter(a => !ownerOf.get(a)).length;
-          if (noDriver) unstaffed.push({ label: vehicleLabel, day: calDay, stops: noDriver });
+          if (noDriver) { unstaffed.push({ label: vehicleLabel, day: calDay, stops: noDriver }); avisado = true; }
         }
         const drivers = [...new Set(stops.map(a => ownerOf.get(a)).filter(Boolean))];
+        if (!avisado && !drivers.some(w => !w._virtual)) sinConductor.push({ label: vehicleLabel, day: calDay, stops: stops.length });
         const conductorLabel = drivers.length ? drivers.map(nameOf).join(" / ") : vehicleLabel;
         const ubicaciones = stops.map((a, i) => taskToUbicacion(a, i));
         const recorrido = stops
@@ -939,7 +948,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       }
     }
 
-    if (skipped.length || unstaffed.length) {
+    if (skipped.length || unstaffed.length || sinConductor.length) {
       const fmt = list => {
         const lines = list.slice(0, 10).map(x => `• Día ${x.day}: ${x.label} — ${x.stops} parada(s)`);
         if (list.length > 10) lines.push(`• …y ${list.length - 10} más`);
@@ -949,6 +958,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       const parts = [];
       if (skipped.length) parts.push(`${total(skipped)} parada(s) NO se publicarán por el cuadrante actual de Rostering:\n${fmt(skipped)}`);
       if (unstaffed.length) parts.push(`${total(unstaffed)} parada(s) se publicarán SIN conductor asignado en Rostering (usa Optimizar en Rostering):\n${fmt(unstaffed)}`);
+      if (sinConductor.length) parts.push(`${sinConductor.length} ruta(s) (${total(sinConductor)} paradas) no tienen ningún conductor: nadie las verá en Rutas. Asigna conductores a los vehículos en Planning o en Rostering:\n${fmt(sinConductor)}`);
       const ok = confirm(`${parts.join("\n\n")}\n\nRegenera u optimiza para corregirlo, o acepta para publicar igualmente.`);
       if (!ok) { setPublishing(false); return; }
     }

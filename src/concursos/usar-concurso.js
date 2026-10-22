@@ -2,7 +2,7 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { db } from "../firebase.js";
-import { escucharDimension, escucharFicha, escucharRequisito, guardarRequisito } from "./store.js";
+import { escucharDimension, escucharDocumentos, escucharFicha, escucharRequisito, guardarRequisito } from "./store.js";
 
 export function useDatosConcurso(id) {
   const [concurso, setConcurso] = useState(undefined);
@@ -10,12 +10,14 @@ export function useDatosConcurso(id) {
   const [dim, setDim] = useState(null);
   const [calc, setCalc] = useState(null);
   const [oferta, setOferta] = useState(null);
+  const [docs, setDocs] = useState([]);
   useEffect(() => (id ? onSnapshot(doc(db, "concursos", id), s => setConcurso(s.exists() ? { _id: s.id, ...s.data() } : null), () => setConcurso(null)) : undefined), [id]);
   useEffect(() => (id ? escucharFicha(id, setFicha) : undefined), [id]);
   useEffect(() => (id ? escucharDimension(id, setDim) : undefined), [id]);
   useEffect(() => (id ? escucharRequisito(id, "calculo", setCalc) : undefined), [id]);
   useEffect(() => (id ? escucharRequisito(id, "oferta", setOferta) : undefined), [id]);
-  return { concurso, ficha, dim, calc, oferta, listo: concurso !== undefined && ficha && dim && calc && oferta };
+  useEffect(() => (id ? escucharDocumentos(id, d => setDocs(d || [])) : undefined), [id]);
+  return { concurso, ficha, dim, calc, oferta, docs, listo: concurso !== undefined && ficha && dim && calc && oferta };
 }
 
 /**

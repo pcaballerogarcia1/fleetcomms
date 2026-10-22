@@ -168,6 +168,7 @@ export function parseFestivos(text) {
 
 // ── MODAL: publicar a Rutas ────────────────────────────────────────
 export const TIPOS_RUTA = [
+  { key: "ruta", label: "Ruta de servicio" },
   { key: "prev", label: "Mantenimiento Preventivo" },
   { key: "ext",  label: "Limpieza Exterior" },
   { key: "int",  label: "Limpieza Interior" },

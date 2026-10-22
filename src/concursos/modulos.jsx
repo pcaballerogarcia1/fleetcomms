@@ -3,6 +3,7 @@
 // (la elegida o la recomendada), con una lista de comprobaciones: cada una
 // dice si está bien y a qué módulo ir para arreglarla.
 import { CircleAlert, CircleCheck, ClipboardList } from "lucide-react";
+import { AvisoLeido } from "./confirmar-panel.jsx";
 import { useEffect, useMemo, useState } from "react";
 import { C, font } from "../tema.js";
 import { F1, eur, pct } from "./formato.js";
@@ -65,6 +66,7 @@ export function ResumenConcurso({ concursoId, irA }) {
           <div style={{ fontSize: 13, color: C.muted }}>{c?.nombre || "…"}</div>
         </div>
       </div>
+      <AvisoLeido concursoId={concursoId} docs={docs} ficha={datos.ficha} irA={irA} />
 
       {c && <div style={{ ...rejilla, marginTop: 18 }}>
         {[["Organismo", c.organismo || "—"], ["Servicio", TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Expediente", c.expediente || "—"],

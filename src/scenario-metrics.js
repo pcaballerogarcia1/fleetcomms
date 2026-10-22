@@ -144,3 +144,24 @@ export function scenarioKpis({ vehicles = [], workers = [], unassigned = 0, days
   k.coste = (costeHora > 0 || costeKm > 0) ? (k.pagado / 60) * costeHora + k.km * costeKm : null;
   return k;
 }
+
+/**
+ * Las rutas de un vehículo en un día que pasan de `limite` minutos (de la
+ * primera salida a la última llegada). @returns { n, max } (max en minutos)
+ */
+export function rutasLargas(rows, limite = 540) {
+  let n = 0, max = 0;
+  for (const r of rows || []) {
+    const porDia = new Map();
+    for (const a of r.assignments || []) {
+      if (a._start == null || a._end == null) continue;
+      const d = Math.floor(a._start / 1440), x = porDia.get(d) || [Infinity, -Infinity];
+      porDia.set(d, [Math.min(x[0], a._start), Math.max(x[1], a._end)]);
+    }
+    for (const [ini, fin] of porDia.values()) {
+      const dur = fin - ini;
+      if (dur > limite) { n++; max = Math.max(max, dur); }
+    }
+  }
+  return { n, max };
+}

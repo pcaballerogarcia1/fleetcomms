@@ -10,6 +10,7 @@ import { C, font } from "../tema.js";
 import { BAJA_ANORMAL, FORMULAS_PRECIO } from "./criterios.js";
 import { F1, eur, pct } from "./formato.js";
 import bajasReferencia from "./bajas-referencia.json";
+import { AvisoLeido } from "./confirmar-panel.jsx";
 import { OFERTA_DEFECTO, analizarOferta, competenciaDeReferencia, puntosEnJuego } from "./oferta.js";
 import { PanelAlarmas } from "./alarmas-panel.jsx";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
@@ -64,7 +65,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
       </div>
     </div>
   );
-  const pagina = hijos => <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px 60px" }}>{cabecera}{hijos}</div>;
+  const pagina = hijos => <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px 60px" }}>{cabecera}<AvisoLeido concursoId={concursoId} docs={datos.docs} ficha={datos.ficha} irA={irA} />{hijos}</div>;
   if (!a) return pagina(<div style={{ color: C.muted, marginTop: 20 }}>Cargando…</div>);
   const falta = (t, d) => (
     <div style={{ ...tarjeta, padding: 20, marginTop: 18, maxWidth: 680 }}>

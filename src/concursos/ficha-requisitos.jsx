@@ -8,11 +8,12 @@ import { C } from "../tema.js";
 import { CriteriosFicha } from "./criterios-ficha.jsx";
 import { contextoDelConcurso, equipoDe, preciosDelPliego, propuestasDeServicios, revisarPeriodo, servicioParaGuardar } from "./ficha.js";
 import { cambiarConcurso, fijarDato, fijarEstudio, fijarServicio } from "./store.js";
+import { alConcurso, confirmarLoLeido, pendientes, propuestasDe } from "./confirmar.js";
 
 const GRUPOS = [
   ["Contrato", ["expediente", "organismo", "objeto", "procedimiento", "cpv", "lotes", "duracion", "prorroga", "fechaLimite", "presupuesto", "importeSinIva", "importeConIva", "valorEstimado", "precioPrimerAnio", "ivaPct", "importeAnual", "puntosPrecio", "garantia", "solvencia"]],
   ["Servicio", ["contenedores", "vecesAnio", "operacionesAnio", "jornadasAnio", "dias", "temporadaAlta", "nocturno", "inicio", "habitantes", "lineas", "expediciones", "kmAnuales", "horasAnuales"]],
-  ["Medios y personal", ["vehiculos", "antiguedad", "revierte", "subrogacion", "personalMinimo", "plantilla", "convenio"]],
+  ["Medios y personal", ["vehiculos", "antiguedad", "revierte", "subrogacion", "maquinariaMinima", "personalMinimo", "plantilla", "convenio"]],
   ["Quién paga qué", ["agua", "vertido"]],
 ];
 const FMT = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 2 }); } catch { return new Intl.NumberFormat("es-ES"); } })();
@@ -21,35 +22,11 @@ const txt = (clave, v) => (v == null ? "—" : DINERO.has(clave) ? `${FMT.format
 // de texto a valor (cifras con punto de miles y coma decimal)
 const aValor = (clave, s) => { const t = String(s).trim(); if (DINERO.has(clave) || /^[\d.\s]+(,\d+)?$/.test(t)) { const n = Number(t.replace(/\s|€/g, "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : t; } return t; };
 
-// La ficha del concurso (organismo, plazos, presupuesto) se rellena sola con lo confirmado
-function alConcurso(clave, valor) {
-  if (clave === "organismo") return { organismo: valor };
-  if (clave === "fechaLimite" && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return { fechaLimite: valor };
-  if (clave === "expediente") return { expediente: valor };
-  if (clave === "duracion") { const n = parseInt(valor, 10); return /mes/.test(valor) ? { duracionMeses: n, duracionAnios: Math.round((n / 12) * 10) / 10 } : n ? { duracionAnios: n, duracionMeses: n * 12 } : {}; }
-  // el presupuesto base de licitación suele llevar el IVA; el «importe sin impuestos», no
-  if (clave === "presupuesto" && typeof valor === "number") return { presupuestoConIva: valor };
-  if (clave === "importeSinIva" && typeof valor === "number") return { presupuestoSinIva: valor };
-  if (clave === "valorEstimado" && typeof valor === "number") return { valorEstimado: valor };
-  return {};
-}
-
-/** Lo propuesto por los pliegos subidos, juntos: { [clave]: [{ valor, pagina, frase, doc, docNombre, nombre }] } */
-function propuestasDe(docs) {
-  const out = {};
-  for (const d of docs || []) {
-    for (const x of d.lectura?.datos || []) {
-      if (x.id.startsWith("horario") || x.id.startsWith("lote") || x.id.startsWith("frecuencia")) continue;
-      (out[x.id] ||= []).push({ valor: x.valor, pagina: x.pagina, frase: x.frase, doc: d._id, docNombre: d.nombre, nombre: x.nombre });
-    }
-  }
-  return out;
-}
-
 export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, concurso }) {
   const [editando, setEditando] = useState(null); // { clave, texto }
   const [elegidas, setElegidas] = useState(null);  // tablas marcadas para añadir
   const [manual, setManual] = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
   const props = propuestasDe(docs);
   const datos = ficha?.datos || {};
   const claves = [...new Set([...Object.keys(props), ...Object.keys(datos)])];
@@ -104,6 +81,18 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
         Lo que vale del pliego. Operanzia propone cada dato con su página; tú lo <b style={{ color: C.text }}>confirmas</b>, lo <b style={{ color: C.text }}>corriges</b> o lo <b style={{ color: C.text }}>descartas</b>. Solo lo revisado pasa a Planning, Cálculo y Resumen.
         <span style={{ marginLeft: 8, color: revisados === claves.length && claves.length ? C.green : C.amber, fontWeight: 600 }}>{revisados} de {claves.length} datos revisados</span>
       </div>
+      {(() => {
+        const p = pendientes(docs, ficha);
+        if (!p.total) return null;
+        return (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+            <button className="op-btn op-primario" disabled={confirmando} onClick={async () => { setConfirmando(true); try { const n = await confirmarLoLeido(concursoId, docs, ficha); onNota(`Confirmado lo leído (${n}). Revisa lo que tenga aviso naranja: dos documentos no dicen lo mismo.`); } catch (e) { onError(e.message || String(e)); } setConfirmando(false); }}>
+              <Check size={14} /> Confirmar todo lo leído ({p.total})
+            </button>
+            <span style={{ fontSize: 12, color: C.dim }}>Confirma de una vez los datos, los criterios y el estudio de costes que ha leído; luego puedes corregir lo que quieras.</span>
+          </div>
+        );
+      })()}
 
       {GRUPOS.concat([["Otros", claves.filter(k => !GRUPOS.some(([, ks]) => ks.includes(k)))]]).map(([grupo, ks]) => {
         const lista = ks.filter(k => claves.includes(k));

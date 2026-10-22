@@ -12,6 +12,7 @@ import { alarmasConcurso } from "./alarmas.js";
 import { PanelAlarmas } from "./alarmas-panel.jsx";
 import { PARAMETROS_CALCULO, calcularConcurso, costeOrientativo } from "./calculo.js";
 import { PlantillaSubrogar } from "./plantilla-panel.jsx";
+import { AvisoLeido } from "./confirmar-panel.jsx";
 import { F0, F1, F2, eur, pct } from "./formato.js";
 import { useDatosConcurso, useGuardadoDiferido } from "./usar-concurso.js";
 
@@ -34,7 +35,7 @@ export function CalculoConcurso({ concursoId, irA }) {
   const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
   const numInput = (valor, onCambio, w = 90, ph) => <input className="op-input" type="number" value={valor ?? ""} placeholder={ph} onChange={e => onCambio(e.target.value === "" ? null : Number(e.target.value))} style={{ width: w, height: 30, textAlign: "right" }} />;
 
-  const cabecera = (
+  const cabeceraTitulo = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
       <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><Calculator size={19} /></div>
       <div>
@@ -43,6 +44,7 @@ export function CalculoConcurso({ concursoId, irA }) {
       </div>
     </div>
   );
+  const cabecera = <>{cabeceraTitulo}<AvisoLeido concursoId={concursoId} docs={datos.docs} ficha={datos.ficha} irA={irA} /></>;
   if (!r) return <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>{cabecera}<div style={{ color: C.muted, marginTop: 20 }}>Cargando…</div></div>;
   if (!r.dimension.lineas.length && r.modo !== "estudio") {
     return (
@@ -229,7 +231,7 @@ export function CalculoConcurso({ concursoId, irA }) {
                 <tr key={v.tipo} style={{ borderTop: `1px solid ${C.border}` }}>
                   <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{v.tipo}<div style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>{v.servicios.join(", ")}</div></td>
                   <td style={td}>{F1.format(v.turnosAnio)}</td>
-                  <td style={td}>{c.aDemanda ? `${F0.format(v.unidades * 100)} %` : v.unidades}{v.kmAnio ? <div style={{ fontSize: 11, color: C.dim }}>{F0.format(v.kmAnio)} km/año</div> : null}</td>
+                  <td style={td}>{c.aDemanda ? `${F0.format(v.unidades * 100)} %` : v.unidades}{v.pliego != null ? <div style={{ fontSize: 11, color: C.dim }} title={(v.conceptosPliego || []).join(" · ")}>las del pliego{v.calculadas != null && v.calculadas !== v.pliego ? ` (tus rendimientos: ${v.calculadas})` : ""}</div> : null}{v.kmAnio ? <div style={{ fontSize: 11, color: C.dim }}>{F0.format(v.kmAnio)} km/año</div> : null}</td>
                   <td style={td}>{numInput(cambiado.reserva ?? null, x => cambiar({ vehiculos: { [v.tipo]: { reserva: x } } }), 60, String(v.reserva))}</td>
                   {CAMPOS_VEHICULO.map(([k]) => <td key={k} style={td}>{numInput(cambiado[k] ?? null, x => cambiar({ vehiculos: { [v.tipo]: { [k]: x } } }), k === "precio" ? 100 : 80, F0.format(o[k]))}</td>)}
                   <td style={td}>{eur(v.amortizacion)}</td>

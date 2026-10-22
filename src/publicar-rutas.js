@@ -28,7 +28,7 @@ import { getScenarioMeta, loadScenarioCloud } from "./scenario-store.js";
 // Nombre del trabajo: al publicar se puede poner otro (p. ej. «Recogida de
 // vidrio» en vez de «Limpieza Exterior»). En Rutas sale como un apartado
 // propio de la portada, con el icono y el color de su tipo.
-export const NOMBRE_TIPO = { prev: "Mantenimiento Preventivo", ext: "Limpieza Exterior", int: "Limpieza Interior" };
+export const NOMBRE_TIPO = { ruta: "Ruta de servicio", prev: "Mantenimiento Preventivo", ext: "Limpieza Exterior", int: "Limpieza Interior" };
 /** Lo que se guarda en el plan: el nombre escrito, o nada si es el de siempre */
 export function trabajoParaGuardar(tipo, texto) {
   const t = String(texto || "").trim().slice(0, 60);

@@ -1,6 +1,6 @@
 // App del conductor (Rutas, Incidencias, Inventario, Admin): datos, colores,
 // estilos y utilidades que comparten todas sus pantallas.
-import { CarFront, CircleDot, Droplets, Hammer, Megaphone, Settings2, Sparkles, Wrench } from "lucide-react";
+import { CarFront, CircleDot, Droplets, Hammer, MapPin, Megaphone, Settings2, Sparkles, Wrench } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore";
@@ -369,6 +369,8 @@ export const PUNTOS_INSPECCION = [
 
 // ── TIPOS DE TRABAJO ──────────────────────────────────────────────
 export const TIPOS_TRABAJO = [
+  // genérico: recogida, reparto, revisiones… (el nombre del trabajo lo pone quien publica)
+  { key:"ruta",   label:"Ruta de servicio",          icon:"📍", Icono:MapPin,   color:"#22b8cf", kml:true  },
   { key:"prev",   label:"Mantenimiento Preventivo", icon:"🛠️", Icono:Wrench,   color:"#5b7cfa", kml:true  },
   { key:"corr",   label:"Mantenimiento Correctivo", icon:"🔩", Icono:Hammer,   color:"#f59e5b", kml:false },
   { key:"ext",    label:"Limpieza Exterior",         icon:"🚿", Icono:Droplets, color:"#3fcf8e", kml:true  },

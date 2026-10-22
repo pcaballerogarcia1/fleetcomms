@@ -56,3 +56,12 @@ describe("criterios reales de Gozón (CON/2026/12)", async () => {
     expect(p.baja.id).toBe("art85");
   });
 });
+
+describe("fórmula del precio con palabras", () => {
+  it("«(precio licitación − precio oferta) / (precio licitación − mejor oferta)» es lineal, aunque esté partida entre dos páginas", () => {
+    const una = ["Fórmula/método de valoración: Puntos oferta = puntos máximos x (precio licitación-precio oferta) / (precio licitación- mejor oferta)."];
+    expect(criteriosDelPliego(una).formula.id).toBe("lineal");
+    const partida = ["Fórmula/método de valoración: Puntos oferta = puntos máximos x (precio licitación-precio", "oferta) / (precio licitación- mejor oferta). b) Bolsa de horas"];
+    expect(criteriosDelPliego(partida).formula).toMatchObject({ id: "lineal", pagina: 1 });
+  });
+});
