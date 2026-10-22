@@ -558,7 +558,13 @@ export async function generateScenario(tasks, resources, constraints) {
       // 40 vehículos, ninguno por debajo del 50% y máx 98%. Al pedir una
       // jornada máxima concreta ya se asume el coste en km de repartir así.
       const baseOptT = Math.max(0, Math.min(100, optimizeWeight || 0)) / 100;
-      const optT = virtualShiftMin ? Math.max(baseOptT, 1) : baseOptT;
+      // Varios días con tope (maxDays): el escenario dura lo que dure la zona más
+      // grande. Con zonas solo por cercanía, una puede no caber en los días (caso
+      // real: 870 paradas en una zona y las otras dos acabadas el día 5) y se
+      // añadía un «Vehículo necesario» con camiones propios parados. Con tope de
+      // días se reparte por trabajo, como con «Priorizar turnos» al máximo.
+      const multiDia = maxDays > 1;
+      const optT = virtualShiftMin || multiDia ? Math.max(baseOptT, 1) : baseOptT;
       const totalDur   = withCoords.reduce((s, t) => s + (t.duracion || 15), 0);
       const avgTaskDur = totalDur / withCoords.length;
       const clusterLoad = cl => {
@@ -569,6 +575,34 @@ export async function generateScenario(tasks, resources, constraints) {
       const avgLoad     = withCoords.length / k;
       const minFraction = 0.5 + optT * 0.4; // 50% (solo evita clusters vacíos) → 90% (reparto casi igualado)
       const minLoad     = Math.max(1, avgLoad * minFraction);
+      // Con tope de días, tampoco una zona muy por encima de la media: lo que le
+      // sobra pasa a la zona vecina con menos trabajo (las paradas suyas más cercanas a ella)
+      if (multiDia) {
+        const maxLoad = avgLoad * 1.08;
+        const centro = cl => ({ lat: cl.reduce((x, t) => x + t.lat, 0) / Math.max(1, cl.length), lng: cl.reduce((x, t) => x + t.lng, 0) / Math.max(1, cl.length) });
+        for (let vuelta = 0; vuelta < 4 * k; vuelta++) {
+          let big = 0;
+          for (let ci = 1; ci < k; ci++) if (clusterLoad(rawClusters[ci]) > clusterLoad(rawClusters[big])) big = ci;
+          const exceso = clusterLoad(rawClusters[big]) - maxLoad;
+          if (exceso <= 0) break;
+          const cb = centro(rawClusters[big]);
+          // la zona con hueco más cercana a la grande
+          let dest = -1, dMin = Infinity;
+          for (let ci = 0; ci < k; ci++) {
+            if (ci === big || clusterLoad(rawClusters[ci]) >= avgLoad) continue;
+            const c = centro(rawClusters[ci]), dd = (c.lat - cb.lat) ** 2 + (c.lng - cb.lng) ** 2;
+            if (dd < dMin) { dMin = dd; dest = ci; }
+          }
+          if (dest < 0) break;
+          const hueco = avgLoad - clusterLoad(rawClusters[dest]);
+          const cd = centro(rawClusters[dest]);
+          const unaCarga = clusterLoad(rawClusters[big]) / rawClusters[big].length;
+          const n = Math.max(1, Math.min(Math.ceil(Math.min(exceso, hueco) / unaCarga), rawClusters[big].length - 1));
+          // las de la zona grande más cercanas a la de destino
+          rawClusters[big].sort((x, y) => ((x.lat - cd.lat) ** 2 + (x.lng - cd.lng) ** 2) - ((y.lat - cd.lat) ** 2 + (y.lng - cd.lng) ** 2));
+          rawClusters[dest].push(...rawClusters[big].splice(0, n));
+        }
+      }
       let rebalChanged = true;
       while (rebalChanged) {
         rebalChanged = false;

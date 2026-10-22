@@ -916,3 +916,18 @@ describe("generateScenario con franjas por día", () => {
     expect(computeCandidateSlots(task, row, 1440).length).toBeGreaterThan(0);
   });
 });
+
+describe("varios días con tope: zonas repartidas por trabajo", () => {
+  it("una zona más grande que lo que cabe en los días no añade vehículos si hay camiones propios parados (caso GODOFREDO)", async () => {
+    // 3 barrios: uno con 600 paradas y dos con 100 (con 15 min por parada, unas 50 al día por camión)
+    const tareas = [];
+    const barrio = (n, lat, lng, id) => { for (let i = 0; i < n; i++) tareas.push({ _id: `${id}${i}`, lat: lat + (i % 25) * 0.0008, lng: lng + Math.floor(i / 25) * 0.0008, duracion: 15 }); };
+    barrio(600, 39.57, 2.62, "a"); barrio(100, 39.62, 2.70, "b"); barrio(100, 39.52, 2.75, "c");
+    const camiones = [1, 2, 3].map(i => ({ _id: `v${i}`, nombre: `Camión ${i}`, turno: "Jornada completa", depotLat: 39.57, depotLng: 2.68 }));
+    const r = await generateScenario(tareas, camiones, { maxShiftMin: 0, maxStops: 0, breakAfter: 0, breakDur: 0, startMin: 360, endMin: 1320, maxDays: 10, circular: false, optimizeWeight: 0, virtualShiftMin: 0 });
+    expect(r.unassigned).toHaveLength(0);
+    // los tres trabajan casi lo mismo (ninguno acaba a mitad mientras otro no llega)
+    const paradas = r.schedule.map(s => s.assignments.filter(a => !a._break && !a._travel && !a._wait).length);
+    expect(Math.min(...paradas)).toBeGreaterThan(Math.max(...paradas) * 0.8);
+  });
+});
