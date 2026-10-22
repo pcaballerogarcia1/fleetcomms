@@ -67,6 +67,23 @@ describe("mejora de rutas de puntos", () => {
     expect(r.schedule.map(f => f.assignments)).toEqual(base.schedule.map(f => f.assignments));
   });
 
+  it("con relevo y vuelta a la base, mejora cada turno por separado y respeta el relevo (caso GODOFREDO)", async () => {
+    const tareas = ciudad(500, 5), cons = { ...RESTRICCIONES_DEFECTO, circular: true, mejorarRutas: true };
+    const vehs = flota(3).map(v => ({ ...v, turno: "Jornada completa", _effectiveStart: 360, _effectiveEnd: 1320, _shiftBreaks: [840] }));
+    const base = await generateScenario(tareas, vehs, cons);
+    const r = await conMejora("generate", base, cons);
+    const ps = paradas(r);
+    expect(new Set(ps.map(a => a._id)).size).toBe(ps.length);
+    expect(ps.length + r.unassigned.length).toBe(tareas.length);
+    expect(dias(r)).toBeLessThanOrEqual(dias(base));
+    for (const f of r.schedule) {
+      const as = [...f.assignments].sort((a, b) => a._start - b._start);
+      for (let i = 1; i < as.length; i++) expect(as[i]._start).toBeGreaterThanOrEqual(as[i - 1]._end);
+      // ningún bloque cruza el relevo de las 14:00: la mañana acaba en la base antes y la tarde sale después
+      for (const a of as) { const m = a._start % 1440, e = a._end - Math.floor(a._start / 1440) * 1440; expect(m < 840 ? e <= 840 : m >= 840).toBe(true); }
+    }
+  }, 60_000);
+
   it("una ruta que no cabe en el turno se rechaza", () => {
     const sh = { start: 360, end: 420, breaks: [] };
     const lejos = { lat: 41.0, lng: -3.7, duracion: 5 };

@@ -225,6 +225,7 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
   // Se prueban de la más corta a la más larga; si alguna parada no cabe en
   // ningún sitio, se deshace todo lo de esa ruta.
   const VECINAS = 8;
+  const HUECO_MIN = 20; // minutos libres al final del turno para que una ruta pueda recibir paradas
   {
     const orden = rutas.filter(r => r.paradas.length).sort((a, b) => b.d - a.d || (a.fin - a.off - a.sh.start) - (b.fin - b.off - b.sh.start));
     let probadas = 0;
@@ -232,7 +233,10 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
       if (fuera()) break;
       if (!r.paradas.length) continue;
       const c = centro(r);
-      const otras = rutas.filter(o => o !== r && o.paradas.length && o.d <= r.d)
+      // las vecinas con hueco (las llenas no van a poder recibir nada) y, si no hay, las más cercanas
+      const conHueco = o => o.off + o.sh.end - o.fin > HUECO_MIN;
+      const cand = rutas.filter(o => o !== r && o.paradas.length && o.d <= r.d);
+      const otras = (cand.some(conHueco) ? cand.filter(conHueco) : cand)
         .map(o => [distancia(c, centro(o)), o]).sort((a, b) => a[0] - b[0]).slice(0, VECINAS).map(x => x[1]);
       if (!otras.length) continue;
       const guardado = otras.map(o => [o, o.paradas, o.items, o.km, o.fin, o.tocada]);
@@ -332,10 +336,66 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
  * añadido («Vehículo necesario N») se queda sin nada, se quita.
  * La ruta maestra (frecuencias) no pasa por aquí: cada parada tiene sus días.
  */
+/**
+ * Con «circular» y relevo de conductor (el camión vuelve a la base a mitad de
+ * jornada para cambiar de conductor), cada turno es una ruta que sale y vuelve
+ * a la base. Para que la mejora pueda tocarlas, cada vehículo se parte en sus
+ * turnos (un vehículo por turno, con su franja cada día), se mejora y se vuelve
+ * a juntar. Sin relevo con vuelta, se mejora tal cual.
+ */
+export async function porTurnos(resultado, cons, mejorar) {
+  const filas = resultado?.schedule || [];
+  if (!cons?.circular || !filas.length) return mejorar(resultado);
+  let ultimo = 0;
+  for (const f of filas) for (const a of f.assignments || []) ultimo = Math.max(ultimo, Math.floor(a._start / DIA));
+  const dias = ultimo + 2; // y uno más, por si algo se adelanta o se abre
+  const tramos = (f, d) => {
+    const sh = shiftForDay(f, d);
+    if (!sh) return null;
+    return [sh.start, ...(sh.breaks || []).filter(b => b > sh.start && b < sh.end).sort((x, y) => x - y), sh.end];
+  };
+  let conRelevo = false;
+  for (const f of filas) for (let d = 0; d < dias && !conRelevo; d++) if ((tramos(f, d)?.length || 0) > 2) conRelevo = true;
+  if (!conRelevo) return mejorar(resultado);
+
+  // partir: una fila por vehículo y turno
+  const piezas = []; // { fi, p }
+  const partidas = [];
+  filas.forEach((f, fi) => {
+    let n = 1;
+    for (let d = 0; d < dias; d++) n = Math.max(n, (tramos(f, d)?.length || 2) - 1);
+    for (let p = 0; p < n; p++) {
+      const ventanas = {};
+      for (let d = 0; d < dias; d++) {
+        const t = tramos(f, d);
+        ventanas[d] = t && p < t.length - 1 ? { start: t[p], end: t[p + 1], breaks: [] } : null;
+      }
+      const assignments = (f.assignments || []).filter(a => {
+        const d = Math.floor(a._start / DIA), t = tramos(f, d), m = a._start - d * DIA;
+        if (!t) return p === 0;
+        let q = t.length - 2;
+        for (let i = 1; i < t.length - 1; i++) if (m < t[i]) { q = i - 1; break; }
+        return q === p;
+      });
+      piezas.push({ fi, p });
+      partidas.push({ ...f, assignments, _dayWindows: ventanas, _onlyDayWindows: true });
+    }
+  });
+  const r = await mejorar({ ...resultado, schedule: partidas });
+  // juntar de nuevo cada vehículo
+  const schedule = filas.map((f, fi) => {
+    const suyas = r.schedule.filter((_, i) => piezas[i].fi === fi);
+    const assignments = suyas.flatMap(x => x.assignments || []).sort((a, b) => a._start - b._start);
+    return { ...f, assignments, totalKm: assignments.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0) };
+  });
+  return { ...r, schedule };
+}
+
 export async function conMejora(op, salida, constraints) {
   if (constraints?.mejorarRutas === false) return salida;
-  // primero la mejora de siempre y después el optimizador «quitar tramos y recolocar» (sisr.js)
-  const mejorar = async r => optimizarSISR(await mejorarRutas(r, constraints), constraints);
+  // primero la mejora de siempre y después el optimizador «quitar tramos y recolocar» (sisr.js);
+  // con relevo y vuelta a la base, cada turno de conductor por separado (porTurnos)
+  const mejorar = r => porTurnos(r, constraints, async x => optimizarSISR(await mejorarRutas(x, constraints), constraints));
   if (op === "generate") return mejorar(salida);
   if (op !== "autoscale" || !salida?.result) return salida;
   const result = await mejorar(salida.result);
