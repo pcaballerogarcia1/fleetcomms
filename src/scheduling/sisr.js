@@ -11,17 +11,18 @@
 //     vez menos: «recocido simulado»), para no quedarse atascado.
 // Y de vez en cuando intenta vaciar la ruta más corta (un turno menos).
 // Lo que cuenta, por este orden: paradas sin recoger, turnos, minutos de
-// conducción. Cada ruta se comprueba igual que el motor (simular de
+// conducción (al segundo: sin redondear cada trayecto). Cada ruta se comprueba igual que el motor (simular de
 // mejora-rutas.js: fin de turno, duración máxima, tope de paradas, franjas
 // horarias, pausas): nunca deja una ruta que el motor no aceptaría.
 // Sin React ni Firebase.
 import { hasCoords, kmRuta, minutosRuta, shiftForDay } from "../vrp-engine.js";
-import { simular } from "./mejora-rutas.js";
+import { MARGEN, simular } from "./mejora-rutas.js";
 
 const DIA = 1440;
 const esParada = a => !a._travel && !a._break && !a._wait;
 const sinHora = a => { const t = { ...a }; delete t._start; delete t._end; return t; };
-const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(km))) : 0);
+// minutos exactos de un trayecto (al segundo), igual que simular de mejora-rutas.js
+const minutos = km => (km >= 0.05 ? minutosRuta(km) : 0);
 
 export const SISR = {
   costeTurno: 100_000,     // un turno (vehículo-día) más pesa más que cualquier ahorro de conducción
@@ -129,7 +130,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   // ── Tiempos entre sitios (minutos enteros, como el motor) ──
   // hasta 2.500 sitios, tabla completa; con más, se calculan al pedirlos y se guardan
   const denso = S <= 2500;
-  const MIN = denso ? new Uint16Array(S * S) : null, KM = denso ? new Float32Array(S * S) : null;
+  const MIN = denso ? new Float32Array(S * S) : null, KM = denso ? new Float32Array(S * S) : null;
   if (denso) for (let i = 0; i < S; i++) for (let j = 0; j < S; j++) {
     if (i === j) continue;
     const km = kmRuta(sitios[i].lat, sitios[i].lng, sitios[j].lat, sitios[j].lng);
@@ -162,16 +163,16 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     if (lenta) {
       const s = simular({ off: r.off, sh: r.sh, depot: r.depot, circular: r.circular, paradas: paradasDe(seq) }, cons);
       if (!s.ok) return { ok: false };
-      return { ok: true, travel: s.items.reduce((m, a) => m + (a._travel ? a.duracion : 0), 0), km: s.km, lenta: true };
+      return { ok: true, travel: s.conduccion, km: s.km, lenta: true };
     }
     let prev = r.depotSitio, travel = 0, km = 0, serv = 0;
     for (const i of seq) { const s = tareas[i].sitio; travel += tt(prev, s); km += tk(prev, s); serv += dur(i); if (s >= 0) prev = s; }
     const ancla = r.depotSitio >= 0 ? r.depotSitio : r.circular ? tareas[seq[0]].sitio : -1;
     if (ancla >= 0 && prev !== ancla) { travel += tt(prev, ancla); km += tk(prev, ancla); }
     const total = travel + serv;
-    const ini = r.sh.start + r.off, finDia = r.sh.end + r.off;
-    if (ini + total > finDia) return { ok: false };
-    if (cons.maxShiftMin > 0 && total > cons.maxShiftMin) return { ok: false };
+    const ini = r.sh.start + r.off, finDia = r.sh.end + r.off - MARGEN * (r.sh.end - r.sh.start);
+    if (ini + total > finDia + 1e-9) return { ok: false };
+    if (cons.maxShiftMin > 0 && total > cons.maxShiftMin * (1 - MARGEN) + 1e-9) return { ok: false };
     return { ok: true, travel, km, total, lenta: false };
   }
   const coste = st => st.sinRecoger.length * SISR.costeSinRecoger + st.turnos * SISR.costeTurno + st.travel;
@@ -215,7 +216,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
         // rápido: con cochera, sin franjas ni pausas, lo que añade cada hueco se sabe al momento
         if (!r.lenta && r.depotSitio >= 0 && !conFranja(i) && m && !m.lenta && m.total != null) {
           if (cons.maxStops > 0 && cuantas(seq) + tareas[i].miembros.length > cons.maxStops) continue;
-          const ini = r.sh.start + r.off, finDia = r.sh.end + r.off;
+          const ini = r.sh.start + r.off, finDia = r.sh.end + r.off - MARGEN * (r.sh.end - r.sh.start);
           for (let p = 0; p <= n; p++) {
             if (rnd() < SISR.saltarHueco) continue;
             const a = p === 0 ? r.depotSitio : tareas[seq[p - 1]].sitio;
@@ -223,7 +224,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
             const delta = tt(a, s) + tt(s, b) - tt(a, b);
             if (elegido && delta + extraTurno >= elegido.delta) continue;
             const total = m.total + delta + di;
-            if (ini + total > finDia || (cons.maxShiftMin > 0 && total > cons.maxShiftMin)) continue;
+            if (ini + total > finDia + 1e-9 || (cons.maxShiftMin > 0 && total > cons.maxShiftMin * (1 - MARGEN) + 1e-9)) continue;
             elegido = { r, p, delta: delta + extraTurno, rapido: { travel: m.travel + delta, km: m.km + tk(a, s) + tk(s, b) - tk(a, b), total } };
           }
           continue;

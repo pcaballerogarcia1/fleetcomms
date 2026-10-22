@@ -138,7 +138,15 @@ export function kmRuta(lat1, lng1, lat2, lng2) {
   return d * rodeo(d);
 }
 /** Minutos para esos km: entre paradas a la velocidad de la zona; en trayectos largos (a la base, a la planta) más deprisa */
+// velocidades medidas por tramos de km por carretera: [[km, km/h], …] (los trayectos muy cortos van más despacio)
+let VELS = null;
 export function minutosRuta(km) {
+  if (VELS) {
+    let v = VELS[VELS.length - 1][1];
+    if (km <= VELS[0][0]) v = VELS[0][1];
+    else for (let i = 1; i < VELS.length; i++) if (km <= VELS[i][0]) { const [k0, v0] = VELS[i - 1], [k1, v1] = VELS[i]; v = v0 + (v1 - v0) * (km - k0) / (k1 - k0); break; }
+    return km / v * 60;
+  }
   const corto = 2 * RODEO;
   const v = KMH_LARGO && km > corto ? TRAVEL_SPEED_KMH + (KMH_LARGO - TRAVEL_SPEED_KMH) * Math.min(1, (km - corto) / 10) : TRAVEL_SPEED_KMH;
   return km / v * 60;
@@ -149,6 +157,8 @@ export function fijarCarretera(c) {
   // { d, f } (como se guarda: Firestore no admite listas dentro de listas) o [d, f]
   const r = Array.isArray(c?.rodeos) ? c.rodeos.map(x => (Array.isArray(x) ? x : [x?.d, x?.f])).filter(x => x[0] > 0 && x[1] >= 1 && x[1] <= 5).sort((x, y) => x[0] - y[0]) : [];
   RODEOS = r.length ? r : null;
+  const vs = Array.isArray(c?.velocidades) ? c.velocidades.map(x => (Array.isArray(x) ? x : [x?.km, x?.kmh])).filter(x => x[0] > 0 && x[1] >= 5 && x[1] <= 110).sort((x, y) => x[0] - y[0]) : [];
+  VELS = vs.length >= 2 ? vs : null;
   VECINOS = c?.vecinos instanceof Map && c.vecinos.size ? c.vecinos : null;
   VECINOS_MAX = VECINOS ? Number(c.vecinosMaxKm) || 2 : 0;
   TRAVEL_SPEED_KMH = c?.kmh >= 8 && c.kmh <= 90 ? c.kmh : 30;

@@ -18,7 +18,6 @@
 import { hasCoords, kmRuta, minutosRuta, shiftForDay, windowWait } from "../vrp-engine.js";
 import { optimizarSISR } from "./sisr.js";
 
-const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(km))) : 0);
 const esParada = a => !a._travel && !a._break && !a._wait;
 const DIA = 1440;
 const sinHora = a => { const t = { ...a }; delete t._start; delete t._end; return t; };
@@ -26,49 +25,63 @@ const sinHora = a => { const t = { ...a }; delete t._start; delete t._end; retur
 /** Opciones de mejora: «a fondo» busca bastante más tiempo */
 export const tiempoMejora = constraints => (constraints?.optimizarAFondo ? 90_000 : 6_000);
 
+/** Parte del turno que se deja de margen al ajustar las rutas al segundo */
+export const MARGEN = 0.02;
+
 /**
  * Rehace las horas de una ruta de un día.
- * @returns { ok, items, km, fin } — ok=false si no cabe (franja, turno, tope)
+ * El tiempo se lleva al segundo (cada trayecto con sus minutos exactos por
+ * carretera) y solo se redondea la hora que se enseña: cada bloque empieza y
+ * acaba en el minuto entero más cercano a su hora exacta. Así la duración de
+ * la ruta es la de verdad (antes, redondear cada trayecto hacia arriba y con
+ * un mínimo de 1 minuto inflaba mucho las rutas de contenedores seguidos).
+ * @returns { ok, items, km, fin, conduccion } — ok=false si no cabe (franja, turno, tope);
+ *   fin y conduccion, exactos (minutos con decimales)
  */
 export function simular(ruta, cons) {
   const { breakAfter = 0, breakDur = 0, maxShiftMin = 0, maxStops = 0 } = cons;
   const { off, sh, depot, circular } = ruta;
   const paradas = ruta.paradas;
   if (maxStops > 0 && paradas.length > maxStops) return { ok: false };
-  const ini = sh.start + off, finDia = sh.end + off;
-  let cur = ini, desde = 0, km = 0;
+  const ini = sh.start + off;
+  // margen de seguridad: la carretera estimada acierta en conjunto pero no al minuto; al ajustar
+  // las rutas al segundo, se deja un 2 % del turno (unos 8 min en 7 h) para no pasarse de verdad
+  const finDia = sh.end + off - MARGEN * (sh.end - sh.start);
+  const M = Math.round; // la hora que se enseña
+  let x = ini, desde = 0, km = 0, conduccion = 0; // x: la hora exacta
   let lat = depot?.lat ?? null, lng = depot?.lng ?? null, salida = !!depot;
   let ancla = depot;
   const items = [];
+  const bloque = (extra, d) => { const b = { ...extra, _start: M(x), _end: M(x + d), duracion: M(x + d) - M(x) }; x += d; return b; };
   for (const t of paradas) {
     const dur = t.duracion || 15;
-    if (breakAfter > 0 && breakDur > 0 && desde >= breakAfter && cur + breakDur <= finDia) {
-      items.push({ _break: true, _start: cur, _end: cur + breakDur, duracion: breakDur });
-      cur += breakDur; desde = 0;
+    if (breakAfter > 0 && breakDur > 0 && desde >= breakAfter && x + breakDur <= finDia) {
+      items.push(bloque({ _break: true }, breakDur));
+      desde = 0;
     }
     let vk = 0, vm = 0;
-    if (hasCoords(lat, lng) && hasCoords(t.lat, t.lng)) { vk = kmRuta(lat, lng, t.lat, t.lng); vm = minutos(vk); }
-    const espera = windowWait(t, cur + vm, off);
+    if (hasCoords(lat, lng) && hasCoords(t.lat, t.lng)) { vk = kmRuta(lat, lng, t.lat, t.lng); vm = vk >= 0.05 ? minutosRuta(vk) : 0; }
+    const espera = windowWait(t, x + vm, off);
     if (espera == null) return { ok: false };
-    if (vm > 0) {
-      items.push({ _travel: true, _start: cur, _end: cur + vm, duracion: vm, km: +vk.toFixed(3), ...(salida ? { _depot_exit: true } : {}) });
-      cur += vm; km += vk;
+    if (vk >= 0.05) {
+      items.push(bloque({ _travel: true, km: +vk.toFixed(3), ...(salida ? { _depot_exit: true } : {}) }, vm));
+      km += vk; conduccion += vm;
     }
     salida = false;
-    if (espera > 0) { items.push({ _wait: true, _start: cur, _end: cur + espera, duracion: espera }); cur += espera; }
-    items.push({ ...t, _start: cur, _end: cur + dur });
-    cur += dur; desde += dur;
+    if (espera > 0) items.push(bloque({ _wait: true }, espera));
+    const p = bloque({}, dur);
+    items.push({ ...t, _start: p._start, _end: p._end });
+    desde += dur;
     if (hasCoords(t.lat, t.lng)) { lat = +t.lat; lng = +t.lng; }
     if (circular && !ancla) ancla = { lat, lng };
   }
   if (ancla && hasCoords(lat, lng) && (lat !== ancla.lat || lng !== ancla.lng)) {
     const rk = kmRuta(lat, lng, ancla.lat, ancla.lng);
-    const rm = minutos(rk);
-    if (rm > 0) { items.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rm, duracion: rm, km: +rk.toFixed(3) }); cur += rm; km += rk; }
+    if (rk >= 0.05) { const rm = minutosRuta(rk); items.push(bloque({ _travel: true, _depot_return: true, km: +rk.toFixed(3) }, rm)); km += rk; conduccion += rm; }
   }
-  if (cur > finDia) return { ok: false };
-  if (maxShiftMin > 0 && cur - ini > maxShiftMin) return { ok: false };
-  return { ok: true, items, km, fin: cur };
+  if (x > finDia + 1e-9) return { ok: false };
+  if (maxShiftMin > 0 && x - ini > maxShiftMin * (1 - MARGEN) + 1e-9) return { ok: false };
+  return { ok: true, items, km, fin: x, conduccion };
 }
 
 const distancia = (a, b) => (a && b && hasCoords(a.lat, a.lng) && hasCoords(b.lat, b.lng) ? kmRuta(a.lat, a.lng, b.lat, b.lng) : 0);

@@ -78,7 +78,7 @@ export async function medirCarretera(puntos, { fetchFn = (...a) => fetch(...a), 
   }
   if (pares < 10) return { medido: false, motivo: "pocos trayectos medidos" };
   // el rodeo de los trayectos cortos (de un punto a sus vecinos): es el que más pesa en una ruta
-  const cortosVecinos = await rodeosCortos(puntos, { fetchFn }).catch(() => []);
+  const cortosVecinos = await rodeosCortos(puntos, { fetchFn, camion }).catch(() => []);
   // la velocidad: la de los trayectos cortos si hay bastantes (son los de una ruta), si no la de todos
   const vel = xs => xs.reduce((s, x) => s + x.km, 0) / xs.reduce((s, x) => s + x.h, 0);
   const base = cortos.length >= 10 ? cortos : [...cortos, ...largos];
@@ -92,6 +92,12 @@ export async function medirCarretera(puntos, { fetchFn = (...a) => fetch(...a), 
     kmh: Math.round(Math.min(70, Math.max(10, vel(base) * camion)) * 10) / 10,
     kmhLargo: largos.length ? Math.round(vel(largos) * camion * 10) / 10 : null,
   };
+  // la velocidad por tramos de km por carretera: los cortos (vecinos), los de la zona y los largos
+  res.velocidades = [
+    ...cortosVecinos.map(b => ({ km: Math.round(b.km * 1000) / 1000, kmh: b.kmh })),
+    ...(cortos.length ? [{ km: Math.round(mediana(cortos.map(x => x.km)) * 1000) / 1000, kmh: res.kmh }] : []),
+    ...(largos.length ? [{ km: Math.round(mediana(largos.map(x => x.km)) * 1000) / 1000, kmh: res.kmhLargo }] : []),
+  ].sort((a, b) => a.km - b.km).filter((x, i, a) => !i || x.km > a[i - 1].km);
   cache.set(clave, res);
   return res;
 }
@@ -103,7 +109,7 @@ const TRAMOS = [[0, 0.1], [0.1, 0.3], [0.3, 1]];
  * (el 1.º, el 5.º y el 20.º más cercanos), medidos por carretera.
  * @returns [{ d: km típico del tramo, f: rodeo, n }] (solo los tramos con bastantes trayectos)
  */
-export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cuantos = 150 } = {}) {
+export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cuantos = 150, camion = CARRETERA.camion } = {}) {
   const pts = (puntos || []).filter(p => hasCoords(p.lat, p.lng)).map(p => ({ lat: +p.lat, lng: +p.lng }));
   if (pts.length < 25) return [];
   const pares = [];
@@ -116,12 +122,12 @@ export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cu
   for (let i = 0; i < pares.length; i += 25) {
     const lote = pares.slice(i, i + 25);
     const coords = lote.flatMap(([a, b]) => [a, b]).map(p => `${p.lng},${p.lat}`).join(";");
-    const r = await fetchFn(`${OSRM}/${coords}?sources=${lote.map((_, k) => 2 * k).join(";")}&destinations=${lote.map((_, k) => 2 * k + 1).join(";")}&annotations=distance`);
+    const r = await fetchFn(`${OSRM}/${coords}?sources=${lote.map((_, k) => 2 * k).join(";")}&destinations=${lote.map((_, k) => 2 * k + 1).join(";")}&annotations=distance,duration`);
     const j = await r.json();
     if (j?.code !== "Ok") continue;
     lote.forEach(([, , d], k) => {
-      const km = j.distances?.[k]?.[k] / 1000, t = TRAMOS.findIndex(([a, b]) => d >= a && d < b);
-      if (km > 0 && t >= 0) porTramo[t].push({ d, km });
+      const km = j.distances?.[k]?.[k] / 1000, h = j.durations?.[k]?.[k] / 3600, t = TRAMOS.findIndex(([a, b]) => d >= a && d < b);
+      if (km > 0 && h > 0 && t >= 0) porTramo[t].push({ d, km, h });
     });
   }
   // el rodeo del tramo: lo típico por carretera entre lo típico en línea recta (más estable que
@@ -129,7 +135,9 @@ export async function rodeosCortos(puntos, { fetchFn = (...a) => fetch(...a), cu
   return porTramo.map(xs => {
     if (xs.length < 8) return null;
     const d = mediana(xs.map(x => x.d)), km = mediana(xs.map(x => x.km));
-    return { d, f: Math.round(Math.min(5, Math.max(1, km / d)) * 100) / 100, n: xs.length };
+    // y la velocidad de ese tramo (los trayectos muy cortos van más despacio: giros, cruces)
+    const kmh = (xs.reduce((s, x) => s + x.km, 0) / xs.reduce((s, x) => s + x.h, 0)) * camion;
+    return { d, f: Math.round(Math.min(5, Math.max(1, km / d)) * 100) / 100, n: xs.length, km, kmh: Math.round(Math.min(70, Math.max(5, kmh)) * 10) / 10 };
   }).filter(Boolean);
 }
 
