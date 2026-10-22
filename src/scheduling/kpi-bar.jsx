@@ -53,17 +53,17 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
   return (
     <div style={{ flexShrink: 0, background: C.bg, borderBottom: `1px solid ${C.border}` }}>
     <div style={{ display: "flex", overflowX: "auto" }}>
-      {vistos.map((it, i) => (
-        <div key={it.l} title={it.ayuda} style={{ padding: "12px 20px", borderRight: i < vistos.length - 1 ? `1px solid ${C.border}` : "none", minWidth: 160, flexShrink: 0, cursor: "help" }}>
+      {vistos.map(it => (
+        <div key={it.l} title={it.ayuda} style={{ padding: "12px 20px", borderRight: `1px solid ${C.border}`, minWidth: 160, flex: "1 1 0", textAlign: "center", cursor: "help" }}>
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>{it.l}</div>
-          <div style={{ display: "flex", alignItems: "baseline", marginTop: 3 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", marginTop: 3 }}>
             <span style={{ fontSize: 22, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{it.v}</span>
             {it.d}
           </div>
           <div style={{ fontSize: 11.5, color: it.subColor || C.dim, marginTop: 2, whiteSpace: "nowrap" }}>{it.sub}</div>
         </div>
       ))}
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
         {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
         <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`}>
           Todos los indicadores {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
