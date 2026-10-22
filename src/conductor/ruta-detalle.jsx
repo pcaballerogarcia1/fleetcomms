@@ -1,12 +1,38 @@
 // App del conductor → Rutas: el detalle de una ruta (paradas, inspección, mapa).
 import { Printer, Save, Scale } from "lucide-react";
-import { Check, CheckCheck, ChevronLeft, ClipboardCheck, ClipboardList, Map as MapIcon, Navigation, StickyNote } from "lucide-react";
+import { Check, CheckCheck, ChevronLeft, ClipboardCheck, ClipboardList, Map as MapIcon, MessageCircle, MessageSquare, Mic, MicOff, Navigation, Phone, StickyNote } from "lucide-react";
 import { useRef, useState } from "react";
 import { C, PUNTOS_INSPECCION, S, timeAgo } from "./comun.js";
 import { buscarEtiqueta, hayNfc } from "./rfid.js";
 import { leerKg } from "../pesadas.js";
 import { apuntarPesada } from "../pesadas-store.js";
 import { MapaLeaflet } from "./ui.jsx";
+import { NAVEGADORES, abrirNavegacion, elegirNavegador, enlacesContacto, navegadorElegido, telefonoDe, useDictado } from "./contacto.js";
+
+// Botón de dictar con la voz (solo si el móvil lo permite)
+function BotonDictar({ d }) {
+  if (!d.disponible) return null;
+  return (
+    <button type="button" onClick={d.alternar} style={{...S.btnGhost,display:"inline-flex",alignItems:"center",gap:6,borderColor:d.escuchando?C.red:C.border,color:d.escuchando?C.red:C.muted}} title="Dictar con la voz">
+      {d.escuchando?<><MicOff size={14}/> Escuchando… toca para parar</>:<><Mic size={14}/> Dictar</>}
+    </button>
+  );
+}
+
+// Llamar, WhatsApp o SMS al cliente de la parada (si trae teléfono)
+function ContactoParada({ ub }) {
+  const t = telefonoDe(ub), e = enlacesContacto(t);
+  if (!e) return null;
+  const b = {...S.btnGhost,fontSize:10,padding:"4px 8px",display:"inline-flex",alignItems:"center",gap:4,textDecoration:"none"};
+  return (
+    <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5,alignItems:"center"}} onClick={ev=>ev.stopPropagation()}>
+      {ub.contacto&&<span style={{fontSize:10,color:C.muted,marginRight:2}}>{ub.contacto}</span>}
+      <a href={e.llamar} style={b} title={`Llamar al ${t.ver}`}><Phone size={12}/> Llamar</a>
+      <a href={e.whatsapp} target="_blank" rel="noreferrer" style={{...b,color:"#25d366",borderColor:"#25d36655"}} title="WhatsApp"><MessageCircle size={12}/> WhatsApp</a>
+      <a href={e.sms} style={b} title="SMS"><MessageSquare size={12}/> SMS</a>
+    </div>
+  );
+}
 
 // ── LECTOR RFID ───────────────────────────────────────────────────
 // Lector por USB/Bluetooth (escribe el código + Intro) o NFC del móvil: la
@@ -94,6 +120,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           <div style={{fontSize:13,color:C.text,fontWeight:700,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.calle} {ub.num}</div>
           <div style={{fontSize:10,color:C.muted}}>{ub.barri}{ub.districte?" · "+ub.districte:""}</div>
           {ub.comentari&&<div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.comentari}</div>}
+          <ContactoParada ub={ub}/>
           {done&&ub.realizadoEn&&<div style={{fontSize:10,color:C.green,marginTop:2}}>✓ {timeAgo(ub.realizadoEn)}</div>}
           {ub.nota&&<div style={{fontSize:11,color:"#a78bfa",marginTop:2,display:"flex",alignItems:"center",gap:4}}><StickyNote size={12}/> {ub.nota}</div>}
           <div style={{fontSize:10,color:C.dim,marginTop:2}}>{ub.pa}</div>
@@ -150,6 +177,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
   };
   const [checks, setChecks]     = useState(initParte);
   const [obs, setObs]           = useState(ub.parte?.observaciones || "");
+  const dictadoObs = useDictado(t => setObs(x => (x ? x.trim() + " " : "") + t));
   const [firmado]   = useState(ub.parte?.firmado || false);
 
   const total  = PUNTOS_INSPECCION.reduce((s,g)=>s+g.puntos.length,0);
@@ -279,6 +307,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
           <label style={S.label}>Observaciones</label>
           <textarea value={obs} onChange={e=>setObs(e.target.value)} placeholder="Anotaciones, incidencias, elementos sustituidos..." rows={4}
             style={{...S.input,resize:"vertical"}}/>
+          <div style={{marginTop:6}}><BotonDictar d={dictadoObs}/></div>
         </div>
 
         {/* Estado firma */}
@@ -314,6 +343,8 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
   const [expandId,setExpandId]=useState(null);
   const [notaId,setNotaId]=useState(null);
   const [notaText,setNotaText]=useState("");
+  const [nav,setNav]=useState(()=>navegadorElegido().id);
+  const dictadoNota=useDictado(t=>setNotaText(x=>(x?x.trim()+" ":"")+t));
   const [filtroBa,setFiltroBa]=useState("");
   const [parteUbicId,setParteUbicId]=useState(null); // id de parada con parte abierto
 
@@ -405,7 +436,13 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
               <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proxima.calle} {proxima.num}</div>
               <div style={{fontSize:10,color:C.dim}}>{proxima.barri} · {proxima.elementos.length} elementos</div>
             </div>
-            <button onClick={()=>window.open(`https://maps.google.com/maps?daddr=${proxima.lat},${proxima.lng}&dirflg=d`,"_blank")} style={{...S.btnOk,flexShrink:0,display:"inline-flex",alignItems:"center",gap:6}}><Navigation size={15}/> Ir</button>
+            <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"stretch",flexShrink:0}}>
+              <button onClick={()=>abrirNavegacion(proxima.lat,proxima.lng)} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}><Navigation size={15}/> Ir</button>
+              <select value={nav} onChange={e=>{elegirNavegador(e.target.value);setNav(e.target.value);}} title="Con qué app navegar (se recuerda en este móvil)"
+                style={{background:"#0d0f14",border:`1px solid ${C.border}`,color:C.muted,borderRadius:6,fontSize:10,padding:"3px 4px"}}>
+                {NAVEGADORES.map(n=><option key={n.id} value={n.id}>{n.nombre}</option>)}
+              </select>
+            </div>
           </div>
         )}
         {plan.origenVRP&&<ApuntarPesada plan={plan} sesion={sesion}/>}
@@ -426,14 +463,15 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             {ubics.every(u=>u.realizado)?"Desmarcar todas":<><CheckCheck size={14} style={{verticalAlign:"-3px",marginRight:4}}/>Marcar todas</>}
           </button>
         </div>
-        {pendientes.length>0&&<><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:6,paddingLeft:4}}>Pendientes ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
-        {hechas.length>0&&<><div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:12,paddingLeft:4}}>Completadas ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>window.open(`https://maps.google.com/maps?daddr=${ub.lat},${ub.lng}&dirflg=d`,"_blank")} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
+        {pendientes.length>0&&<><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:6,paddingLeft:4}}>Pendientes ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
+        {hechas.length>0&&<><div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:12,paddingLeft:4}}>Completadas ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
       </div>
       {notaId&&(
         <div style={{position:"fixed",inset:0,background:"#000b",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setNotaId(null)}>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxWidth:520}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:13,fontWeight:600,marginBottom:12}}><StickyNote size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Nota de la parada</div>
-            <textarea value={notaText} onChange={e=>setNotaText(e.target.value)} rows={4} placeholder="Observaciones, incidencias..." style={{...S.input,resize:"none",marginBottom:12}}/>
+            <textarea value={notaText} onChange={e=>setNotaText(e.target.value)} rows={4} placeholder="Observaciones, incidencias..." style={{...S.input,resize:"none",marginBottom:8}}/>
+            <div style={{marginBottom:12}}><BotonDictar d={dictadoNota}/></div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setNotaId(null)} style={{...S.btnGhost,flex:1}}>Cancelar</button>
               <button onClick={guardarNota} style={{...S.btn,flex:1}}>Guardar</button>

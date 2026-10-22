@@ -106,6 +106,9 @@ export function taskToUbicacion(task, idx) {
     calle: field("calle","carrer","street","via"),
     num: field("num","num.","número","numero"),
     comentari: field("comentari","comentario","comment"),
+    // para contactar desde la app del conductor (si el Excel de Planning lo trae)
+    telefono: field("telefono","teléfono","tel","tlf","movil","móvil","phone","telefono contacto","teléfono contacto"),
+    contacto: field("contacto","persona contacto","persona de contacto","cliente","contact"),
     barri: task.barrio || field("barri","barrio","neighbourhood","neighborhood","sector","zona"),
     districte: field("districte","distrito","district"),
     turno: field("turno","turn","shift"),
