@@ -16,6 +16,7 @@
 // (circular + turno partido) se dejan como están.
 // Sin React ni Firebase.
 import { hasCoords, kmRuta, minutosRuta, shiftForDay, windowWait } from "../vrp-engine.js";
+import { optimizarSISR } from "./sisr.js";
 
 const minutos = km => (km >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(km))) : 0);
 const esParada = a => !a._travel && !a._break && !a._wait;
@@ -316,9 +317,11 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
  */
 export async function conMejora(op, salida, constraints) {
   if (constraints?.mejorarRutas === false) return salida;
-  if (op === "generate") return mejorarRutas(salida, constraints);
+  // primero la mejora de siempre y después el optimizador «quitar tramos y recolocar» (sisr.js)
+  const mejorar = async r => optimizarSISR(await mejorarRutas(r, constraints), constraints);
+  if (op === "generate") return mejorar(salida);
   if (op !== "autoscale" || !salida?.result) return salida;
-  const result = await mejorarRutas(salida.result, constraints);
+  const result = await mejorar(salida.result);
   const quedan = salida.resources.map((r, i) => !r._virtual || (result.schedule[i]?.assignments || []).some(esParada));
   return {
     ...salida,
