@@ -168,8 +168,8 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
             <tbody>
               {servicios.map(s => (
                 <tr key={s.id} style={{ borderTop: `1px solid ${C.border}` }}>
-                  {[["nombre", 170], ["fraccion", 110], ["ubicacion", 100]].map(([campo, w]) => (
-                    <td key={campo} style={{ padding: "4px 6px" }}><input className="op-input" defaultValue={s[campo] || ""} onBlur={e => e.target.value !== (s[campo] || "") && cambiarServicio(s, campo, e.target.value || null)} style={{ width: w, height: 30 }} /></td>
+                  {[["nombre", 170], ["fraccion", 100], ["ubicacion", 230]].map(([campo, w]) => (
+                    <td key={campo} style={{ padding: "4px 6px" }}><input className="op-input" defaultValue={s[campo] || ""} title={s[campo] || ""} onBlur={e => e.target.value !== (s[campo] || "") && cambiarServicio(s, campo, e.target.value || null)} style={{ width: w, height: 30 }} /></td>
                   ))}
                   <td style={{ padding: "4px 6px", textAlign: "right" }}>
                     <input className="op-input" defaultValue={FMT.format(s.cantidadAnual || 0)} onBlur={e => { const n = aValor("x", e.target.value); if (typeof n === "number" && n !== s.cantidadAnual) cambiarServicio(s, "cantidadAnual", n); }} style={{ width: 90, height: 30, textAlign: "right" }} />

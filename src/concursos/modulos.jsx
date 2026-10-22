@@ -11,6 +11,15 @@ import { analizarOferta, puntosEnJuego } from "./oferta.js";
 import { ESTADOS, TIPOS_CONCURSO, escucharDocumentos } from "./store.js";
 import { useDatosConcurso } from "./usar-concurso.js";
 
+// El servicio, por lo que dicen los pliegos (el tipo que más se repite entre los documentos)
+const SERVICIO_LEIDO = { residuos: "Recogida de residuos", limpieza: "Limpieza viaria", autobuses: "Autobuses" };
+function servicioDe(docs) {
+  const n = {};
+  for (const d of docs || []) if (d.lectura?.tipo) n[d.lectura.tipo] = (n[d.lectura.tipo] || 0) + (d.lectura.clase === "tecnico" ? 2 : 1);
+  const t = Object.entries(n).sort((x, y) => y[1] - x[1])[0]?.[0];
+  return t ? SERVICIO_LEIDO[t] : null;
+}
+
 export function ResumenConcurso({ concursoId, irA }) {
   const datos = useDatosConcurso(concursoId);
   const [docs, setDocs] = useState([]);
@@ -44,14 +53,19 @@ export function ResumenConcurso({ concursoId, irA }) {
       [!!docs.length, docs.length ? `${pl(docs.length, "documento subido", "documentos subidos")}` : "No hay pliegos subidos", "/documentos"],
       [!pendientes, pendientes ? `Quedan ${pl(pendientes, "dato", "datos")} del pliego por revisar en la ficha` : "Datos de la ficha revisados", "/documentos"],
       [(servicios.length > 0 || a.r.modo === "estudio") && !noCuadran, !servicios.length ? (a.r.modo === "estudio" ? "Sin servicios en la ficha: el coste sale del estudio del Ayuntamiento" : "No hay servicios en la ficha") : noCuadran ? `${pl(noCuadran, "servicio no cuadra", "servicios no cuadran")} con las unidades y la frecuencia del pliego` : `${pl(servicios.length, "servicio", "servicios")} en la ficha`, "/documentos"],
-      [!!juego && juego.total === 100 && juego.precio > 0, !juego ? "Faltan los criterios de adjudicación" : juego.total !== 100 ? `Los criterios suman ${juego.total} puntos, no 100` : `Criterios: ${juego.precio} puntos de precio y ${juego.resto} del resto`, "/documentos"],
+      [!!juego && juego.total === 100 && juego.precio > 0, !juego ? "Faltan los criterios de adjudicación" : juego.total !== 100 ? `Los criterios suman ${juego.total} puntos, no 100` : `Criterios: ${[`${juego.precio} puntos de precio`, juego.mejoras ? `${juego.mejoras} de mejoras` : null, juego.resto ? `${juego.resto} del resto` : null].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " y $1")}`, "/documentos"],
       [!!a.presupuesto, a.presupuesto ? `Presupuesto: ${eur(a.presupuesto)} al año sin IVA` : "Falta el presupuesto", "/calculo"],
-      [!!e && e.margen >= a.o.margenMinimoPct, !e ? "No hay baja elegida" : `Margen con la baja elegida: ${pct(e.margen)} (mínimo ${pct(a.o.margenMinimoPct)})`, "/alternativas"],
-      [!!e && !e.anormal, !e ? "Sin baja, no se sabe si sería anormal" : e.anormal ? "La baja elegida sería anormalmente baja: habría que justificarla" : "La baja elegida no es anormal con lo que se espera de la competencia", "/alternativas"],
-      [!!e && e.puesto === 1 && !e.empate, !e ? "Sin baja elegida" : e.puesto === 1 && !e.empate ? "Con lo que se espera de la competencia, ganaría" : `Con lo que se espera de la competencia, quedaría ${e.puesto}.º`, "/alternativas"],
-      [!!adverso && adverso.resultado >= 0, !adverso ? "Sin escenarios" : adverso.resultado >= 0 ? `Aguanta el escenario adverso (${eur(adverso.resultado)} al año)` : `En el escenario adverso pierde ${eur(-adverso.resultado)} al año`, "/alternativas"],
-      [!!tension && tension.resultado >= 0, !tension ? "Sin escenarios" : tension.resultado >= 0 ? `Aguanta también el de tensión (${eur(tension.resultado)} al año)` : `En el escenario de tensión pierde ${eur(-tension.resultado)} al año: ¿se puede asumir?`, "/alternativas", true],
     );
+    if (!e) comprobaciones.push([false, "No hay baja elegida: elígela en Alternativas (con ella salen el margen, si sería anormal, el puesto y los escenarios)", "/alternativas"]);
+    else {
+      comprobaciones.push(
+        [e.margen >= a.o.margenMinimoPct, `Margen con la baja elegida: ${pct(e.margen)} (mínimo ${pct(a.o.margenMinimoPct)})`, "/alternativas"],
+        [!e.anormal, e.anormal ? "La baja elegida sería anormalmente baja: habría que justificarla" : "La baja elegida no es anormal con lo que se espera de la competencia", "/alternativas"],
+        [e.puesto === 1 && !e.empate, e.puesto === 1 && !e.empate ? "Con lo que se espera de la competencia, ganaría" : `Con lo que se espera de la competencia, quedaría ${e.puesto}.º`, "/alternativas"],
+      );
+      if (adverso) comprobaciones.push([adverso.resultado >= 0, adverso.resultado >= 0 ? `Aguanta el escenario adverso (${eur(adverso.resultado)} al año)` : `En el escenario adverso pierde ${eur(-adverso.resultado)} al año`, "/alternativas"]);
+      if (tension) comprobaciones.push([tension.resultado >= 0, tension.resultado >= 0 ? `Aguanta también el de tensión (${eur(tension.resultado)} al año)` : `En el escenario de tensión pierde ${eur(-tension.resultado)} al año: ¿se puede asumir?`, "/alternativas", true]);
+    }
   }
   // lo que no cuadra (alarmas.js), delante
   if (a) for (const al of [...a.alarmas].reverse()) comprobaciones.unshift([false, al.texto, al.ruta, al.nivel !== "bloquea"]);
@@ -69,9 +83,11 @@ export function ResumenConcurso({ concursoId, irA }) {
       <AvisoLeido concursoId={concursoId} docs={docs} ficha={datos.ficha} irA={irA} />
 
       {c && <div style={{ ...rejilla, marginTop: 18 }}>
-        {[["Organismo", c.organismo || "—"], ["Servicio", TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Expediente", c.expediente || "—"],
+        {[["Organismo", c.organismo || "—"], ["Servicio", servicioDe(docs) || TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre || "—"], ["Expediente", c.expediente || "—"],
           ["Duración", c.duracionMeses && c.duracionMeses % 12 ? `${c.duracionMeses} meses` : c.duracionAnios ? `${c.duracionAnios} año${c.duracionAnios === 1 ? "" : "s"}` : "—"],
-          ["Presupuesto con IVA", c.presupuestoConIva != null ? eur(c.presupuestoConIva) : "—", "todo el contrato"], ["Presupuesto sin IVA", c.presupuestoSinIva != null ? eur(c.presupuestoSinIva) : "—", "todo el contrato"], ["Valor estimado", c.valorEstimado != null ? eur(c.valorEstimado) : "—"],
+          ["Presupuesto al año", a?.r.presupuestoAnual ? eur(a.r.presupuestoAnual) : "—", a?.r.presupuestoAnual ? `sin IVA · ${a.r.fuentePresupuesto?.fuente || ""}` : "falta en la ficha"],
+          ...(c.presupuestoConIva != null ? [["Presupuesto con IVA", eur(c.presupuestoConIva), "todo el contrato"]] : []), ...(c.presupuestoSinIva != null ? [["Presupuesto sin IVA", eur(c.presupuestoSinIva), "todo el contrato"]] : []),
+          ["Valor estimado", c.valorEstimado != null ? eur(c.valorEstimado) : "—", c.valorEstimado != null ? "con prórrogas y modificaciones, sin IVA" : null],
           ["Presentar antes del", c.fechaLimite ? new Date(`${c.fechaLimite}T12:00:00`).toLocaleDateString("es-ES") : "—"], ["Estado", est?.nombre || "—", null, est?.color]].map(([l, v, s, col]) => tarjeta(l, v, s, col))}
       </div>}
 
@@ -84,9 +100,11 @@ export function ResumenConcurso({ concursoId, irA }) {
             {tarjeta("Precio del contrato", eur(a.elegida.precio * a.r.cuenta.factorIngresos), `${F1.format(a.r.anios)} año${a.r.anios === 1 ? "" : "s"}, sin IVA, con las subidas del pliego`)}
             {tarjeta("Margen", pct(a.elegida.margen), `${eur(a.elegida.precio * a.r.cuenta.factorIngresos - a.r.cuenta.totalContrato)} en el contrato`, a.elegida.margen < 0 ? C.red : null)}
             {tarjeta("Puntos esperados", F1.format(a.elegida.puntos), a.elegida.puesto === 1 && !a.elegida.empate ? "ganaría" : `quedaría ${a.elegida.puesto}.º`, a.elegida.puesto === 1 && !a.elegida.empate ? C.green : C.amber)}
-          </> : tarjeta("Precio", "—", a.bloqueado ? "hay que resolver lo que no cuadra (abajo)" : a.adj ? "falta el presupuesto" : "faltan los criterios de adjudicación", a.bloqueado ? C.red : null)}
+          </> : tarjeta("Precio", "—", a.bloqueado ? "hay que resolver lo que no cuadra (abajo)" : !a.adj ? "faltan los criterios de adjudicación" : !a.r.presupuestoAnual ? "falta el presupuesto" : "elige la baja en Alternativas", a.bloqueado ? C.red : null)}
+          {a.r.modo === "estudio" ? tarjeta("Plantilla y vehículos", "—", "salen del estudio de costes del Ayuntamiento (por rendimientos, en Cálculo, se calculan)") : <>
           {tarjeta("Plantilla", F1.format(a.r.cuenta.plantilla.total), "personas a jornada completa")}
           {tarjeta("Vehículos", String(a.r.cuenta.vehiculos.reduce((s, v) => s + (v.total || 0), 0)), (() => { const vs = a.r.cuenta.vehiculos; const t = vs.slice(0, 3).map(v => `${v.total} ${v.tipo}`).join(" · "); return vs.length > 3 ? `${t} y ${vs.length - 3} más` : t; })())}
+          </>}
         </div>
       </>}
 

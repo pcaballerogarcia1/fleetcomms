@@ -9,6 +9,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
+// Nombre corto para el eje de una gráfica (sin el mes, que ya se elige arriba; con «…» si no cabe)
+const etiqueta = n => { const x = String(n || "").replace(/\s*·\s*\d{4}-\d{2}$/, "").trim(); return x.length > 24 ? `${x.slice(0, 23)}…` : x; };
+
 const C = {
   bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
   border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
@@ -181,7 +184,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       .map(p => {
         const total = p.ubicaciones?.length || 0;
         const done = p.ubicaciones?.filter(u => u.realizado).length || 0;
-        return { nombre: (p.nombre || p.archivo || "Plan").slice(0, 22), pct: total > 0 ? Math.round(done/total*100) : 0, total };
+        return { nombre: etiqueta(p.nombre || p.archivo || "Plan"), pct: total > 0 ? Math.round(done/total*100) : 0, total };
       })
       .filter(p => p.total > 0)
       .sort((a, b) => b.total - a.total)
@@ -226,7 +229,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
         .map(([dia, euros]) => ({ dia, euros: +euros.toFixed(2), _s: dia.split("/").reverse().join("") }))
         .sort((a, b) => a._s.localeCompare(b._s)),
       porVehiculo: Object.entries(porVehiculo)
-        .map(([nombre, euros]) => ({ nombre: nombre.slice(0, 22), euros: +euros.toFixed(2) }))
+        .map(([nombre, euros]) => ({ nombre: etiqueta(nombre), euros: +euros.toFixed(2) }))
         .sort((a, b) => b.euros - a.euros).slice(0, 10),
     };
   }, [canPrice, planesReales, prices, projectId]);
@@ -243,7 +246,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       porConductor[nombre].km += f.kmRecorridos || 0;
     });
     const ranking = Object.values(porConductor)
-      .map(c => ({ nombre: c.nombre.length > 16 ? c.nombre.slice(0,16)+"…" : c.nombre, horas: +(c.horasMs/3600000).toFixed(1), km: +c.km.toFixed(0) }))
+      .map(c => ({ nombre: etiqueta(c.nombre), horas: +(c.horasMs/3600000).toFixed(1), km: +c.km.toFixed(0) }))
       .sort((a, b) => b.horas - a.horas)
       .slice(0, 10);
 
@@ -366,7 +369,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
                   <BarChart data={prod.topPlanes} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                     <XAxis type="number" domain={[0, 100]} tick={axisStyle} unit="%" />
-                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={120} />
+                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={150} interval={0} />
                     <Tooltip contentStyle={tooltipStyle} formatter={v => `${v}%`} />
                     <Bar dataKey="pct" fill={C.green} radius={[0, 4, 4, 0]} />
                   </BarChart>
@@ -410,7 +413,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
                   <BarChart data={fact.porVehiculo} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                     <XAxis type="number" tick={axisStyle} />
-                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={120} />
+                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={150} interval={0} />
                     <Tooltip contentStyle={tooltipStyle} formatter={v => fmtEur(v)} />
                     <Bar dataKey="euros" fill={C.green} radius={[0, 4, 4, 0]} />
                   </BarChart>
@@ -434,7 +437,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
                   <BarChart data={personal.ranking} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                     <XAxis type="number" tick={axisStyle} unit="h" />
-                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={110} />
+                    <YAxis type="category" dataKey="nombre" tick={axisStyle} width={150} interval={0} />
                     <Tooltip contentStyle={tooltipStyle} formatter={v => `${v}h`} />
                     <Bar dataKey="horas" fill={C.blue} radius={[0, 4, 4, 0]} />
                   </BarChart>

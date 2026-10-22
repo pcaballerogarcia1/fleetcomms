@@ -151,16 +151,29 @@ export function leerPliego(paginasCrudas) {
       ?? (/prescripciones t[eé]cnicas/i.test(todo) ? "tecnico" : /cl[aá]usulas administrativas/i.test(todo) ? "administrativo" : null);
 
   // ── ficha del anuncio / expediente ──
-  const expd = buscar(paginas, /(?:n[uú]mero de expediente|exp(?:te|ediente)?\.?)\s*(?:n[ºo°.]*\s*)?:?\s*([A-Z][A-Z0-9 .-]{0,15}?\d{1,6}\/\d{2,4}|\d[\d.-]{2,20})/i);
-  if (expd) poner("expediente", "Expediente", expd, expd.m[1].trim());
+  const expd = buscar(paginas, /(?:n[uú]mero de expediente|exp(?:te|ediente)?\.?)\s*(?:n[ºo°.]*\s*)?:?\s*([A-Z][A-Z0-9 .-]{0,15}?\d{1,6}\/\d{2,4}|\d[\d./-]{2,20})/i);
+  if (expd) poner("expediente", "Expediente", expd, expd.m[1].trim().replace(/[./-]+$/, ""));
   const ent = buscar(paginas, /entidad adjudicadora\s+(.{5,200}?)\s+(?:tipo de administraci|actividad principal|sitio web|direcci[oó]n)/i);
   if (ent) poner("organismo", "Entidad adjudicadora", ent, ent.m[1].trim());
   const plazoOf = buscar(paginas, /plazo de presentaci[oó]n de (?:la )?ofertas?[^0-9]{0,30}(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
   if (plazoOf) poner("fechaLimite", "Fecha límite de presentación", plazoOf, `${plazoOf.m[3]}-${plazoOf.m[2].padStart(2, "0")}-${plazoOf.m[1].padStart(2, "0")}`);
   const nLotes = buscar(paginas, /n[ºo°.]*\s*de lotes\s*:?\s*(\d{1,2})/i);
   if (nLotes) poner("lotes", "Número de lotes", nLotes, Number(nLotes.m[1]));
-  const cpv = buscar(paginas, /\b(\d{8})\s*-\s*([^.\n]{5,90})/);
-  if (cpv && /cpv/i.test(todo)) poner("cpv", "CPV", cpv, `${cpv.m[1]} · ${cpv.m[2].trim()}`);
+  // los CPV: «90610000-6, 90620000, 90630000…» o «90610000-6 - Servicios de limpieza y barrido de calles 90620000 – …»
+  const cpv = buscar(paginas, /\bCPV\b[^\d]{0,60}(\d{8}(?:[^]{0,400}))/i) || buscar(paginas, /\b(\d{8}\s*-\s*\d\b[^]{0,400})/);
+  if (cpv && /cpv/i.test(todo)) {
+    const codigos = [];
+    let fin = 0;
+    for (const m of cpv.m[1].matchAll(/\b(\d{8})(?:\s*-\s*\d\b)?(?:\s*[-–]\s*([A-ZÁÉÍÓÚÑ][^\d\n.;:]{4,90}))?/g)) {
+      if (codigos.length && m.index - fin > 40) break; // ya no es la lista de CPV
+      fin = m.index + m[0].length;
+      if (codigos.some(c => c.codigo === m[1])) continue;
+      codigos.push({ codigo: m[1], nombre: (m[2] || "").trim().replace(/\s+[a-z]$/i, "") }); // «… públicos b» (la «b.» del apartado siguiente)
+      if (codigos.length >= 8) break;
+    }
+    // solo hasta donde siguen los códigos (lo de después es otro apartado)
+    if (codigos.length) poner("cpv", "CPV", cpv, codigos.map(c => (c.nombre ? `${c.codigo} ${c.nombre}` : c.codigo)).join(" · "));
+  }
   const proc = buscar(paginas, /procedimiento (abierto(?: simplificado)?|restringido|negociado(?: sin publicidad)?)/i);
   if (proc) poner("procedimiento", "Procedimiento", proc, `Procedimiento ${proc.m[1].toLowerCase()}`);
   const sinIva = buscar(paginas, new RegExp(String.raw`importe \(sin impuestos\)\s*${IMPORTE}`, "i"));
@@ -269,13 +282,22 @@ export function leerPliego(paginasCrudas) {
     return total ? top.sort((a, b) => b.valor - a.valor)[0] : top.sort((a, b) => b.nota - a.nota || a.pagina - b.pagina)[0];
   };
   const pbl = elegir(cifrasTras(String.raw`presupuesto base de licitaci[oó]n|presupuesto (?:base )?de (?:la )?licitaci[oó]n|presupuesto m[aá]ximo de licitaci[oó]n|pressupost base de licitaci[oó]|orzamento base de licitaci[oó]n`, 260, String.raw`valor estimado|valor estimat|anualidad|lote\s*\d|importe del lote`), false);
-  if (pbl) poner("presupuesto", /iva (?:excluido|no incluido)|sin iva|excluido el iva|iva excluido/.test(pbl.despues + pbl.antes) ? "Presupuesto base de licitación (sin IVA)" : "Presupuesto base de licitación", pbl, pbl.valor);
+  if (pbl) {
+    // «… referido a una anualidad, en: BASE IMPONIBLE | IVA (10 %) | PRESUPUESTO BASE DE LICITACIÓN 454.145,57 € …»:
+    // la primera cifra de la tabla es la base imponible (sin IVA) de un año, no el total con IVA
+    const previo = sinAcentos(paginas[pbl.pagina - 1].slice(Math.max(0, pbl.pos - 260), pbl.pos)).toLowerCase();
+    const deUnAnio = /referid[oa] a una anualidad|por anualidad|presupuesto (?:base de licitacion )?anual|para cada anualidad|cada ano de (?:contrato|ejecucion)/.test(previo);
+    const sinIva = /base imponible/.test(previo.slice(-160)) || /iva (?:excluido|no incluido)|sin iva|excluido el iva|iva excluido/.test(pbl.despues + pbl.antes);
+    if (deUnAnio) poner("importeAnual", `Presupuesto base de licitación de un año${sinIva ? " (sin IVA)" : ""}`, pbl, pbl.valor);
+    else if (sinIva) poner("importeSinIva", "Presupuesto base de licitación (sin IVA)", pbl, pbl.valor);
+    else poner("presupuesto", "Presupuesto base de licitación", pbl, pbl.valor);
+  }
   const ve = elegir(cifrasTras(String.raw`valor estimado(?: del contrato)?|valor estimat|valor estimado total`, 260, String.raw`presupuesto base de licitaci|cr[eé]dito|anualidad`), true);
   if (ve) poner("valorEstimado", "Valor estimado del contrato", ve, ve.valor);
   // (no el «importe anual de facturación» de la solvencia ni el «volumen anual de negocios»)
   const anual = buscarTodas(paginas, new RegExp(String.raw`(?:importe|presupuesto|precio)\s+anual[^.€]{0,120}?${IMPORTE}`, "i"), 20)
     .find(c => !/facturaci|volumen (?:anual )?de negocio|solvencia|seguro|cobertura|contratos? de (?:limpieza|recogida)/i.test(c.frase));
-  if (anual) poner("importeAnual", "Importe anual", anual, numeroEs(anual.m[1]));
+  if (anual && !datos.some(d => d.id === "importeAnual")) poner("importeAnual", "Importe anual", anual, numeroEs(anual.m[1]));
   // el precio que se oferta: «el precio de licitación … referido a la primera anualidad (año 1º): 1.406.520,42 euros»
   const primerAnio = buscar(paginas, new RegExp(String.raw`(?:primera anualidad|primer a[nñ]o|a[nñ]o 1)[^€]{0,80}?${IMPORTE}`, "i"));
   if (primerAnio) poner("precioPrimerAnio", "Precio de licitación del primer año", primerAnio, numeroEs(primerAnio.m[1]));

@@ -26,15 +26,23 @@ export function TabInventario({ layers, projectId, orgId }) {
   const fileRef = useRef(null);
   const pendientes = cambiados.size + borrados.length;
   const pendRef = useUltimo(pendientes);
+  const layersRef = useUltimo(layers);
   const cargando = remoto.pid !== projectId && !error;
 
   useEffect(() => {
     if (!projectId) return;
     return escucharInventario(projectId, r => {
       setRemoto({ ...r, pid: projectId });
-      if (!pendRef.current) setLista(r.lista); // con cambios sin guardar, no se pisan
+      if (pendRef.current) return; // con cambios sin guardar, no se pisan
+      // sin inventario guardado: se prepara solo con los puntos del mapa (no se guarda hasta «Guardar»)
+      const puntos = r.lista.length ? [] : layersRef.current.filter(l => l.visible !== false && !l.lineasCloud).flatMap(l => l.markers || []);
+      const prep = puntos.length ? completarConPuntos([], puntos) : null;
+      if (prep?.nuevos) {
+        setLista(prep.lista); setCambiados(new Set(prep.lista.map(c => c.id)));
+        setNota(`He preparado el inventario con los ${prep.nuevos} puntos del mapa (una fila = un contenedor). Revísalo y pulsa «Guardar» para guardarlo.`);
+      } else setLista(r.lista);
     }, e => setError(`No se pudo leer el inventario: ${e.message || e}`));
-  }, [projectId, pendRef]);
+  }, [projectId, pendRef, layersRef]);
 
   const marcar = ids => setCambiados(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
   const cambiar = (id, cambio) => { setLista(l => l.map(c => (c.id === id ? { ...c, ...cambio } : c))); marcar([id]); };

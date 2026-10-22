@@ -121,3 +121,23 @@ describe("memoria justificativa, objeto y tipo", () => {
     expect(l.datos.find(d => d.id === "objeto").valor).toMatch(/^Contratación del servicio de limpieza viaria/);
   });
 });
+
+describe("CPV y expediente", () => {
+  it("todos los CPV con su nombre, sin el dígito de control ni lo que viene detrás", () => {
+    const l = leerPliego(["Expediente n.º: 376/2025 Procedimiento: Contrataciones", "Codificación Vocabulario Común de Contratos Públicos (CPV):\n90610000-6 - Servicios de limpieza y barrido de calles\n90620000 – Servicios de limpieza y eliminación de nieve\n90531000-Servicios de gestión de vertederos públicos\nb. División en lotes."]);
+    expect(l.datos.find(d => d.id === "cpv").valor).toBe("90610000 Servicios de limpieza y barrido de calles · 90620000 Servicios de limpieza y eliminación de nieve · 90531000 Servicios de gestión de vertederos públicos");
+    expect(l.datos.find(d => d.id === "expediente").valor).toBe("376/2025");
+  });
+  it("lista sin nombres: «CPV: 90610000-6, 90620000 , 90630000 y 90531000»", () => {
+    const l = leerPliego(["División en Lotes: NO CPV: 90610000-6, 90620000 , 90630000 y 90531000 Duración del contrato: diez años"]);
+    expect(l.datos.find(d => d.id === "cpv").valor).toBe("90610000 · 90620000 · 90630000 · 90531000");
+  });
+});
+
+describe("presupuesto de un año, sin IVA", () => {
+  it("«referido a una anualidad … BASE IMPONIBLE | IVA | PRESUPUESTO BASE DE LICITACIÓN 454.145,57 €» es la base de un año", () => {
+    const l = leerPliego(["De acuerdo con lo anteriormente expuesto, el presupuesto base de licitación se establece, referido a una anualidad, en: BASE IMPONIBLE IVA (10 %) PRESUPUESTO BASE DE LICITACIÓN 454.145,57 € 45.414,56 € 499.560,13 €"]);
+    expect(l.datos.find(d => d.id === "importeAnual")).toMatchObject({ valor: 454145.57, nombre: "Presupuesto base de licitación de un año (sin IVA)" });
+    expect(l.datos.find(d => d.id === "presupuesto")).toBeUndefined();
+  });
+});

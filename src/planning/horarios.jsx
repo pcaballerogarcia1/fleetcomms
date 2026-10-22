@@ -586,6 +586,12 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{effectiveEntries.length.toLocaleString()}</span>
           <span style={{ fontSize: 11, color: C.muted }}>puntos</span>
+          {/* varios elementos en el mismo sitio (una isla de contenedores) son un punto aquí y una parada cada uno en Scheduling */}
+          {!isLarge && totalMarkers > effectiveEntries.length && (
+            <span style={{ fontSize: 11, color: C.dim }} title="Los elementos con las mismas coordenadas son un solo punto en el Timetable. En Scheduling cada uno es una parada.">
+              · {totalMarkers.toLocaleString()} elementos (algunos en el mismo sitio)
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{withTime.length}</span>

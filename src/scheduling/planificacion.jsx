@@ -751,7 +751,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
                 <div style={{ fontSize: 11 }}>Planning → Timetable → Exportar a Scheduling</div>
               </>
             : <>
-                <div style={{ fontSize: 13, color: C.muted }}>{tasks.length.toLocaleString()} paradas listas</div>
+                <div style={{ fontSize: 13, color: C.muted }} title="Cada elemento de Planning (p. ej. cada contenedor) es una parada; los que comparten sitio cuentan como un solo punto en el Timetable.">{tasks.length.toLocaleString()} paradas listas{(() => { const n = new Set(tasks.map(t => t._id)).size; return n < tasks.length ? ` en ${n.toLocaleString()} puntos` : ""; })()}</div>
                 <div style={{ fontSize: 11 }}>
                   {(vehicles.length > 0 || workers.length > 0)
                     ? "Pulsa «Generar escenario» para asignar paradas"

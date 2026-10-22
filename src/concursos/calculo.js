@@ -308,7 +308,7 @@ export function presupuestoPrimerAnio({ calc, ficha, concurso }) {
   if (primer > 0 && iva != null) return { valor: primer / (1 + iva / 100), fuente: `precio del primer año del pliego, sin el ${iva} % de IVA` };
   if (primer > 0) return { valor: primer, fuente: "precio del primer año del pliego (¿lleva IVA? compruébalo)", dudoso: true };
   const anual = Number(valorDato(ficha, "importeAnual"));
-  if (anual > 0) return { valor: anual, fuente: "importe anual del pliego", dudoso: true };
+  if (anual > 0) return /sin IVA/i.test(ficha?.datos?.importeAnual?.nombre || "") ? { valor: anual, fuente: "presupuesto de un año del pliego" } : { valor: anual, fuente: "importe anual del pliego", dudoso: true };
   const p = presupuestoAnualDe(concurso);
   if (p) return { valor: p, fuente: "presupuesto total sin IVA ÷ años del contrato", dudoso: true };
   // solo el presupuesto base de licitación, que lleva el IVA
