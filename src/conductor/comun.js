@@ -201,6 +201,12 @@ export function cleanCalle(raw) {
 }
 
 // ── KML PARSER ────────────────────────────────────────────────────
+// Texto de un KML: sin CDATA y con las entidades (&amp; …) traducidas
+function limpiarXml(t) {
+  return String(t || "").replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/, "$1")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&");
+}
+
 export function parseKML(rawText) {
   const ubicaciones = {};
   let recorrido = null;
@@ -212,62 +218,55 @@ export function parseKML(rawText) {
     debug.push("Tamaño: " + text.length + " chars");
 
     const dn = text.indexOf("<name>"), de = text.indexOf("</name>");
-    if (dn !== -1 && de > dn) docName = text.slice(dn+6, de).trim();
+    if (dn !== -1 && de > dn) docName = limpiarXml(text.slice(dn+6, de).trim());
 
-    // Contar placemarks
-    let pmTotal = 0;
-    let pp = 0;
-    while(true){const i=text.indexOf("<Placemark>",pp);if(i===-1)break;pmTotal++;pp=i+1;}
-    debug.push("Placemarks: " + pmTotal);
+    // Cada <Placemark …>, con o sin atributos (Google My Maps, Google Earth, QGIS…)
+    const bloques = [...text.matchAll(/<Placemark\b[^>]*>[\s\S]*?<\/Placemark>/g)].map(m => m[0]);
+    debug.push("Placemarks: " + bloques.length);
 
-    // Helper getVal usando charCode para evitar problemas de escape en JSX
+    // Un campo de ExtendedData: <Data name="X"><value>…</value></Data> o
+    // <SimpleData name="X">…</SimpleData>, con espacios o saltos de línea entre medias
     function getVal(block, fieldName) {
-      const q = String.fromCharCode(34);
-      const needle = "name=" + q + fieldName + q + "><value>";
-      const si = block.indexOf(needle);
-      if (si === -1) return "";
-      const after = block.slice(si + needle.length);
-      const ei = after.indexOf("</value>");
-      return ei === -1 ? "" : after.slice(0, ei).trim();
+      const nombre = fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const m = block.match(new RegExp("<(?:Data|SimpleData)\\s+name\\s*=\\s*[\"']" + nombre + "[\"'][^>]*>\\s*(?:<displayName>[\\s\\S]*?</displayName>\\s*)?(?:<value>([\\s\\S]*?)</value>|([^<]*))", "i"));
+      if (!m) return "";
+      return limpiarXml((m[1] ?? m[2] ?? "").trim());
     }
+    const nombreDe = block => { const m = block.match(/<name>([\s\S]*?)<\/name>/); return m ? limpiarXml(m[1].trim()) : ""; };
 
-    let pos = 0, processed = 0;
-    while(true) {
-      const pStart = text.indexOf("<Placemark>", pos);
-      if (pStart === -1) break;
-      const pEnd = text.indexOf("</Placemark>", pStart);
-      if (pEnd === -1) break;
-      const block = text.slice(pStart, pEnd+12);
-      pos = pEnd+12;
+    let processed = 0;
+    for (const block of bloques) {
       processed++;
 
-      // LineString
-      if (block.indexOf("<LineString>") !== -1) {
-        const cs=block.indexOf("<coordinates>"),ce=block.indexOf("</coordinates>");
-        if(cs!==-1&&ce>cs){
-          const coords=[];
-          block.slice(cs+13,ce).trim().split(/\s+/).forEach(pair=>{
-            const p=pair.split(",");
-            if(p.length>=2){const lng=parseFloat(p[0]),lat=parseFloat(p[1]);if(!isNaN(lat)&&!isNaN(lng))coords.push([lat,lng]);}
+      // LineString: el recorrido
+      if (block.indexOf("<LineString") !== -1) {
+        const cm = block.match(/<coordinates[^>]*>([\s\S]*?)<\/coordinates>/);
+        if (cm) {
+          const coords = [];
+          cm[1].trim().split(/\s+/).forEach(pair => {
+            const q = pair.split(",");
+            if (q.length >= 2) { const lng = parseFloat(q[0]), lat = parseFloat(q[1]); if (!isNaN(lat) && !isNaN(lng)) coords.push([lat, lng]); }
           });
-          if(coords.length>1)recorrido=coords;
+          if (coords.length > 1) recorrido = coords;
         }
         continue;
       }
+      if (block.indexOf("<Polygon") !== -1 && block.indexOf("<Point") === -1) continue; // zonas, no paradas
 
       // Point coords
-      const cs=block.indexOf("<coordinates>"),ce=block.indexOf("</coordinates>");
-      if(cs===-1||ce===-1)continue;
-      const cparts=block.slice(cs+13,ce).trim().split(",");
-      if(cparts.length<2)continue;
-      const lng=parseFloat(cparts[0]),lat=parseFloat(cparts[1]);
-      if(isNaN(lat)||isNaN(lng))continue;
+      const cm = block.match(/<coordinates[^>]*>([\s\S]*?)<\/coordinates>/);
+      if (!cm) continue;
+      const cparts = cm[1].trim().split(/\s+/)[0].split(",");
+      if (cparts.length < 2) continue;
+      const lng = parseFloat(cparts[0]), lat = parseFloat(cparts[1]);
+      if (isNaN(lat) || isNaN(lng)) continue;
 
       // Fields — usar unicode escape para caracteres especiales
       const pa        = getVal(block,"Ubicaci\u00f3 T\u00e8cnica") || ("PA_"+processed);
-      const orden     = getVal(block,"Orden")     || "0";
+      const orden     = getVal(block,"Orden")     || String(processed);
       const codiQR    = getVal(block,"Codi QR");
-      const calleRaw  = getVal(block,"Calle")     || "Sin calle";
+      // sin campo «Calle», el nombre del punto (KML de Google Maps y similares)
+      const calleRaw  = getVal(block,"Calle")     || nombreDe(block) || "Sin calle";
       const calle     = cleanCalle(calleRaw);
       const num       = getVal(block,"Num.")      || "";
       const barri     = getVal(block,"Barri")     || "";

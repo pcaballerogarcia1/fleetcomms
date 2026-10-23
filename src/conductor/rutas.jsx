@@ -404,6 +404,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
       setSubiendo(true);setErrorMsg("");setDebugInfo([]);
       let done=0;
       files.forEach(file=>{
+        if(/\.kmz$/i.test(file.name)){setErrorMsg(`«${file.name}» es un KMZ (comprimido): ábrelo en Google Earth y guárdalo como KML.`);done++;if(done===files.length)setSubiendo(false);return;}
         const reader=new FileReader();
         reader.onload=ev=>{
           try{
@@ -416,8 +417,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               const dia=ubicaciones[0]?.dia||"";
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
-              addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(".kml",""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido,fechaSubida:Date.now()});
-              setShowUpload(false);setDebugInfo([]);
+              // se espera a que se guarde: si falla (permisos, conexión), se dice
+              Promise.resolve(addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(/\.kml$/i,""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido:recorrido||null,fechaSubida:Date.now()}))
+                .then(()=>{setShowUpload(false);setDebugInfo([]);})
+                .catch(err=>setErrorMsg(`No se pudo guardar «${file.name}»: ${err?.message||err}`));
             }
           }catch(err){setErrorMsg("Error: "+err.message);}
           done++;if(done===files.length)setSubiendo(false);
@@ -456,7 +459,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                     <div style={{fontSize:13,color:tipo.color,fontWeight:600,marginBottom:4}}>{subiendo?"Procesando…":"Seleccionar KML"}</div>
                     <div style={{fontSize:10,color:C.dim}}>Formato: 02-02-2026.kml</div>
                   </div>
-                  <input ref={fileRef} type="file" accept=".kml" multiple onChange={handleFiles} style={{display:"none"}}/>
+                  <input ref={fileRef} type="file" accept=".kml,application/vnd.google-earth.kml+xml,application/xml,text/xml,application/octet-stream" multiple onChange={handleFiles} style={{display:"none"}}/>
                 </div>
               )}
             </>
