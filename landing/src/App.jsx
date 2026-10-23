@@ -69,6 +69,46 @@ const ModuleIcons = {
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
     </svg>
   ),
+  Conductor: ({ color }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="2" width="12" height="20" rx="2"/>
+      <line x1="11" y1="18" x2="13" y2="18"/>
+    </svg>
+  ),
+  Control: ({ color }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/>
+      <circle cx="12" cy="10" r="2.2"/>
+    </svg>
+  ),
+  Concursos: ({ color }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="17" x2="13" y2="17"/>
+    </svg>
+  ),
+  Meter: ({ color }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="13" r="8"/>
+      <path d="M12 13l3.5-3.5"/>
+      <line x1="12" y1="2" x2="12" y2="5"/>
+    </svg>
+  ),
+  Bus: ({ color }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="14" rx="2"/>
+      <line x1="4" y1="11" x2="20" y2="11"/>
+      <circle cx="8" cy="20" r="1.5"/><circle cx="16" cy="20" r="1.5"/>
+    </svg>
+  ),
+  Route: ({ color }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/>
+      <path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>
+    </svg>
+  ),
   Target: ({ color }) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/>
@@ -110,109 +150,133 @@ const T = {
       demo: "Solicitar demo",
     },
     hero: {
-      tag: "Plataforma de operaciones",
-      h1a: "Gestión inteligente",
-      h1b: "de operaciones urbanas",
-      sub: "Planifica rutas, optimiza horarios, gestiona turnos y controla incidencias — todo en una plataforma integrada y en tiempo real.",
+      tag: "Plataforma de operaciones de servicios",
+      h1a: "Rutas, turnos y operación",
+      h1b: "de cualquier servicio en la calle",
+      sub: "Residuos, limpieza, contadores, mantenimiento urbano o autobuses: planifica, optimiza las rutas por carretera real, organiza los turnos y controla el día en directo, en una sola plataforma.",
       cta1: "Solicitar demo",
       cta2: "Ver en acción",
-      badge1: "Optimización VRP",
-      badge2: "Datos en tiempo real",
-      badge3: "Multi-empresa",
+      badge1: "Rutas por carretera real",
+      badge2: "App para el conductor",
+      badge3: "Varios sectores",
     },
     stats: [
-      { value: "5", label: "Módulos integrados" },
-      { value: "VRP", label: "Optimización de rutas" },
-      { value: "Real-time", label: "Datos en vivo" },
-      { value: "100%", label: "En la nube" },
+      { value: "7", label: "Módulos integrados" },
+      { value: "5", label: "Sectores de servicio" },
+      { value: "12 s", label: "Para optimizar cientos de paradas" },
+      { value: "100%", label: "En la nube y en el móvil" },
     ],
     modules: {
       tag: "Plataforma",
-      h2: "Todo lo que necesitas, integrado",
-      sub: "Cada módulo cubre una fase crítica de la operación. Sin silos, sin exportaciones manuales: los datos fluyen entre módulos automáticamente.",
+      h2: "Del concurso a la calle, en una sola herramienta",
+      sub: "Cada módulo cubre una fase de la operación y comparte los datos con los demás: sin hojas de cálculo ni exportaciones a mano.",
       items: [
         {
           icon: "Planning",
           name: "Planning",
-          desc: "Importa archivos KML, define zonas geográficas y visualiza tus rutas en mapa interactivo con asignación por barrios.",
-          pills: ["KML import", "Mapa interactivo", "Zonas y barrios"],
+          desc: "Sube tus puntos o líneas desde Excel, CSV, KML o GTFS. Mapa, horarios, inventario y precios de cada punto.",
+          pills: ["Excel / KML / GTFS", "Inventario", "Horarios"],
         },
         {
           icon: "Scheduling",
           name: "Scheduling",
-          desc: "Motor VRP que genera el Gantt óptimo multi-día respetando jornadas, descansos y capacidad de cada vehículo.",
-          pills: ["VRP Algorithm", "Gantt Chart", "Multi-día"],
+          desc: "Motor de optimización propio: rutas y turnos de varios días con tiempos de carretera reales, pausas y normativa de conducción.",
+          pills: ["Carretera real", "Varios días", "UE 561/2006"],
         },
         {
           icon: "Rostering",
           name: "Rostering",
-          desc: "Cuadrante mensual de disponibilidad con asignación M/T/N y detección automática de conflictos con el scheduling.",
-          pills: ["Cuadrante mensual", "Detección conflictos", "Bulk assign"],
+          desc: "Cuadrante mensual de trabajadores y vehículos, conectado con las rutas: turnos, libranzas, bajas y conflictos a la vista.",
+          pills: ["Cuadrante mensual", "Vehículos", "Conflictos"],
         },
         {
-          icon: "Incidencias",
-          name: "Incidencias",
-          desc: "Registro, categorización y seguimiento de incidencias operativas con estadísticas y flujo de estados.",
-          pills: ["Categorías", "Prioridades", "Panel estadístico"],
+          icon: "Conductor",
+          name: "App del conductor",
+          desc: "Cada operario ve su ruta en el móvil: navegación, partes, fotos, lectura de etiquetas, fichaje y avisos. Funciona sin cobertura.",
+          pills: ["Sin cobertura", "Fichaje", "Partes y fotos"],
         },
         {
-          icon: "Inventario",
-          name: "Inventario",
-          desc: "Control de stock de recambios con alertas de mínimos, registro de movimientos y trazabilidad completa.",
-          pills: ["Control stock", "Alertas mínimos", "Movimientos"],
+          icon: "Control",
+          name: "Control y Departure",
+          desc: "El día en directo: quién ha salido, qué paradas van hechas, retrasos y fichajes, en el mapa y en tiempo real.",
+          pills: ["En directo", "Fichajes", "Avisos"],
         },
         {
           icon: "Analytics",
           name: "Analytics",
-          desc: "KPIs operativos en tiempo real: productividad, cumplimiento de rutas, evolución de incidencias y tendencias.",
-          pills: ["KPIs en vivo", "Tendencias", "Exportar CSV"],
+          desc: "Producción, cumplimiento, facturación y personal: los indicadores del servicio sin montar informes a mano.",
+          pills: ["KPIs", "Facturación", "Exportar"],
+        },
+        {
+          icon: "Concursos",
+          name: "Concursos",
+          desc: "Vigila la Plataforma de Contratación, lee los pliegos (con la página de cada dato), dimensiona el servicio y calcula la oferta.",
+          pills: ["Lectura de pliegos", "Dimensionamiento", "Oferta"],
         },
       ],
     },
     howitworks: {
       tag: "Cómo funciona",
       h2: "De la planificación a la ejecución",
-      sub: "Tres pasos para transformar la gestión de tu flota.",
+      sub: "Tres pasos para transformar la gestión de tu servicio.",
       steps: [
         {
           num: "01",
-          title: "Configura tu flota",
-          desc: "Importa tus vehículos, conductores y puntos de servicio. Define turnos, depots y restricciones operativas de cada recurso.",
+          title: "Carga tu servicio",
+          desc: "Sube tus puntos, vehículos y trabajadores, elige el sector y define turnos, bases y restricciones.",
         },
         {
           num: "02",
-          title: "Optimiza automáticamente",
-          desc: "El motor VRP calcula la asignación óptima de rutas respetando jornadas, descansos, capacidad y distancias reales.",
+          title: "Optimiza en segundos",
+          desc: "El motor reparte el trabajo entre vehículos y días con tiempos de carretera reales, respetando jornadas, pausas y franjas horarias.",
         },
         {
           num: "03",
           title: "Ejecuta y controla",
-          desc: "Publica los planes, gestiona incidencias en tiempo real y analiza métricas de rendimiento para mejorar cada día.",
+          desc: "Publica las rutas en el móvil de cada operario, sigue el día en directo y mide los resultados para mejorar cada semana.",
         },
       ],
     },
     usecases: {
-      tag: "Casos de uso",
-      h2: "Diseñado para operaciones urbanas",
-      sub: "Probado en los entornos más exigentes de servicios municipales.",
+      tag: "Sectores",
+      h2: "Para cualquier servicio con rutas",
+      sub: "La misma plataforma se adapta a cada sector: sus palabras, sus partes y sus datos.",
       items: [
         {
           icon: "Waste",
           title: "Recogida de residuos",
-          desc: "Optimiza rutas de recogida RSU minimizando kilómetros en vacío. Gestiona turnos de noche y detecta ausencias antes de salir a calle.",
-          tags: ["Rutas RSU", "Turno noche", "KPI operativo"],
+          desc: "Rutas por fracción, capacidad del camión y viajes a planta, pesadas, inventario de contenedores y lectura de RFID.",
+          tags: ["Fracciones", "Pesadas", "RFID"],
         },
         {
           icon: "Cleaning",
           title: "Limpieza viaria",
-          desc: "Asigna zonas por barrio, gestiona cuadrillas y realiza seguimiento de incidencias de suciedad con geolocalización.",
-          tags: ["Zonas barrio", "Cuadrillas", "Incidencias"],
+          desc: "Zonas por barrio, cuadrillas y baldeos, con la maquinaria y el personal mínimos del pliego.",
+          tags: ["Zonas", "Cuadrillas", "Pliegos"],
+        },
+        {
+          icon: "Meter",
+          title: "Contadores y redes",
+          desc: "Rutas de lectura y cambio de contadores de agua o gas, con inventario por número de serie y calibre.",
+          tags: ["Lecturas", "Nº de serie", "Calibre"],
         },
         {
           icon: "Maintenance",
           title: "Mantenimiento urbano",
-          desc: "Crea planes de mantenimiento preventivo y correctivo. Gestiona el inventario de recambios y genera partes de inspección.",
-          tags: ["Preventivo", "Correctivo", "Stock recambios"],
+          desc: "Alumbrado, parques y mobiliario urbano: revisiones periódicas, partes de inspección e inventario de elementos.",
+          tags: ["Preventivo", "Partes", "Inventario"],
+        },
+        {
+          icon: "Bus",
+          title: "Autobuses",
+          desc: "Líneas desde GTFS, turnos de conductores con cambios de vehículo y cocheras, y cuadrantes por tipo de día.",
+          tags: ["GTFS", "Turnos", "Cocheras"],
+        },
+        {
+          icon: "Route",
+          title: "Otros servicios con rutas",
+          desc: "Servicio técnico, visitas y reparto: cualquier equipo que tenga paradas, vehículos y turnos.",
+          tags: ["Visitas", "Franjas horarias", "Técnicos"],
         },
       ],
     },
@@ -226,7 +290,7 @@ const T = {
       note: "Sin permanencia · Factura según flota real",
       features: [
         "Todos los módulos incluidos",
-        "Planning, Scheduling, Rostering, Incidencias, Inventario",
+        "Planning, Scheduling, Rostering, Control, Analytics y app del conductor",
         "Soporte incluido",
         "Sin coste de alta",
       ],
@@ -235,11 +299,11 @@ const T = {
     about: {
       tag: "Empresa",
       h2: "Construido por expertos en operaciones",
-      sub: "Nacimos de la frustración de gestionar flotas con hojas de cálculo. Creamos la herramienta que nos hubiera gustado tener.",
+      sub: "Nacimos de la frustración de gestionar servicios con hojas de cálculo. Creamos la herramienta que nos hubiera gustado tener.",
       visionLabel: "Visión",
       vision: "Ser el sistema operativo de referencia mundial para organizaciones que mueven recursos en el territorio — liderando la digitalización de la gestión operativa urbana y convirtiéndonos en el estándar global para flotas de servicios.",
       missionLabel: "Misión",
-      mission: "Unificar en una sola plataforma todo el ciclo operativo de flotas urbanas — desde la planificación hasta el operario en campo — eliminando la fragmentación entre sistemas y convirtiendo los datos operativos en decisiones accionables en tiempo real.",
+      mission: "Unificar en una sola plataforma todo el ciclo operativo de los servicios con flota — desde la planificación hasta el operario en campo — eliminando la fragmentación entre sistemas y convirtiendo los datos operativos en decisiones accionables en tiempo real.",
       values: [
         { icon: "Target",   title: "Enfoque operativo", desc: "Cada funcionalidad nace de un problema real en calle." },
         { icon: "Speed",    title: "Velocidad",          desc: "Iteramos rápido junto a nuestros clientes." },
@@ -263,12 +327,12 @@ const T = {
       phoneVal: "+34 620 12 18 57",
     },
     footer: {
-      tagline: "La plataforma de operaciones para flotas urbanas.",
+      tagline: "La plataforma de operaciones para servicios con rutas.",
       product: "Producto",
       company: "Empresa",
       legal: "Legal",
       links: {
-        product: ["Planning", "Scheduling", "Rostering", "Incidencias", "Inventario"],
+        product: ["Planning", "Scheduling", "Rostering", "App del conductor", "Concursos"],
         company: ["Sobre nosotros", "Blog", "Careers", "Partners"],
         legal: [
           { label: "Privacidad", href: "/privacidad.html" },
@@ -276,7 +340,7 @@ const T = {
           { label: "Cookies", href: "/cookies.html" },
         ],
       },
-      copy: "© 2025 Operanzia. Todos los derechos reservados.",
+      copy: "© 2026 Operanzia. Todos los derechos reservados.",
     },
   },
 
@@ -290,109 +354,133 @@ const T = {
       demo: "Request demo",
     },
     hero: {
-      tag: "Operations platform",
-      h1a: "Intelligent management",
-      h1b: "of urban operations",
-      sub: "Plan routes, optimize schedules, manage shifts and track incidents — all in one integrated, real-time platform.",
+      tag: "Service operations platform",
+      h1a: "Routes, shifts and operations",
+      h1b: "for any field service",
+      sub: "Waste, street cleaning, meters, urban maintenance or buses: plan, optimize routes on real roads, organize shifts and track the day live, in one platform.",
       cta1: "Request demo",
       cta2: "See it in action",
-      badge1: "VRP Optimization",
-      badge2: "Real-time data",
-      badge3: "Multi-tenant",
+      badge1: "Real road routing",
+      badge2: "Driver app",
+      badge3: "Multi-sector",
     },
     stats: [
-      { value: "5", label: "Integrated modules" },
-      { value: "VRP", label: "Route optimization" },
-      { value: "Real-time", label: "Live data" },
-      { value: "100%", label: "Cloud-based" },
+      { value: "7", label: "Integrated modules" },
+      { value: "5", label: "Service sectors" },
+      { value: "12 s", label: "To optimize hundreds of stops" },
+      { value: "100%", label: "Cloud and mobile" },
     ],
     modules: {
       tag: "Platform",
-      h2: "Everything you need, integrated",
-      sub: "Each module covers a critical operational phase. No silos, no manual exports — data flows between modules automatically.",
+      h2: "From tender to street, in one tool",
+      sub: "Each module covers a phase of the operation and shares its data with the rest: no spreadsheets, no manual exports.",
       items: [
         {
           icon: "Planning",
           name: "Planning",
-          desc: "Import KML files, define geographic zones and visualize your routes on an interactive map with district assignment.",
-          pills: ["KML import", "Interactive map", "Zones & districts"],
+          desc: "Upload your points or lines from Excel, CSV, KML or GTFS. Map, time windows, inventory and prices for every point.",
+          pills: ["Excel / KML / GTFS", "Inventory", "Time windows"],
         },
         {
           icon: "Scheduling",
           name: "Scheduling",
-          desc: "VRP engine that generates the optimal multi-day Gantt chart respecting shifts, breaks and vehicle capacity.",
-          pills: ["VRP Algorithm", "Gantt Chart", "Multi-day"],
+          desc: "In-house optimization engine: multi-day routes and shifts with real road times, breaks and driving regulations.",
+          pills: ["Real roads", "Multi-day", "EU 561/2006"],
         },
         {
           icon: "Rostering",
           name: "Rostering",
-          desc: "Monthly availability calendar with M/T/N shift assignment and automatic conflict detection with scheduling.",
-          pills: ["Monthly grid", "Conflict detection", "Bulk assign"],
+          desc: "Monthly roster for staff and vehicles, linked to the routes: shifts, days off, sick leave and conflicts at a glance.",
+          pills: ["Monthly roster", "Vehicles", "Conflicts"],
         },
         {
-          icon: "Incidencias",
-          name: "Incidents",
-          desc: "Log, categorize and track operational incidents with statistics and status workflows.",
-          pills: ["Categories", "Priorities", "Stats panel"],
+          icon: "Conductor",
+          name: "Driver app",
+          desc: "Every worker sees their route on the phone: navigation, reports, photos, tag reading, clock-in and alerts. Works offline.",
+          pills: ["Offline", "Clock-in", "Reports & photos"],
         },
         {
-          icon: "Inventario",
-          name: "Inventory",
-          desc: "Spare parts stock control with low-stock alerts, movement logs and full traceability per product.",
-          pills: ["Stock control", "Low-stock alerts", "Movements"],
+          icon: "Control",
+          name: "Control & Departure",
+          desc: "The day live: who has left, which stops are done, delays and clock-ins, on the map and in real time.",
+          pills: ["Live", "Clock-ins", "Alerts"],
         },
         {
           icon: "Analytics",
           name: "Analytics",
-          desc: "Real-time operational KPIs: productivity, route compliance, incident trends and consumption patterns.",
-          pills: ["Live KPIs", "Trends", "Export CSV"],
+          desc: "Output, compliance, billing and staff: service KPIs without building reports by hand.",
+          pills: ["KPIs", "Billing", "Export"],
+        },
+        {
+          icon: "Concursos",
+          name: "Tenders",
+          desc: "Watches the Spanish public procurement platform, reads tender documents (citing each page), sizes the service and prices the bid.",
+          pills: ["Tender reading", "Sizing", "Bid pricing"],
         },
       ],
     },
     howitworks: {
       tag: "How it works",
       h2: "From planning to execution",
-      sub: "Three steps to transform how you manage your fleet.",
+      sub: "Three steps to transform how you run your service.",
       steps: [
         {
           num: "01",
-          title: "Configure your fleet",
-          desc: "Import your vehicles, drivers and service points. Define shifts, depots and operational constraints for each resource.",
+          title: "Load your service",
+          desc: "Upload your points, vehicles and staff, choose your sector and set shifts, depots and constraints.",
         },
         {
           num: "02",
-          title: "Optimize automatically",
-          desc: "The VRP engine calculates the optimal route assignment, respecting shift hours, breaks, capacity and real road distances.",
+          title: "Optimize in seconds",
+          desc: "The engine splits the work across vehicles and days with real road times, respecting shifts, breaks and time windows.",
         },
         {
           num: "03",
           title: "Execute and monitor",
-          desc: "Publish plans, manage incidents in real time and analyze performance metrics to improve operations every day.",
+          desc: "Publish routes to each worker's phone, follow the day live and measure results to improve every week.",
         },
       ],
     },
     usecases: {
-      tag: "Use cases",
-      h2: "Built for urban operations",
-      sub: "Tested in the most demanding municipal service environments.",
+      tag: "Sectors",
+      h2: "For any service with routes",
+      sub: "The same platform adapts to each sector: its words, its reports and its data.",
       items: [
         {
           icon: "Waste",
           title: "Waste collection",
-          desc: "Optimize waste collection routes minimizing empty mileage. Manage night shifts and detect absences before going out.",
-          tags: ["Waste routes", "Night shift", "Operational KPIs"],
+          desc: "Routes by waste stream, truck capacity and trips to the plant, weighings, container inventory and RFID reading.",
+          tags: ["Waste streams", "Weighings", "RFID"],
         },
         {
           icon: "Cleaning",
           title: "Street cleaning",
-          desc: "Assign zones by district, manage crews and track cleanliness incidents with geolocation.",
-          tags: ["District zones", "Crews", "Incidents"],
+          desc: "District zones, crews and washing, with the minimum machinery and staff required by the tender.",
+          tags: ["Zones", "Crews", "Tenders"],
+        },
+        {
+          icon: "Meter",
+          title: "Meters and networks",
+          desc: "Reading and replacement routes for water or gas meters, with inventory by serial number and size.",
+          tags: ["Readings", "Serial no.", "Meter size"],
         },
         {
           icon: "Maintenance",
           title: "Urban maintenance",
-          desc: "Create preventive and corrective maintenance plans. Manage spare parts inventory and generate inspection reports.",
-          tags: ["Preventive", "Corrective", "Spare parts"],
+          desc: "Street lighting, parks and street furniture: periodic inspections, reports and asset inventory.",
+          tags: ["Preventive", "Reports", "Inventory"],
+        },
+        {
+          icon: "Bus",
+          title: "Buses",
+          desc: "Lines from GTFS, driver duties with vehicle changes and depots, and rosters by day type.",
+          tags: ["GTFS", "Duties", "Depots"],
+        },
+        {
+          icon: "Route",
+          title: "Other route-based services",
+          desc: "Field service, visits and delivery: any team with stops, vehicles and shifts.",
+          tags: ["Visits", "Time windows", "Technicians"],
         },
       ],
     },
@@ -406,7 +494,7 @@ const T = {
       note: "No commitment · Billed on your actual fleet",
       features: [
         "All modules included",
-        "Planning, Scheduling, Rostering, Incidents, Inventory",
+        "Planning, Scheduling, Rostering, Control, Analytics and driver app",
         "Support included",
         "No setup fee",
       ],
@@ -415,11 +503,11 @@ const T = {
     about: {
       tag: "Company",
       h2: "Built by operations experts",
-      sub: "We were born from the frustration of managing fleets with spreadsheets. We built the tool we wish we'd had.",
+      sub: "We were born from the frustration of managing services with spreadsheets. We built the tool we wish we'd had.",
       visionLabel: "Vision",
       vision: "To be the reference operating system worldwide for organizations that move resources across the territory — leading the digitalization of urban operations management and becoming the global standard for service fleets.",
       missionLabel: "Mission",
-      mission: "To unify the entire operating cycle of urban fleets in a single platform — from planning to the field worker — eliminating fragmentation between systems and turning operational data into real-time, actionable decisions.",
+      mission: "To unify the entire operating cycle of service fleets in a single platform — from planning to the field worker — eliminating fragmentation between systems and turning operational data into real-time, actionable decisions.",
       values: [
         { icon: "Target",   title: "Operations focus", desc: "Every feature comes from a real problem in the field." },
         { icon: "Speed",    title: "Speed",             desc: "We iterate fast, together with our customers." },
@@ -443,12 +531,12 @@ const T = {
       phoneVal: "+34 620 12 18 57",
     },
     footer: {
-      tagline: "The operations platform for urban fleets.",
+      tagline: "The operations platform for route-based services.",
       product: "Product",
       company: "Company",
       legal: "Legal",
       links: {
-        product: ["Planning", "Scheduling", "Rostering", "Incidents", "Inventory"],
+        product: ["Planning", "Scheduling", "Rostering", "Driver app", "Tenders"],
         company: ["About us", "Blog", "Careers", "Partners"],
         legal: [
           { label: "Privacy", href: "/privacidad.html" },
@@ -456,7 +544,7 @@ const T = {
           { label: "Cookies", href: "/cookies.html" },
         ],
       },
-      copy: "© 2025 Operanzia. All rights reserved.",
+      copy: "© 2026 Operanzia. All rights reserved.",
     },
   },
 };
@@ -861,7 +949,8 @@ function HeroSection({ t }) {
         </div>
 
         {/* Product screenshot */}
-        <div className="animate-fadeup" style={{ maxWidth: 960, margin: "0 auto", animationDelay: "0.28s" }}>
+        {/* en el móvil la captura de la app no cabe: se desliza dentro de su caja en vez de ensanchar la página */}
+        <div className="animate-fadeup" style={{ maxWidth: 960, margin: "0 auto", animationDelay: "0.28s", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <MockupGantt />
         </div>
       </div>
@@ -882,7 +971,7 @@ function StatsBar({ t }) {
   return (
     <section ref={ref} style={{ padding: "52px 0", background: "#ffffff", borderBottom: "1px solid #f1f5f9" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0 }}>
+        <div className="movil-2col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0 }}>
           {t.stats.map((s, i) => (
             <div key={i} className="reveal" style={{
               textAlign: "center", padding: "8px 24px",
@@ -1133,7 +1222,7 @@ function AboutSection({ t }) {
   return (
     <section id="about" ref={ref} className="section" style={{ background: "#f8fafc" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+        <div className="movil-1col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
           <div>
             <div className="reveal" style={{ display: "flex", marginBottom: 20 }}>
               <span className="tag-light">{a.tag}</span>
@@ -1160,7 +1249,7 @@ function AboutSection({ t }) {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div className="movil-1col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {a.values.map((v, i) => {
               const Icon = ModuleIcons[v.icon];
               return (
@@ -1262,7 +1351,7 @@ function ContactSection({ t }) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div className="movil-1col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
                   <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginBottom: 6, display: "block" }}>{c.name}</label>
                   {inp("name", "Ana García")}
@@ -1319,7 +1408,7 @@ function FooterSection({ t }) {
   return (
     <footer style={{ background: "#0a0f1e", borderTop: "1px solid rgba(255,255,255,0.06)", padding: "72px 0 36px" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, marginBottom: 52 }}>
+        <div className="movil-2col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, marginBottom: 52 }}>
           <div>
             <Logo size={30} textColor="#f0f4f8" />
             <p style={{ fontSize: 13.5, color: "#64748b", marginTop: 16, lineHeight: 1.75, maxWidth: 250 }}>{f.tagline}</p>

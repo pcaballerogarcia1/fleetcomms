@@ -214,3 +214,10 @@ body {
   .container { padding: 0 20px; }
   .hide-mobile { display: none !important; }
 }
+
+/* En el móvil, las rejillas fijas pasan a 1 o 2 columnas (si no, la página se ensancha) */
+@media (max-width: 700px) {
+  .movil-1col { grid-template-columns: 1fr !important; gap: 24px !important; }
+  .movil-2col { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+  .movil-2col > * { border-right: none !important; }
+}
