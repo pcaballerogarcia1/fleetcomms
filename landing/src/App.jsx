@@ -340,7 +340,7 @@ const T = {
           { label: "Cookies", href: "/cookies.html" },
         ],
       },
-      copy: "© 2026 Operanzia. Todos los derechos reservados.",
+      copy: "© 2025 Operanzia. Todos los derechos reservados.",
     },
   },
 
@@ -544,7 +544,7 @@ const T = {
           { label: "Cookies", href: "/cookies.html" },
         ],
       },
-      copy: "© 2026 Operanzia. All rights reserved.",
+      copy: "© 2025 Operanzia. All rights reserved.",
     },
   },
 };
