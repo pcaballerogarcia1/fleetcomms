@@ -940,6 +940,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
           ubicaciones, recorrido,
           fechaSubida: Date.now(),
           origenVRP: true, origenScheduling: true,
+          sector: activeProject?.sector || null, // la app del conductor adapta sus palabras
           conductorUid: null, // por vehículo: compartido (los conductores lo buscan así)
           // Para que Analytics (facturación) sepa de qué proyecto es el plan
           projectId: activeProject?._id || null,

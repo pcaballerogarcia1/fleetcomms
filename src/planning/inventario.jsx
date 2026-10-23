@@ -7,12 +7,15 @@ import { ESTADOS, completarConPuntos, importarFilas, resumenInventario } from ".
 import { escucharInventario, guardarInventario } from "../inventario-store.js";
 import { useUltimo } from "../use-ultimo.js";
 import { C, font, mono } from "./estilo.js";
+import { useSector } from "../sector.js";
 
 const POR_PAGINA = 200;
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const COLOR_ESTADO = { "En servicio": C.green, "Dañado": C.red, "En taller": C.amber, "Pendiente de instalar": C.blue, "Retirado": C.muted };
 
 export function TabInventario({ layers, projectId, orgId }) {
+  const { t: T, ver } = useSector();
+  const elementoRef = useUltimo(T.elemento);
   const [remoto, setRemoto] = useState({ pid: null, v: null, lista: [] });
   const [lista, setLista] = useState([]);
   const [cambiados, setCambiados] = useState(() => new Set());
@@ -39,10 +42,10 @@ export function TabInventario({ layers, projectId, orgId }) {
       const prep = puntos.length ? completarConPuntos([], puntos) : null;
       if (prep?.nuevos) {
         setLista(prep.lista); setCambiados(new Set(prep.lista.map(c => c.id)));
-        setNota(`He preparado el inventario con los ${prep.nuevos} puntos del mapa (una fila = un contenedor). Revísalo y pulsa «Guardar» para guardarlo.`);
+        setNota(`He preparado el inventario con los ${prep.nuevos} puntos del mapa (una fila = un ${elementoRef.current}). Revísalo y pulsa «Guardar» para guardarlo.`);
       } else setLista(r.lista);
     }, e => setError(`No se pudo leer el inventario: ${e.message || e}`));
-  }, [projectId, pendRef, layersRef]);
+  }, [projectId, pendRef, layersRef, elementoRef]);
 
   const marcar = ids => setCambiados(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
   const cambiar = (id, cambio) => { setLista(l => l.map(c => (c.id === id ? { ...c, ...cambio } : c))); marcar([id]); };
@@ -52,7 +55,7 @@ export function TabInventario({ layers, projectId, orgId }) {
     const r = completarConPuntos(lista, marcadores());
     if (!r.nuevos) { setNota("Todos los puntos del mapa ya están en el inventario."); return; }
     setLista(r.lista); marcar(r.lista.slice(-r.nuevos).map(c => c.id));
-    setNota(`${r.nuevos} contenedor(es) añadidos desde los puntos del mapa. Pulsa «Guardar» para guardarlos.`);
+    setNota(`${r.nuevos} ${T.elementos} añadidos desde los puntos del mapa. Pulsa «Guardar» para guardarlos.`);
   }
   async function importar(file) {
     if (!file) return;
@@ -75,7 +78,7 @@ export function TabInventario({ layers, projectId, orgId }) {
     const filas = lista.map(c => ({ Código: c.codigo, RFID: c.rfid, Tipo: c.tipo, Litros: c.litros ?? "", Fracción: c.fraccion, Estado: c.estado, Instalado: c.instalado, Revisado: c.revisado, Lavado: c.lavado, Notas: c.notas, Nombre: c.nombre, Lat: c.lat, Lng: c.lng }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), "Inventario");
-    XLSX.writeFile(wb, "inventario-contenedores.xlsx");
+    XLSX.writeFile(wb, `inventario-${T.elementos}.xlsx`);
   }
   async function guardar() {
     setGuardando(true); setError(null);
@@ -107,15 +110,15 @@ export function TabInventario({ layers, projectId, orgId }) {
   if (!projectId) return <div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Abre un proyecto para ver su inventario.</div>;
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px", fontFamily: font }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Inventario de contenedores</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Inventario de {T.elementos}</div>
       <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.55, maxWidth: 900 }}>
-        La ficha de cada contenedor. Scheduling usa sus litros para saber cuándo se llena el camión, y la app del conductor recibe sus RFID: al leer la etiqueta, la parada se marca sola. Los «Retirados» y «Pendientes de instalar» no cuentan en las rutas.
+        La ficha de cada {T.elemento}. {ver.volumen ? "Scheduling usa sus litros para saber cuándo se llena el camión, y l" : "L"}a app del conductor recibe sus RFID o códigos: al leer la etiqueta, la parada se marca sola. Los «Retirados» y «Pendientes de instalar» no cuentan en las rutas.
       </div>
       <div style={{ display: "flex", gap: 14, margin: "12px 0", flexWrap: "wrap", fontSize: 12, color: C.muted }}>
-        <span><b style={{ color: C.text }}>{res.total}</b> contenedores</span>
+        <span><b style={{ color: C.text }}>{res.total}</b> {T.elementos}</span>
         {ESTADOS.filter(e => res.porEstado[e]).map(e => <span key={e}><b style={{ color: COLOR_ESTADO[e] }}>{res.porEstado[e]}</b> {e.toLowerCase()}</span>)}
         <span><b style={{ color: C.text }}>{res.conRfid}</b> con RFID</span>
-        {res.litros > 0 && <span><b style={{ color: C.text }}>{Math.round(res.litros / 1000).toLocaleString("es-ES")}</b> m³ en servicio</span>}
+        {ver.volumen && res.litros > 0 && <span><b style={{ color: C.text }}>{Math.round(res.litros / 1000).toLocaleString("es-ES")}</b> m³ en servicio</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <input value={q} onChange={e => { setQ(e.target.value); setPaginas(1); }} placeholder="Buscar código, RFID, tipo, calle…" style={{ ...inp, width: 230, padding: "6px 9px" }} />
@@ -132,13 +135,13 @@ export function TabInventario({ layers, projectId, orgId }) {
           <button onClick={descartar} disabled={guardando} style={{ ...btn(false), color: C.muted }}>Descartar</button>
         </>}
       </div>
-      <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>El Excel: una fila por contenedor con «Código» o «RFID» para encontrarlo, y las columnas que quieras cambiar (Tipo, Litros, Fracción, Estado, Instalado, Revisado, Lavado, Notas). Si el código no está y la fila trae Lat/Lng, se añade.</div>
+      <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>El Excel: una fila por {T.elemento} con «Código» o «RFID» para encontrarlo, y las columnas que quieras cambiar ({`Tipo, ${ver.volumen ? "Litros" : "Capacidad"}, ${T.categoria}, Estado, Instalado, Revisado, ${T.revision}, Notas`}). Si el código no está y la fila trae Lat/Lng, se añade.</div>
       {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
       {nota && <div style={{ fontSize: 12, color: C.green, marginBottom: 8 }}>{nota}</div>}
       {cargando ? <div style={{ fontSize: 12, color: C.muted }}>Cargando…</div> : (
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "auto", maxHeight: "calc(100vh - 360px)", background: C.card }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Código", "RFID", "Tipo", "Litros", "Fracción", "Estado", "Instalado", "Revisado", "Lavado", "Notas", "Dónde", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Código", "RFID", "Tipo", ver.volumen ? "Litros" : "Capacidad", T.categoria, "Estado", "Instalado", "Revisado", T.revision, "Notas", "Dónde", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {vis.slice(0, paginas * POR_PAGINA).map(c => (
                 <tr key={c.id} style={cambiados.has(c.id) ? { background: "rgba(91,124,250,0.06)" } : undefined}>

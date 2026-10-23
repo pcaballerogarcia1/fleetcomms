@@ -164,7 +164,7 @@ export function workerStopsByDay({ scenario, startMin, asignWorker, workerRow })
  */
 export async function publishWorker({
   orgId, projectId, worker, year, month, tipo, trabajo = "", scenario, startMin,
-  gridWorker, asignWorker, dailyDetailWorker, schedDayOffset = 0,
+  gridWorker, asignWorker, dailyDetailWorker, schedDayOffset = 0, sector = null,
 }) {
   const mes = `${year}-${String(month).padStart(2, "0")}`;
   const nombre = [worker.nombre, worker.apellidos].filter(Boolean).join(" ") || "Trabajador";
@@ -219,7 +219,7 @@ export async function publishWorker({
         vehiculoNombre: vehiculo, mes, diaServicio: dayLabel, diaNum: d,
         ubicaciones: stops.map((a, i) => taskToUbicacion(a, i)),
         recorrido: stops.filter(a => hasCoords(a.lat, a.lng)).map(a => ({ lat: +a.lat, lng: +a.lng })),
-        fechaSubida: Date.now(), origenVRP: true, origenRostering: true,
+        fechaSubida: Date.now(), origenVRP: true, origenRostering: true, sector,
         projectId: projectId || null, org_id: orgId,
       });
       created++;

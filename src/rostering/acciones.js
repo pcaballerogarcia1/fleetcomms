@@ -44,6 +44,7 @@ export async function doPublish(ctx, targets, tipo, trabajo = "") {
     setPublishing(`Publicando ${++i}/${targets.length}…`);
     try {
       const r = await publishWorker({
+        sector: activeProject?.sector || null,
         orgId, projectId, worker: w, year, month, tipo, trabajo, scenario, startMin,
         gridWorker: grid[w._id] || {}, asignWorker: asign[w._id] || {},
         dailyDetailWorker: schedRoster?.dailyDetail?.[w._id],

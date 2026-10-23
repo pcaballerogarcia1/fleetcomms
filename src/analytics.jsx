@@ -8,6 +8,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { sectorDe } from "./sector.js";
 
 // Nombre corto para el eje de una gráfica (sin el mes, que ya se elige arriba; con «…» si no cabe)
 const etiqueta = n => { const x = String(n || "").replace(/\s*·\s*\d{4}-\d{2}$/, "").trim(); return x.length > 24 ? `${x.slice(0, 23)}…` : x; };
@@ -313,11 +314,11 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Analytics</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Producción, facturación, pesadas, personal e incidencias</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{sectorDe(activeProject).ver.pesadas ? "Producción, facturación, pesadas, personal e incidencias" : "Producción, facturación, personal e incidencias"}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
-              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ["pesadas", "Pesadas"], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
+              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ...(sectorDe(activeProject).ver.pesadas ? [["pesadas", "Pesadas"]] : []), ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
                   background: vista === k ? "rgba(255,255,255,0.1)" : "none",

@@ -92,3 +92,10 @@ describe("pesadas de báscula", () => {
     expect(r.porVehiculo[0]).toEqual({ name: "C1", kg: 14000 });
   });
 });
+
+describe("puntos de un CSV y columnas de otros sectores", () => {
+  it("lee las columnas sueltas del punto (capas subidas) y las de contadores", () => {
+    const f = fichaDePunto({ lat: 39.57, lng: 2.65, id: "interno-1", "Nº de serie": "A123", "Tipo de contador": "Volumétrico", Calibre: "DN15", Nombre: "Calle Mayor 1" });
+    expect(f).toMatchObject({ codigo: "A123", tipo: "Volumétrico", fraccion: "DN15", nombre: "Calle Mayor 1" });
+  });
+});

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 import { C, barrioColor, font } from "./estilo.js";
+import { SECTORES, sectorDe } from "../sector.js";
 
 // ── TAB PROYECTOS ─────────────────────────────────────────────────
 const PROJECT_STATUS = {
@@ -83,6 +84,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     const mes    = newModal.mes || new Date().toISOString().slice(0, 7);
     const projectOrgId = newModal.orgId || effectiveOrgId;
     const tipo = newModal.tipo === "lineas" ? "lineas" : "puntos";
+    const sector = sectorDe(newModal.sector).id;
     // Nunca caer en `docId` como org_id: un proyecto "huérfano" con su propio
     // id de documento como org_id parece crearse bien (no da ningún error),
     // pero todo lo que cuelga de él (vehículos, planes publicados en Rutas...)
@@ -98,7 +100,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     setCreating(true);
     try {
       await setDoc(doc(db, "scheduling_projects", docId), {
-        nombre, descripcion: desc, mes, status: "nuevo", tipo,
+        nombre, descripcion: desc, mes, status: "nuevo", tipo, ...(tipo === "puntos" ? { sector } : {}),
         org_id: projectOrgId,
         planning: null, scheduling: null,
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -112,7 +114,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
     logAudit({ modulo: "Proyectos", accion: "Creó un proyecto", detalle: `${nombre} (${mes})`, projectId: docId, proyecto: nombre, orgId: projectOrgId });
     setCreating(false);
     setNewModal(null);
-    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId, tipo });
+    onOpenProject({ _id: docId, nombre, status: "nuevo", org_id: projectOrgId, tipo, ...(tipo === "puntos" ? { sector } : {}) });
   }
 
   async function removeProject(id) {
@@ -190,6 +192,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       <span style={{ width: 9, height: 9, borderRadius: 3, background: p.color || C.dim, flexShrink: 0 }} />
                       <span style={{ fontSize: 15, fontWeight: 650, color: C.text, letterSpacing: "-0.01em" }}>{p.nombre}</span>
                       {isActive && <span className="op-pastilla" style={{ background: "rgba(91,124,250,0.14)", color: C.blueText }}>Abierto</span>}
+                      {p.tipo !== "lineas" && p.sector && p.sector !== "residuos" && <span className="op-pastilla" title="Sector del proyecto" style={{ background: "rgba(91,124,250,0.1)", color: C.blueText }}>{sectorDe(p).nombre}</span>}
                       {p.tipo === "lineas" && <span className="op-pastilla" title="Proyecto de líneas regulares (autobuses)" style={{ background: "rgba(63,207,142,0.1)", color: C.green }}><Bus size={11} /> Líneas</span>}
                     </div>
                     <div style={{ fontSize: 12, color: C.dim, marginLeft: 17 }}>{p.mes} · {dateStr}</div>
@@ -365,6 +368,14 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 })}
               </div>
             </div>
+            {(newModal.tipo || "puntos") === "puntos" && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Sector</label>
+                <select value={sectorDe(newModal.sector).id} onChange={e => setNewModal(p => ({ ...p, sector: e.target.value }))} style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: "dark" }}>
+                  {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre} — {s.detalle}</option>)}
+                </select>
+              </div>
+            )}
             <input autoFocus placeholder="Nombre del proyecto *" value={newModal.nombre}
               onChange={e => setNewModal(p => ({ ...p, nombre: e.target.value }))}
               onKeyDown={e => e.key === "Enter" && createProject()}

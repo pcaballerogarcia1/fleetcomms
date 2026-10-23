@@ -8,6 +8,7 @@ import { LineasPanel } from "../gtfs-lineas.jsx";
 import { logAudit } from "../audit.js";
 import { barrioColor, cambiarDepots, coordQuality, getBarrio, getContenedor, getFraccion, idbDel } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
+import { useSector } from "../sector.js";
 
 // Flecha y cabecera plegable de cada sección del panel
 const Chevron = ({ open }) => (
@@ -32,7 +33,11 @@ const SecBtn = ({ label, badge, open, onToggle, extra }) => (
   </button>
 );
 
-export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
+export function Sidebar(props) {
+  const sector = useSector();
+  return <SidebarSector {...props} sector={sector} />;
+}
+function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
   const [manualLat, setManualLat] = useState("");
@@ -280,7 +285,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
                 </div>
                 {/* Planta de descarga (vertedero, planta de transferencia…): el Scheduling manda ahí a los camiones cuando se llenan */}
-                <button
+                {(sector.ver.plantas || d.planta) && <button
                   title={d.planta ? "Es una planta de descarga: los camiones descargan aquí. Pulsa para que vuelva a ser depósito." : "Marcar como planta de descarga (vertedero, planta de transferencia…)"}
                   onClick={() => {
                     const cambio = l => l.map(x => (x.id === d.id ? { ...x, planta: !x.planta } : x));
@@ -289,7 +294,7 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
                   }}
                   style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? "#3fcf8e" : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
                   {d.planta ? "Planta" : "Depósito"}
-                </button>
+                </button>}
                 <button
                   onClick={() => {
                     if (projectId) {
@@ -570,14 +575,14 @@ export function Sidebar({ layers, setLayers, onUpload, uploading, depots, setDep
       <LineasPanel grupos={gtfsGrupos} sel={lineaSel} onSel={setLineaSel} verTodas={verTodasLineas} setVerTodas={setVerTodasLineas} />
 
       <FilterChipsSection
-        label="Tipo de fracción"
+        label={sector.t.tipoCategoria}
         layers={layers}
         getValue={getFraccion}
         active={fraccionFilter}
         onSelect={setFraccionFilter}
       />
       <FilterChipsSection
-        label="Tipo de contenedor"
+        label={sector.t.tipoElemento}
         layers={layers}
         getValue={getContenedor}
         active={contenedorFilter}

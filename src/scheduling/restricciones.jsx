@@ -10,12 +10,14 @@ import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restri
 import { CAPACIDAD_DEFECTO } from "./capacidad.js";
 import { DIAS, FRECUENCIAS_DEFECTO } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
+import { useSector } from "../sector.js";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
 const AL_ENCENDER = { maxStops: 100, maxDays: 5, virtualShiftMin: 480, costeKm: 0.9, maxShiftMin: 480, breakAfter: 240, costeHora: 22 };
 
 // ── CONSTRAINTS PANEL ─────────────────────────────────────────────
 export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
+  const sector = useSector();
   const lang = useLang();
   const set = (key, val) => onChange({ ...c, [key]: val });
 
@@ -111,7 +113,7 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
           )],
         ] : []),
       ] },
-      { id: "capacidad", nombre: "Capacidad y descargas", items: [
+      ...(sector.ver.capacidad || c.usarCapacidad ? [{ id: "capacidad", nombre: "Capacidad y descargas", items: [
         ["usarCapacidad", "Tener en cuenta lo que cabe en el camión", <Interruptor on={!!c.usarCapacidad} onCambiar={v => onChange({ ...CAPACIDAD_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarCapacidad: v })} />, "Cada camión carga lo que pone su ficha (Flota → Capacidad, m³). Cuando la siguiente parada no cabe, va a la planta de descarga más cercana, descarga y sigue; y descarga al final antes de volver al depósito. Las plantas se marcan en Planning → Depots («Planta»); si no hay, descarga en su depósito."],
         ...(c.usarCapacidad ? [
           ["llenadoPct", "Llenado medio de los contenedores", numero("llenadoPct", 1, 100, "%")],
@@ -119,7 +121,7 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
           ["litrosPorDefecto", "Contenedor si el Excel no lo dice", numero("litrosPorDefecto", 1, 10000, "litros"), "El volumen se lee de una columna «Litros»/«Volumen»/«Capacidad» o del tipo de contenedor («3200 L»); si no hay, se usa este."],
           ["tiempoDescarga", "Tiempo en la planta (cola + descarga)", numero("tiempoDescarga", 0, 240, "min")],
         ] : []),
-      ] },
+      ] }] : []),
       { id: "coste-v", nombre: "Coste", items: [
         ["costeKm", "Coste por km", limite("costeKm", null, "€/km", { decimal: true }), "Para el coste estimado de los indicadores."],
       ] },

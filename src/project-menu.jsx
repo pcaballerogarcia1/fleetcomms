@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { duplicarProyecto, nombreCopia } from "./project-copy.js";
 import { logAudit } from "./audit.js";
+import { SECTORES, sectorDe } from "./sector.js";
 
 const C = {
   bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
   text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", red: "#f26d6d",
 };
 const font = "var(--font)";
-export function ProjectMenu({ activeProject, onOpenProject }) {
+export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
   const [open, setOpen] = useState(false);
   const [modo, setModo] = useState("menu"); // menu | duplicar
   const [nombre, setNombre] = useState("");
@@ -75,7 +76,21 @@ export function ProjectMenu({ activeProject, onOpenProject }) {
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.45)",
           padding: 8, fontFamily: font,
         }}>
-          {modo === "menu" ? (
+          {modo === "menu" ? (<>
+            {activeProject.tipo !== "lineas" && onProjectUpdate && (
+              <div style={{ padding: "6px 10px 10px", borderBottom: `1px solid ${C.border}`, marginBottom: 6 }}>
+                <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Sector del proyecto</label>
+                <select value={sectorDe(activeProject).id} onChange={e => {
+                  const s = sectorDe(e.target.value);
+                  onProjectUpdate({ sector: s.id }).catch(err => setError(err.message || String(err)));
+                  logAudit({ modulo: "Proyectos", accion: "Cambió el sector", detalle: `${activeProject.nombre} → ${s.nombre}`, projectId: activeProject._id, proyecto: activeProject.nombre, orgId: activeProject.org_id });
+                }} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: font, colorScheme: "dark" }}>
+                  {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 4, lineHeight: 1.4 }}>Cambia las palabras de las pantallas ({sectorDe(activeProject).t.elementos}…) y oculta lo que no aplica.</div>
+                {error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 4 }}>{error}</div>}
+              </div>
+            )}
             <button role="menuitem" onClick={() => { setNombre(nombreCopia(activeProject.nombre)); setModo("duplicar"); }} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 7,
               background: "none", border: "none", color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer", textAlign: "left",
@@ -91,7 +106,7 @@ export function ProjectMenu({ activeProject, onOpenProject }) {
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 1 }}>Copia puntos, depósitos, horarios, precios y escenario</div>
               </span>
             </button>
-          ) : (
+          </>) : (
             <form onSubmit={e => { e.preventDefault(); duplicar(); }} style={{ padding: 6 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>Duplicar «{activeProject.nombre}»</div>
               <label style={{ fontSize: 11, color: C.muted }}>Nombre de la copia</label>

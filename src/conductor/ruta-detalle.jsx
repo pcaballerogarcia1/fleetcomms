@@ -8,6 +8,7 @@ import { leerKg } from "../pesadas.js";
 import { apuntarPesada } from "../pesadas-store.js";
 import { MapaLeaflet } from "./ui.jsx";
 import { NAVEGADORES, abrirNavegacion, elegirNavegador, enlacesContacto, navegadorElegido, telefonoDe, useDictado } from "./contacto.js";
+import { sectorDe } from "../sector.js";
 
 // Botón de dictar con la voz (solo si el móvil lo permite)
 function BotonDictar({ d }) {
@@ -37,7 +38,7 @@ function ContactoParada({ ub }) {
 // ── LECTOR RFID ───────────────────────────────────────────────────
 // Lector por USB/Bluetooth (escribe el código + Intro) o NFC del móvil: la
 // etiqueta leída marca su contenedor y, si era el último, la parada.
-function LectorRfid({ubicaciones,onLeido}){
+function LectorRfid({ubicaciones,onLeido,codigo="código"}){
   const [texto,setTexto]=useState("");
   const [aviso,setAviso]=useState(null);
   const [nfc,setNfc]=useState(false);
@@ -62,7 +63,7 @@ function LectorRfid({ubicaciones,onLeido}){
   return(
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px",marginBottom:10}}>
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Leer RFID / código del contenedor"
+        <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder={`Leer RFID / ${codigo}`}
           onKeyDown={e=>{if(e.key==="Enter"&&texto.trim()){leer(texto.trim());setTexto("");}}}
           style={{flex:1,minWidth:0,background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
         {hayNfc()&&<button onClick={activarNfc} style={{...(nfc?S.btnOk:S.btnGhost),fontSize:11,padding:"7px 10px",flexShrink:0}}>{nfc?"NFC activo":"NFC"}</button>}
@@ -445,8 +446,8 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             </div>
           </div>
         )}
-        {plan.origenVRP&&<ApuntarPesada plan={plan} sesion={sesion}/>}
-        {totalQR>0&&<LectorRfid ubicaciones={ubicaciones} onLeido={(ubicId,qr)=>marcarQR(ubicId,qr,true)}/>}
+        {plan.origenVRP&&sectorDe(plan).ver.pesadas&&<ApuntarPesada plan={plan} sesion={sesion}/>}
+        {totalQR>0&&<LectorRfid ubicaciones={ubicaciones} codigo={sectorDe(plan).t.codigo} onLeido={(ubicId,qr)=>marcarQR(ubicId,qr,true)}/>}
         <button onClick={()=>setVerMapa(v=>!v)} style={{...S.btnGhost,width:"100%",marginBottom:8,borderColor:verMapa?C.blue:C.border,color:verMapa?C.blueText:C.muted}}>
           <MapIcon size={15} style={{verticalAlign:"-3px",marginRight:6}}/>{verMapa?"Ocultar mapa":"Ver mapa del recorrido"}
         </button>

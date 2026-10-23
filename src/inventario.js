@@ -17,14 +17,16 @@ const columna = (campos, re) => {
   const k = Object.keys(campos || {}).find(c => re.test(norm(c)));
   return k != null && String(campos[k]).trim() ? String(campos[k]).trim() : "";
 };
-const RE_CODIGO = /^(codigo|cod|cod\.? contenedor|codigo contenedor|id contenedor|id_contenedor|n[ºo°]? ?contenedor|num(ero)? contenedor|matricula contenedor|id)$/;
+// (también las columnas de contadores y de otros sectores: nº de serie, calibre, tipo de contador…)
+const RE_CODIGO = /^(codigo|cod|cod\.? contenedor|codigo contenedor|id contenedor|id_contenedor|n[ºo°]? ?contenedor|num(ero)? contenedor|matricula contenedor|id|n[ºo°]? ?(de )?serie|num(ero)? (de )?serie|serie|codigo contador|id contador|codigo elemento|id elemento)$/;
 const RE_RFID = /rfid|^tag|chip|transponder/;
-const RE_TIPO = /^(contenedor|tipo contenedor|tipo_contenedor|tipocontenedor|modelo contenedor|modelo_contenedor|tipo)$/;
-const RE_FRACCION = /^(fraccion|fracción|residuo|tipo residuo|tipo_residuo|flujo)$/;
+const RE_TIPO = /^(contenedor|tipo contenedor|tipo_contenedor|tipocontenedor|modelo contenedor|modelo_contenedor|tipo|tipo (de )?contador|modelo|tipo (de )?elemento)$/;
+const RE_FRACCION = /^(fraccion|fracción|residuo|tipo residuo|tipo_residuo|flujo|calibre|categoria)$/;
 
 /** Una ficha a partir de un punto de Planning */
 export function fichaDePunto(m, i = 0) {
-  const campos = m.campos || m.fields || {};
+  // las capas subidas de un CSV/Excel traen las columnas sueltas en el punto, no en «campos»
+  const campos = m.campos || m.fields || Object.fromEntries(Object.entries(m).filter(([k]) => !/^(_|lat$|lng$|id$)/.test(k)));
   const codigo = columna(campos, RE_CODIGO);
   const litros = litrosDe({ campos });
   return {

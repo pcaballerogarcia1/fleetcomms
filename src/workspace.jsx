@@ -12,6 +12,7 @@ import { OnlineUsers } from "./presence-bar.jsx";
 import { AuditButton } from "./audit-panel.jsx";
 import { HelpButton } from "./help-panel.jsx";
 import { ProjectMenu } from "./project-menu.jsx";
+import { fijarSector } from "./sector.js";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { setErrorUser } from "./error-report.js";
@@ -70,7 +71,7 @@ function go(path) {
 }
 
 // ── Shared header ─────────────────────────────────────────────────
-function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject }) {
+function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject, onProjectUpdate }) {
   const lang = useLang();
   const crumb = (label, href, active) => (
     <button onClick={() => go(href)} style={{
@@ -113,7 +114,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         {activeProject && !activeProject.concurso && <>
           <span style={{ color: "rgba(255,255,255,0.12)", margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
           {/* Nombre del proyecto: al pincharlo, menú con "Duplicar proyecto" */}
-          <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} />
+          <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} onProjectUpdate={onProjectUpdate} />
           <span style={{ width: 1, height: 18, background: C.border, margin: "0 8px" }} />
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
@@ -244,6 +245,8 @@ export function WorkspaceRouter() {
   // Planes antiguos sin conductorUid: los arregla quien gestiona rutas al entrar
   useEffect(() => { repararPlanesSinConductor(sesion).catch(e => console.warn("[planes] arreglo de planes antiguos:", e)); }, [sesion]);
   useEffect(() => { setAuditProject(activeProject); }, [activeProject]);
+  // las palabras de las pantallas según el sector del proyecto (residuos, contadores…)
+  useEffect(() => { fijarSector(activeProject?.sector); }, [activeProject?.sector]);
   // Los depots del proyecto abierto, en la lista de la empresa para fichar (fichaje-depots.js)
   useEffect(() => {
     const pid = activeProject?._id, org = sesion?.org_id;
@@ -360,7 +363,7 @@ export function WorkspaceRouter() {
   // uploaded layers state across navigation within the same project)
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.bg, fontFamily: font }}>
-      {!fullscreen && <TopBar sesion={sesion} activeProject={activeProject} path={path} onLogout={logout} onFullscreen={() => setFullscreen(true)} onOpenProject={openProject} />}
+      {!fullscreen && <TopBar sesion={sesion} activeProject={activeProject} path={path} onLogout={logout} onFullscreen={() => setFullscreen(true)} onOpenProject={openProject} onProjectUpdate={updateProject} />}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
         {/* /projects — unmounts when leaving (no heavy state to preserve) */}
