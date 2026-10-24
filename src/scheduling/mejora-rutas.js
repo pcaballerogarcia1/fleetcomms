@@ -86,7 +86,20 @@ export function simular(ruta, cons) {
   }
   if (x > finDia + 1e-9) return { ok: false };
   if (ruta.aut != null && km > ruta.aut + 1e-9) return { ok: false }; // autonomía del vehículo
-  if (maxShiftMin > 0 && x - ini > maxShiftMin * (1 - margen) + 1e-9) return { ok: false };
+  if (maxShiftMin > 0) {
+    // la duración máxima es de cada conductor: con relevos, cada uno desde el inicio de su turno
+    const lim = maxShiftMin * (1 - margen) + 1e-9;
+    const cortes = (sh.breaks || []).map(b => b + off).filter(b => b > ini && b < sh.end + off).sort((a, b) => a - b);
+    if (!cortes.length) { if (x - ini > lim) return { ok: false }; }
+    else {
+      if (items.some(a => !a._travel && !a._wait && cortes.some(b => a._start < b && a._end > b))) return { ok: false }; // nada a caballo de un relevo
+      const bordes = [ini, ...cortes];
+      for (let k = 0; k < bordes.length; k++) {
+        const suyos = items.filter(a => a._start >= bordes[k] && (k + 1 >= bordes.length || a._start < bordes[k + 1]));
+        if (suyos.length && Math.max(...suyos.map(a => a._end)) - bordes[k] > lim) return { ok: false };
+      }
+    }
+  }
   return { ok: true, items, km, fin: x, conduccion };
 }
 

@@ -271,7 +271,12 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
     // control, cualquiera de los dos podía insertar una parada que alargara
     // el turno más allá del límite configurado, dejando jornadas de más de
     // 8h aunque el límite estuviera puesto.
-    if (maxShiftMin > 0 && (taskEnd - dayStart) > maxShiftMin) continue;
+    // Con relevo de conductor, cuenta desde que empezó el turno de ese conductor.
+    if (maxShiftMin > 0) {
+      let iniTurno = dayStart;
+      for (const b of shiftBoundaries) if (b <= prevEnd && b > iniTurno) iniTurno = b;
+      if (taskEnd - iniTurno > maxShiftMin) continue;
+    }
 
     const originalDirectKm = kmRuta(prevLat, prevLng, nextLat, nextLng);
     if (kmHoy + (inKm + outKm) - originalDirectKm > aut) continue; // se pasaría de su autonomía
@@ -522,7 +527,8 @@ export function reorderByWindowHint(queue, shiftStart, shiftEnd) {
 const MAX_AUTO_DAYS = 365; // safety cap for auto-day expansion
 
 export async function generateScenario(tasks, resources, constraints) {
-  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular, optimizeWeight, virtualShiftMin } = constraints;
+  const { maxShiftMin, maxStops, breakDur, breakAfter, startMin: winStart, endMin: winEnd, maxDays, circular, optimizeWeight } = constraints;
+  const virtualShiftMin = constraints.virtualShiftMin > 0 || constraints.personalNecesarioMaxMin > 0; // jornada fija de los añadidos: repartir por tiempo
   const dayCap = maxDays > 0 ? maxDays : MAX_AUTO_DAYS;
 
   if (!resources.length) return { schedule: [], unassigned: [...tasks], daysUsed: 1 };
@@ -784,7 +790,11 @@ export async function generateScenario(tasks, resources, constraints) {
       // punto de vuelta es la ubicación de la primera parada del propio día
       // (anchor se fija dinámicamente más abajo). Con circular=false,
       // segEnds=[dayEnd] reproduce exactamente el comportamiento anterior.
-      const segEnds = circular && sh.breaks.length
+      // Un tramo por conductor (relevos del vehículo). La «duración máxima de
+      // turno» es de cada conductor: se cuenta desde el inicio de su tramo.
+      // Sin circular, en el relevo no se vuelve a la base: el siguiente
+      // conductor sigue desde donde esté el vehículo.
+      const segEnds = sh.breaks.length
         ? [...sh.breaks.map(b => b + dayOffset), dayEnd]
         : [dayEnd];
 
@@ -833,6 +843,8 @@ export async function generateScenario(tasks, resources, constraints) {
         // perder trabajo real que sí cabía por una estimación de reparto
         // que se queda corta.
         const effSegEnd = segTargets ? segTargets[segIdx] : segEnd;
+        // al acabar este tramo, ¿vuelve a la base? (circular, o fin de jornada)
+        const vuelveAqui = circular || segIdx === segEnds.length - 1;
         // Si el head-of-queue es inviable para este tramo (p.ej. demasiado lejos
         // del anchor para volver a tiempo, o su franja horaria ya no se puede
         // cumplir), busca hasta 40 tareas por delante y adelanta la que MENOS
@@ -852,7 +864,7 @@ export async function generateScenario(tasks, resources, constraints) {
         function tryLookaheadSwap() {
           if (queueIdx[i] >= queue.length) return false;
           const LOOK = Math.min(40, queue.length - queueIdx[i]);
-          const tWorkSoFar = cursor - dayStart0;
+          const tWorkSoFar = cursor - segStarts[segIdx];
           let swapTo = -1, bestWait = Infinity;
           for (let li = 0; li < LOOK; li++) {
             const t = queue[queueIdx[i] + li];
@@ -867,7 +879,7 @@ export async function generateScenario(tasks, resources, constraints) {
             let tRet = 0, tRetKm = 0;
             if (anchor && hasCoords(t.lat, t.lng)) {
               const rkm = kmRuta(+t.lat, +t.lng, anchor.lat, anchor.lng);
-              if (rkm >= 0.05) { tRet = Math.max(1, Math.ceil(minutosRuta(rkm))); tRetKm = rkm; }
+              if (rkm >= 0.05) { tRet = vuelveAqui ? Math.max(1, Math.ceil(minutosRuta(rkm))) : 0; tRetKm = rkm; }
             }
             const tKmIda = hasCoords(lastLat, lastLng) && hasCoords(t.lat, t.lng) ? kmRuta(lastLat, lastLng, t.lat, t.lng) : 0;
             const fits = cursor + ttMin + tWait + tdur + tRet <= effSegEnd
@@ -938,11 +950,11 @@ export async function generateScenario(tasks, resources, constraints) {
             const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
             if (hasCoords(refLat, refLng)) {
               const retKmEst = kmRuta(refLat, refLng, anchor.lat, anchor.lng);
-              if (retKmEst >= 0.05) { retBuffer = Math.max(1, Math.ceil(minutosRuta(retKmEst))); retKmAut = retKmEst; }
+              if (retKmEst >= 0.05) { retBuffer = vuelveAqui ? Math.max(1, Math.ceil(minutosRuta(retKmEst))) : 0; retKmAut = retKmEst; }
             }
           }
 
-          const workSoFar = cursor - dayStart0;
+          const workSoFar = cursor - segStarts[segIdx];
           const feasible = wait != null
             && !(maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin)
             && (cursor + travelMin + wait + dur + retBuffer <= effSegEnd)
@@ -981,7 +993,7 @@ export async function generateScenario(tasks, resources, constraints) {
         }
 
         // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
-        if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
+        if (vuelveAqui && anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
           const retKm = kmRuta(lastLat, lastLng, anchor.lat, anchor.lng);
           if (retKm >= 0.05) {
             const retMin = Math.max(1, Math.ceil(minutosRuta(retKm)));
@@ -996,7 +1008,7 @@ export async function generateScenario(tasks, resources, constraints) {
 
         // El siguiente tramo (relevo de conductor) empieza en su hora fija,
         // no antes aunque el anterior haya terminado con margen.
-        if (anchor) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
+        if (anchor && vuelveAqui) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
         cursor = Math.max(cursor, segEnd);
       }
     }
@@ -1029,7 +1041,7 @@ export async function generateScenario(tasks, resources, constraints) {
       const dEnd = bSh.end + dOff;
       if (bSh.start + dOff >= dEnd) continue;
 
-      const segEnds = circular && bSh.breaks.length
+      const segEnds = bSh.breaks.length
         ? [...bSh.breaks.map(b => b + dOff), dEnd]
         : [dEnd];
 
@@ -1040,7 +1052,8 @@ export async function generateScenario(tasks, resources, constraints) {
       let anchor  = eDepot;
       let sinceB  = 0;
 
-      for (const segEnd of segEnds) {
+      for (const [segI, segEnd] of segEnds.entries()) {
+        const vuelveB = circular || segI === segEnds.length - 1;
         let pi = 0;
         let backfillIterations = 0;
         while (pi < sortedQueues[i].length) {
@@ -1085,7 +1098,7 @@ export async function generateScenario(tasks, resources, constraints) {
           sortedQueues[i].splice(pi, 1); // remove assigned task; pi stays (next shifts down)
         }
 
-        if (anchor && hasCoords(lLat, lLng) && (lLat !== anchor.lat || lLng !== anchor.lng)) {
+        if (vuelveB && anchor && hasCoords(lLat, lLng) && (lLat !== anchor.lat || lLng !== anchor.lng)) {
           const rKm = kmRuta(lLat, lLng, anchor.lat, anchor.lng);
           if (rKm >= 0.05) {
             const rMin = Math.max(1, Math.ceil(minutosRuta(rKm)));
@@ -1094,7 +1107,7 @@ export async function generateScenario(tasks, resources, constraints) {
           }
         }
 
-        if (anchor) { lLat = anchor.lat; lLng = anchor.lng; fromDep = true; }
+        if (anchor && vuelveB) { lLat = anchor.lat; lLng = anchor.lng; fromDep = true; }
         cur = Math.max(cur, segEnd);
       }
     }
@@ -1137,7 +1150,7 @@ export async function generateScenario(tasks, resources, constraints) {
         const dSh = shiftForDay(res, dayOffset / 1440);
         if (!dSh) continue;
         const dayEnd = dSh.end + dayOffset;
-        const segEnds = circular && dSh.breaks.length
+        const segEnds = dSh.breaks.length
           ? [...dSh.breaks.map(b => b + dayOffset), dayEnd]
           : [dayEnd];
         const segStarts = [dSh.start + dayOffset, ...segEnds.slice(0, -1)];
@@ -1239,9 +1252,10 @@ export async function generateScenario(tasks, resources, constraints) {
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
         const dayEnd = mSh.end + dayOffset;
-        const segEnds = circular && mSh.breaks.length
+        const segEnds = mSh.breaks.length
           ? [...mSh.breaks.map(b => b + dayOffset), dayEnd]
           : [dayEnd];
+        const segStartsM = [mSh.start + dayOffset, ...segEnds.slice(0, -1)];
 
         let cursor     = mSh.start + dayOffset;
         let sinceBreak = 0;
@@ -1250,7 +1264,8 @@ export async function generateScenario(tasks, resources, constraints) {
         let fromDepot  = !!depot;
         let anchor     = depot;
 
-        for (const segEnd of segEnds) {
+        for (const [segI, segEnd] of segEnds.entries()) {
+          const vuelveM = circular || segI === segEnds.length - 1;
           // Scan every remaining pool task; assign what fits, skip what doesn't.
           // No retBuffer check here — the return-to-anchor leg is appended after
           // the loop and may slightly overshoot segEnd, acceptable for the mop-up.
@@ -1273,7 +1288,7 @@ export async function generateScenario(tasks, resources, constraints) {
             }
 
             const wait = windowWait(task, cursor + travelMin, dayOffset);
-            const workSoFar = cursor - (mSh.start + dayOffset);
+            const workSoFar = cursor - segStartsM[segI]; // del conductor de este tramo
             const fitsShift   = wait != null && (maxShiftMin <= 0 || workSoFar + travelMin + wait + dur <= maxShiftMin);
             const fitsSeg     = wait != null && cursor + travelMin + wait + dur <= segEnd;
 
@@ -1305,7 +1320,7 @@ export async function generateScenario(tasks, resources, constraints) {
           }
 
           // Vuelta al anchor (depósito, o primera parada del día si es circular sin depósito)
-          if (anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
+          if (vuelveM && anchor && hasCoords(lastLat, lastLng) && (lastLat !== anchor.lat || lastLng !== anchor.lng)) {
             const retKm = kmRuta(lastLat, lastLng, anchor.lat, anchor.lng);
             if (retKm >= 0.05) {
               const retMin = Math.max(1, Math.ceil(minutosRuta(retKm)));
@@ -1314,7 +1329,7 @@ export async function generateScenario(tasks, resources, constraints) {
             }
           }
 
-          if (anchor) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
+          if (anchor && vuelveM) { lastLat = anchor.lat; lastLng = anchor.lng; fromDepot = true; }
           cursor = Math.max(cursor, segEnd);
         }
       }
@@ -1670,6 +1685,36 @@ const MAX_VIRTUAL_VEHICLES = 5000;
 // Las paradas a las que ningún vehículo llega con su autonomía se quedan sin
 // asignar desde el principio (marcadas _fueraAutonomia): si no, el auto-escalado
 // añadiría vehículos ronda tras ronda intentando colocarlas.
+/**
+ * La jornada de los vehículos y del personal que añade el auto-escalado
+ * («Vehículo necesario N» y sus «Conductor necesario»):
+ *  · vehiculoNecesarioMaxMin: lo que trabaja el vehículo desde la hora de
+ *    inicio (0 = sin límite = 24 h);
+ *  · personalNecesarioMaxMin: lo que trabaja cada persona; el día del vehículo
+ *    se parte en turnos de esa duración, uno por conductor (0 = uno solo).
+ * Escenarios guardados antes de estos dos ajustes (sin ellos): el vehículo,
+ * la ventana de «Jornada y horario» y el personal, virtualShiftMin, como antes.
+ * @returns { start, end, breaks, personalMin }
+ */
+export function jornadasNecesarias(cons) {
+  const start = cons.startMin ?? 360;
+  const nuevos = cons.vehiculoNecesarioMaxMin != null || cons.personalNecesarioMaxMin != null;
+  let span, persona;
+  if (nuevos) {
+    span = Number(cons.vehiculoNecesarioMaxMin) > 0 ? Math.min(1440, Number(cons.vehiculoNecesarioMaxMin)) : 1440;
+    persona = Number(cons.personalNecesarioMaxMin) > 0 ? Number(cons.personalNecesarioMaxMin) : 0;
+  } else {
+    const win = (cons.endMin ?? 1320) - start;
+    const v = Number(cons.virtualShiftMin) > 0 ? Number(cons.virtualShiftMin) : 0;
+    span = v ? Math.min(win, Math.max(1, Math.floor(win / v)) * v) : win;
+    persona = v;
+  }
+  span = Math.max(1, span);
+  const breaks = [];
+  if (persona > 0) for (let b = start + persona; b < start + span; b += persona) breaks.push(b);
+  return { start, end: start + span, breaks, personalMin: persona || span };
+}
+
 export async function autoScaleFleet(tasks, baseResources, constraints, onProgress) {
   const fuera = [], dentro = [];
   for (const t of tasks) (fueraDeAutonomia(t, baseResources) ? fuera : dentro).push(t);
@@ -1695,9 +1740,9 @@ async function autoScaleFleetTodas(tasks, baseResources, constraints, onProgress
   // Sin esto, cada vehículo nuevo solo tenía un conductor anclado a la
   // mañana y la tarde quedaba sin usar, obligando a añadir más vehículos de
   // los necesarios.
-  const virtualShiftMin = constraints.virtualShiftMin > 0 ? constraints.virtualShiftMin : null;
-  const winSpan          = constraints.endMin - constraints.startMin;
-  const shiftsPerVehicle = virtualShiftMin ? Math.max(1, Math.floor(winSpan / virtualShiftMin)) : 1;
+  // Ahora son dos ajustes (ver jornadasNecesarias): la jornada del vehículo
+  // añadido (sin límite = 24 h) y la de su personal (sin límite = una persona).
+  const jn = jornadasNecesarias(constraints);
 
   // Cuántas rondas seguidas sin BATIR el mínimo de sin-asignar visto hasta
   // ahora toleramos antes de rendirnos. Una tarea con franja horaria muy
@@ -1786,15 +1831,10 @@ async function autoScaleFleetTodas(tasks, baseResources, constraints, onProgress
         // la autonomía de la flota, si todos sus vehículos la tienen (la mayor)
         autonomiaKm: baseResources.length && baseResources.every(r => autonomiaDe(r) < Infinity) ? Math.max(...baseResources.map(autonomiaDe)) : null,
         _virtual: true,
-        _effectiveStart: constraints.startMin,
-        _effectiveEnd: virtualShiftMin
-          ? Math.min(constraints.endMin, constraints.startMin + shiftsPerVehicle * virtualShiftMin)
-          : constraints.endMin,
+        _effectiveStart: jn.start,
+        _effectiveEnd: jn.end,
       };
-      if (virtualShiftMin && shiftsPerVehicle > 1) {
-        veh._shiftBreaks = Array.from({ length: shiftsPerVehicle - 1 },
-          (_, s) => constraints.startMin + (s + 1) * virtualShiftMin);
-      }
+      if (jn.breaks.length) veh._shiftBreaks = [...jn.breaks];
       return veh;
     });
 
@@ -1893,7 +1933,7 @@ async function autoScaleFleetTodas(tasks, baseResources, constraints, onProgress
 
     const totalWorkMin = result.schedule.reduce((s, r) =>
       s + r.assignments.reduce((ss, a) => ss + (a._break ? 0 : (a.duracion || 0)), 0), 0);
-    const perVehicleCapacity = Math.max(1, virtualShiftMin ? shiftsPerVehicle * virtualShiftMin : winSpan);
+    const perVehicleCapacity = Math.max(1, jn.end - jn.start);
     const estimate = Math.min(resources.length, Math.max(baseResources.length,
       Math.ceil((totalWorkMin / perVehicleCapacity) * 1.15)));
 

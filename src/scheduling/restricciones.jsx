@@ -4,7 +4,7 @@ import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp,
 import { useEffect, useState } from "react";
 import { db } from "../firebase.js";
 import { t, useLang } from "../i18n.js";
-import { minToTime, timeToMin } from "../vrp-engine.js";
+import { jornadasNecesarias, minToTime, timeToMin } from "../vrp-engine.js";
 import { C, font, mono } from "./estilo.js";
 import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restricciones.jsx";
 import { CAPACIDAD_DEFECTO } from "./capacidad.js";
@@ -13,10 +13,20 @@ import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import { useSector } from "../sector.js";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
-const AL_ENCENDER = { maxStops: 100, maxDays: 5, virtualShiftMin: 480, costeKm: 0.9, maxShiftMin: 480, breakAfter: 240, costeHora: 22 };
+const AL_ENCENDER = { maxStops: 100, maxDays: 5, vehiculoNecesarioMaxMin: 960, personalNecesarioMaxMin: 480, costeKm: 0.9, maxShiftMin: 480, breakAfter: 240, costeHora: 22 };
 
 // ── CONSTRAINTS PANEL ─────────────────────────────────────────────
-export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
+// Escenarios de antes: «Jornada de los añadidos» (virtualShiftMin) pasa a los
+// dos ajustes nuevos con lo que hacía (el motor lo lee igual; ver jornadasNecesarias)
+function conJornadasNuevas(c) {
+  if (c.vehiculoNecesarioMaxMin != null || c.personalNecesarioMaxMin != null) return c;
+  const jn = jornadasNecesarias(c);
+  const span = jn.end - jn.start;
+  return { ...c, vehiculoNecesarioMaxMin: span >= 1440 ? 0 : span, personalNecesarioMaxMin: Number(c.virtualShiftMin) > 0 ? Number(c.virtualShiftMin) : 0, virtualShiftMin: 0 };
+}
+
+export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
+  const c = conJornadasNuevas(c0);
   const sector = useSector();
   const lang = useLang();
   const set = (key, val) => onChange({ ...c, [key]: val });
@@ -87,7 +97,7 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
       ] },
       { id: "flota", nombre: "Días y flota necesaria", items: [
         ["maxDays", "Días máximos del escenario", limite("maxDays", 365, "días"), "Si con la flota actual no caben todas las paradas en esos días, se añaden los vehículos y conductores necesarios («Vehículo necesario 1»…). Apagado: los días que hagan falta."],
-        ...(c.maxDays > 0 ? [["virtualShiftMin", "Jornada de los añadidos", limite("virtualShiftMin", 1440, "min"), "Apagado: jornada completa."]] : []),
+        ...(c.maxDays > 0 ? [["vehiculoNecesarioMaxMin", "Jornada máxima del vehículo necesario", limite("vehiculoNecesarioMaxMin", 1440, "min"), "Cuánto trabaja cada vehículo que se añade, desde la hora de inicio de «Jornada y horario». Sin límite: 24 horas."]] : []),
       ] },
       { id: "frecuencias", nombre: "Frecuencias (ruta maestra)", items: [
         ["usarFrecuencias", "Hacer la ruta maestra semanal", <Interruptor on={!!c.usarFrecuencias} onCambiar={v => onChange({ ...FRECUENCIAS_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarFrecuencias: v })} />, "El escenario es la semana tipo: cada parada sale los días de su frecuencia y cada vehículo trabaja siempre la misma zona. La frecuencia se lee de una columna del Excel («Frecuencia», «Días»): días («L,X,V», «lunes y jueves», «L-V», «diaria») o veces por semana («3», «2/semana»); las de veces se colocan en días separados y equilibrando la zona."],
@@ -128,7 +138,8 @@ export function ConstraintsPanel({ c, onChange, orgId, onCerrar }) {
     ] },
     { id: "conductores", nombre: "Trabajadores", icono: <IconoCategoria tipo="conductores" />, secs: [
       { id: "jornada", nombre: "Jornada y horario", items: [
-        ["maxShiftMin", "Duración máxima de turno", limite("maxShiftMin", 1440, "min")],
+        ["maxShiftMin", "Duración máxima de turno", limite("maxShiftMin", 1440, "min"), "De cada conductor: si un vehículo tiene relevo (mañana y tarde), cada uno cuenta desde que empieza su turno."],
+        ...(c.maxDays > 0 ? [["personalNecesarioMaxMin", "Jornada máxima del personal necesario", limite("personalNecesarioMaxMin", 1440, "min"), "Cuánto trabaja cada persona que se añade: el día de cada vehículo necesario se parte en turnos de esta duración, uno por persona (16 h de vehículo con 8 h de personal = 2 conductores). Sin límite: una sola persona todo el día del vehículo."]] : []),
         ["startMin", "Ventana: hora de inicio", hora("startMin")],
         ["endMin", "Ventana: hora de fin", hora("endMin")],
       ] },

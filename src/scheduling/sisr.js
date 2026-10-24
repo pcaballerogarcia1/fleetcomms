@@ -145,7 +145,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   const conFranja = i => tareas[i].franja;
   const cuantas = seq => seq.reduce((n, i) => n + tareas[i].miembros.length, 0); // contenedores (para el tope de paradas)
   const paradasDe = seq => seq.flatMap(i => tareas[i].miembros);
-  for (const r of vivas) r.lenta = conPausas; // con pausas, se comprueban con simular
+  for (const r of vivas) r.lenta = conPausas || !!r.sh?.breaks?.length; // con pausas o relevos, se comprueban con simular
 
   // vecinas de cada tarea (por tiempo, del mismo día), para elegir qué tramos quitar
   const porDia = new Map();
