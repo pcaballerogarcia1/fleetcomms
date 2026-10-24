@@ -282,14 +282,15 @@ const VehicleSelect = ({ value, onChange, vehicles, selStyle }) => (
 );
 
 // La ficha del trabajador (DNI, nacimiento, nacionalidad, categoría, contacto…), plegable
-function FichaCampos({ obj, setObj, selStyle }) {
-  const [abierta, setAbierta] = useState(() => CAMPOS_FICHA.some(c => obj[c.k]));
+function FichaCampos({ obj, setObj, selStyle, siempre = false }) {
+  const [abierta0, setAbierta] = useState(() => CAMPOS_FICHA.some(c => obj[c.k]));
+  const abierta = siempre || abierta0;
   const rellenos = CAMPOS_FICHA.filter(c => obj[c.k] !== "" && obj[c.k] != null).length;
   return (
     <div style={{ marginTop: 10 }}>
-      <button type="button" onClick={() => setAbierta(a => !a)} style={{ background: "none", border: "none", color: C.blueText, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: font }}>
+      {!siempre && <button type="button" onClick={() => setAbierta(a => !a)} style={{ background: "none", border: "none", color: C.blueText, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: font }}>
         {abierta ? "▾" : "▸"} Ficha del trabajador {rellenos ? `(${rellenos} datos)` : ""}
-      </button>
+      </button>}
       {abierta && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
           {CAMPOS_FICHA.map(c => (
@@ -384,7 +385,8 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
   );
 
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 900 }}>
+    <div style={{ flex: 1, overflow: "auto", padding: 24, display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <div style={{ flex: "1 1 520px", maxWidth: 720, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Trabajadores</div>
@@ -426,7 +428,6 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
             }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
-          <FichaCampos obj={form} setObj={setForm} selStyle={selStyle} />
           <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
       )}
@@ -467,7 +468,6 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   Cancelar
                 </button>
               </div>
-              <FichaCampos obj={editForm} setObj={setEditForm} selStyle={selStyle} />
               <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
@@ -512,6 +512,25 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
           ))}
         </div>
       )}
+    </div>
+    {/* la ficha del trabajador que se está editando o dando de alta, a la derecha */}
+    {(adding || editId) && (() => {
+      const nuevo = adding && !editId;
+      const obj = nuevo ? form : editForm, setObj = nuevo ? setForm : setEditForm;
+      return (
+        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 16, animation: "sched-fadein .15s ease both" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del trabajador nuevo" : `de ${[obj.nombre, obj.apellidos].filter(Boolean).join(" ") || "…"}`}</div>
+            <span style={{ fontSize: 11, color: C.dim }}>Se guarda con «Guardar»</span>
+          </div>
+          <FichaCampos obj={obj} setObj={setObj} selStyle={selStyle} siempre />
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} style={{ padding: "8px 18px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font, opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
+          </div>
+        </div>
+      );
+    })()}
     </div>
   );
 }
