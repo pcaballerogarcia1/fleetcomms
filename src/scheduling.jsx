@@ -16,40 +16,15 @@ export { TabProyectos } from "./scheduling/proyectos.jsx";
 
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
 export function SchedulingModuleWrapper({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
-  const [subTab, setSubTab] = useState("vrp");
-  // vehículos y trabajadores se gestionan en Planning → Recursos
-  const SUB_TABS = [
-    { key: "vrp",          label: "VRP / Gantt" },
-  ];
+  // una sola vista (vehículos y trabajadores se gestionan en Planning → Recursos): sin barra de pestañas, más sitio para el Gantt
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-      <div style={{
-        height: 38, flexShrink: 0,
-        background: C.card, borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "stretch", padding: "0 20px", gap: 2,
-      }}>
-        {SUB_TABS.map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)} style={{
-            background: "none", border: "none", cursor: "pointer",
-            padding: "0 14px", fontFamily: font,
-            fontSize: 12, fontWeight: subTab === t.key ? 600 : 400,
-            color: subTab === t.key ? C.text : C.muted,
-            borderBottom: `2px solid ${subTab === t.key ? C.blue : "transparent"}`,
-            marginBottom: -1, transition: "color .12s",
-          }}>{t.label}</button>
-        ))}
-        <span style={{ marginLeft: "auto", alignSelf: "center", fontSize: 11.5, color: C.dim }}>{vehicles.length} vehículos · {workers.length} trabajadores — se gestionan en Planning → Recursos</span>
-      </div>
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <div style={{ flex: 1, display: subTab === "vrp" ? "flex" : "none", overflow: "hidden" }}>
-          <TabPlanificacion key={activeProject?._id || "sin-proyecto"}
-            vehicles={vehicles} workers={workers}
-            activeProject={activeProject}
-            onProjectUpdate={onProjectUpdate}
-            orgId={orgId} sesion={sesion}
-          />
-        </div>
-      </div>
+      <TabPlanificacion key={activeProject?._id || "sin-proyecto"}
+        vehicles={vehicles} workers={workers}
+        activeProject={activeProject}
+        onProjectUpdate={onProjectUpdate}
+        orgId={orgId} sesion={sesion}
+      />
     </div>
   );
 }
