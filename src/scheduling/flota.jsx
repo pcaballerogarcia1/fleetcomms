@@ -7,6 +7,7 @@ import { db } from "../firebase.js";
 import { C, TURNO_TYPES, VEHICLE_TYPES, font, mono } from "./estilo.js";
 import { CAMPOS_FICHA, edadDe, valorFicha } from "../trabajador-ficha.js";
 import { AccesoApp } from "./acceso-app.jsx";
+import { CAMPOS_FICHA_VEHICULO, diasHasta, valorFichaVehiculo } from "../vehiculo-ficha.js";
 
 // ── DEPOT SECTION ─────────────────────────────────────────────────
 // Selector de cochera/depot compartido por vehículos y trabajadores: dos
@@ -95,8 +96,40 @@ function DepotSection({ projectId, formObj, setFormObj }) {
 }
 
 // ── VEHICLES TAB ──────────────────────────────────────────────────
+// La ficha del vehículo (marca, combustible, autonomía, ITV…), en el panel de la derecha
+function FichaVehiculoCampos({ obj, setObj, selStyle }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 10 }}>
+      {CAMPOS_FICHA_VEHICULO.map(c => (
+        <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: c.k === "autonomiaKm" ? C.blueText : C.muted, gridColumn: c.k === "notas" || c.k === "autonomiaKm" ? "1 / -1" : undefined }}>
+          {c.l}
+          {c.tipo === "opciones" ? (
+            <select value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })} style={{ ...selStyle, flex: "none", color: obj[c.k] ? C.text : C.dim }}>
+              <option value="">—</option>
+              {[...c.opciones, ...(obj[c.k] && !c.opciones.includes(obj[c.k]) ? [obj[c.k]] : [])].map(o => <option key={o}>{o}</option>)}
+            </select>
+          ) : (
+            <input type={c.tipo === "fecha" ? "date" : "text"} inputMode={c.tipo === "decimal" ? "decimal" : undefined}
+              placeholder={c.k === "autonomiaKm" ? "sin límite — el Scheduling no le dará rutas más largas" : ""}
+              value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
+              style={{ ...selStyle, flex: "none", colorScheme: "dark" }} />
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
+const fichaVehiculoParaGuardar = obj => Object.fromEntries(CAMPOS_FICHA_VEHICULO.map(c => [c.k, valorFichaVehiculo(c, obj[c.k]) ?? ""]));
+const fichaVehiculoVacia = Object.fromEntries(CAMPOS_FICHA_VEHICULO.map(c => [c.k, ""]));
+// aviso de una fecha que caduca (ITV, seguro): en rojo si ya pasó, en ámbar si falta menos de un mes
+function AvisoFecha({ fecha, que }) {
+  const d = diasHasta(fecha);
+  if (d == null || d > 30) return null;
+  return <span style={{ color: d < 0 ? C.red : C.amber, fontWeight: 600 }}>{d < 0 ? `${que} caducada` : d === 0 ? `${que} hoy` : `${que} en ${d} días`}</span>;
+}
+
 export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
-  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa", depotLat: "", depotLng: "" };
+  const empty = { nombre: "", matricula: "", tipo: "Camión lateral", capacidad: "", turno: "Jornada completa", depotLat: "", depotLng: "", ...fichaVehiculoVacia };
   const [form,   setForm]   = useState(empty);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -118,6 +151,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
         capacidad: parseInt(form.capacidad) || 0,
         depotLat: form.depotLat ? +form.depotLat : null,
         depotLng: form.depotLng ? +form.depotLng : null,
+        ...fichaVehiculoParaGuardar(form),
         activo: true, org_id: orgId, createdAt: serverTimestamp(),
       });
       setForm(empty); setAdding(false);
@@ -135,6 +169,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
         capacidad: parseInt(editForm.capacidad) || 0,
         depotLat: editForm.depotLat ? +editForm.depotLat : null,
         depotLng: editForm.depotLng ? +editForm.depotLng : null,
+        ...fichaVehiculoParaGuardar(editForm),
       });
       setEditId(null);
     } catch (e) { console.error("save vehicle:", e); alert("Error al guardar."); }
@@ -150,7 +185,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
 
   function startEdit(v) {
     setEditId(v._id);
-    setEditForm({ nombre: v.nombre || "", matricula: v.matricula || "", tipo: v.tipo || "Camión lateral", turno: v.turno || "Jornada completa", capacidad: v.capacidad || "", depotLat: v.depotLat ?? "", depotLng: v.depotLng ?? "" });
+    setEditForm({ nombre: v.nombre || "", matricula: v.matricula || "", tipo: v.tipo || "Camión lateral", turno: v.turno || "Jornada completa", capacidad: v.capacidad || "", depotLat: v.depotLat ?? "", depotLng: v.depotLng ?? "", ...Object.fromEntries(CAMPOS_FICHA_VEHICULO.map(c => [c.k, v[c.k] ?? ""])) });
     setAdding(false);
   }
 
@@ -169,7 +204,8 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
   );
 
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 720 }}>
+    <div style={{ flex: 1, overflow: "auto", padding: 24, display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <div style={{ flex: "1 1 520px", maxWidth: 720, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Vehículos</div>
@@ -247,6 +283,11 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   <span>{v.tipo}</span>
                   {v.capacidad > 0 && <span>{v.capacidad} m³</span>}
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
+                  {[v.marca, v.modelo].filter(Boolean).length > 0 && <span>{[v.marca, v.modelo].filter(Boolean).join(" ")}</span>}
+                  {v.combustible && <span>{v.combustible}</span>}
+                  {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="El Scheduling no le da rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? "🔋" : "⛽"} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
+                  <AvisoFecha fecha={v.proximaITV} que="ITV" />
+                  <AvisoFecha fecha={v.seguroVence} que="Seguro" />
                   {v.depotLat && v.depotLng && (
                     <span style={{ color: "#f59e5b", display: "flex", alignItems: "center", gap: 3 }}>
                       🏠 {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
@@ -268,6 +309,25 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
           ))}
         </div>
       )}
+    </div>
+    {/* la ficha del vehículo que se está editando o dando de alta, a la derecha */}
+    {(adding || editId) && (() => {
+      const nuevo = adding && !editId;
+      const obj = nuevo ? form : editForm, setObj = nuevo ? setForm : setEditForm;
+      return (
+        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 16, animation: "sched-fadein .15s ease both" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del vehículo nuevo" : `de ${obj.nombre || obj.matricula || "…"}`}</div>
+            <span style={{ fontSize: 11, color: C.dim }}>Se guarda con «Guardar»</span>
+          </div>
+          <FichaVehiculoCampos obj={obj} setObj={setObj} selStyle={selStyle} />
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} style={{ padding: "8px 18px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font, opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
+          </div>
+        </div>
+      );
+    })()}
     </div>
   );
 }

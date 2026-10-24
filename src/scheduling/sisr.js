@@ -15,7 +15,7 @@
 // mejora-rutas.js: fin de turno, duración máxima, tope de paradas, franjas
 // horarias, pausas): nunca deja una ruta que el motor no aceptaría.
 // Sin React ni Firebase.
-import { hasCoords, kmRuta, shiftForDay, tiempoRuta } from "../vrp-engine.js";
+import { autonomiaDe, hasCoords, kmRuta, shiftForDay, tiempoRuta } from "../vrp-engine.js";
 import { margenDe, simular } from "./mejora-rutas.js";
 
 const DIA = 1440;
@@ -103,7 +103,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
         continue;
       }
       const seq = agrupar(ps.sort((a, b) => a._start - b._start), d);
-      rutas.push({ fi, d, off: d * DIA, sh, depot: depotDe(f), circular, seq });
+      rutas.push({ fi, d, off: d * DIA, sh, depot: depotDe(f), circular, aut: autonomiaDe(f), seq });
     }
   });
   // las sin recoger: también juntas por sitio
@@ -118,7 +118,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
       if (rutas.some(r => r.fi === fi && r.d === d)) continue;
       const sh = shiftForDay(f, d);
       if (!sh || (circular && sh.breaks?.length)) continue;
-      rutas.push({ fi, d, off: d * DIA, sh, depot: depotDe(f), circular, seq: [] });
+      rutas.push({ fi, d, off: d * DIA, sh, depot: depotDe(f), circular, aut: autonomiaDe(f), seq: [] });
     }
   });
   const vivas = rutas.filter(r => !r.fija);
@@ -162,7 +162,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     if (cons.maxStops > 0 && cuantas(seq) > cons.maxStops) return { ok: false };
     const lenta = r.lenta || seq.some(conFranja);
     if (lenta) {
-      const s = simular({ off: r.off, sh: r.sh, depot: r.depot, circular: r.circular, paradas: paradasDe(seq) }, cons);
+      const s = simular({ off: r.off, sh: r.sh, depot: r.depot, circular: r.circular, aut: r.aut, paradas: paradasDe(seq) }, cons);
       if (!s.ok) return { ok: false };
       return { ok: true, travel: s.conduccion, km: s.km, lenta: true };
     }
@@ -173,6 +173,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     const total = travel + serv;
     const ini = r.sh.start + r.off, finDia = r.sh.end + r.off - margen * (r.sh.end - r.sh.start);
     if (ini + total > finDia + 1e-9) return { ok: false };
+    if (km > r.aut + 1e-9) return { ok: false }; // autonomía del vehículo
     if (cons.maxShiftMin > 0 && total > cons.maxShiftMin * (1 - margen) + 1e-9) return { ok: false };
     return { ok: true, travel, km, total, lenta: false };
   }
@@ -354,7 +355,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     const seq = mejor.seqs.get(r);
     if (seq === r.seq) continue;
     if (!seq.length) { nuevasItems.set(r, []); continue; }
-    const s = simular({ off: r.off, sh: r.sh, depot: r.depot, circular: r.circular, paradas: paradasDe(seq) }, cons);
+    const s = simular({ off: r.off, sh: r.sh, depot: r.depot, circular: r.circular, aut: r.aut, paradas: paradasDe(seq) }, cons);
     if (!s.ok) return { ...resultado, sisr: { antes, despues: antes, vueltas, seg: +((Date.now() - t0) / 1000).toFixed(1), sinCambios: true, motivo: "una ruta no cuadró al rehacer las horas" } };
     nuevasItems.set(r, s.items);
   }

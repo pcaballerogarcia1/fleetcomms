@@ -6,6 +6,7 @@
 // matrícula o el nombre del vehículo. Sin React ni Firebase.
 import { TURNO_TYPES } from "./scheduling/estilo.js";
 import { CAMPOS_FICHA, valorFicha } from "./trabajador-ficha.js";
+import { CAMPOS_FICHA_VEHICULO, valorFichaVehiculo } from "./vehiculo-ficha.js";
 
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const texto = v => String(v ?? "").trim();
@@ -45,7 +46,7 @@ export function turnoDe(v, defecto = "Jornada completa") {
 const C_VEH = {
   nombre: ["nombre", "vehiculo", "nombre vehiculo", "codigo", "id", "unidad", "camion"],
   matricula: ["matricula", "placa", "registration", "plate"],
-  tipo: ["tipo", "tipo vehiculo", "tipo de vehiculo", "modelo", "clase"],
+  tipo: ["tipo", "tipo vehiculo", "tipo de vehiculo", "clase"],
   capacidad: ["capacidad", "capacidad kg", "capacidad m3", "carga", "litros"],
   turno: ["turno", "jornada", "horario"],
   lat: ["lat", "latitud", "base lat", "deposito lat", "depot lat"],
@@ -70,10 +71,17 @@ export function leerVehiculos(filas) {
     const nombre = col(f, C_VEH.nombre) || matricula;
     if (!nombre) { ignorados.push({ fila: i + 2, motivo: "sin nombre ni matrícula" }); return; }
     const lat = num(col(f, C_VEH.lat)), lng = num(col(f, C_VEH.lng));
+    // la ficha (marca, combustible, autonomía, ITV…): solo lo que venga, para no borrar lo que ya hubiera
+    const ficha = {};
+    for (const c of CAMPOS_FICHA_VEHICULO) {
+      const v = valorFichaVehiculo(c, col(f, c.sin));
+      if (v !== "" && v != null) ficha[c.k] = v;
+    }
     vehiculos.push({
       nombre, matricula, tipo: col(f, C_VEH.tipo) || "Otro", turno: turnoDe(col(f, C_VEH.turno)),
       capacidad: Math.round(num(col(f, C_VEH.capacidad)) || 0),
       depotLat: lat != null && lng != null ? lat : null, depotLng: lat != null && lng != null ? lng : null,
+      ...ficha,
     });
   });
   return { vehiculos, ignorados };
@@ -157,8 +165,8 @@ export function planTrabajadores(leidos, existentes = [], vehiculos = []) {
 
 /** Las filas de ejemplo de las plantillas */
 export const PLANTILLA_VEHICULOS = [
-  { Nombre: "Camión 1", Matrícula: "1234ABC", Tipo: "Camión lateral", Capacidad: 12000, Turno: "Jornada completa", Latitud: "", Longitud: "" },
-  { Nombre: "Furgoneta 2", Matrícula: "5678DEF", Tipo: "Furgón", Capacidad: 800, Turno: "Mañana", Latitud: "", Longitud: "" },
+  { Nombre: "Camión 1", Matrícula: "1234ABC", Tipo: "Camión lateral", Capacidad: 12000, Turno: "Jornada completa", Marca: "Volvo", Modelo: "FE 320", "Nº de bastidor": "", "Fecha de matriculación": "15/03/2019", "Fecha de alta": "01/04/2019", Propiedad: "Propio", Combustible: "Diésel", "Autonomía (km)": 600, "Consumo (l/100 km)": 38, "Depósito (l o kWh)": 300, "MMA (kg)": 26000, "Tara (kg)": 14000, Plazas: 3, "Km actuales": 182000, "Próxima ITV": "15/03/2026", "Seguro vence": "31/12/2026", Latitud: "", Longitud: "", Notas: "" },
+  { Nombre: "Furgoneta 2", Matrícula: "5678DEF", Tipo: "Furgón", Capacidad: 800, Turno: "Mañana", Marca: "Renault", Modelo: "Kangoo E-Tech", "Nº de bastidor": "", "Fecha de matriculación": "10/09/2023", "Fecha de alta": "10/09/2023", Propiedad: "Renting", Combustible: "Eléctrico", "Autonomía (km)": 180, "Consumo (l/100 km)": 18, "Depósito (l o kWh)": 45, "MMA (kg)": 2200, "Tara (kg)": 1500, Plazas: 2, "Km actuales": 21000, "Próxima ITV": "", "Seguro vence": "30/09/2026", Latitud: "", Longitud: "", Notas: "Consumo en kWh/100 km" },
 ];
 export const PLANTILLA_TRABAJADORES = [
   { Nombre: "Ana", Apellidos: "García López", "DNI/NIE": "12345678Z", "Fecha de nacimiento": "14/03/1985", Nacionalidad: "Española", "Categoría": "Conductor 1ª", "Correo electrónico": "ana.garcia@empresa.es", "Teléfono": "600111222", "Dirección": "C/ Mayor 1, Palma", "Permiso de conducir": "C", "Fecha de alta": "01/02/2020", Turno: "Mañana", Rol: "conductor", "Vehículo": "1234ABC", Notas: "" },

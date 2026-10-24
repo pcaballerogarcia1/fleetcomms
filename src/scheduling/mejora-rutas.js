@@ -13,9 +13,10 @@
 // motor (pausas, franjas horarias, fin de turno, duración máxima, tope de
 // paradas), así que nunca se acepta una ruta que el motor no aceptaría.
 // Los días con relevo de conductor y vuelta obligatoria a mitad de turno
-// (circular + turno partido) se dejan como están.
+// (circular + turno partido) se dejan como están. Ninguna ruta pasa de la
+// autonomía de su vehículo (km del día).
 // Sin React ni Firebase.
-import { hasCoords, kmRuta, shiftForDay, tiempoRuta, windowWait } from "../vrp-engine.js";
+import { autonomiaDe, hasCoords, kmRuta, shiftForDay, tiempoRuta, windowWait } from "../vrp-engine.js";
 import { optimizarSISR } from "./sisr.js";
 
 const esParada = a => !a._travel && !a._break && !a._wait;
@@ -84,6 +85,7 @@ export function simular(ruta, cons) {
     if (rk >= 0.05) { const rm = tiempoRuta(lat, lng, ancla.lat, ancla.lng); items.push(bloque({ _travel: true, _depot_return: true, km: +rk.toFixed(3) }, rm)); km += rk; conduccion += rm; }
   }
   if (x > finDia + 1e-9) return { ok: false };
+  if (ruta.aut != null && km > ruta.aut + 1e-9) return { ok: false }; // autonomía del vehículo
   if (maxShiftMin > 0 && x - ini > maxShiftMin * (1 - margen) + 1e-9) return { ok: false };
   return { ok: true, items, km, fin: x, conduccion };
 }
@@ -128,7 +130,7 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
       const sh = turnoDe(f, d);
       const paradas = items.filter(esParada).sort((a, b) => a._start - b._start);
       if (!sh || !paradas.length) { fijas.add(`${fi}|${d}`); continue; }
-      const ruta = { fi, d, off: d * DIA, sh, depot: depotDe(f), circular, paradas: paradas.map(sinHora), items, tocada: false };
+      const ruta = { fi, d, off: d * DIA, sh, depot: depotDe(f), circular, aut: autonomiaDe(f), paradas: paradas.map(sinHora), items, tocada: false };
       ruta.km = items.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0);
       ruta.fin = Math.max(...items.map(a => a._end));
       rutas.push(ruta);
@@ -193,7 +195,7 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
     if (r) return r.paradas.length ? null : r;
     const sh = turnoDe(filas[fi], d);
     if (!sh) return null;
-    const nueva = { fi, d, off: d * DIA, sh, depot: depotDe(filas[fi]), circular, paradas: [], items: [], km: 0, fin: 0, tocada: true };
+    const nueva = { fi, d, off: d * DIA, sh, depot: depotDe(filas[fi]), circular, aut: autonomiaDe(filas[fi]), paradas: [], items: [], km: 0, fin: 0, tocada: true };
     rutas.push(nueva); ocupado.set(k, nueva);
     return nueva;
   }
@@ -378,7 +380,15 @@ export async function porTurnos(resultado, cons, mejorar) {
         return q === p;
       });
       piezas.push({ fi, p });
-      partidas.push({ ...f, assignments, _dayWindows: ventanas, _onlyDayWindows: true });
+      // autonomía del turno: la del vehículo menos lo que hacen sus otros turnos (el día que más)
+      const aut = autonomiaDe(f);
+      let autonomiaKm = f.autonomiaKm;
+      if (aut < Infinity) {
+        const otros = new Map();
+        for (const a of f.assignments || []) if (a._travel && !assignments.includes(a)) { const d = Math.floor(a._start / DIA); otros.set(d, (otros.get(d) || 0) + (a.km || 0)); }
+        autonomiaKm = Math.max(0.001, aut - Math.max(0, ...otros.values()));
+      }
+      partidas.push({ ...f, assignments, autonomiaKm, _dayWindows: ventanas, _onlyDayWindows: true });
     }
   });
   const r = await mejorar({ ...resultado, schedule: partidas });

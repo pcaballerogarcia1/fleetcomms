@@ -202,6 +202,29 @@ export function hasCoords(lat, lng) {
 // entre los dos turnos (empieza antes del relevo, termina después), y al
 // repartir esas paradas por conductor ese tramo de viaje se atribuiría al
 // turno equivocado (o inflaría su jornada más allá de su propio horario).
+// Autonomía del vehículo (km que hace en un día con una carga o un depósito,
+// de su ficha en Recursos): ninguna jornada suya puede pasar de ahí, contando
+// la vuelta. Sin autonomía, sin límite.
+export function autonomiaDe(row) {
+  const a = Number(row?.autonomiaKm);
+  return a > 0 ? a : Infinity;
+}
+/** ¿Ningún vehículo llega a esta parada y vuelve a su base sin pasarse de su autonomía? */
+export function fueraDeAutonomia(task, resources) {
+  if (!hasCoords(task?.lat, task?.lng) || !resources?.length) return false;
+  return resources.every(r => {
+    const a = autonomiaDe(r);
+    if (a === Infinity || !hasCoords(r.depotLat, r.depotLng)) return false;
+    return 2 * kmRuta(+r.depotLat, +r.depotLng, +task.lat, +task.lng) > a;
+  });
+}
+/** Los km que ya lleva `row` el día que empieza en `dayOffset` */
+export function kmDelDia(row, dayOffset) {
+  let km = 0;
+  for (const a of row?.assignments || []) if (a._travel && a._start >= dayOffset && a._start < dayOffset + 1440) km += a.km || 0;
+  return km;
+}
+
 export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
   const sh = shiftForDay(row, Math.floor(dayOffset / 1440));
   if (!sh) return []; // ese día no trabaja (cuadrante de Rostering)
@@ -217,6 +240,7 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
   const crossesShiftBoundary = (from, to) => shiftBoundaries.some(b => b > from && b < to);
 
   const depotLat = row.depotLat, depotLng = row.depotLng;
+  const aut = autonomiaDe(row), kmHoy = aut < Infinity ? kmDelDia(row, dayOffset) : 0;
   const slots = [];
   for (let g = 0; g <= stops.length; g++) {
     const prev = g === 0 ? null : stops[g - 1];
@@ -250,6 +274,7 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
     if (maxShiftMin > 0 && (taskEnd - dayStart) > maxShiftMin) continue;
 
     const originalDirectKm = kmRuta(prevLat, prevLng, nextLat, nextLng);
+    if (kmHoy + (inKm + outKm) - originalDirectKm > aut) continue; // se pasaría de su autonomía
     slots.push({
       prevStop: prev, nextStop: next, prevEnd, nextStart,
       inKm, inMin, outKm, outMin, wait, arrival, taskEnd,
@@ -714,6 +739,8 @@ export async function generateScenario(tasks, resources, constraints) {
   const queueIdx  = new Int32Array(k);
   // Per-resource counter of stops assigned today (reset each day, for maxStops)
   const dayStops  = new Int32Array(k);
+  // Km de cada recurso en el día (reset cada día, para su autonomía)
+  const dayKm     = new Float64Array(k);
 
   let day = 0;
   let anyAssignedThisDay = true;
@@ -728,6 +755,7 @@ export async function generateScenario(tasks, resources, constraints) {
     skippedOffDay = false;
     const dayOffset = day * 1440;
     dayStops.fill(0);
+    dayKm.fill(0);
 
     for (let i = 0; i < k; i++) {
       // Con maxDays=1 este bucle es la ÚNICA pasada del día — el único yield
@@ -739,6 +767,7 @@ export async function generateScenario(tasks, resources, constraints) {
       if (i > 0 && i % 5 === 0) await _yield();
 
       const res   = state[i];
+      const autRes = autonomiaDe(res);
       const queue = sortedQueues[i];
       if (queueIdx[i] >= queue.length) continue; // all tasks for this resource done
 
@@ -835,12 +864,14 @@ export async function generateScenario(tasks, resources, constraints) {
             }
             const tWait = windowWait(t, cursor + ttMin, dayOffset);
             if (tWait == null || tWait >= bestWait) continue; // inviable hoy, o ya hay algo igual o mejor
-            let tRet = 0;
+            let tRet = 0, tRetKm = 0;
             if (anchor && hasCoords(t.lat, t.lng)) {
               const rkm = kmRuta(+t.lat, +t.lng, anchor.lat, anchor.lng);
-              if (rkm >= 0.05) tRet = Math.max(1, Math.ceil(minutosRuta(rkm)));
+              if (rkm >= 0.05) { tRet = Math.max(1, Math.ceil(minutosRuta(rkm))); tRetKm = rkm; }
             }
+            const tKmIda = hasCoords(lastLat, lastLng) && hasCoords(t.lat, t.lng) ? kmRuta(lastLat, lastLng, t.lat, t.lng) : 0;
             const fits = cursor + ttMin + tWait + tdur + tRet <= effSegEnd
+              && dayKm[i] + tKmIda + tRetKm <= autRes
               && !(maxShiftMin > 0 && tWorkSoFar + ttMin + tWait + tdur + tRet > maxShiftMin);
             if (fits) {
               swapTo = li; bestWait = tWait;
@@ -901,20 +932,21 @@ export async function generateScenario(tasks, resources, constraints) {
             // si no: wait > 0 pero es la mejor opción disponible — se acepta con esa espera
           }
 
-          let retBuffer = 0;
+          let retBuffer = 0, retKmAut = 0;
           if (anchor) {
             const refLat = hasCoords(task.lat, task.lng) ? +task.lat : lastLat;
             const refLng = hasCoords(task.lat, task.lng) ? +task.lng : lastLng;
             if (hasCoords(refLat, refLng)) {
               const retKmEst = kmRuta(refLat, refLng, anchor.lat, anchor.lng);
-              if (retKmEst >= 0.05) retBuffer = Math.max(1, Math.ceil(minutosRuta(retKmEst)));
+              if (retKmEst >= 0.05) { retBuffer = Math.max(1, Math.ceil(minutosRuta(retKmEst))); retKmAut = retKmEst; }
             }
           }
 
           const workSoFar = cursor - dayStart0;
           const feasible = wait != null
             && !(maxShiftMin > 0 && workSoFar + travelMin + wait + dur + retBuffer > maxShiftMin)
-            && (cursor + travelMin + wait + dur + retBuffer <= effSegEnd);
+            && (cursor + travelMin + wait + dur + retBuffer <= effSegEnd)
+            && dayKm[i] + travelKm + retKmAut <= autRes; // autonomía del vehículo (km del día, con la vuelta)
 
           if (!feasible) {
             // Antes de rendirse por el resto del día (o del tramo, si el
@@ -930,7 +962,7 @@ export async function generateScenario(tasks, resources, constraints) {
             const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
             if (fromDepot) block._depot_exit = true;
             res.assignments.push(block);
-            cursor += travelMin; res.totalKm += travelKm;
+            cursor += travelMin; res.totalKm += travelKm; dayKm[i] += travelKm;
           }
           fromDepot = false;
           if (wait > 0) {
@@ -958,7 +990,7 @@ export async function generateScenario(tasks, resources, constraints) {
               _start: cursor, _end: cursor + retMin,
               duracion: retMin, km: +retKm.toFixed(3),
             });
-            cursor += retMin; res.totalKm += retKm;
+            cursor += retMin; res.totalKm += retKm; dayKm[i] += retKm;
           }
         }
 
@@ -985,11 +1017,13 @@ export async function generateScenario(tasks, resources, constraints) {
     if (queueIdx[i] >= sortedQueues[i].length) continue;    // queue exhausted
 
     const res    = state[i];
+    const autB   = autonomiaDe(res);
     const eDepot = (res.depotLat && res.depotLng)
       ? { lat: +res.depotLat, lng: +res.depotLng } : null;
 
     for (let bDay = 0; bDay < day; bDay++) {
       const dOff = bDay * 1440;
+      let kmB = autB < Infinity ? kmDelDia(res, dOff) : 0;
       const bSh  = shiftForDay(res, bDay);
       if (!bSh) continue; // ese día no trabaja
       const dEnd = bSh.end + dOff;
@@ -1028,12 +1062,16 @@ export async function generateScenario(tasks, resources, constraints) {
           const tWait = windowWait(task, cur + tMin, dOff);
           if (tWait == null) { pi++; continue; } // franja ya inviable — prueba otra tarea
           if (cur + tMin + tWait + dur > segEnd) { pi++; continue; }
+          if (autB < Infinity) { // autonomía: km del día con la vuelta
+            const vuelta = anchor && hasCoords(task.lat, task.lng) ? kmRuta(+task.lat, +task.lng, anchor.lat, anchor.lng) : 0;
+            if (kmB + tKm + vuelta > autB) { pi++; continue; }
+          }
 
           if (tMin > 0) {
             const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
             if (fromDep) blk._depot_exit = true;
             res.assignments.push(blk);
-            cur += tMin; res.totalKm += tKm;
+            cur += tMin; res.totalKm += tKm; kmB += tKm;
           }
           fromDep = false;
           if (tWait > 0) {
@@ -1052,7 +1090,7 @@ export async function generateScenario(tasks, resources, constraints) {
           if (rKm >= 0.05) {
             const rMin = Math.max(1, Math.ceil(minutosRuta(rKm)));
             res.assignments.push({ _travel: true, _depot_return: true, _start: cur, _end: cur + rMin, duracion: rMin, km: +rKm.toFixed(3) });
-            cur += rMin; res.totalKm += rKm;
+            cur += rMin; res.totalKm += rKm; kmB += rKm;
           }
         }
 
@@ -1194,6 +1232,8 @@ export async function generateScenario(tasks, resources, constraints) {
       for (let i = 0; i < k && pool.length > 0; i++) {
         if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
         const res   = state[i];
+        const autM  = autonomiaDe(res);
+        let kmM     = autM < Infinity ? kmDelDia(res, mopDay * 1440) : 0;
         const mSh   = shiftForDay(res, mopDay);
         if (!mSh) { mopSkippedOff = true; continue; }
         const depot = (res.depotLat && res.depotLng)
@@ -1237,7 +1277,9 @@ export async function generateScenario(tasks, resources, constraints) {
             const fitsShift   = wait != null && (maxShiftMin <= 0 || workSoFar + travelMin + wait + dur <= maxShiftMin);
             const fitsSeg     = wait != null && cursor + travelMin + wait + dur <= segEnd;
 
-            if (!fitsShift || !fitsSeg) {
+            const vueltaM = autM < Infinity && anchor && hasCoords(task.lat, task.lng) ? kmRuta(+task.lat, +task.lng, anchor.lat, anchor.lng) : 0;
+            const fitsAut = kmM + travelKm + vueltaM <= autM; // autonomía del vehículo
+            if (!fitsShift || !fitsSeg || !fitsAut) {
               pi++; // skip this task for now; it stays in pool for later vehicles/days
               continue;
             }
@@ -1247,7 +1289,7 @@ export async function generateScenario(tasks, resources, constraints) {
               const block = { _travel: true, _start: cursor, _end: cursor + travelMin, duracion: travelMin, km: +travelKm.toFixed(3) };
               if (fromDepot) block._depot_exit = true;
               res.assignments.push(block);
-              cursor += travelMin; res.totalKm += travelKm;
+              cursor += travelMin; res.totalKm += travelKm; kmM += travelKm;
             }
             fromDepot = false;
             if (wait > 0) {
@@ -1268,7 +1310,7 @@ export async function generateScenario(tasks, resources, constraints) {
             if (retKm >= 0.05) {
               const retMin = Math.max(1, Math.ceil(minutosRuta(retKm)));
               res.assignments.push({ _travel: true, _depot_return: true, _start: cursor, _end: cursor + retMin, duracion: retMin, km: +retKm.toFixed(3) });
-              cursor += retMin; res.totalKm += retKm;
+              cursor += retMin; res.totalKm += retKm; kmM += retKm;
             }
           }
 
@@ -1490,6 +1532,7 @@ export async function generateScenario(tasks, resources, constraints) {
             const outMin = outKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(outKm))) : 0;
             const carry = (taskEnd + outMin) - next._start;
             if (carry <= 0) continue; // cabría sin empujar nada — eso ya lo cubre tryInsertOrphan/tryEvictAndInsertOrphan
+            if (autonomiaDe(res) < Infinity && kmDelDia(res, dOff) + inKm + outKm - kmRuta(prevLat, prevLng, next.lat, next.lng) > autonomiaDe(res)) continue; // autonomía
 
             const tailItems = dayItems.slice(idxInDay.get(next));
             if (tailItems.some(a => a._break)) continue;
@@ -1624,7 +1667,18 @@ const MAX_VIRTUAL_VEHICLES = 5000;
 // barra ciega. Sin esto, un cálculo largo en un proyecto grande es
 // indistinguible de uno colgado — no hay forma de saber si sigue vivo,
 // en qué ronda va, o cuánto le puede quedar.
+// Las paradas a las que ningún vehículo llega con su autonomía se quedan sin
+// asignar desde el principio (marcadas _fueraAutonomia): si no, el auto-escalado
+// añadiría vehículos ronda tras ronda intentando colocarlas.
 export async function autoScaleFleet(tasks, baseResources, constraints, onProgress) {
+  const fuera = [], dentro = [];
+  for (const t of tasks) (fueraDeAutonomia(t, baseResources) ? fuera : dentro).push(t);
+  if (!fuera.length) return autoScaleFleetTodas(tasks, baseResources, constraints, onProgress);
+  const r = await autoScaleFleetTodas(dentro, baseResources, constraints, onProgress);
+  return { ...r, result: { ...r.result, unassigned: [...r.result.unassigned, ...fuera.map(t => ({ ...t, _fueraAutonomia: true }))] } };
+}
+
+async function autoScaleFleetTodas(tasks, baseResources, constraints, onProgress) {
   let resources = baseResources;
   let result = await generateScenario(tasks, resources, constraints);
   let added = 0;
@@ -1729,6 +1783,8 @@ export async function autoScaleFleet(tasks, baseResources, constraints, onProgre
         tipo: template.tipo || "Camión lateral",
         turno: "Jornada completa",
         depotLat: template.depotLat ?? null, depotLng: template.depotLng ?? null,
+        // la autonomía de la flota, si todos sus vehículos la tienen (la mayor)
+        autonomiaKm: baseResources.length && baseResources.every(r => autonomiaDe(r) < Infinity) ? Math.max(...baseResources.map(autonomiaDe)) : null,
         _virtual: true,
         _effectiveStart: constraints.startMin,
         _effectiveEnd: virtualShiftMin

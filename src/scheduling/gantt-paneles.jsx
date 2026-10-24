@@ -334,6 +334,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
             <span style={{ fontSize: 10.5, color: C.red, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
             <span style={{ background: "rgba(242,109,109,0.12)", border: "1px solid rgba(242,109,109,0.3)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
             <span style={{ fontSize: 10, color: C.dim }}>arrastra una parada a una fila para colocarla</span>
+            {unassigned.some(t => t._fueraAutonomia) && <span style={{ fontSize: 10, color: C.amber }}>· {unassigned.filter(t => t._fueraAutonomia).length} no las alcanza ningún vehículo con su autonomía</span>}
             <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{unassignedOpen ? "▲" : "▼"}</span>
           </button>
           {unassignedOpen && (
@@ -352,7 +353,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
                     draggable
                     onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ task, fromRowId: null }); }}
                     onDragEnd={() => setDragging(null)}
-                    title={hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
+                    title={task._fueraAutonomia ? "Ningún vehículo llega y vuelve a su base con su autonomía" : hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
                     style={{
                       position: "relative", height: ROW_H - 22, minWidth: 60, background: color + "d0",
                       border: `1px solid ${color}`, borderRadius: 4, overflow: "visible", cursor: "grab",
