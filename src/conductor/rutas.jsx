@@ -261,6 +261,8 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const esSA=sesion?.rol==="superadmin";
   const [orgs,setOrgs]               = useState([]);
   const [orgDestino,setOrgDestino]   = useState(sesion?.org_id||"");
+  // fecha de servicio de los KML que se suben: vacía = la que diga el KML (o el mes actual)
+  const [fechaKml,setFechaKml]       = useState("");
   useEffect(()=>{
     if(!esSA) return;
     return onSnapshot(collection(db,"orgs"),snap=>setOrgs(snap.docs.map(d=>({org_id:d.id,...d.data()})).sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||""))),()=>setOrgs([]));
@@ -423,7 +425,9 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               setErrorMsg(`Sin ubicaciones en "${file.name}". Ver debug.`);
             } else {
               const turno=ubicaciones[0]?.turno||"";
-              const dia=ubicaciones[0]?.dia||"";
+              // la fecha elegida al subir manda sobre la del KML
+              const elegida=/^\d{4}-\d{2}-\d{2}$/.test(fechaKml)?fechaKml.split("-"):null;
+              const dia=elegida?`${elegida[2]}/${elegida[1]}/${elegida[0]}`:(ubicaciones[0]?.dia||"");
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
               // se espera a que se guarde: si falla (permisos, conexión), se dice
@@ -468,6 +472,11 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                       {orgs.map(o=><option key={o.org_id} value={o.org_id}>{o.nombre||o.org_id}</option>)}
                     </select>
                   </div>}
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Fecha de servicio</div>
+                    <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:"dark"}}/>
+                    <div style={{fontSize:10.5,color:C.dim,marginTop:4}}>{fechaKml?"Los KML se guardan en esta fecha (y su mes en Control).":"Vacía: la fecha que diga el KML o, si no dice ninguna, este mes."}</div>
+                  </div>
                   {errorMsg&&<div style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
                   {debugInfo.length>0&&<div style={{background:"#080f1a",border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
                   <div onClick={()=>fileRef.current.click()} style={{background:"#080f1a",border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
