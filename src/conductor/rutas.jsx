@@ -257,6 +257,14 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   const [errorMsg,setErrorMsg]       = useState("");
   const [debugInfo,setDebugInfo]     = useState([]);
   const [mesFilter,setMesFilter]     = useState(null);
+  // superadmin: no pertenece a ninguna empresa, elige a cuál sube los KML
+  const esSA=sesion?.rol==="superadmin";
+  const [orgs,setOrgs]               = useState([]);
+  const [orgDestino,setOrgDestino]   = useState(sesion?.org_id||"");
+  useEffect(()=>{
+    if(!esSA) return;
+    return onSnapshot(collection(db,"orgs"),snap=>setOrgs(snap.docs.map(d=>({org_id:d.id,...d.data()})).sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||""))),()=>setOrgs([]));
+  },[esSA]);
   const [formTarea,setFormTarea]     = useState({titulo:"",descripcion:"",vehiculo:"",estado:"pendiente"});
   const [verCuadrante,setVerCuadrante] = useState(false);
   const fileRef = useRef();
@@ -401,6 +409,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
     function handleFiles(e){
       const files=Array.from(e.target.files);
       if(!files.length)return;
+      if(esSA&&!orgDestino){setErrorMsg("Elige primero la empresa a la que subir el KML.");e.target.value="";return;}
       setSubiendo(true);setErrorMsg("");setDebugInfo([]);
       let done=0;
       files.forEach(file=>{
@@ -418,7 +427,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
               // se espera a que se guarde: si falla (permisos, conexión), se dice
-              Promise.resolve(addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(/\.kml$/i,""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido:recorridoParaGuardar(recorrido),fechaSubida:Date.now()}))
+              Promise.resolve(addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(/\.kml$/i,""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido:recorridoParaGuardar(recorrido),fechaSubida:Date.now(),...(esSA&&orgDestino?{org_id:orgDestino}:{})}))
                 .then(()=>{setShowUpload(false);setDebugInfo([]);})
                 .catch(err=>setErrorMsg(`No se pudo guardar «${file.name}»: ${err?.message||err}`));
             }
@@ -452,6 +461,13 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               {showUpload&&(
                 <div style={{...S.card,marginBottom:10}}>
                   <div style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.7}}>Sube archivos KML de {tipo.label.toLowerCase()}. La app detecta turno, fecha y paradas automáticamente.</div>
+                  {esSA&&<div style={{marginBottom:10}}>
+                    <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Empresa</div>
+                    <select value={orgDestino} onChange={e=>setOrgDestino(e.target.value)} style={{width:"100%",background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13}}>
+                      <option value="">— Elige la empresa —</option>
+                      {orgs.map(o=><option key={o.org_id} value={o.org_id}>{o.nombre||o.org_id}</option>)}
+                    </select>
+                  </div>}
                   {errorMsg&&<div style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
                   {debugInfo.length>0&&<div style={{background:"#080f1a",border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
                   <div onClick={()=>fileRef.current.click()} style={{background:"#080f1a",border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>

@@ -69,8 +69,18 @@ export function useCollection(colName, orderField = "fecha", orgId = null, super
 
 export const nuevoComentario = (usuarioId, texto) => ({ usuarioId, texto, fecha: Date.now() });
 
+// Firestore rechaza los campos «undefined» y las listas dentro de listas:
+// los vacíos se quitan y una lista dentro de otra pasa a objeto ({0:…,1:…})
+export function paraFirestore(v) {
+  if (Array.isArray(v)) return v.map(x => (Array.isArray(x) ? Object.fromEntries(x.map((y, i) => [i, paraFirestore(y)])) : paraFirestore(x)));
+  if (v && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
+    return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, paraFirestore(x)]));
+  }
+  return v;
+}
+
 export async function fbAdd(colName, data) {
-  return await addDoc(collection(db, colName), { ...data, fecha: serverTimestamp() });
+  return await addDoc(collection(db, colName), { ...paraFirestore(data), fecha: serverTimestamp() });
 }
 
 export async function fbUpdate(colName, id, data) {

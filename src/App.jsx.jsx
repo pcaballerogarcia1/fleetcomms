@@ -161,7 +161,12 @@ export default function App(){
 
   // conductorUid: null explícito en los que no son de nadie, para que los
   // conductores puedan pedir solo los compartidos (ver más arriba)
-  async function addPlan(plan){ await fbAdd("planes",{conductorUid:null,...plan,org_id:sesion.org_id}); }
+  async function addPlan(plan){
+    // el superadmin elige la empresa (plan.org_id); los demás, siempre la suya
+    const org=sesion?.rol==="superadmin"?(plan.org_id||sesion?.org_id):sesion?.org_id;
+    if(!org) throw new Error("tu usuario no tiene empresa asignada. Entra con un usuario de la empresa o asígnale una en Admin.");
+    await fbAdd("planes",{conductorUid:null,...plan,org_id:org});
+  }
   // Solo los campos que han cambiado, y los comentarios se AÑADEN (antes se
   // guardaba el plan entero y pisaba lo que hubiera cambiado otro, p. ej.
   // las paradas que un conductor marcaba a la vez).

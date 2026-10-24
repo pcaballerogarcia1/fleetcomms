@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseKML, recorridoParaGuardar } from "./comun.js";
+import { paraFirestore, parseKML, recorridoParaGuardar } from "./comun.js";
 
 const KML_MYMAPS = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -41,5 +41,11 @@ describe("KML de cualquier origen", () => {
     // al guardar, como objetos: Firestore no admite listas dentro de listas
     expect(recorridoParaGuardar(r.recorrido)).toEqual([{ lat: 39.57, lng: 2.65 }, { lat: 39.576, lng: 2.654 }]);
     expect(recorridoParaGuardar(null)).toBe(null);
+  });
+});
+
+describe("datos que Firestore acepta", () => {
+  it("quita los campos vacíos (undefined) y convierte listas dentro de listas", () => {
+    expect(paraFirestore({ a: 1, b: undefined, c: [{ d: undefined, e: 2 }], f: [[1, 2]] })).toEqual({ a: 1, c: [{ e: 2 }], f: [{ 0: 1, 1: 2 }] });
   });
 });
