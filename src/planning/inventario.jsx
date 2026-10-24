@@ -62,7 +62,7 @@ export function TabInventario({ layers, projectId, orgId }) {
     setError(null); setNota(null);
     try {
       const XLSX = await import("xlsx");
-      const wb = XLSX.read(await file.arrayBuffer());
+      const wb = /\.csv$/i.test(file.name) ? XLSX.read(await file.text(), { type: "string" }) : XLSX.read(await file.arrayBuffer()); // CSV como texto UTF-8 (si no, las tildes salen rotas)
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
       if (!filas.length) throw new Error("el archivo no tiene filas");
       const antes = new Map(lista.map(c => [c.id, JSON.stringify(c)]));

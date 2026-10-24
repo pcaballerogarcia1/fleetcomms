@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { TabTrabajadores, TabVehiculos } from "../scheduling/flota.jsx";
 import { C, font } from "./estilo.js";
+import { ImportarRecursos } from "./importar-recursos.jsx";
 
 export function TabRecursos({ vehicles = [], workers = [], loadingV, loadingW, activeProject, onProjectUpdate, orgId }) {
   const [sub, setSub] = useState("vehiculos");
@@ -25,8 +26,14 @@ export function TabRecursos({ vehicles = [], workers = [], loadingV, loadingW, a
         <span style={{ fontSize: 11.5, color: C.dim, marginLeft: 8 }}>Vehículos y trabajadores son de toda la empresa: los mismos en todos los proyectos.</span>
       </div>
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {sub === "vehiculos" && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}
-        {sub === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} activeProject={activeProject} orgId={orgId} />}
+        {sub === "vehiculos" && <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <ImportarRecursos tipo="vehiculos" vehicles={vehicles} workers={workers} orgId={orgId} />
+          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}><TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} /></div>
+        </div>}
+        {sub === "trabajadores" && <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <ImportarRecursos tipo="trabajadores" vehicles={vehicles} workers={workers} orgId={orgId} />
+          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}><TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} activeProject={activeProject} orgId={orgId} /></div>
+        </div>}
         {sub === "trabajos" && <VehiculosTrabajos vehicles={vehicles} activeProject={activeProject} onProjectUpdate={onProjectUpdate} />}
       </div>
     </div>
