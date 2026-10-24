@@ -14,7 +14,7 @@ export function vigilarErrores(page) {
 
 export async function entrarOficina(page, email = "admin@demo.test") {
   await page.goto("/login");
-  await page.fill('input[type="email"]', email);
+  await page.fill('input[autocomplete="username"]', email);
   await page.fill('input[type="password"]', CLAVE);
   await page.getByRole("button", { name: "Acceder" }).click();
   await page.waitForURL(/\/projects/);
@@ -22,7 +22,7 @@ export async function entrarOficina(page, email = "admin@demo.test") {
 
 export async function entrarCampo(page, email) {
   await page.goto("/rutas");
-  await page.fill('input[type="email"]', email);
+  await page.fill('input[autocomplete="username"]', email);
   await page.fill('input[type="password"]', CLAVE);
   await page.keyboard.press("Enter");
   await expect(page.getByText("Selecciona tipo de trabajo", { exact: false })).toBeVisible();

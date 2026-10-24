@@ -20,11 +20,11 @@ import { ModuloIncidencias } from "./conductor/incidencias.jsx";
 import { ModuloInventario } from "./conductor/inventario.jsx";
 import { ListaPlanes } from "./conductor/rutas.jsx";
 
-function Login(){
+function Login({aviso=""}){
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
-  const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState(aviso);const [loading,setLoading]=useState(false);
   const go=async()=>{
-    if(!email||!pw){setErr("Introduce email y contraseña");return;}
+    if(!email||!pw){setErr("Introduce tu usuario (o email) y tu contraseña");return;}
     setLoading(true);setErr("");
     try{ await signInWithEmailAndPassword(auth,limpiarEmail(email),pw); }
     catch(e){ setErr(mensajeAuth(e)); setLoading(false); }
@@ -39,8 +39,8 @@ function Login(){
         </div>
         <div style={{background:"rgba(18,21,28,0.85)",border:`1px solid ${C.border}`,borderRadius:16,padding:22,boxShadow:"0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04)"}}>
           <div style={{marginBottom:14}}>
-            <label className="op-label">Email</label>
-            <input className="op-input" style={{height:44,fontSize:15}} value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="tu@empresa.com" autoComplete="email" onKeyDown={e=>e.key==="Enter"&&go()}/>
+            <label className="op-label">Email o usuario</label>
+            <input className="op-input" style={{height:44,fontSize:15}} value={email} onChange={e=>setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={e=>e.key==="Enter"&&go()}/>
           </div>
           <div style={{marginBottom:20}}>
             <label className="op-label">Contraseña</label>
@@ -60,6 +60,7 @@ function Login(){
 // ── APP ───────────────────────────────────────────────────────────
 export default function App(){
   const [sesion,setSesion]=useState(undefined); // undefined=cargando, null=no autenticado
+  const [bloqueado,setBloqueado]=useState(false); // su perfil está inactivo: se le dice al volver a la entrada
   const [usuarios,setUsuarios]=useState([]);
   const [tab,setTab]=useState("rutas");
 
@@ -74,9 +75,10 @@ export default function App(){
           // no se queda cargando para siempre.
           const snap=await getUserProfileSafe(user.uid);
           if(snap.exists()&&snap.data().activo!==false){
-            setSesion({uid:user.uid,id:user.uid,...snap.data()});
+            setBloqueado(false); setSesion({uid:user.uid,id:user.uid,...snap.data()});
             setErrorUser({uid:user.uid,...snap.data()});
           }else{
+            setBloqueado(snap.exists());
             await signOut(auth); setSesion(null);
           }
         }catch{ setSesion(null); }
@@ -184,7 +186,7 @@ export default function App(){
     </div>
   );
 
-  if(!sesion) return <Login/>;
+  if(!sesion) return <Login key={bloqueado?"b":"n"} aviso={bloqueado?"Tu acceso a la app está bloqueado. Habla con tu empresa.":""}/>;
 
   const esIntermedio = sesion.rol==="intermedio";
   const esAdmin = puedeGestionarRutasRol(sesion.rol); // admin/intermedio/superadmin

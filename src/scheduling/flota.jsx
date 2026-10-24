@@ -6,6 +6,7 @@ import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 import { C, TURNO_TYPES, VEHICLE_TYPES, font, mono } from "./estilo.js";
 import { CAMPOS_FICHA, edadDe, valorFicha } from "../trabajador-ficha.js";
+import { AccesoApp } from "./acceso-app.jsx";
 
 // ── DEPOT SECTION ─────────────────────────────────────────────────
 // Selector de cochera/depot compartido por vehículos y trabajadores: dos
@@ -485,6 +486,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   {w.nacionalidad && <span>{w.nacionalidad}</span>}
                   {w.telefono && <span>☎ {w.telefono}</span>}
                   {w.email && <span>{w.email}</span>}
+                  {w.uid && <span style={{ color: C.blueText }} title="Tiene acceso a la app">🔑 {w.usuario || "app"}</span>}
                   {(() => {
                     const v = (vehicles || []).find(v => v._id === w.vehiculoId);
                     return v
@@ -528,6 +530,9 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
             <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} style={{ padding: "8px 18px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font, opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
             <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
           </div>
+          {nuevo
+            ? <div style={{ fontSize: 11.5, color: C.dim, marginTop: 14 }}>Cuando lo guardes, ábrelo para darle su usuario y contraseña de la app.</div>
+            : workers.find(w => w._id === editId) && <AccesoApp key={editId} worker={workers.find(w => w._id === editId)} orgId={orgId} selStyle={selStyle} />}
         </div>
       );
     })()}

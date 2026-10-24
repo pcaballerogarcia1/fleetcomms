@@ -75,8 +75,8 @@ export function LoginScheduling({ onLogin }) {
         </div>
         <div style={{ background: "rgba(18,21,28,0.85)", border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, boxShadow: "0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
           <div style={{ marginBottom: 14 }}>
-            <label className="op-label" htmlFor="login-email">Email</label>
-            <input id="login-email" className="op-input" value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="tu@empresa.com" autoComplete="email" onKeyDown={onEnter} />
+            <label className="op-label" htmlFor="login-email">Email o usuario</label>
+            <input id="login-email" className="op-input" value={email} onChange={e => setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={onEnter} />
           </div>
           <div style={{ marginBottom: 20 }}>
             <label className="op-label" htmlFor="login-clave">Contraseña</label>

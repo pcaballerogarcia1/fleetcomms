@@ -231,7 +231,7 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   const erroresMovil = vigilarErrores(m);
   m.on("dialog", d => d.accept());
   await m.goto("/rutas");
-  await m.fill('input[type="email"]', "cond1@demo.test");
+  await m.fill('input[autocomplete="username"]', "cond1@demo.test");
   await m.fill('input[type="password"]', CLAVE);
   await m.keyboard.press("Enter");
   await expect(m.getByText("¿Qué turno haces hoy?")).toBeVisible({ timeout: 30_000 });
@@ -396,7 +396,7 @@ test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin c
   const m = await movil.newPage();
   await m.clock.setFixedTime(dia);
   await m.goto("/rutas");
-  await m.fill('input[type="email"]', "cond1@demo.test");
+  await m.fill('input[autocomplete="username"]', "cond1@demo.test");
   await m.fill('input[type="password"]', CLAVE);
   await m.keyboard.press("Enter");
   await expect(m.getByRole("button", { name: "Empezar turno" })).toBeVisible({ timeout: 30_000 });

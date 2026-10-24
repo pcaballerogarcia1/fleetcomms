@@ -2,13 +2,15 @@
 // errores de Firebase Auth en palabras que se entienden. Lo usan las tres
 // pantallas de entrada (oficina, Rutas y superadmin).
 
-/** Sin espacios, en minúsculas y sin el punto final que se cuela al copiarlo de un texto */
-export const limpiarEmail = email => String(email || "").trim().toLowerCase().replace(/\.+$/, "");
+import { correoDeUsuario } from "./acceso-app.js";
+
+/** Sin espacios, en minúsculas y sin el punto final que se cuela al copiarlo de un texto; un usuario sin «@» (el de un trabajador) se completa con su dominio */
+export const limpiarEmail = correoDeUsuario;
 
 const MENSAJES = {
-  "auth/invalid-credential": "Email o contraseña incorrectos.",
-  "auth/wrong-password": "Email o contraseña incorrectos.",
-  "auth/user-not-found": "Email o contraseña incorrectos.",
+  "auth/invalid-credential": "Usuario o contraseña incorrectos.",
+  "auth/wrong-password": "Usuario o contraseña incorrectos.",
+  "auth/user-not-found": "Usuario o contraseña incorrectos.",
   "auth/invalid-email": "Ese email no es válido: revisa que esté bien escrito.",
   "auth/user-disabled": "Esta cuenta está desactivada.",
   "auth/too-many-requests": "Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.",

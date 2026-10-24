@@ -8,7 +8,7 @@ describe("entrada a la app", () => {
     expect(limpiarEmail(undefined)).toBe("");
   });
   it("explica los errores en palabras que se entienden, sin códigos de Firebase", () => {
-    expect(mensajeAuth({ code: "auth/invalid-credential" })).toBe("Email o contraseña incorrectos.");
+    expect(mensajeAuth({ code: "auth/invalid-credential" })).toBe("Usuario o contraseña incorrectos.");
     expect(mensajeAuth({ code: "auth/invalid-email" })).toMatch(/no es válido/);
     expect(mensajeAuth({ code: "auth/raro", message: "Firebase: Error (auth/raro)." })).not.toMatch(/Firebase|auth\//);
   });
