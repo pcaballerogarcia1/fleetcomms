@@ -8,7 +8,7 @@ import { aplicarCambios, camposCambiados, colaDe } from "./cola.js";
 import {
   C, CUADRANTE_META, MESES_ES, S, TIPOS_TRABAJO, VEHICULOS,
   avatarOf, fbUpdate, fmtDuracion, fmtHora, fmtMes, font,
-  haversineKm, hhmm, mono, parseKML, timeAgo,
+  haversineKm, hhmm, mono, parseKML, recorridoParaGuardar, timeAgo,
 } from "./comun.js";
 import { AvisosMovil } from "./avisos-movil.jsx";
 import { DetallePlan } from "./ruta-detalle.jsx";
@@ -418,7 +418,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
               let mes=new Date().toISOString().slice(0,7);
               if(dia){const p=dia.split("/");if(p.length===3)mes=p[2]+"-"+p[1].padStart(2,"0");}
               // se espera a que se guarde: si falla (permisos, conexión), se dice
-              Promise.resolve(addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(/\.kml$/i,""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido:recorrido||null,fechaSubida:Date.now()}))
+              Promise.resolve(addPlan({tipo:tipoActivo.key,...(tipoActivo.trabajo?{trabajo:tipoActivo.trabajo}:{}),nombre:docName||file.name.replace(/\.kml$/i,""),archivo:file.name,turno,mes,diaServicio:dia,ubicaciones,recorrido:recorridoParaGuardar(recorrido),fechaSubida:Date.now()}))
                 .then(()=>{setShowUpload(false);setDebugInfo([]);})
                 .catch(err=>setErrorMsg(`No se pudo guardar «${file.name}»: ${err?.message||err}`));
             }

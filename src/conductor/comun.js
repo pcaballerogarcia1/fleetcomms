@@ -201,6 +201,9 @@ export function cleanCalle(raw) {
 }
 
 // ── KML PARSER ────────────────────────────────────────────────────
+/** El recorrido de un KML ([[lat, lng], …]) como se guarda: Firestore no admite listas dentro de listas */
+export const recorridoParaGuardar = r => (Array.isArray(r) && r.length > 1 ? r.map(p => (Array.isArray(p) ? { lat: p[0], lng: p[1] } : p)) : null);
+
 // Texto de un KML: sin CDATA y con las entidades (&amp; …) traducidas
 function limpiarXml(t) {
   return String(t || "").replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/, "$1")

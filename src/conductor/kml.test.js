@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseKML } from "./comun.js";
+import { parseKML, recorridoParaGuardar } from "./comun.js";
 
 const KML_MYMAPS = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -37,6 +37,9 @@ describe("KML de cualquier origen", () => {
     const r = parseKML(KML_MYMAPS);
     expect(r.docName).toBe("Ruta lunes");
     expect(r.ubicaciones.map(u => [u.calle, u.turno, u.lat])).toEqual([["Calle Mayor 3 & esquina", "Mañana", 39.5701], ["Plaza de España", "", 39.576]]);
-    expect(r.recorrido).toHaveLength(2);
+    expect(r.recorrido).toEqual([[39.57, 2.65], [39.576, 2.654]]);
+    // al guardar, como objetos: Firestore no admite listas dentro de listas
+    expect(recorridoParaGuardar(r.recorrido)).toEqual([{ lat: 39.57, lng: 2.65 }, { lat: 39.576, lng: 2.654 }]);
+    expect(recorridoParaGuardar(null)).toBe(null);
   });
 });
