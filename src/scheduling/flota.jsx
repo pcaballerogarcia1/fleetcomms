@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 import { C, TURNO_TYPES, VEHICLE_TYPES, font, mono } from "./estilo.js";
+import { CAMPOS_FICHA, edadDe, valorFicha } from "../trabajador-ficha.js";
 
 // ── DEPOT SECTION ─────────────────────────────────────────────────
 // Selector de cochera/depot compartido por vehículos y trabajadores: dos
@@ -280,8 +281,36 @@ const VehicleSelect = ({ value, onChange, vehicles, selStyle }) => (
   </select>
 );
 
+// La ficha del trabajador (DNI, nacimiento, nacionalidad, categoría, contacto…), plegable
+function FichaCampos({ obj, setObj, selStyle }) {
+  const [abierta, setAbierta] = useState(() => CAMPOS_FICHA.some(c => obj[c.k]));
+  const rellenos = CAMPOS_FICHA.filter(c => obj[c.k] !== "" && obj[c.k] != null).length;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button type="button" onClick={() => setAbierta(a => !a)} style={{ background: "none", border: "none", color: C.blueText, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: font }}>
+        {abierta ? "▾" : "▸"} Ficha del trabajador {rellenos ? `(${rellenos} datos)` : ""}
+      </button>
+      {abierta && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
+          {CAMPOS_FICHA.map(c => (
+            <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: C.muted, gridColumn: c.k === "direccion" || c.k === "notas" ? "1 / -1" : undefined }}>
+              {c.l}
+              <input type={c.tipo === "fecha" ? "date" : c.tipo === "numero" ? "number" : c.tipo === "email" ? "email" : "text"}
+                value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
+                style={{ ...selStyle, flex: "none", colorScheme: "dark" }} />
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+// los datos de la ficha para guardar (normalizados; vacíos = se borran)
+const fichaParaGuardar = obj => Object.fromEntries(CAMPOS_FICHA.map(c => [c.k, valorFicha(c, obj[c.k]) ?? ""]));
+const fichaVacia = Object.fromEntries(CAMPOS_FICHA.map(c => [c.k, ""]));
+
 export function TabTrabajadores({ workers, vehicles, loading, activeProject, orgId }) {
-  const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "", depotLat: "", depotLng: "" };
+  const empty = { nombre: "", apellidos: "", turno: "Mañana (06-14)", rol: "conductor", vehiculoId: "", depotLat: "", depotLng: "", ...fichaVacia };
   const [form,     setForm]     = useState(empty);
   const [adding,   setAdding]   = useState(false);
   const [saving,   setSaving]   = useState(false);
@@ -302,6 +331,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
         vehiculoId: form.vehiculoId || "",
         depotLat: form.depotLat ? +form.depotLat : null,
         depotLng: form.depotLng ? +form.depotLng : null,
+        ...fichaParaGuardar(form),
         activo: true, org_id: orgId, createdAt: serverTimestamp(),
       });
       setForm(empty); setAdding(false);
@@ -319,6 +349,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
         vehiculoId: editForm.vehiculoId || "",
         depotLat: editForm.depotLat ? +editForm.depotLat : null,
         depotLng: editForm.depotLng ? +editForm.depotLng : null,
+        ...fichaParaGuardar(editForm),
       });
       setEditId(null);
     } catch (e) { console.error("save worker:", e); alert("Error al guardar."); }
@@ -334,7 +365,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
 
   function startEdit(w) {
     setEditId(w._id);
-    setEditForm({ nombre: w.nombre || "", apellidos: w.apellidos || "", turno: w.turno || "Mañana (06-14)", rol: w.rol || "conductor", vehiculoId: w.vehiculoId || "", depotLat: w.depotLat ?? "", depotLng: w.depotLng ?? "" });
+    setEditForm({ nombre: w.nombre || "", apellidos: w.apellidos || "", turno: w.turno || "Mañana (06-14)", rol: w.rol || "conductor", vehiculoId: w.vehiculoId || "", depotLat: w.depotLat ?? "", depotLng: w.depotLng ?? "", ...Object.fromEntries(CAMPOS_FICHA.map(c => [c.k, w[c.k] ?? ""])) });
     setAdding(false);
   }
 
@@ -353,7 +384,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
   );
 
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 720 }}>
+    <div style={{ flex: 1, overflow: "auto", padding: 24, maxWidth: 900 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Trabajadores</div>
@@ -395,6 +426,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
               fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
             }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
+          <FichaCampos obj={form} setObj={setForm} selStyle={selStyle} />
           <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
       )}
@@ -435,6 +467,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   Cancelar
                 </button>
               </div>
+              <FichaCampos obj={editForm} setObj={setEditForm} selStyle={selStyle} />
               <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
@@ -447,6 +480,11 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <span>{w.turno}</span>
                   <span style={{ color: w.rol === "supervisor" ? C.amber : C.dim }}>{w.rol}</span>
+                  {w.categoria && <span>{w.categoria}</span>}
+                  {edadDe(w) != null && <span>{edadDe(w)} años</span>}
+                  {w.nacionalidad && <span>{w.nacionalidad}</span>}
+                  {w.telefono && <span>☎ {w.telefono}</span>}
+                  {w.email && <span>{w.email}</span>}
                   {(() => {
                     const v = (vehicles || []).find(v => v._id === w.vehiculoId);
                     return v

@@ -74,7 +74,7 @@ export function ImportarRecursos({ tipo, vehicles = [], workers = [], orgId }) {
         <button onClick={() => fileRef.current?.click()} style={btn}><Upload size={14} /> Subir Excel/CSV de {nombre}</button>
         <button onClick={plantilla} style={{ ...btn, background: "none" }}><Download size={14} /> Descargar plantilla</button>
         <span style={{ fontSize: 11.5, color: C.dim }}>
-          {tipo === "vehiculos" ? "Columnas: Nombre, Matrícula, Tipo, Capacidad, Turno (y Latitud/Longitud de su base). Los que ya existen se actualizan por la matrícula." : "Columnas: Nombre, Apellidos (o Nombre completo), Turno, Rol y Vehículo (su matrícula o nombre). Los que ya existen se actualizan."}
+          {tipo === "vehiculos" ? "Columnas: Nombre, Matrícula, Tipo, Capacidad, Turno (y Latitud/Longitud de su base). Los que ya existen se actualizan por la matrícula." : "Columnas: Nombre y Apellidos (o Nombre completo), DNI/NIE, Fecha de nacimiento (o Edad), Nacionalidad, Categoría, Correo electrónico, Teléfono, Dirección, Permiso de conducir, Fecha de alta, Turno, Rol y Vehículo (su matrícula o nombre). Solo el nombre es obligatorio; los que ya existen se actualizan."}
         </span>
       </div>
       {estado && <div style={{ fontSize: 12.5, color: estado.ok ? C.green : C.red, marginTop: 8 }}>{estado.texto}</div>}

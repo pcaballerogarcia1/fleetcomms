@@ -35,3 +35,15 @@ describe("subir vehículos y trabajadores", () => {
     expect(plan.sinVehiculo).toEqual(["No existe"]);
   });
 });
+
+describe("ficha del trabajador desde el Excel", () => {
+  it("lee DNI, nacimiento (texto o número de Excel), nacionalidad, categoría, correo… y el rol de la app", () => {
+    const { trabajadores } = leerTrabajadores([
+      { Nombre: "Ana", "D.N.I.": "12345678Z", "Fecha de nacimiento": "14/03/1985", Nacionalidad: "Española", "Categoría": "Conductor 1ª", Email: "Ana@Empresa.es", "Móvil": "600111222", Domicilio: "C/ Mayor 1", Carnet: "C", "Fecha de alta": 43862, Puesto: "Encargado" },
+      { Nombre: "Luis", Edad: "34 años" },
+    ]);
+    expect(trabajadores[0]).toMatchObject({ dni: "12345678Z", fechaNacimiento: "1985-03-14", nacionalidad: "Española", categoria: "Conductor 1ª", email: "ana@empresa.es", telefono: "600111222", direccion: "C/ Mayor 1", carnet: "C", fechaAlta: "2020-02-01", rol: "supervisor" });
+    expect(trabajadores[1]).toMatchObject({ edad: 34, rol: "conductor" });
+    expect(trabajadores[1].dni).toBeUndefined(); // lo que no viene no se toca
+  });
+});

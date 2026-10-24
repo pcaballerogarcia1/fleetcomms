@@ -5,6 +5,7 @@
 // por nombre y apellidos. Un trabajador se vincula a su vehículo por la
 // matrícula o el nombre del vehículo. Sin React ni Firebase.
 import { TURNO_TYPES } from "./scheduling/estilo.js";
+import { CAMPOS_FICHA, valorFicha } from "./trabajador-ficha.js";
 
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const texto = v => String(v ?? "").trim();
@@ -55,7 +56,7 @@ const C_TRAB = {
   apellidos: ["apellidos", "apellido", "apellido 1", "surname"],
   completo: ["nombre completo", "nombre y apellidos", "empleado"],
   turno: ["turno", "jornada", "horario"],
-  rol: ["rol", "puesto", "categoria", "cargo"],
+  rol: ["rol", "puesto", "cargo", "funcion"],
   vehiculo: ["vehiculo", "matricula", "camion", "vehiculo asignado", "unidad"],
   lat: ["lat", "latitud"],
   lng: ["lng", "lon", "longitud"],
@@ -87,10 +88,19 @@ export function leerTrabajadores(filas) {
     if (!nombre && completo) { const p = completo.split(/\s+/); nombre = p[0]; apellidos = apellidos || p.slice(1).join(" "); }
     if (!nombre) { ignorados.push({ fila: i + 2, motivo: "sin nombre" }); return; }
     const lat = num(col(f, C_TRAB.lat)), lng = num(col(f, C_TRAB.lng));
+    // la ficha (DNI, nacimiento, nacionalidad, categoría, correo…): solo lo que venga, para no borrar lo que ya hubiera
+    const ficha = {};
+    for (const c of CAMPOS_FICHA) {
+      const v = valorFicha(c, col(f, c.sin));
+      if (v !== "" && v != null) ficha[c.k] = v;
+    }
     trabajadores.push({
       nombre, apellidos, turno: turnoDe(col(f, C_TRAB.turno), TURNO_TYPES[0]),
-      rol: (col(f, C_TRAB.rol) || "conductor").toLowerCase(), vehiculo: col(f, C_TRAB.vehiculo),
+      // el rol de la app: supervisor (encargados, jefes) o conductor
+      rol: /supervis|encargad|jefe|capataz|coordinad/.test(norm(col(f, C_TRAB.rol))) ? "supervisor" : "conductor",
+      vehiculo: col(f, C_TRAB.vehiculo),
       depotLat: lat != null && lng != null ? lat : null, depotLng: lat != null && lng != null ? lng : null,
+      ...ficha,
     });
   });
   return { trabajadores, ignorados };
@@ -151,6 +161,6 @@ export const PLANTILLA_VEHICULOS = [
   { Nombre: "Furgoneta 2", Matrícula: "5678DEF", Tipo: "Furgón", Capacidad: 800, Turno: "Mañana", Latitud: "", Longitud: "" },
 ];
 export const PLANTILLA_TRABAJADORES = [
-  { Nombre: "Ana", Apellidos: "García López", Turno: "Mañana", Rol: "conductor", Vehículo: "1234ABC" },
-  { Nombre: "Luis", Apellidos: "Martín Ruiz", Turno: "Tarde", Rol: "conductor", Vehículo: "1234ABC" },
+  { Nombre: "Ana", Apellidos: "García López", "DNI/NIE": "12345678Z", "Fecha de nacimiento": "14/03/1985", Nacionalidad: "Española", "Categoría": "Conductor 1ª", "Correo electrónico": "ana.garcia@empresa.es", "Teléfono": "600111222", "Dirección": "C/ Mayor 1, Palma", "Permiso de conducir": "C", "Fecha de alta": "01/02/2020", Turno: "Mañana", Rol: "conductor", "Vehículo": "1234ABC", Notas: "" },
+  { Nombre: "Luis", Apellidos: "Martín Ruiz", "DNI/NIE": "X1234567L", "Fecha de nacimiento": "02/11/1990", Nacionalidad: "Rumana", "Categoría": "Peón", "Correo electrónico": "", "Teléfono": "600333444", "Dirección": "", "Permiso de conducir": "B", "Fecha de alta": "15/06/2023", Turno: "Tarde", Rol: "conductor", "Vehículo": "1234ABC", Notas: "" },
 ];
