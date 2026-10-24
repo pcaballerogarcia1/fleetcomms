@@ -400,6 +400,8 @@ export function WorkspaceRouter() {
                   : <PlanningPageLazy
                       sesion={sesionModulos} onLogout={logout}
                       projectId={activeProject._id} embedded
+                      activeProject={activeProject} onProjectUpdate={updateProject}
+                      vehicles={vehicles} workers={workers} loadingV={loadingV} loadingW={loadingW} orgRecursos={effectiveOrgId}
                     />;
                 // en un concurso, primero dimensionar por rendimientos (sin inventario); el mapa, en su pestaña
                 return enConcurso ? <PlanningConcursoLazy concursoId={activeProject.concurso} mapa={mapa} irADocumentos={() => go("/documentos")} /> : mapa;

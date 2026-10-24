@@ -7,13 +7,15 @@ import { cambiarDepots, getContenedor, getFraccion } from "./planning/datos.js";
 import { C, LAYER_COLORS, font } from "./planning/estilo.js";
 import { TabTimetable } from "./planning/horarios.jsx";
 import { TabInventario } from "./planning/inventario.jsx";
+import { TabTrabajos } from "./planning/trabajos.jsx";
+import { TabRecursos } from "./planning/recursos.jsx";
 import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
 import { useUltimo } from "./use-ultimo.js";
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
-export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) {
+export function PlanningPage({ sesion, onLogout, projectId, embedded = false, activeProject = null, onProjectUpdate = null, vehicles = [], workers = [], loadingV = false, loadingW = false, orgRecursos = null }) {
   const orgId = sesion?.org_id ?? null;
   const orgIdRef = useUltimo(orgId); // la de ahora, dentro de las escuchas por proyecto
 
@@ -536,8 +538,10 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
       }}>
         {[
           { key: "mapa",      label: "Mapa" },
+          { key: "trabajos",  label: "Trabajos" },
           { key: "timetable", label: "Timetable" },
           { key: "inventario", label: "Inventario" },
+          { key: "recursos",  label: "Recursos" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             background: "none", border: "none", cursor: "pointer",
@@ -595,6 +599,10 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false }) 
           </>
         ) : tab === "inventario" ? (
           <TabInventario layers={layers} projectId={projectId} orgId={orgId} />
+        ) : tab === "trabajos" ? (
+          <TabTrabajos key={projectId} layers={layers} activeProject={activeProject} onProjectUpdate={onProjectUpdate} vehicles={vehicles} />
+        ) : tab === "recursos" ? (
+          <TabRecursos key={projectId} vehicles={vehicles} workers={workers} loadingV={loadingV} loadingW={loadingW} activeProject={activeProject} onProjectUpdate={onProjectUpdate} orgId={orgRecursos || orgId} />
         ) : (
           <TabTimetable layers={layers} projectId={projectId} orgId={orgId}
             canPrice={sesion?.rol === "admin" || sesion?.rol === "superadmin"} />

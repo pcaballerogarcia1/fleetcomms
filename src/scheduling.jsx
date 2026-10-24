@@ -5,7 +5,6 @@ import { auth, db, getUserProfileSafe } from "./firebase.js";
 import { LoginScheduling } from "./login-scheduling.jsx";
 import { PlanningPage } from "./planning.jsx";
 import { C, font } from "./scheduling/estilo.js";
-import { TabTrabajadores, TabVehiculos } from "./scheduling/flota.jsx";
 import { TabPlanificacion } from "./scheduling/planificacion.jsx";
 import { TabProyectos } from "./scheduling/proyectos.jsx";
 
@@ -16,12 +15,11 @@ export { TabPlanificacion } from "./scheduling/planificacion.jsx";
 export { TabProyectos } from "./scheduling/proyectos.jsx";
 
 // ── SCHEDULING PAGE ───────────────────────────────────────────────
-export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW, activeProject, onProjectUpdate, orgId, sesion = null }) {
+export function SchedulingModuleWrapper({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
   const [subTab, setSubTab] = useState("vrp");
+  // vehículos y trabajadores se gestionan en Planning → Recursos
   const SUB_TABS = [
     { key: "vrp",          label: "VRP / Gantt" },
-    { key: "vehiculos",    label: `Vehículos${vehicles.length ? ` (${vehicles.length})` : ""}` },
-    { key: "trabajadores", label: `Trabajadores${workers.length ? ` (${workers.length})` : ""}` },
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
@@ -40,6 +38,7 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
             marginBottom: -1, transition: "color .12s",
           }}>{t.label}</button>
         ))}
+        <span style={{ marginLeft: "auto", alignSelf: "center", fontSize: 11.5, color: C.dim }}>{vehicles.length} vehículos · {workers.length} trabajadores — se gestionan en Planning → Recursos</span>
       </div>
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         <div style={{ flex: 1, display: subTab === "vrp" ? "flex" : "none", overflow: "hidden" }}>
@@ -50,8 +49,6 @@ export function SchedulingModuleWrapper({ vehicles, workers, loadingV, loadingW,
             orgId={orgId} sesion={sesion}
           />
         </div>
-        {subTab === "vehiculos"    && <TabVehiculos vehicles={vehicles} loading={loadingV} activeProject={activeProject} orgId={orgId} />}
-        {subTab === "trabajadores" && <TabTrabajadores workers={workers} vehicles={vehicles} loading={loadingW} activeProject={activeProject} orgId={orgId} />}
       </div>
     </div>
   );
