@@ -2,23 +2,17 @@
 // usuario y su contraseña). Se crea igual que en «Gestión de usuarios» (con
 // la sesión secundaria, sin cerrar la del admin) y queda unido a la ficha
 // (scheduling_workers.uid). Bloquear = el perfil pasa a inactivo y ya no
-// entra. Cambiar la contraseña pasa por /api/usuario-clave.
+// entra. La contraseña la cambia cada uno con un enlace que le llega al correo
+// (desde la entrada, desde su menú o con «Enviarle un correo» de aquí).
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { logAudit } from "../audit.js";
 import { auth, db, secondaryAuth } from "../firebase.js";
-import { DOMINIO_USUARIOS, correoDeUsuario, generarClave, mensajeAlta, rolAppDe, sugerirUsuario, usuarioDeCorreo, usuarioValido } from "../acceso-app.js";
+import { esCorreoReal, enviarCambioClave } from "../cambio-clave.js";
+import { correoDeUsuario, generarClave, mensajeAlta, rolAppDe, sugerirUsuario, usuarioDeCorreo, usuarioValido } from "../acceso-app.js";
 import { roleLabel } from "../roles.js";
 import { C, font, mono } from "./estilo.js";
-
-async function pedirServidor(cuerpo) {
-  const token = await auth.currentUser?.getIdToken();
-  const r = await fetch("/api/usuario-clave", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `error ${r.status}`);
-  return j;
-}
 
 export function AccesoApp({ worker, orgId, selStyle }) {
   const [perfil, setPerfil] = useState(null); // usuarios/{uid} del trabajador (o null)
@@ -26,7 +20,6 @@ export function AccesoApp({ worker, orgId, selStyle }) {
   const [existente, setExistente] = useState(null); // un usuario de la empresa con su mismo correo, aún sin unir
   const [usuario, setUsuario] = useState(() => worker.email || sugerirUsuario(worker));
   const [clave, setClave] = useState(() => generarClave());
-  const [nuevaClave, setNuevaClave] = useState("");
   const [estado, setEstado] = useState(null); // { ok, texto }
   const [hecho, setHecho] = useState(null); // { usuario, clave } recién creado o cambiado, para dárselo al trabajador
   const [trabajando, setTrabajando] = useState(false);
@@ -103,7 +96,6 @@ export function AccesoApp({ worker, orgId, selStyle }) {
     setTrabajando(true); setEstado(null);
     try {
       await updateDoc(doc(db, "usuarios", perfil._id), { activo });
-      pedirServidor({ uid: perfil._id, bloquear: !activo }).catch(() => {}); // si el servidor está preparado, también cierra la cuenta en Firebase
       logAudit({ modulo: "Plantilla", accion: activo ? "Desbloqueó el acceso a la app" : "Bloqueó el acceso a la app", detalle: nombreCompleto, projectId: null });
       setPerfil({ ...perfil, activo });
       setEstado({ ok: true, texto: activo ? "Ya puede volver a entrar." : "Bloqueado: ya no puede entrar en la app." });
@@ -111,30 +103,14 @@ export function AccesoApp({ worker, orgId, selStyle }) {
     setTrabajando(false);
   }
 
-  async function cambiarClave() {
-    if (nuevaClave.length < 6) { setEstado({ ok: false, texto: "La contraseña tiene que tener al menos 6 caracteres." }); return; }
-    setTrabajando(true); setEstado(null);
-    try {
-      const r = await pedirServidor({ uid: perfil._id, clave: nuevaClave });
-      if (!r.configurado) {
-        setEstado({ ok: false, texto: realEmail ? "Desde aquí aún no se puede poner la contraseña de otra persona (falta un ajuste del servidor). Usa «Enviarle un correo para cambiarla»." : "Desde aquí aún no se puede poner la contraseña de otra persona: falta un ajuste del servidor (la cuenta de servicio de Firebase en Vercel)." });
-      } else {
-        logAudit({ modulo: "Plantilla", accion: "Cambió la contraseña de la app de un trabajador", detalle: nombreCompleto, projectId: null });
-        setHecho({ usuario: usuarioDeCorreo(perfil.email), clave: nuevaClave });
-        setNuevaClave("");
-      }
-    } catch (e) { setEstado({ ok: false, texto: `No se pudo cambiar: ${e.message || e}` }); }
-    setTrabajando(false);
-  }
-
   async function correoCambio() {
     setTrabajando(true); setEstado(null);
-    try { await sendPasswordResetEmail(auth, perfil.email); setEstado({ ok: true, texto: `Enviado a ${perfil.email}: le llegará un enlace para poner su contraseña.` }); }
-    catch (e) { setEstado({ ok: false, texto: `No se pudo enviar: ${e.message || e}` }); }
+    try { const email = await enviarCambioClave(perfil.email); setEstado({ ok: true, texto: `Enviado a ${email}: le llegará un enlace para poner su contraseña.` }); }
+    catch (e) { setEstado({ ok: false, texto: e.message || String(e) }); }
     setTrabajando(false);
   }
 
-  const realEmail = perfil?.email && !perfil.email.endsWith(`@${DOMINIO_USUARIOS}`);
+  const realEmail = esCorreoReal(perfil?.email);
   const btn = { padding: "7px 12px", borderRadius: 7, fontSize: 12, fontFamily: font, cursor: "pointer", border: `1px solid ${C.border}`, background: "none", color: C.text };
   const btnAzul = { ...btn, background: C.blue, border: "none", color: "#fff", fontWeight: 600 };
   const etiqueta = { display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: C.muted, flex: "1 1 160px" };
@@ -160,19 +136,15 @@ export function AccesoApp({ worker, orgId, selStyle }) {
           <div>Usuario: <b style={{ fontFamily: mono }}>{usuarioDeCorreo(perfil.email)}</b> · {roleLabel(perfil.rol)} · {perfil.activo === false
             ? <span style={{ color: C.red, fontWeight: 600 }}>bloqueado</span>
             : <span style={{ color: C.green, fontWeight: 600 }}>puede entrar</span>}</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
-            <label style={etiqueta}>Nueva contraseña
-              <input value={nuevaClave} onChange={e => setNuevaClave(e.target.value)} autoComplete="new-password" style={{ ...selStyle, flex: "none", fontFamily: mono }} />
-            </label>
-            <button style={btn} onClick={() => setNuevaClave(generarClave())}>Inventar una</button>
-            <button style={btnAzul} disabled={trabajando || !nuevaClave} onClick={cambiarClave}>Cambiar contraseña</button>
-          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-            {realEmail && <button style={btn} disabled={trabajando} onClick={correoCambio}>Enviarle un correo para cambiarla</button>}
+            {realEmail && <button style={btn} disabled={trabajando} onClick={correoCambio}>Enviarle un correo para cambiar su contraseña</button>}
             <button style={{ ...btn, color: perfil.activo === false ? C.green : C.red, borderColor: (perfil.activo === false ? C.green : C.red) + "55" }} disabled={trabajando} onClick={cambiarActivo}>
               {perfil.activo === false ? "Desbloquear el acceso" : "Bloquear el acceso"}
             </button>
           </div>
+          <div style={{ fontSize: 11.5, color: C.dim, marginTop: 8 }}>{realEmail
+            ? "Su contraseña la cambia él: le llega un enlace a su correo (desde la entrada de la app, «¿Has olvidado tu contraseña?», o desde su menú)."
+            : "Entra con un usuario sin correo: no podrá cambiar su contraseña él solo. Si quieres que pueda, bloquea este acceso y créale otro con su correo."}</div>
         </div>
       ) : existente ? (
         <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
@@ -183,9 +155,9 @@ export function AccesoApp({ worker, orgId, selStyle }) {
         <div style={{ fontSize: 12.5, color: C.dim }}>Su usuario de la app ya no existe.</div>
       ) : (
         <div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Aún no puede entrar en la app. Elige su usuario y su contraseña; entrará como {roleLabel(rolApp)}.</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Aún no puede entrar en la app. Elige con qué entra (mejor su correo, así podrá cambiar su contraseña él solo) y su contraseña; entrará como {roleLabel(rolApp)}.</div>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <label style={etiqueta}>Usuario
+            <label style={etiqueta}>Su correo (o un usuario)
               <input value={usuario} onChange={e => setUsuario(e.target.value)} autoComplete="off" autoCapitalize="none" style={{ ...selStyle, flex: "none", fontFamily: mono }} />
             </label>
             <label style={etiqueta}>Contraseña
@@ -193,6 +165,7 @@ export function AccesoApp({ worker, orgId, selStyle }) {
             </label>
             <button style={btn} onClick={() => setClave(generarClave())}>Otra</button>
           </div>
+          {!usuario.includes("@") && <div style={{ fontSize: 11.5, color: C.amber, marginTop: 8 }}>Sin correo podrá entrar, pero no podrá cambiar su contraseña él solo. Mejor pon su correo (o rellénalo en la ficha).</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button style={btnAzul} disabled={trabajando} onClick={crear}>{trabajando ? "Creando…" : "Crear su acceso"}</button>
           </div>

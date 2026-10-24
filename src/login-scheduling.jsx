@@ -4,6 +4,7 @@ import { useState } from "react";
 import { auth, getUserProfileSafe } from "./firebase.js";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
+import { OlvideClave } from "./olvide-clave.jsx";
 
 // Extracted out of scheduling.jsx so the login screen doesn't have to
 // download the Scheduling/Planning/Rostering bundle just to show a form —
@@ -90,6 +91,7 @@ export function LoginScheduling({ onLogin }) {
           <button onClick={login} disabled={loading} className="op-btn op-primario" style={{ width: "100%", height: 40, fontSize: 13.5 }}>
             {loading ? <><Loader2 size={15} className="op-girando" /> Accediendo…</> : "Acceder"}
           </button>
+          <OlvideClave texto={email} color={C.muted} />
         </div>
         <div style={{ textAlign: "center", fontSize: 11.5, color: C.dim, marginTop: 18 }}>Acceso para la oficina · los conductores entran por la app de Rutas</div>
       </div>

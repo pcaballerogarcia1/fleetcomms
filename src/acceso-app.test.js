@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { correoDeUsuario, generarClave, rolAppDe, sugerirUsuario, usuarioDeCorreo, usuarioValido } from "./acceso-app.js";
-import { puedeGestionar, leerPeticion, actualizarCuenta } from "../api/usuario-clave.js";
+import { esCorreoReal } from "./cambio-clave.js";
 
 describe("acceso a la app del trabajador", () => {
   it("un usuario sin @ se completa con el dominio y se enseña corto", () => {
@@ -31,38 +31,11 @@ describe("acceso a la app del trabajador", () => {
   });
 });
 
-describe("/api/usuario-clave", () => {
-  it("solo gestiona a los de su empresa (intermedio, solo conductores)", () => {
-    expect(puedeGestionar({ rol: "admin", org_id: "a" }, { rol: "conductor", org_id: "a" })).toBe(true);
-    expect(puedeGestionar({ rol: "admin", org_id: "a" }, { rol: "conductor", org_id: "b" })).toBe(false);
-    expect(puedeGestionar({ rol: "intermedio", org_id: "a" }, { rol: "admin", org_id: "a" })).toBe(false);
-    expect(puedeGestionar({ rol: "intermedio", org_id: "a" }, { rol: "conductor", org_id: "a" })).toBe(true);
-    expect(puedeGestionar({ rol: "conductor", org_id: "a" }, { rol: "conductor", org_id: "a" })).toBe(false);
-    expect(puedeGestionar({ rol: "admin", org_id: "a", activo: false }, { rol: "conductor", org_id: "a" })).toBe(false);
-    expect(puedeGestionar({ rol: "superadmin" }, { rol: "admin", org_id: "x" })).toBe(true);
-    expect(puedeGestionar({ rol: "admin", org_id: "a" }, null)).toBe(false);
-  });
-  it("lee la petición y rechaza contraseñas cortas", () => {
-    expect(leerPeticion({ uid: "abcdef123", clave: "Secreta1" })).toEqual({ uid: "abcdef123", clave: "Secreta1" });
-    expect(leerPeticion('{"uid":"abcdef123","bloquear":true}')).toEqual({ uid: "abcdef123", bloquear: true });
-    expect(() => leerPeticion({ uid: "abcdef123", clave: "123" })).toThrow(/6 caracteres/);
-    expect(() => leerPeticion({ uid: "abcdef123" })).toThrow();
-    expect(() => leerPeticion({ uid: "../x" })).toThrow();
-  });
-  it("pide a Firebase Auth el cambio como administrador", async () => {
-    const llamadas = [];
-    const f = async (url, op) => {
-      llamadas.push([url, op]);
-      if (url.includes("oauth2")) return { ok: true, json: async () => ({ access_token: "T", expires_in: 3600 }) };
-      return { ok: true, json: async () => ({}) };
-    };
-    const { generateKeyPair, exportPKCS8 } = await import("jose");
-    const { privateKey } = await generateKeyPair("RS256", { extractable: true });
-    const sa = { project_id: "p1", client_email: "x@p1.iam.gserviceaccount.com", private_key: await exportPKCS8(privateKey) };
-    await actualizarCuenta(sa, { uid: "abcdef123", clave: "Secreta1" }, f);
-    const [url, op] = llamadas.at(-1);
-    expect(url).toBe("https://identitytoolkit.googleapis.com/v1/projects/p1/accounts:update");
-    expect(JSON.parse(op.body)).toEqual({ localId: "abcdef123", password: "Secreta1" });
-    expect(op.headers.Authorization).toBe("Bearer T");
+describe("cambiar la contraseña por correo", () => {
+  it("solo a un correo de verdad, no a un usuario sin correo", () => {
+    expect(esCorreoReal("ana@empresa.com")).toBe(true);
+    expect(esCorreoReal("juan.perez@usuarios.operanzia.com")).toBe(false);
+    expect(esCorreoReal("juan.perez")).toBe(false);
+    expect(esCorreoReal("")).toBe(false);
   });
 });

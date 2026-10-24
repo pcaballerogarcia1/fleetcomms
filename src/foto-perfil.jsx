@@ -1,10 +1,12 @@
 // El círculo del usuario en la cabecera: su foto o, si no tiene, sus
 // iniciales. Al tocarlo: poner o cambiar la foto (galería o cámara), quitarla
-// y cerrar sesión.
-import { Camera, LogOut, Trash2 } from "lucide-react";
+// cambiar la contraseña (le llega un correo) y cerrar sesión.
+import { Camera, KeyRound, LogOut, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { C, MARCA } from "./tema.js";
 import { guardarFoto, reducirFoto } from "./foto-perfil.js";
+import { esCorreoReal, enviarCambioClave } from "./cambio-clave.js";
+import { usuarioDeCorreo } from "./acceso-app.js";
 
 const iniciales = u => (((u?.nombre || "")[0] || "") + ((u?.apellidos || "")[0] || "")).toUpperCase() || "?";
 
@@ -27,6 +29,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
   const [abierto, setAbierto] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState(null);
+  const [aviso, setAviso] = useState(null);
   const caja = useRef(), archivo = useRef();
   useEffect(() => {
     if (!abierto) return;
@@ -46,6 +49,13 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
     setOcupado(false);
   }
 
+  async function cambiarClave() {
+    setError(null); setAviso(null); setOcupado(true);
+    try { const email = await enviarCambioClave(sesion.email); setAviso(`Te hemos enviado un correo a ${email} con un enlace para poner una contraseña nueva.`); }
+    catch (e) { setError(e.message || String(e)); }
+    setOcupado(false);
+  }
+
   const opcion = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 14, cursor: "pointer", textAlign: "left" };
   return (
     <div ref={caja} style={{ position: "relative" }}>
@@ -59,11 +69,13 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
             <CirculoPerfil usuario={{ ...sesion, foto }} size={40} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[sesion?.nombre, sesion?.apellidos].filter(Boolean).join(" ") || "Tu perfil"}</div>
-              {sesion?.email && <div style={{ fontSize: 12, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sesion.email}</div>}
+              {sesion?.email && <div style={{ fontSize: 12, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{usuarioDeCorreo(sesion.email)}</div>}
             </div>
           </div>
           <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => archivo.current?.click()}><Camera size={16} color={C.blue} /> {ocupado ? "Guardando…" : foto ? "Cambiar foto" : "Poner foto"}</button>
           {foto && <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => poner(null)}><Trash2 size={16} color={C.muted} /> Quitar foto</button>}
+          {esCorreoReal(sesion?.email) && <button role="menuitem" style={opcion} disabled={ocupado} onClick={cambiarClave}><KeyRound size={16} color={C.blue} /> Cambiar mi contraseña</button>}
+          {aviso && <div role="status" style={{ padding: "6px 14px 10px", fontSize: 12, color: C.green, lineHeight: 1.45, maxWidth: 260 }}>{aviso}</div>}
           {error && <div style={{ padding: "6px 14px", fontSize: 12, color: C.red }}>{error}</div>}
           {onCerrarSesion && <button role="menuitem" style={{ ...opcion, borderTop: `1px solid ${C.border}` }} onClick={onCerrarSesion}><LogOut size={16} color={C.red} /> Cerrar sesión</button>}
         </div>

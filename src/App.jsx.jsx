@@ -15,6 +15,7 @@ import { watchServiciosFechas, watchMisCuadrantes } from "./lineas-servicio-stor
 import { fechaLocal, sumarDias, servicioVigente } from "./lineas-servicio.js";
 import { PanelAdminRutas } from "./conductor/admin.jsx";
 import { AvatarPerfil } from "./foto-perfil.jsx";
+import { OlvideClave } from "./olvide-clave.jsx";
 import { C, S, fbAdd, fbDelete, fbUpdate, font, useCollection } from "./conductor/comun.js";
 import { ModuloIncidencias } from "./conductor/incidencias.jsx";
 import { ModuloInventario } from "./conductor/inventario.jsx";
@@ -50,6 +51,7 @@ function Login({aviso=""}){
           <button onClick={go} disabled={loading} className="op-btn op-primario" style={{width:"100%",height:46,fontSize:15}}>
             {loading?<><Loader2 size={16} className="op-girando"/> Accediendo…</>:"Acceder"}
           </button>
+          <OlvideClave texto={email} color={C.muted}/>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}`}</style>
         </div>
       </div>

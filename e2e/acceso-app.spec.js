@@ -2,7 +2,7 @@
 // app, que entre con su usuario (sin «@») y bloquearle el acceso.
 import { test, expect } from "@playwright/test";
 import { sembrar, listar } from "./semilla.mjs";
-import { vigilarErrores, entrarOficina } from "./ayudas.mjs";
+import { vigilarErrores, entrarOficina, entrarCampo } from "./ayudas.mjs";
 
 test.beforeEach(async () => { await sembrar(); });
 
@@ -23,7 +23,7 @@ test("un trabajador recibe su usuario, entra con él y se le puede bloquear", as
   await page.locator("div").filter({ hasText: /^Trabajador 1 Demo$/ }).first().locator("xpath=ancestor::div[.//button[@title='Editar']][1]").getByTitle("Editar").click();
   const acceso = page.getByTestId("acceso-app");
   await expect(acceso.getByText("Aún no puede entrar en la app")).toBeVisible();
-  await expect(acceso.getByLabel("Usuario")).toHaveValue("trabajador.demo");
+  await expect(acceso.getByLabel(/Su correo/)).toHaveValue("trabajador.demo");
   await acceso.getByLabel("Contraseña").fill("Clave-2026");
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/a1-crear-acceso.png` });
   await acceso.getByRole("button", { name: "Crear su acceso" }).click();
@@ -54,4 +54,28 @@ test("un trabajador recibe su usuario, entra con él y se le puede bloquear", as
   await expect(m2.getByText("Tu acceso a la app está bloqueado")).toBeVisible();
   await ctx2.close();
   expect(errores.filter(e => !/usuario-clave|404|Failed to load resource/.test(e))).toEqual([]);
+});
+
+test("cada uno puede pedir un correo para cambiar su contraseña", async ({ page }) => {
+  const errores = vigilarErrores(page);
+  await page.goto("/rutas");
+  // sin escribir nada, o con un usuario sin correo, se le explica
+  await page.getByRole("button", { name: "¿Has olvidado tu contraseña?" }).click();
+  await expect(page.getByText("Escribe tu correo arriba")).toBeVisible();
+  await page.fill('input[autocomplete="username"]', "trabajador.demo");
+  await page.getByRole("button", { name: "¿Has olvidado tu contraseña?" }).click();
+  await expect(page.getByText("Con un usuario sin correo no se puede")).toBeVisible();
+  // con su correo, se manda el enlace (el emulador lo guarda)
+  await page.fill('input[autocomplete="username"]', "cond1@demo.test");
+  await page.getByRole("button", { name: "¿Has olvidado tu contraseña?" }).click();
+  await expect(page.getByText("le llegará un correo con un enlace")).toBeVisible();
+  const r = await fetch("http://127.0.0.1:9099/emulator/v1/projects/demo-operanzia/oobCodes");
+  expect((await r.json()).oobCodes.some(c => c.email === "cond1@demo.test" && c.requestType === "PASSWORD_RESET")).toBe(true);
+  // y desde dentro, en su menú
+  await entrarCampo(page, "cond1@demo.test");
+  await page.getByRole("button", { name: "Tu perfil" }).click();
+  await page.getByRole("menuitem", { name: "Cambiar mi contraseña" }).click();
+  await expect(page.getByText("Te hemos enviado un correo a cond1@demo.test")).toBeVisible();
+  if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/a3-menu-cambiar.png` });
+  expect(errores).toEqual([]);
 });
