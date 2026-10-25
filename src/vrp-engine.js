@@ -218,10 +218,13 @@ export function fueraDeAutonomia(task, resources) {
     return 2 * kmRuta(+r.depotLat, +r.depotLng, +task.lat, +task.lng) > a;
   });
 }
-/** Los km que ya lleva `row` el día que empieza en `dayOffset` */
+/** Los km que ya lleva `row` en su jornada del día que empieza en `dayOffset` (la de noche sigue pasada la medianoche) */
 export function kmDelDia(row, dayOffset) {
+  const sh = row ? shiftForDay(row, Math.floor(dayOffset / 1440)) : null;
+  const desde = sh ? dayOffset + sh.start : dayOffset;
+  const hasta = sh ? Math.max(dayOffset + sh.end, dayOffset + 1440) : dayOffset + 1440;
   let km = 0;
-  for (const a of row?.assignments || []) if (a._travel && a._start >= dayOffset && a._start < dayOffset + 1440) km += a.km || 0;
+  for (const a of row?.assignments || []) if (a._travel && a._start >= desde && a._start < hasta) km += a.km || 0;
   return km;
 }
 
@@ -231,8 +234,10 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
   const dayStart = dayOffset + sh.start;
   const dayEnd   = dayOffset + sh.end;
 
+  // las tareas de ESTA jornada: un turno de noche sigue pasada la medianoche,
+  // y lo de antes de que empiece (la noche anterior) no es suyo
   const dayItems = (row.assignments || [])
-    .filter(a => a._start >= dayOffset && a._start < dayOffset + 1440)
+    .filter(a => a._start >= dayStart && a._start < Math.max(dayEnd, dayOffset + 1440))
     .sort((a, b) => a._start - b._start);
   const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
   const hasBreakIn = (from, to) => dayItems.some(a => a._break && a._start >= from && a._start < to);

@@ -8,7 +8,7 @@ import { db } from "../firebase.js";
 import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
-import { rutasLargas, scenarioKpis } from "../scenario-metrics.js";
+import { diaDe, rutasLargas, scenarioKpis } from "../scenario-metrics.js";
 import { loadScenarioCloud, newScenarioVersion, saveScenarioCloud } from "../scenario-store.js";
 import { autoScaleFleetBg, generateScenarioBg, rutaMaestraBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
@@ -666,7 +666,7 @@ export async function downloadVehicleXLSX(ctx) {
     const name = v.nombre || v.matricula || v._id || "";
     const mat  = v.matricula || "";
     for (const a of v.assignments) {
-      const day   = Math.floor(a._start / 1440) + 1;
+      const day   = diaDe(v, a) + 1; // el de su jornada (la de noche, el día en que empieza)
       const type  = a._break ? "Descanso" : a._wait ? "Espera" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
       rows.push([
         name, mat, day,
@@ -700,7 +700,7 @@ export async function downloadCrewXLSX(ctx) {
     const veh    = vehicles.find(v => (v._id || v.id) === w.vehiculoId);
     const vehNm  = veh ? (veh.nombre || veh.matricula || "") : "";
     for (const a of w.assignments) {
-      const day  = Math.floor(a._start / 1440) + 1;
+      const day  = diaDe(w, a) + 1;
       const type = a._break ? "Descanso" : a._wait ? "Espera" : a._depot_exit ? "Salida depósito" : a._depot_return ? "Vuelta depósito" : a._travel ? "Viaje" : "Parada";
       rows.push([
         name, turno, vehNm, day,

@@ -20,12 +20,56 @@ export const REGLAS_DEFAULT = {
 
 const dur = a => Math.max(0, (a._end ?? a._start) - a._start);
 
+// ── El día de cada jornada ──
+// Una jornada cuenta entera en el día en que EMPIEZA: un turno de noche de
+// 22:00 a 06:00 es del día en que entra, aunque acabe al día siguiente (antes
+// se partía a las 00:00 y juntaba las 00-06 de una noche con las 22-24 de la
+// siguiente: «24 h»). El día va de la hora en que empieza la fila (su turno,
+// su franja del cuadrante o la del vehículo) a la misma hora del día siguiente.
+
+/** Minuto del día en que empieza la jornada de la fila (o null si no se sabe) */
+export function inicioFila(row) {
+  const s = row?._tw?.start ?? row?._effectiveStart ?? row?.shiftStart;
+  if (Number.isFinite(s)) return ((s % 1440) + 1440) % 1440;
+  const m = /\((\d{2})-(\d{2})\)/.exec(row?.turno || "");
+  return m ? parseInt(m[1], 10) * 60 : null;
+}
+
+/** Día (0 = primero) de una tarea de la fila: el de la jornada a la que pertenece */
+export function diaDe(row, a) {
+  const dw = row?._dayWindows;
+  if (dw) {
+    // franja de cada día (cuadrante): la del día que la contiene
+    const d0 = Math.floor(a._start / 1440);
+    for (const d of [d0, d0 - 1]) {
+      const w = dw[d];
+      if (w && a._start >= d * 1440 + w.start && a._start < d * 1440 + Math.max(w.end, w.start + 1)) return d;
+    }
+  }
+  const ini = inicioFila(row);
+  return ini == null ? Math.floor(a._start / 1440) : Math.floor((a._start - ini) / 1440);
+}
+
+const cacheJornadas = new WeakMap();
+/** Las tareas de la fila por día de jornada: Map día → lista ordenada */
+export function jornadasDe(row) {
+  const lista = row?.assignments;
+  if (!lista) return new Map();
+  const c = cacheJornadas.get(lista);
+  if (c && c.row === row) return c.porDia;
+  const porDia = new Map();
+  for (const a of [...lista].filter(x => x._start != null).sort((x, y) => x._start - y._start)) {
+    const d = diaDe(row, a);
+    if (!porDia.has(d)) porDia.set(d, []);
+    porDia.get(d).push(a);
+  }
+  cacheJornadas.set(lista, { row, porDia });
+  return porDia;
+}
+
 /** Métricas de una fila en un día (0 = primer día del escenario). */
 export function dayMetrics(row, day) {
-  const off = day * 1440;
-  const list = (row?.assignments || [])
-    .filter(a => a._start >= off && a._start < off + 1440)
-    .sort((a, b) => a._start - b._start);
+  const list = jornadasDe(row).get(day) || [];
   const m = {
     activo: list.length > 0, inicio: null, fin: null, amplitud: 0,
     conduccion: 0, trabajo: 0, pausas: 0, espera: 0,
@@ -153,10 +197,12 @@ export function rutasLargas(rows, limite = 540) {
   let n = 0, max = 0;
   for (const r of rows || []) {
     const porDia = new Map();
-    for (const a of r.assignments || []) {
-      if (a._start == null || a._end == null) continue;
-      const d = Math.floor(a._start / 1440), x = porDia.get(d) || [Infinity, -Infinity];
-      porDia.set(d, [Math.min(x[0], a._start), Math.max(x[1], a._end)]);
+    for (const [d, lista] of jornadasDe(r)) {
+      for (const a of lista) {
+        if (a._end == null) continue;
+        const x = porDia.get(d) || [Infinity, -Infinity];
+        porDia.set(d, [Math.min(x[0], a._start), Math.max(x[1], a._end)]);
+      }
     }
     for (const [ini, fin] of porDia.values()) {
       const dur = fin - ini;

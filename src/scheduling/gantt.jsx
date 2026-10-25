@@ -3,7 +3,7 @@
 import { ArrowRight, Home } from "lucide-react";
 import { MIN_VACIO } from "./gantt-lienzo.jsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { dayIssues, dayMetrics } from "../scenario-metrics.js";
+import { dayIssues, dayMetrics, diaDe, jornadasDe } from "../scenario-metrics.js";
 import { applyTaskMove, computeCandidateSlots, minToTime, turnoWindow } from "../vrp-engine.js";
 import { C, barrioColor, fmtDurHM, font, mono } from "./estilo.js";
 import { BarraGantt, TooltipGantt, PanelDetalleGantt, PieGantt } from "./gantt-paneles.jsx";
@@ -100,7 +100,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
     if (stackPanel?.task === task) { closePanel(); return; }
     setStackPanel({ task, row });
     if (!onScheduleChange) return;
-    const dayOffset = Math.floor(task._start / 1440) * 1440;
+    const dayOffset = diaDe(row, task) * 1440; // el día de su jornada (la de noche sigue pasada la medianoche)
     const slotsByRowId = new Map();
     rows.forEach(r => {
       if ((r._id || r.id) === (row._id || row.id)) return;
@@ -205,7 +205,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
     const type = ganttSort.startsWith("salida") ? "salida" : "servicio";
     const asc  = ganttSort.endsWith("asc");
     const getKey = row => {
-      const dayA = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
+      const dayA = jornadasDe(row).get(selectedDay) || [];
       if (type === "salida") {
         const dep = dayA.find(a => a._depot_exit);
         return dep ? dep._start : (dayA.length ? dayA[0]._start : Infinity);
@@ -228,9 +228,8 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
   // de un vistazo si los turnos están descompensados (p.ej. el fallo real
   // que hubo con mañana llena y tarde casi vacía en Palma de Mallorca).
   const jornadaStats = useMemo(() => {
-    const dayOffset = selectedDay * 1440;
     const durations = rows.map(r => {
-      const dayA = (r.assignments || []).filter(a => a._start >= dayOffset && a._start < dayOffset + 1440);
+      const dayA = jornadasDe(r).get(selectedDay) || [];
       if (!dayA.length) return null;
       const start = Math.min(...dayA.map(a => a._start));
       const end   = Math.max(...dayA.map(a => a._end));
@@ -244,7 +243,12 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
   // Night-shift support: extend chart width beyond 24h if any row has shiftEnd > 1440
   // Memoized: rows can be dozens of workers with per-day assignments, and this
   // component re-renders on every drag-and-drop mouse move (dragging/dropRowId).
-  const maxShiftEnd = useMemo(() => Math.max(1440, ...rows.map(r => r.shiftEnd ?? 1440)), [rows]);
+  // y hasta donde acabe la jornada más tardía (un turno de noche sigue pasadas las 24:00)
+  const maxShiftEnd = useMemo(() => {
+    let fin = Math.max(1440, ...rows.map(r => r.shiftEnd ?? 1440));
+    for (const r of rows) for (const [d, lista] of jornadasDe(r)) for (const a of lista) fin = Math.max(fin, (a._end ?? a._start) - d * 1440);
+    return Math.min(fin, 2880);
+  }, [rows]);
   const hasNightShift = maxShiftEnd > 1440;
   const chartW = maxShiftEnd * pxPerMin;
 
@@ -284,8 +288,8 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
     const dayOffset = selectedDay * 1440;
     let first = Infinity;
     for (const r of rows) {
-      for (const a of r.assignments || []) {
-        if (a._start >= dayOffset && a._start < dayOffset + 1440 && a._start - dayOffset < first) first = a._start - dayOffset;
+      for (const a of jornadasDe(r).get(selectedDay) || []) {
+        if (a._start - dayOffset < first) first = a._start - dayOffset;
       }
     }
     return isFinite(first) ? first : minShiftStart;
@@ -341,9 +345,8 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
   // Paradas estrechas (zoom 2× o menos): cada fila se dibuja en un lienzo
   const usarLienzo = pxPerMin <= 2;
   const tareasDelDia = useMemo(() => {
-    const off = selectedDay * 1440;
-    return new Map(rows.map(r => [r._id || r.id, (r.assignments || []).filter(a => a._start >= off && a._start < off + maxShiftEnd)]));
-  }, [rows, selectedDay, maxShiftEnd]);
+    return new Map(rows.map(r => [r._id || r.id, jornadasDe(r).get(selectedDay) || []]));
+  }, [rows, selectedDay]);
   const gridBg = `repeating-linear-gradient(90deg, rgba(148,163,184,0.11) 0 1px, transparent 1px ${hourPx}px), repeating-linear-gradient(90deg, rgba(148,163,184,0.035) 0 1px, transparent 1px ${subPx}px)`;
 
   const leftW = vista === "tabla" ? TABLE_W : labelW;
@@ -503,7 +506,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                 {vista === "tabla" ? renderTableCells(row) : (() => {
                   const fullName = [row.nombre, row.apellidos].filter(Boolean).join(" ") || row.name || "?";
                   const letter = fullName[0].toUpperCase();
-                  const dayAssignments = (row.assignments || []).filter(a => Math.floor(a._start / 1440) === selectedDay);
+                  const dayAssignments = jornadasDe(row).get(selectedDay) || [];
                   const stopCount = dayAssignments.filter(a => !a._break && !a._travel && !a._wait).length;
                   const dayKm = dayAssignments.filter(a => a._travel).reduce((s, a) => s + (a.km || 0), 0);
 
@@ -592,7 +595,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   if (dragging.fromRowId === toRowId) return;
                   const fromRow = rows.find(r => (r._id || r.id) === dragging.fromRowId);
                   if (!fromRow) return;
-                  const dayOffset = Math.floor(task._start / 1440) * 1440;
+                  const dayOffset = diaDe(fromRow, task) * 1440;
                   const slots = computeCandidateSlots(task, row, dayOffset, maxShiftMin);
                   if (!slots.length) { rejectMove(); return; }
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -628,9 +631,8 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   onTooltip={t => { if (!dragging) setTooltip(t ? { ...t, row } : null); }}
                   onArrastrar={task => setDragging({ task, fromRowId: row._id || row.id })}
                   onSoltar={() => setDragging(null)} />
-              ) : (row.assignments || []).map((task, ti) => {
+              ) : (tareasDelDia.get(row._id || row.id) || []).map((task, ti) => {
                   const dayOffset = selectedDay * 1440;
-                  if (!(task._start >= dayOffset && task._start < dayOffset + maxShiftEnd)) return null;
                   // fuera de las horas que se ven: no se pinta (la parada abierta, siempre)
                   const t0 = task._start - dayOffset;
                   if ((t0 + (task.duracion || 15) < winLo || t0 > winHi) && stackPanel?.task !== task && dragging?.task !== task) return null;
