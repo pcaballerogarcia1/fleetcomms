@@ -9,7 +9,7 @@ import {
   SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, useRostering, useVehicleAvailability,
   vehicleCodeOnDay, workerCodeOnDay,
 } from "../rostering/datos.js";
-import { scenarioKpis } from "../scenario-metrics.js";
+import { scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
 import { loadScenarioCloud, watchScenarioMeta } from "../scenario-store.js";
 import { applyTaskMove, fijarCarretera, turnoWindow } from "../vrp-engine.js";
 import { leerVecinos } from "./vecinos-guardados.js";
@@ -184,7 +184,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // Pinta un escenario cargado (del IndexedDB o de la nube)
   function applyScenario(projectId, data) {
     const sc = activeProject?.scheduling;
-    const next = { vehicles: data.vehicles, workers: data.workers || [] };
+    // sin copias exactas de un mismo bloque (escenarios guardados con paradas repetidas)
+    const next = { vehicles: sinDuplicados(data.vehicles).rows, workers: sinDuplicados(data.workers || []).rows };
     const un = data.unassigned || { vehicles: [], workers: [] };
     persistedRef.current = { s: next, u: un };
     setSchedules(next);

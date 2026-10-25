@@ -66,3 +66,17 @@ describe("turnos de noche", () => {
     }
   }, 120_000);
 });
+
+import { sinDuplicados } from "./scenario-metrics.js";
+describe("bloques repetidos", () => {
+  it("quita las copias exactas y deja lo demás", () => {
+    const p = { _id: "a", lat: 40.4, lng: -3.7, _start: 400, _end: 412 };
+    const v = { _travel: true, km: 3.1, _start: 412, _end: 418 };
+    const { rows, quitadas } = sinDuplicados([{ _id: "v", assignments: [p, { ...p }, { ...p }, v, { ...v }, { ...p, _start: 500, _end: 512 }] }]);
+    expect(quitadas).toBe(3);
+    expect(rows[0].assignments).toHaveLength(3);
+    expect(rows[0].totalKm).toBeCloseTo(3.1);
+    const limpio = [{ _id: "w", assignments: [p, v] }];
+    expect(sinDuplicados(limpio).rows[0]).toBe(limpio[0]); // sin repetidos, la misma fila
+  });
+});

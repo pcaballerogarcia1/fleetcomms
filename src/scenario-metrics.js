@@ -211,3 +211,24 @@ export function rutasLargas(rows, limite = 540) {
   }
   return { n, max };
 }
+
+/**
+ * Quita las copias exactas de un mismo bloque en una fila (misma hora de
+ * inicio y fin, mismo tipo y mismo sitio). Red de seguridad: en un escenario
+ * real salieron paradas repetidas 8 veces en un vehículo (06:00-22:00), con
+ * horas pagadas imposibles. @returns { rows, quitadas }
+ */
+export function sinDuplicados(rows) {
+  let quitadas = 0;
+  const out = (rows || []).map(r => {
+    const vistos = new Set(), lista = [];
+    for (const a of r.assignments || []) {
+      const tipo = a._travel ? "v" : a._wait ? "e" : a._break ? "p" : "s";
+      const k = `${tipo}|${a._start}|${a._end}|${a._id ?? a.id ?? ""}|${a.lat ?? ""}|${a.lng ?? ""}|${a.km ?? ""}`;
+      if (vistos.has(k)) { quitadas++; continue; }
+      vistos.add(k); lista.push(a);
+    }
+    return lista.length === (r.assignments || []).length ? r : { ...r, assignments: lista, totalKm: lista.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0) };
+  });
+  return { rows: out, quitadas };
+}

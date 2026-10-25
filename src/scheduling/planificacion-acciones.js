@@ -8,7 +8,7 @@ import { db } from "../firebase.js";
 import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
-import { diaDe, rutasLargas, scenarioKpis } from "../scenario-metrics.js";
+import { diaDe, rutasLargas, scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
 import { loadScenarioCloud, newScenarioVersion, saveScenarioCloud } from "../scenario-store.js";
 import { autoScaleFleetBg, generateScenarioBg, rutaMaestraBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
@@ -262,13 +262,15 @@ export async function runGenerate(ctx) {
     if (vr.unassigned?.length && vehiclesForVRP.some(v => Number(v.autonomiaKm) > 0)) {
       vr = { ...vr, unassigned: vr.unassigned.map(t => (!t._fueraAutonomia && fueraDeAutonomia(t, vehiclesForVRP) ? { ...t, _fueraAutonomia: true } : t)) };
     }
-    const vehicleScheduleRaw = vehiclesForSchedule.map((v, i) => ({
+    // (sin copias exactas de un mismo bloque: red de seguridad, ver sinDuplicados)
+    const { rows: vehicleScheduleRaw, quitadas: bloquesRepetidos } = sinDuplicados(vehiclesForSchedule.map((v, i) => ({
       ...v,
       assignments: vr.schedule[i]?.assignments || [],
       totalKm:     vr.schedule[i]?.totalKm     || 0,
       shiftStart:  vr.schedule[i]?.shiftStart,
       shiftEnd:    vr.schedule[i]?.shiftEnd,
-    }));
+    })));
+    if (bloquesRepetidos) console.warn(`[Scheduling] ${bloquesRepetidos} bloques repetidos quitados`);
 
     // Enrich travel block km with real road distances via OSRM
     setGenPhase("osrm");
@@ -393,9 +395,11 @@ export async function runGenerate(ctx) {
     const coverDaysCount = usedCoverWorkers.reduce((s, w) =>
       s + new Set(w.assignments.map(a => Math.floor((a._start - constraints.startMin) / 1440))).size, 0);
     const horasMin = m => { const t = Math.round(m); return `${Math.floor(t / 60)} h${t % 60 ? ` ${t % 60} min` : ""}`; };
-    const largas = rutasLargas(vehicleSchedule, constraints.maxShiftMin > 0 ? constraints.maxShiftMin + 15 : 540);
+    // por conductor si los hay (un vehículo de 24 h con tres conductores no es una ruta de 24 h)
+    const largas = rutasLargas(usedWorkerRows.some(w => w.assignments?.length) ? usedWorkerRows : vehicleSchedule, constraints.maxShiftMin > 0 ? constraints.maxShiftMin + 15 : 540);
     const scaleMsgs = [
       `Distancias y tiempos ${textoCarretera(carretera || medida)}.`,
+      bloquesRepetidos ? `Se han quitado ${bloquesRepetidos} bloques repetidos (la misma parada o el mismo viaje dos veces a la misma hora).` : null,
       addedVehicles.length > 0
         ? `Se han añadido ${addedVehicles.length} vehículo(s) y ${usedVirtualWorkerCount} conductor(es) necesarios para encajar todas las paradas en ${constraints.maxDays} día(s).`
         : null,
