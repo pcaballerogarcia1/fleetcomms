@@ -15,7 +15,7 @@
 // mejora-rutas.js: fin de turno, duración máxima, tope de paradas, franjas
 // horarias, pausas): nunca deja una ruta que el motor no aceptaría.
 // Sin React ni Firebase.
-import { autonomiaDe, hasCoords, kmRuta, shiftForDay, tiempoRuta } from "../vrp-engine.js";
+import { autonomiaDe, diaJornada, hasCoords, kmRuta, shiftForDay, tiempoRuta } from "../vrp-engine.js";
 import { margenDe, simular } from "./mejora-rutas.js";
 
 const DIA = 1440;
@@ -93,7 +93,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   const conPausas = cons.breakAfter > 0 && cons.breakDur > 0;
   filas.forEach((f, fi) => {
     const porDia = new Map();
-    for (const a of f.assignments || []) if (esParada(a)) { const d = Math.floor(a._start / DIA); if (!porDia.has(d)) porDia.set(d, []); porDia.get(d).push(a); }
+    for (const a of f.assignments || []) if (esParada(a)) { const d = diaJornada(f, a._start); if (!porDia.has(d)) porDia.set(d, []); porDia.get(d).push(a); }
     for (const [d, ps] of porDia) {
       diasConTrabajo.add(d);
       const sh = shiftForDay(f, d);
@@ -365,7 +365,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     const cambios = porFila.get(fi);
     if (!cambios) return f;
     const diasC = new Set(cambios.map(c => c.d));
-    const assignments = (f.assignments || []).filter(a => !diasC.has(Math.floor(a._start / DIA))).concat(cambios.flatMap(c => c.items)).sort((a, b) => a._start - b._start);
+    const assignments = (f.assignments || []).filter(a => !diasC.has(diaJornada(f, a._start))).concat(cambios.flatMap(c => c.items)).sort((a, b) => a._start - b._start);
     return { ...f, assignments, totalKm: assignments.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0) };
   });
   const recogidas = new Set(libres.flatMap(r => mejor.seqs.get(r)));

@@ -218,11 +218,32 @@ export function fueraDeAutonomia(task, resources) {
     return 2 * kmRuta(+r.depotLat, +r.depotLng, +task.lat, +task.lng) > a;
   });
 }
+// La jornada de una fila «del día d» va desde que empieza su turno ese día
+// hasta que acaba (un turno de noche o un vehículo de 24 h sigue pasada la
+// medianoche). Todo lo que trabaja con «las tareas de ese día» (mover,
+// recolocar, reequilibrar, empujar) usa este rango: antes se cortaba a las
+// 00:00 y, al mover una parada de pasada la medianoche, el viaje viejo no se
+// quitaba y se añadía otro (viajes duplicados, miles de km de más).
+/** [desde, hasta) de la jornada de `row` del día que empieza en `dayOffset` */
+export function rangoJornada(row, dayOffset) {
+  const sh = row ? shiftForDay(row, Math.floor(dayOffset / 1440)) : null;
+  if (!sh) return [dayOffset, dayOffset + 1440];
+  return [dayOffset + sh.start, Math.max(dayOffset + sh.end, dayOffset + 1440)];
+}
+/** El día de jornada (0 = primero) al que pertenece el minuto `t` en la fila `row` */
+export function diaJornada(row, t) {
+  const d0 = Math.floor(t / 1440);
+  for (const d of [d0 - 1, d0]) {
+    if (d < 0) continue;
+    const [a, b] = rangoJornada(row, d * 1440);
+    if (t >= a && t < b) return d;
+  }
+  return d0;
+}
+
 /** Los km que ya lleva `row` en su jornada del día que empieza en `dayOffset` (la de noche sigue pasada la medianoche) */
 export function kmDelDia(row, dayOffset) {
-  const sh = row ? shiftForDay(row, Math.floor(dayOffset / 1440)) : null;
-  const desde = sh ? dayOffset + sh.start : dayOffset;
-  const hasta = sh ? Math.max(dayOffset + sh.end, dayOffset + 1440) : dayOffset + 1440;
+  const [desde, hasta] = rangoJornada(row, dayOffset);
   let km = 0;
   for (const a of row?.assignments || []) if (a._travel && a._start >= desde && a._start < hasta) km += a.km || 0;
   return km;
@@ -300,7 +321,9 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
 // hueco elegido con sus nuevos bloques de viaje/espera alrededor).
 export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
   const sameRow = (fromRow._id || fromRow.id) === (toRow._id || toRow.id);
-  const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+  const [f0, f1] = rangoJornada(fromRow, dayOffset), [t0, t1] = rangoJornada(toRow, dayOffset);
+  const dayS = a => a._start >= f0 && a._start < f1;   // jornada de la fila de origen
+  const dayT = a => a._start >= t0 && a._start < t1;   // y la de destino
 
   const fromItems = [...(fromRow.assignments || [])].sort((a, b) => a._start - b._start);
   const fromDayStops = fromItems.filter(a => a !== task && !a._travel && !a._break && !a._wait && dayS(a));
@@ -340,7 +363,7 @@ export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
 
   const toItems = sameRow ? newFromAssignments : [...(toRow.assignments || [])].sort((a, b) => a._start - b._start);
   const newToAssignments = toItems
-    .filter(a => !(dayS(a) && a._start >= slot.prevEnd && a._start < slot.nextStart))
+    .filter(a => !(dayT(a) && a._start >= slot.prevEnd && a._start < slot.nextStart))
     .concat(newBlocks)
     .sort((a, b) => a._start - b._start);
 
@@ -1149,7 +1172,7 @@ export async function generateScenario(tasks, resources, constraints) {
     // cálculo de segEnds/segStarts que usa el reparto principal para que
     // "tramo" signifique lo mismo en los dos sitios.
     function vehicleSegments(res) {
-      const dayOffsets = [...new Set((res.assignments || []).map(a => Math.floor(a._start / 1440) * 1440))];
+      const dayOffsets = [...new Set((res.assignments || []).map(a => diaJornada(res, a._start) * 1440))];
       const segs = [];
       for (const dayOffset of dayOffsets) {
         const dSh = shiftForDay(res, dayOffset / 1440);
@@ -1355,7 +1378,8 @@ export async function generateScenario(tasks, resources, constraints) {
     // sin ellos, sin necesitar lógica aparte para cada caso. Se usa el
     // hueco que menos km añade.
     function insertAtSlot(res, task, slot, dayOffset) {
-      const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+      const [j0, j1] = rangoJornada(res, dayOffset);
+      const dayS = a => a._start >= j0 && a._start < j1;
       const movedTask = { ...task, _start: slot.arrival, _end: slot.taskEnd };
       const newBlocks = [];
       if (slot.inKm >= 0.05) {
@@ -1380,7 +1404,7 @@ export async function generateScenario(tasks, resources, constraints) {
       let best = null, bestKm = Infinity, bestDayOffset = null;
       for (let i = 0; i < k; i++) {
         const res = state[i];
-        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        const daysUsedSet = new Set(res.assignments.map(a => diaJornada(res, a._start)));
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
@@ -1399,7 +1423,8 @@ export async function generateScenario(tasks, resources, constraints) {
     // porque aquí no hay todavía una posición nueva para ella (eso se
     // decide después, para el hueco que deja libre).
     function removeFromRow(res, task, dayOffset) {
-      const dayS = a => a._start >= dayOffset && a._start < dayOffset + 1440;
+      const [j0, j1] = rangoJornada(res, dayOffset);
+      const dayS = a => a._start >= j0 && a._start < j1;
       const items = [...(res.assignments || [])].sort((a, b) => a._start - b._start);
       const dayStops = items.filter(a => a !== task && !a._travel && !a._break && !a._wait && dayS(a));
       const afterIdx = dayStops.findIndex(a => a._start > task._start);
@@ -1439,12 +1464,12 @@ export async function generateScenario(tasks, resources, constraints) {
       if (task.windowStart == null) return false; // sin franja, cualquier hueco libre ya le habría valido
       for (let i = 0; i < k; i++) {
         const res = state[i];
-        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        const daysUsedSet = new Set(res.assignments.map(a => diaJornada(res, a._start)));
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
           const evictable = res.assignments.filter(a =>
-            a._start >= dOff && a._start < dOff + 1440 &&
+            a._start >= rangoJornada(res, dOff)[0] && a._start < rangoJornada(res, dOff)[1] &&
             !a._travel && !a._break && !a._wait && a.windowStart == null
           );
           // Lo que de verdad determina si desalojar a "a" libera el hueco que
@@ -1512,7 +1537,7 @@ export async function generateScenario(tasks, resources, constraints) {
       if (task.windowStart == null) return false;
       for (let i = 0; i < k; i++) {
         const res = state[i];
-        const daysUsedSet = new Set(res.assignments.map(a => Math.floor(a._start / 1440)));
+        const daysUsedSet = new Set(res.assignments.map(a => diaJornada(res, a._start)));
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
@@ -1522,7 +1547,8 @@ export async function generateScenario(tasks, resources, constraints) {
           const dayEnd   = dOff + pSh.end;
           const shiftBoundaries = pSh.breaks.map(b => b + dOff).filter(b => b > dayStart && b < dayEnd);
           const crosses = (from, to) => shiftBoundaries.some(b => b > from && b < to);
-          const dayItems = [...(res.assignments || [])].filter(a => a._start >= dOff && a._start < dOff + 1440).sort((a, b) => a._start - b._start);
+          const [j0, j1] = rangoJornada(res, dOff);
+          const dayItems = [...(res.assignments || [])].filter(a => a._start >= j0 && a._start < j1).sort((a, b) => a._start - b._start);
           if (dayItems.length > PUSHBACK_MAX_DAY_STOPS) continue;
           const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
           const depotLat = res.depotLat, depotLng = res.depotLng;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dayMetrics, diaDe, jornadasDe, scenarioKpis } from "./scenario-metrics.js";
-import { autoScaleFleet, computeCandidateSlots, kmDelDia } from "./vrp-engine.js";
+import { autoScaleFleet, computeCandidateSlots, diaJornada, kmDelDia } from "./vrp-engine.js";
+import { conMejora } from "./scheduling/mejora-rutas.js";
 
 // un conductor de noche (22:00-06:00) dos noches seguidas: cada parada de 20 min
 const noche = d => Array.from({ length: 22 }, (_, i) => ({ id: `n${d}-${i}`, lat: 40.42, lng: -3.70, duracion: 20, _start: d * 1440 + 1320 + i * 21, _end: d * 1440 + 1320 + i * 21 + 20 }));
@@ -43,4 +44,25 @@ describe("turnos de noche", () => {
     expect(dayMetrics({ ...anadido, ...fila }, 0).activo).toBe(true);
     expect(jornadasDe({ ...anadido, ...fila }).size).toBe(1); // todo en el día 1
   });
+  it("el día de jornada de un minuto: la noche sigue siendo del día en que empezó", () => {
+    const v24 = { shiftStart: 360, shiftEnd: 1800 };
+    expect(diaJornada(v24, 1440 + 60)).toBe(0);   // 01:00 del día 2: jornada del día 1
+    expect(diaJornada(v24, 1440 + 400)).toBe(1);
+    expect(diaJornada({ shiftStart: 360, shiftEnd: 840 }, 1440 + 60)).toBe(1); // turno de mañana: sin cambios
+  });
+  it("vehículos de 24 h: sin paradas ni viajes encima de otros, también después de mejorar (los km de más venían de ahí)", async () => {
+    let semilla = 7;
+    const azar = () => (semilla = (semilla * 16807) % 2147483647) / 2147483647;
+    const tareas = Array.from({ length: 900 }, (_, i) => ({ id: `m${i}`, lat: 40.33 + azar() * 0.2, lng: -3.83 + azar() * 0.29, duracion: 10 }));
+    const veh = { _id: "v1", nombre: "1", turno: "Jornada completa", depotLat: 40.4166, depotLng: -3.7048, _effectiveStart: 360, _effectiveEnd: 821 };
+    const cons = { startMin: 360, endMin: 1320, maxDays: 3, circular: false, maxShiftMin: 480, maxStops: 0, breakAfter: 0, breakDur: 0, optimizeWeight: 0, vehiculoNecesarioMaxMin: 0, personalNecesarioMaxMin: 480 };
+    const salida = await autoScaleFleet(tareas, [veh], cons);
+    const r = await conMejora("autoscale", salida, cons);
+    for (const f of [...salida.result.schedule, ...r.result.schedule]) {
+      const a = [...f.assignments].sort((x, y) => x._start - y._start);
+      for (let i = 1; i < a.length; i++) expect(a[i]._start).toBeGreaterThanOrEqual(a[i - 1]._end - 0.5);
+      const km = a.filter(x => x._travel).reduce((s, x) => s + (x.km || 0), 0);
+      expect(km / Math.max(1, a.filter(x => !x._travel && !x._wait && !x._break).length)).toBeLessThan(3); // de media, menos de 3 km por parada
+    }
+  }, 120_000);
 });

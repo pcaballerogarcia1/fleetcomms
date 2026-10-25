@@ -16,7 +16,7 @@
 // (circular + turno partido) se dejan como están. Ninguna ruta pasa de la
 // autonomía de su vehículo (km del día).
 // Sin React ni Firebase.
-import { autonomiaDe, hasCoords, kmRuta, shiftForDay, tiempoRuta, windowWait } from "../vrp-engine.js";
+import { autonomiaDe, diaJornada, hasCoords, kmRuta, shiftForDay, tiempoRuta, windowWait } from "../vrp-engine.js";
 import { optimizarSISR } from "./sisr.js";
 
 const esParada = a => !a._travel && !a._break && !a._wait;
@@ -135,7 +135,7 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
   filas.forEach((f, fi) => {
     const dias = new Map();
     for (const a of f.assignments || []) {
-      const d = Math.floor(a._start / DIA);
+      const d = diaJornada(f, a._start);
       if (!dias.has(d)) dias.set(d, []);
       dias.get(d).push(a);
     }
@@ -335,13 +335,13 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
     const cambiadas = porFila.get(fi);
     if (!cambiadas) return f;
     const dias = new Set(cambiadas.map(r => r.d));
-    const assignments = (f.assignments || []).filter(a => !dias.has(Math.floor(a._start / DIA)))
+    const assignments = (f.assignments || []).filter(a => !dias.has(diaJornada(f, a._start)))
       .concat(cambiadas.flatMap(r => r.items))
       .sort((a, b) => a._start - b._start);
     return { ...f, assignments, totalKm: assignments.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0) };
   });
   const despues = medir();
-  const diasUsados = Math.max(1, ...schedule.flatMap(f => (f.assignments || []).filter(esParada).map(a => Math.floor(a._start / DIA) + 1)));
+  const diasUsados = Math.max(1, ...schedule.flatMap(f => (f.assignments || []).filter(esParada).map(a => diaJornada(f, a._start) + 1)));
   return { ...resultado, schedule, daysUsed: Math.min(resultado.daysUsed ?? diasUsados, diasUsados), mejora: { antes, despues, seg: +((Date.now() - t0) / 1000).toFixed(1) } };
 }
 
@@ -362,7 +362,7 @@ export async function porTurnos(resultado, cons, mejorar) {
   const filas = resultado?.schedule || [];
   if (!cons?.circular || !filas.length) return mejorar(resultado);
   let ultimo = 0;
-  for (const f of filas) for (const a of f.assignments || []) ultimo = Math.max(ultimo, Math.floor(a._start / DIA));
+  for (const f of filas) for (const a of f.assignments || []) ultimo = Math.max(ultimo, diaJornada(f, a._start));
   const dias = ultimo + 2; // y uno más, por si algo se adelanta o se abre
   const tramos = (f, d) => {
     const sh = shiftForDay(f, d);
@@ -386,7 +386,7 @@ export async function porTurnos(resultado, cons, mejorar) {
         ventanas[d] = t && p < t.length - 1 ? { start: t[p], end: t[p + 1], breaks: [] } : null;
       }
       const assignments = (f.assignments || []).filter(a => {
-        const d = Math.floor(a._start / DIA), t = tramos(f, d), m = a._start - d * DIA;
+        const d = diaJornada(f, a._start), t = tramos(f, d), m = a._start - d * DIA;
         if (!t) return p === 0;
         let q = t.length - 2;
         for (let i = 1; i < t.length - 1; i++) if (m < t[i]) { q = i - 1; break; }
@@ -398,7 +398,7 @@ export async function porTurnos(resultado, cons, mejorar) {
       let autonomiaKm = f.autonomiaKm;
       if (aut < Infinity) {
         const otros = new Map();
-        for (const a of f.assignments || []) if (a._travel && !assignments.includes(a)) { const d = Math.floor(a._start / DIA); otros.set(d, (otros.get(d) || 0) + (a.km || 0)); }
+        for (const a of f.assignments || []) if (a._travel && !assignments.includes(a)) { const d = diaJornada(f, a._start); otros.set(d, (otros.get(d) || 0) + (a.km || 0)); }
         autonomiaKm = Math.max(0.001, aut - Math.max(0, ...otros.values()));
       }
       partidas.push({ ...f, assignments, autonomiaKm, _dayWindows: ventanas, _onlyDayWindows: true });
