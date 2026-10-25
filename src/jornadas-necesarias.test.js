@@ -34,3 +34,18 @@ describe("duración máxima de turno: de cada conductor", () => {
     expect(anadidos[0]).toMatchObject({ _effectiveStart: 360, _effectiveEnd: 1320, _shiftBreaks: [840] });
   });
 });
+
+describe("lo que sobra de un vehículo de turno corto lo hacen los que se quedan parados", () => {
+  it("con días de sobra no deja paradas sin hacer (antes el repaso final solo miraba días nuevos)", async () => {
+    const zona = (lat, n, p) => Array.from({ length: n }, (_, i) => ({ id: `${p}${i}`, lat: lat + (i % 10) * 0.001, lng: -3.70 + Math.floor(i / 10) * 0.001, duracion: 10 }));
+    const tareas = [...zona(40.42, 100, "a"), ...zona(40.46, 100, "b")];
+    const corto = { _id: "c", nombre: "Corto", depotLat: 40.42, depotLng: -3.70, _effectiveStart: 360, _effectiveEnd: 420 }; // 1 h al día
+    const largo = { _id: "l", nombre: "Largo", depotLat: 40.46, depotLng: -3.70, _effectiveStart: 360, _effectiveEnd: 1800 }; // 24 h
+    const r = await generateScenario(tareas, [corto, largo], { startMin: 360, endMin: 1320, maxDays: 3, circular: false, maxShiftMin: 0, maxStops: 0, breakAfter: 0, breakDur: 0, optimizeWeight: 0 });
+    expect(r.unassigned).toHaveLength(0);
+    for (const f of r.schedule) {
+      const a = [...f.assignments].sort((x, y) => x._start - y._start);
+      for (let i = 1; i < a.length; i++) expect(a[i]._start).toBeGreaterThanOrEqual(a[i - 1]._end - 0.5); // nada encima de nada
+    }
+  });
+});

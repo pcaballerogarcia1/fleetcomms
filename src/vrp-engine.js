@@ -1261,11 +1261,16 @@ export async function generateScenario(tasks, resources, constraints) {
   // one outlier task from blocking all subsequent assignable tasks.
   if (leftover.length > 0) {
     const pool   = leftover.slice(); // mutable; tasks removed when assigned
-    let mopDay   = day;
+    // Empieza por los días ya hechos en los que algún vehículo se quedó sin
+    // trabajo (acabó su zona antes): antes solo se miraban días nuevos y, si el
+    // escenario ya llegaba al tope de días (un vehículo con zona demasiado
+    // grande para su turno), lo que sobraba se quedaba sin asignar con otros
+    // vehículos parados, y el auto-escalado añadía vehículos de más.
+    let mopDay   = 0;
     let anyMop   = true;
     let mopSkippedOff = false; // mismo motivo que skippedOffDay del bucle principal
 
-    while (pool.length > 0 && (anyMop || mopSkippedOff) && mopDay < dayCap) {
+    while (pool.length > 0 && (mopDay < day || anyMop || mopSkippedOff) && mopDay < dayCap) {
       anyMop = false;
       mopSkippedOff = false;
       const dayOffset = mopDay * 1440;
@@ -1277,6 +1282,10 @@ export async function generateScenario(tasks, resources, constraints) {
         let kmM     = autM < Infinity ? kmDelDia(res, mopDay * 1440) : 0;
         const mSh   = shiftForDay(res, mopDay);
         if (!mSh) { mopSkippedOff = true; continue; }
+        if (mopDay < day) { // día ya hecho: solo si ese vehículo no trabajó nada en esa jornada
+          const [j0, j1] = rangoJornada(res, mopDay * 1440);
+          if (res.assignments.some(a => a._start >= j0 && a._start < j1)) continue;
+        }
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
         const dayEnd = mSh.end + dayOffset;
@@ -1318,7 +1327,14 @@ export async function generateScenario(tasks, resources, constraints) {
             const wait = windowWait(task, cursor + travelMin, dayOffset);
             const workSoFar = cursor - segStartsM[segI]; // del conductor de este tramo
             const fitsShift   = wait != null && (maxShiftMin <= 0 || workSoFar + travelMin + wait + dur <= maxShiftMin);
-            const fitsSeg     = wait != null && cursor + travelMin + wait + dur <= segEnd;
+            // y la vuelta a la base, si acaba aquí: en un vehículo de 24 h, pasarse
+            // se comería el principio del día siguiente
+            let retM = 0;
+            if (vuelveM && anchor && hasCoords(task.lat, task.lng)) {
+              const rk = kmRuta(+task.lat, +task.lng, anchor.lat, anchor.lng);
+              if (rk >= 0.05) retM = Math.max(1, Math.ceil(minutosRuta(rk)));
+            }
+            const fitsSeg     = wait != null && cursor + travelMin + wait + dur + retM <= segEnd;
 
             const vueltaM = autM < Infinity && anchor && hasCoords(task.lat, task.lng) ? kmRuta(+task.lat, +task.lng, anchor.lat, anchor.lng) : 0;
             const fitsAut = kmM + travelKm + vueltaM <= autM; // autonomía del vehículo
