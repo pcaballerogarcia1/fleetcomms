@@ -382,6 +382,11 @@ export function distSq(a, b) {
 }
 
 export const _yield = () => new Promise(resolve => setTimeout(resolve, 0));
+// Ceder el hilo solo si hace más de 40 ms de la última vez: cada cesión cuesta
+// unos milisegundos (más en un Worker del navegador) y, hecha cada pocas
+// paradas, se comía la mayor parte del cálculo en escenarios grandes.
+let _ultimaCesion = 0;
+const _ceder = async () => { if (Date.now() - _ultimaCesion > 40) { await _yield(); _ultimaCesion = Date.now(); } };
 
 // Farthest-point sampling: deterministic k-means seed (no randomness).
 // async + yields once per seed picked: for large fleets (autoScaleFleet can
@@ -798,7 +803,7 @@ export async function generateScenario(tasks, resources, constraints) {
       // hacía de un tirón, y con suficientes vehículos eso solo ya podía
       // superar los segundos que el navegador tolera antes de avisar de que
       // la pestaña "no responde". Cede el hilo cada pocos vehículos.
-      if (i > 0 && i % 5 === 0) await _yield();
+      if (i > 0 && i % 5 === 0) await _ceder();
 
       const res   = state[i];
       const autRes = autonomiaDe(res);
@@ -938,7 +943,7 @@ export async function generateScenario(tasks, resources, constraints) {
         let taskIterations = 0;
 
         while (queueIdx[i] < queue.length) {
-          if (++taskIterations % 25 === 0) await _yield();
+          if (++taskIterations % 25 === 0) await _ceder();
           const task = queue[queueIdx[i]];
           const dur  = task.duracion || 15;
 
@@ -1052,7 +1057,7 @@ export async function generateScenario(tasks, resources, constraints) {
   // days as the other vehicles, using continue (not break) so tasks are skipped
   // individually rather than killing the whole day.
   for (let i = 0; i < k; i++) {
-    if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
+    if (i > 0 && i % 5 === 0) await _ceder(); // ver comentario del bucle principal — mismo riesgo con k grande
     if (state[i].assignments.length > 0) continue;          // already has work
     if (queueIdx[i] >= sortedQueues[i].length) continue;    // queue exhausted
 
@@ -1085,7 +1090,7 @@ export async function generateScenario(tasks, resources, constraints) {
         let pi = 0;
         let backfillIterations = 0;
         while (pi < sortedQueues[i].length) {
-          if (++backfillIterations % 25 === 0) await _yield();
+          if (++backfillIterations % 25 === 0) await _ceder();
           const task = sortedQueues[i][pi];
           const dur  = task.duracion || 15;
 
@@ -1250,7 +1255,7 @@ export async function generateScenario(tasks, resources, constraints) {
           under.res.totalKm = newToAssignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
           improved = true;
         }
-        if (++_rebalanceIter % 20 === 0) await _yield();
+        if (++_rebalanceIter % 20 === 0) await _ceder();
       }
     }
   }
@@ -1276,19 +1281,36 @@ export async function generateScenario(tasks, resources, constraints) {
       const dayOffset = mopDay * 1440;
 
       for (let i = 0; i < k && pool.length > 0; i++) {
-        if (i > 0 && i % 5 === 0) await _yield(); // ver comentario del bucle principal — mismo riesgo con k grande
+        if (i > 0 && i % 5 === 0) await _ceder(); // ver comentario del bucle principal — mismo riesgo con k grande
         const res   = state[i];
         const autM  = autonomiaDe(res);
         let kmM     = autM < Infinity ? kmDelDia(res, mopDay * 1440) : 0;
         const mSh   = shiftForDay(res, mopDay);
         if (!mSh) { mopSkippedOff = true; continue; }
-        if (mopDay < day) { // día ya hecho: solo si ese vehículo no trabajó nada en esa jornada
-          const [j0, j1] = rangoJornada(res, mopDay * 1440);
-          if (res.assignments.some(a => a._start >= j0 && a._start < j1)) continue;
-        }
         const depot = (res.depotLat && res.depotLng)
           ? { lat: +res.depotLat, lng: +res.depotLng } : null;
         const dayEnd = mSh.end + dayOffset;
+        // Día ya hecho en el que el vehículo trabajó algo (p. ej. acabó su zona a
+        // media jornada): sigue desde donde lo dejó, con lo que sobra. Se quita la
+        // vuelta a la base de ese día y se vuelve a poner al final.
+        let sigue = null;
+        if (mopDay < day) {
+          const [j0, j1] = rangoJornada(res, mopDay * 1440);
+          const suyos = res.assignments.filter(a => a._start >= j0 && a._start < j1).sort((a, b) => a._start - b._start);
+          if (suyos.length) {
+            let ult = suyos[suyos.length - 1];
+            const finTrabajo = ult._depot_return ? ult._start : ult._end;
+            if (finTrabajo >= dayEnd - 10) continue; // ya lo tenía lleno
+            if (ult._depot_return) {
+              res.assignments.splice(res.assignments.indexOf(ult), 1);
+              res.totalKm -= ult.km || 0; kmM -= ult.km || 0;
+              suyos.pop(); ult = suyos[suyos.length - 1];
+            }
+            const paradas = suyos.filter(a => !a._travel && !a._wait && !a._break && hasCoords(a.lat, a.lng));
+            const ultima = paradas[paradas.length - 1];
+            sigue = { cursor: ult ? ult._end : finTrabajo, lat: ultima ? +ultima.lat : null, lng: ultima ? +ultima.lng : null, primera: paradas[0] || null };
+          }
+        }
         const segEnds = mSh.breaks.length
           ? [...mSh.breaks.map(b => b + dayOffset), dayEnd]
           : [dayEnd];
@@ -1300,8 +1322,15 @@ export async function generateScenario(tasks, resources, constraints) {
         let lastLng    = depot ? depot.lng : null;
         let fromDepot  = !!depot;
         let anchor     = depot;
+        if (sigue) {
+          cursor = sigue.cursor;
+          if (hasCoords(sigue.lat, sigue.lng)) { lastLat = sigue.lat; lastLng = sigue.lng; }
+          fromDepot = false;
+          if (circular && !depot && sigue.primera) anchor = { lat: +sigue.primera.lat, lng: +sigue.primera.lng };
+        }
 
         for (const [segI, segEnd] of segEnds.entries()) {
+          if (segEnd <= cursor) continue; // tramos que ya pasaron (al seguir un día a medias)
           const vuelveM = circular || segI === segEnds.length - 1;
           // Scan every remaining pool task; assign what fits, skip what doesn't.
           // No retBuffer check here — the return-to-anchor leg is appended after
@@ -1309,7 +1338,7 @@ export async function generateScenario(tasks, resources, constraints) {
           let pi = 0;
           let mopIterations = 0;
           while (pi < pool.length) {
-            if (++mopIterations % 25 === 0) await _yield();
+            if (++mopIterations % 200 === 0) await _ceder();
             const task = pool[pi];
             const dur  = task.duracion || 15;
 
@@ -1671,7 +1700,7 @@ export async function generateScenario(tasks, resources, constraints) {
       // tryInsertOrphan recorre todos los vehículos/días — con muchas paradas
       // de franja horaria esto suma bastante trabajo síncrono. Cede el hilo
       // cada pocos intentos para que la pestaña no se quede "sin responder".
-      if (++orphanAttempts % 5 === 0) await _yield();
+      if (++orphanAttempts % 5 === 0) await _ceder();
     }
 
     // Cada desalojo cambia lo que hay ocupado en cada vehículo — una tarea
@@ -1691,7 +1720,7 @@ export async function generateScenario(tasks, resources, constraints) {
             stillUnassigned.splice(idx, 1);
             progressed = true;
           }
-          if (++orphanAttempts % 5 === 0) await _yield();
+          if (++orphanAttempts % 5 === 0) await _ceder();
         }
         if (orphanBudgetExceeded || !progressed) break;
       }
