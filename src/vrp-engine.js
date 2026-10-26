@@ -476,6 +476,95 @@ export function nnTSP(stops, depotPt = null) {
 // Boustrophedon (strip) sort — O(n log n), used for large clusters instead of O(n²) TSP.
 // Divides the bounding box into horizontal strips and zigzags through them,
 // producing a geographically coherent route without quadratic distance calculations.
+/**
+ * Las paradas de una zona de varios días, en barrios compactos de unas
+ * `porBloque` paradas (un día de trabajo), encadenados desde la base y cada
+ * uno ordenado por dentro. Así cada día el vehículo hace un barrio.
+ */
+export async function ordenarPorBloques(stops, depot, porBloque, deadline = Infinity) {
+  const m = Math.max(1, Math.round(stops.length / porBloque));
+  if (m <= 1) return twoOpt(nnTSP(stops, depot));
+  const cosLat = Math.cos(((stops[0]?.lat || 40) * Math.PI) / 180);
+  const d2 = (a, b) => (a.lat - b.lat) ** 2 + ((a.lng - b.lng) * cosLat) ** 2;
+  const asgn = await kMeansCluster(stops, m, 15, deadline);
+  let grupos = Array.from({ length: m }, () => []);
+  stops.forEach((t, i) => grupos[asgn[i]].push(t));
+  // del mismo tamaño (k-medias con capacidad, como las zonas)
+  const tope = Math.ceil(stops.length / m * 1.03);
+  let centros = grupos.map(g => (g.length ? { lat: g.reduce((x, t) => x + t.lat, 0) / g.length, lng: g.reduce((x, t) => x + t.lng, 0) / g.length } : stops[0]));
+  for (let it = 0; it < 5 && Date.now() < deadline; it++) {
+    const prefs = stops.map(t => {
+      const d = centros.map(c => d2(c, t));
+      const orden = d.map((_, ci) => ci).sort((a, b) => d[a] - d[b]);
+      return { t, orden, pena: (d[orden[1]] ?? d[orden[0]]) - d[orden[0]] };
+    }).sort((a, b) => b.pena - a.pena);
+    const nuevos = Array.from({ length: m }, () => []);
+    for (const x of prefs) {
+      const ci = x.orden.find(c => nuevos[c].length < tope) ?? x.orden[0];
+      nuevos[ci].push(x.t);
+    }
+    grupos = nuevos;
+    centros = grupos.map((g, ci) => (g.length ? { lat: g.reduce((x, t) => x + t.lat, 0) / g.length, lng: g.reduce((x, t) => x + t.lng, 0) / g.length } : centros[ci]));
+    await _yield();
+  }
+  // encadenar los barrios: el más cercano a la base primero, luego el más cercano al anterior
+  const vivos = grupos.map((g, ci) => ci).filter(ci => grupos[ci].length);
+  const cadena = [];
+  let desde = depot || centros[vivos[0]];
+  while (vivos.length) {
+    let mejor = 0;
+    for (let j = 1; j < vivos.length; j++) if (d2(centros[vivos[j]], desde) < d2(centros[vivos[mejor]], desde)) mejor = j;
+    const ci = vivos.splice(mejor, 1)[0];
+    cadena.push(ci); desde = centros[ci];
+  }
+  // y cada barrio por dentro, empezando cerca de donde acabó el anterior
+  const out = [];
+  let entrada = depot;
+  for (const ci of cadena) {
+    const ruta = dosOptRapido(nnTSP(grupos[ci], entrada), entrada);
+    out.push(...ruta);
+    entrada = ruta[ruta.length - 1];
+    if (out.length % 1000 < ruta.length) await _ceder();
+  }
+  return out;
+}
+
+/**
+ * 2-opt de un camino abierto (desde `entrada`) con las distancias calculadas
+ * una vez (aproximación plana, de sobra para ordenar un barrio): pasadas
+ * completas aplicando cada mejora, sin volver a empezar. Para barrios de
+ * cientos de paradas tarda milisegundos (el twoOpt de siempre, segundos).
+ */
+export function dosOptRapido(ruta, entrada = null) {
+  const n = ruta.length;
+  if (n < 4) return ruta;
+  const pts = entrada && hasCoords(entrada.lat, entrada.lng) ? [entrada, ...ruta] : ruta;
+  const off = pts.length - n; // 1 si el camino empieza en la entrada (fija)
+  const N = pts.length, cosLat = Math.cos((pts[0].lat * Math.PI) / 180);
+  const M = new Float64Array(N * N);
+  for (let a = 0; a < N; a++) for (let b = a + 1; b < N; b++) {
+    const v = Math.hypot(pts[a].lat - pts[b].lat, (pts[a].lng - pts[b].lng) * cosLat);
+    M[a * N + b] = v; M[b * N + a] = v;
+  }
+  const o = Array.from({ length: N }, (_, i) => i);
+  let mejora = true, pasadas = 0;
+  while (mejora && pasadas++ < 60) {
+    mejora = false;
+    for (let i = Math.max(1, off); i < N - 1; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const a = o[i - 1], b = o[i], c = o[j], dd = j + 1 < N ? o[j + 1] : -1;
+        const antes = M[a * N + b] + (dd >= 0 ? M[c * N + dd] : 0);
+        const despues = M[a * N + c] + (dd >= 0 ? M[b * N + dd] : 0);
+        if (despues < antes - 1e-12) {
+          for (let x = i, y = j; x < y; x++, y--) { const t = o[x]; o[x] = o[y]; o[y] = t; }
+          mejora = true;
+        }
+      }
+    }
+  }
+  return o.slice(off).map(i => pts[i]);
+}
+
 export function stripSort(stops, strips = 30) {
   if (stops.length < 2) return stops;
   const minLat = Math.min(...stops.map(s => s.lat));
@@ -587,6 +676,7 @@ export async function generateScenario(tasks, resources, constraints) {
   const withCoords = tasks.filter(t => hasCoords(t.lat, t.lng));
   const noCoords   = tasks.filter(t => !hasCoords(t.lat, t.lng));
   const clusterQueues = Array.from({ length: k }, () => []);
+  let zonaDeRecurso = null, objetivoZona = null; // reparto de zonas por horas (varios días)
 
   if (withCoords.length > 0) {
     if (k === 1) {
@@ -641,24 +731,71 @@ export async function generateScenario(tasks, resources, constraints) {
       const minLoad     = Math.max(1, avgLoad * minFraction);
       // Con tope de días, tampoco una zona muy por encima de la media: lo que le
       // sobra pasa a la zona vecina con menos trabajo (las paradas suyas más cercanas a ella)
+      // Cada zona, con el trabajo que le toca a su vehículo según sus horas en
+      // los días del escenario: un vehículo de 06:00 a 13:41 junto a otros de
+      // 24 h recibía una zona igual de grande, no le cabía, y lo que sobraba lo
+      // repartía el barrido final entre los demás dando saltos por la ciudad.
       if (multiDia) {
-        const maxLoad = avgLoad * 1.08;
+        const diasCap = Math.min(dayCap, 62);
+        const capDe = resources.map(rr => {
+          const tw = turnoWindow(rr.turno, winStart, winEnd);
+          const base = { ...rr, shiftStart: rr._effectiveStart ?? tw.start, shiftEnd: rr._effectiveEnd ?? tw.end };
+          let m = 0;
+          for (let d = 0; d < diasCap; d++) { const sd = shiftForDay(base, d); if (sd) m += Math.max(0, sd.end - sd.start); }
+          return Math.max(1, m);
+        });
+        const sumCap = capDe.reduce((a, b) => a + b, 0);
+        const cargaTotal = rawClusters.reduce((x, cl) => x + clusterLoad(cl), 0);
+        // la zona con más trabajo, para el vehículo con más horas
+        const porCarga = rawClusters.map((_, ci) => ci).sort((a, b) => clusterLoad(rawClusters[b]) - clusterLoad(rawClusters[a]));
+        const porCap = resources.map((_, ri) => ri).sort((a, b) => capDe[b] - capDe[a]);
+        zonaDeRecurso = new Array(k);
+        objetivoZona = new Array(k);
+        porCarga.forEach((ci, j) => { zonaDeRecurso[porCap[j]] = ci; objetivoZona[ci] = cargaTotal * capDe[porCap[j]] / sumCap; });
         const centro = cl => ({ lat: cl.reduce((x, t) => x + t.lat, 0) / Math.max(1, cl.length), lng: cl.reduce((x, t) => x + t.lng, 0) / Math.max(1, cl.length) });
-        for (let vuelta = 0; vuelta < 4 * k; vuelta++) {
+        // Zonas compactas del tamaño justo (k-medias con capacidad): cada parada
+        // a la zona más cercana que aún tenga sitio, empezando por las que más
+        // pierden si no van a la suya; y se recolocan los centros. Antes se
+        // igualaban quitando paradas del borde de unas y pasándolas a otras, y
+        // quedaban zonas a trozos (el vehículo saltaba de un trozo a otro).
+        const cargaDe = t => (1 - optT) + optT * ((t.duracion || 15) / avgTaskDur);
+        const cosLat = Math.cos(((withCoords[0]?.lat || 40) * Math.PI) / 180);
+        let centros = rawClusters.map(centro);
+        for (let it = 0; it < 6 && !_outOfTime(); it++) {
+          const prefs = withCoords.map(t => {
+            const d = centros.map(c => ((c.lat - t.lat) ** 2) + ((c.lng - t.lng) * cosLat) ** 2);
+            const orden = d.map((_, ci) => ci).sort((a, b) => d[a] - d[b]);
+            return { t, d, orden, pena: (d[orden[1]] ?? d[orden[0]]) - d[orden[0]] };
+          });
+          prefs.sort((a, b) => b.pena - a.pena);
+          const carga = new Array(k).fill(0), nuevas = Array.from({ length: k }, () => []);
+          let vuelta = 0;
+          for (const x of prefs) {
+            if (++vuelta % 2000 === 0) await _ceder();
+            const ct = cargaDe(x.t);
+            let elegida = x.orden.find(ci => carga[ci] + ct <= objetivoZona[ci] * 1.02);
+            if (elegida == null) elegida = x.orden[0];
+            carga[elegida] += ct; nuevas[elegida].push(x.t);
+          }
+          for (let ci = 0; ci < k; ci++) rawClusters[ci] = nuevas[ci];
+          centros = rawClusters.map((cl, ci) => (cl.length ? centro(cl) : centros[ci]));
+        }
+        for (let vuelta = 0; vuelta < 6 * k; vuelta++) {
+          // la zona que más se pasa de lo suyo
           let big = 0;
-          for (let ci = 1; ci < k; ci++) if (clusterLoad(rawClusters[ci]) > clusterLoad(rawClusters[big])) big = ci;
-          const exceso = clusterLoad(rawClusters[big]) - maxLoad;
+          for (let ci = 1; ci < k; ci++) if (clusterLoad(rawClusters[ci]) / objetivoZona[ci] > clusterLoad(rawClusters[big]) / objetivoZona[big]) big = ci;
+          const exceso = clusterLoad(rawClusters[big]) - objetivoZona[big] * 1.08;
           if (exceso <= 0) break;
           const cb = centro(rawClusters[big]);
           // la zona con hueco más cercana a la grande
           let dest = -1, dMin = Infinity;
           for (let ci = 0; ci < k; ci++) {
-            if (ci === big || clusterLoad(rawClusters[ci]) >= avgLoad) continue;
+            if (ci === big || clusterLoad(rawClusters[ci]) >= objetivoZona[ci]) continue;
             const c = centro(rawClusters[ci]), dd = (c.lat - cb.lat) ** 2 + (c.lng - cb.lng) ** 2;
             if (dd < dMin) { dMin = dd; dest = ci; }
           }
           if (dest < 0) break;
-          const hueco = avgLoad - clusterLoad(rawClusters[dest]);
+          const hueco = objetivoZona[dest] - clusterLoad(rawClusters[dest]);
           const cd = centro(rawClusters[dest]);
           const unaCarga = clusterLoad(rawClusters[big]) / rawClusters[big].length;
           const n = Math.max(1, Math.min(Math.ceil(Math.min(exceso, hueco) / unaCarga), rawClusters[big].length - 1));
@@ -671,14 +808,15 @@ export async function generateScenario(tasks, resources, constraints) {
       while (rebalChanged) {
         rebalChanged = false;
         for (let ci = 0; ci < k; ci++) {
-          if (clusterLoad(rawClusters[ci]) >= minLoad) continue;  // big enough
+          const minZona = objetivoZona ? Math.max(1, objetivoZona[ci] * 0.5) : minLoad;
+          if (clusterLoad(rawClusters[ci]) >= minZona) continue;  // big enough
           let maxCi = 0;
           for (let cj = 1; cj < k; cj++) {
             if (clusterLoad(rawClusters[cj]) > clusterLoad(rawClusters[maxCi])) maxCi = cj;
           }
           const donor = rawClusters[maxCi];
-          if (clusterLoad(donor) > minLoad) {                      // donor has surplus
-            const deficit = minLoad - clusterLoad(rawClusters[ci]);
+          if (clusterLoad(donor) > (objetivoZona ? objetivoZona[maxCi] * 0.5 : minLoad)) { // donor has surplus
+            const deficit = minZona - clusterLoad(rawClusters[ci]);
             const take = Math.min(Math.max(1, Math.ceil(deficit)), Math.floor(donor.length / 2));
             if (take > 0) {
               rawClusters[ci].push(...donor.splice(donor.length - take, take));
@@ -748,8 +886,10 @@ export async function generateScenario(tasks, resources, constraints) {
 
       const clusterOrder = centroids.map((_, i) => i).sort((a, b) => centroids[a].lng - centroids[b].lng);
 
-      // Assign clusters to resources by longitude order (west→east).
-      for (let pos = 0; pos < k; pos++) {
+      // Con varios días, cada zona a su vehículo según sus horas (ver arriba);
+      // si no, por longitud (oeste→este), como siempre.
+      if (zonaDeRecurso) for (let ri = 0; ri < k; ri++) clusterQueues[ri] = rawClusters[zonaDeRecurso[ri]];
+      else for (let pos = 0; pos < k; pos++) {
         clusterQueues[resOrder[pos]] = rawClusters[clusterOrder[pos]];
       }
     }
@@ -768,7 +908,13 @@ export async function generateScenario(tasks, resources, constraints) {
       ? { lat: +resources[i].depotLat, lng: +resources[i].depotLng } : null;
     const withC = cluster.filter(t => hasCoords(t.lat, t.lng));
     const noC   = cluster.filter(t => !hasCoords(t.lat, t.lng));
-    const ordered = withC.length > 1500 ? stripSort(withC) : await twoOpt(nnTSP(withC, depot));
+    // Zona de varios días: en barrios compactos de un día de trabajo de este
+    // vehículo, encadenados desde la base (antes, con más de 1.500 paradas, en
+    // franjas horizontales de lado a lado de la zona: cada día una franja larga).
+    const durMedia = withC.length ? withC.reduce((x, t) => x + (t.duracion || 15), 0) / withC.length : 15;
+    const porDia = Math.max(10, Math.floor(Math.max(60, state[i].shiftEnd - state[i].shiftStart) / (durMedia + 2)));
+    const ordered = withC.length > 2 * porDia ? await ordenarPorBloques(withC, depot, porDia, _scenarioStart + SCENARIO_TIME_BUDGET_MS)
+      : withC.length > 1500 ? stripSort(withC) : await twoOpt(nnTSP(withC, depot));
     const hinted = reorderByWindowHint(ordered, state[i].shiftStart, state[i].shiftEnd);
     sortedQueues.push([...hinted, ...noC]);
     await _yield();
