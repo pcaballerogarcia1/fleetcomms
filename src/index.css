@@ -181,3 +181,7 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 :root[data-tema="claro"] .op-tarjeta:hover { box-shadow: 0 8px 24px rgba(16,24,40,.10); }
 :root[data-tema="claro"] .leaflet-popup-content-wrapper, :root[data-tema="claro"] .leaflet-popup-tip { box-shadow: 0 10px 30px rgba(16,24,40,.16); }
 :root[data-tema="claro"] .op-seg > button.op-on { background: #ffffff; box-shadow: 0 1px 2px rgba(16,24,40,.12); }
+
+/* Con los módulos en español la barra no cabía en pantallas de portátil (1440 px):
+   el nombre y el perfil junto a la foto sobran (está el avatar) */
+@media (max-width: 1600px) { .op-cabecera-quien { display: none; } }

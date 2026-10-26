@@ -8,7 +8,7 @@ export const ROLE_LABELS = {
   superadmin: "Superadmin",
   admin: "Administrador",
   intermedio: "Intermedio",
-  conductor: "Field",
+  conductor: "Conductor",
 };
 
 export function roleLabel(rol) {

@@ -2,7 +2,7 @@
 // Dos aspectos, claro y oscuro, con el azul marino de la marca como color
 // principal (sin degradados morados). Una sola paleta para toda la app: las
 // pantallas que tenían su propia `const C` la toman de aquí.
-// El aspecto se elige al cargar (lo guardado, o el del sistema) y cambiarlo
+// El aspecto se elige al cargar (lo guardado; si no, el oscuro) y cambiarlo
 // recarga la página: así los colores siguen siendo valores fijos y se pueden
 // combinar con transparencias (`${C.blue}55`).
 
@@ -53,11 +53,10 @@ const PALETAS = {
 
 const leer = k => { try { return globalThis.localStorage?.getItem(k); } catch { return null; } };
 
-/** «claro» u «oscuro»: lo elegido en este ordenador o, si nada, el del sistema */
+/** «claro» u «oscuro»: lo elegido en este ordenador o, si nada, el oscuro (el de siempre de Operanzia) */
 export const TEMA = (() => {
   const g = leer("op-tema");
-  if (g === "claro" || g === "oscuro") return g;
-  try { return globalThis.matchMedia?.("(prefers-color-scheme: light)").matches ? "claro" : "oscuro"; } catch { return "oscuro"; }
+  return g === "claro" ? "claro" : "oscuro";
 })();
 export const CLARO = TEMA === "claro";
 
