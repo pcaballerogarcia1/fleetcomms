@@ -1874,7 +1874,11 @@ export async function generateScenario(tasks, resources, constraints) {
     }
 
     await rebalanceLoad();
-    const daysUsed = Math.max(1, mopDay);
+    // los días de verdad: el barrido final puede acabar antes del último día con trabajo
+    // (empieza por los días ya hechos), así que se cuentan por lo asignado
+    let ultimoDia = 0;
+    for (const res of state) for (const a of res.assignments) if (!a._travel && !a._wait && !a._break) ultimoDia = Math.max(ultimoDia, diaJornada(res, a._start) + 1);
+    const daysUsed = Math.max(1, day, ultimoDia);
     return { schedule: state, unassigned: stillUnassigned, daysUsed };
   }
 

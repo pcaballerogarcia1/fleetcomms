@@ -12,7 +12,7 @@ import { diaDe, rutasLargas, scenarioKpis, sinDuplicados } from "../scenario-met
 import { loadScenarioCloud, newScenarioVersion, saveScenarioCloud } from "../scenario-store.js";
 import { autoScaleFleetBg, generateScenarioBg, rutaMaestraBg } from "../vrp-client.js";
 import { hasCoords, minToTime, shiftCodeFromStart, turnoWindow } from "../vrp-engine.js";
-import { deriveWorkerRows, extractShifts, kpiHistorial, loadTasksFromLayers, vehicleDayWindows, workerDayWindows } from "./datos.js";
+import { deriveWorkerRows, extractShifts, kpiHistorial, lastScenarioDay, loadTasksFromLayers, vehicleDayWindows, workerDayWindows } from "./datos.js";
 import { idbSave } from "./idb.js";
 import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
 import { NOMBRE_DIA } from "./frecuencias.js";
@@ -388,7 +388,8 @@ export async function runGenerate(ctx) {
     scenarioProjectRef.current = activeProject?._id ?? null;
     setMoveHistory([]); setHistoryIndex(-1); // un escenario nuevo invalida el historial de movimientos manuales
     setUnassigneds({ vehicles: vr.unassigned, workers: vr.unassigned });
-    const newDays = vr.daysUsed;
+    // los días con trabajo de verdad, aunque el motor diga menos (si no, el último no se ve)
+    const newDays = Math.max(vr.daysUsed || 1, lastScenarioDay(vehicleSchedule, constraints.startMin));
     setConstraints(prev => ({ ...prev, days: newDays }));
     const usedVirtualWorkerCount = usedWorkerRows.filter(w => w._virtual && !w._onlyDayWindows).length;
     const usedCoverWorkers = usedWorkerRows.filter(w => w._onlyDayWindows);

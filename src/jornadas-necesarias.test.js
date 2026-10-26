@@ -43,6 +43,9 @@ describe("lo que sobra de un vehículo de turno corto lo hacen los que se quedan
     const largo = { _id: "l", nombre: "Largo", depotLat: 40.46, depotLng: -3.70, _effectiveStart: 360, _effectiveEnd: 1800 }; // 24 h
     const r = await generateScenario(tareas, [corto, largo], { startMin: 360, endMin: 1320, maxDays: 3, circular: false, maxShiftMin: 0, maxStops: 0, breakAfter: 0, breakDur: 0, optimizeWeight: 0 });
     expect(r.unassigned).toHaveLength(0);
+    // los días que dice el motor llegan hasta el último con paradas (si no, la pantalla no lo enseña)
+    const ultimo = Math.max(...r.schedule.flatMap(f => f.assignments.filter(a => !a._travel).map(a => Math.floor((a._start - 360) / 1440) + 1)));
+    expect(r.daysUsed).toBeGreaterThanOrEqual(ultimo);
     for (const f of r.schedule) {
       const a = [...f.assignments].sort((x, y) => x._start - y._start);
       for (let i = 1; i < a.length; i++) expect(a[i]._start).toBeGreaterThanOrEqual(a[i - 1]._end - 0.5); // nada encima de nada

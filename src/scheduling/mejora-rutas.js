@@ -342,7 +342,7 @@ export async function mejorarRutas(resultado, constraints = {}, opciones = {}) {
   });
   const despues = medir();
   const diasUsados = Math.max(1, ...schedule.flatMap(f => (f.assignments || []).filter(esParada).map(a => diaJornada(f, a._start) + 1)));
-  return { ...resultado, schedule, daysUsed: Math.min(resultado.daysUsed ?? diasUsados, diasUsados), mejora: { antes, despues, seg: +((Date.now() - t0) / 1000).toFixed(1) } };
+  return { ...resultado, schedule, daysUsed: diasUsados /* los de verdad: lo que diga el motor puede quedarse corto */, mejora: { antes, despues, seg: +((Date.now() - t0) / 1000).toFixed(1) } };
 }
 
 /**
