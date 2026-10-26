@@ -13,6 +13,7 @@ import {
 } from "./gantt-comun.js";
 import { ClockBadge } from "./kpi-bar.jsx";
 import { FilaLienzo } from "./gantt-lienzo.jsx";
+import { alfa } from "../tema.js";
 
 export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null, nombreDia = d => `Día ${d + 1}` }) {
   // Vista "Tabla" (columnas de datos) o "Compacta" (solo nombre y resumen)
@@ -546,9 +547,9 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                         </div>
                         {/* Stats en línea propia — no hay overflow */}
                         <div style={{ fontSize: 10, fontFamily: mono, display: "flex", gap: 5, alignItems: "center", marginTop: 2 }}>
-                          {durLabel && <span style={{ color: "#3fcf8e", fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
+                          {durLabel && <span style={{ color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
                           {stopCount > 0 && <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{stopCount}p</span>}
-                          {dayKm > 0 && <span style={{ color: "#f59e5b", fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
+                          {dayKm > 0 && <span style={{ color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
                           {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}>🏠</span>}
                         </div>
                       </div>
@@ -563,7 +564,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   position: "relative", width: chartW, flexShrink: 0,
                   backgroundColor: dropRowId === (row._id || row.id) && dragging
                     ? `${C.blue}18`
-                    : ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
+                    : ri % 2 === 0 ? "transparent" : alfa(0.01),
                   backgroundImage: gridBg,
                   transition: "background-color .1s",
                 }}
@@ -684,7 +685,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                           width: ww, height: 12, borderRadius: 4, cursor: "pointer",
                           background: isDepotMove ? "rgba(245,184,74,0.8)" : "rgba(203,213,225,0.55)",
                           display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
-                          overflow: "hidden", zIndex: 6, boxSizing: "border-box", color: "#0b0d12", border: "1.5px solid #0b0d12",
+                          overflow: "hidden", zIndex: 6, boxSizing: "border-box", color: C.bg, border: `1.5px solid ${C.bg}`,
                         }}
                       >
                         {ww > 16 && (isDepotMove ? <Home size={9} strokeWidth={2.6} /> : <ArrowRight size={9} strokeWidth={2.8} />)}
@@ -748,7 +749,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                 {movePreview && movePreview.dayOffset === selectedDay * 1440 && movePreview.slotsByRowId.get(row._id || row.id)?.map((slot, si) => {
                   const left = (slot.arrival - selectedDay * 1440) * pxPerMin;
                   const w    = Math.max((slot.taskEnd - slot.arrival) * pxPerMin - 2, 6);
-                  const color = slot.wait > 0 ? "#f59e0b" : "#3fcf8e";
+                  const color = slot.wait > 0 ? "#f59e0b" : C.green;
                   return (
                     <div key={`slot${si}`}
                       title={`Colocar aquí a las ${minToTime(slot.arrival % 1440)} · ${slot.kmDelta >= 0 ? "+" : ""}${slot.kmDelta.toFixed(2)} km${slot.wait > 0 ? ` · espera ${slot.wait} min` : ""}`}

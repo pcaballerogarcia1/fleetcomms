@@ -9,16 +9,12 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { sectorDe } from "./sector.js";
+import { C, alfa } from "./tema.js";
 
 // Nombre corto para el eje de una gráfica (sin el mes, que ya se elige arriba; con «…» si no cabe)
 const etiqueta = n => { const x = String(n || "").replace(/\s*·\s*\d{4}-\d{2}$/, "").trim(); return x.length > 24 ? `${x.slice(0, 23)}…` : x; };
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
-  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-  blue: "#5b7cfa", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d", purple: "#a78bfa",
-};
+
 const font = "var(--font)";
 const CATS_INCIDENCIA = [
   { label: "Avería mecánica", color: "#ef4444" },
@@ -313,7 +309,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       <div style={{ padding: "14px 20px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Analytics</div>
+            <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Análisis</div>
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{sectorDe(activeProject).ver.pesadas ? "Producción, facturación, pesadas, personal e incidencias" : "Producción, facturación, personal e incidencias"}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -321,8 +317,8 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
               {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ...(sectorDe(activeProject).ver.pesadas ? [["pesadas", "Pesadas"]] : []), ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vista === k ? "rgba(255,255,255,0.1)" : "none",
-                  color: vista === k ? "#fff" : C.muted,
+                  background: vista === k ? alfa(0.1) : "none",
+                  color: vista === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",
                 }}>{l}</button>
@@ -390,7 +386,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
             </div>
             {(!prices.ready || (prices.defaultPrecio == null && prices.byKey.size === 0)) ? (
               <div style={{ fontSize: 12, color: C.muted }}>
-                {prices.ready ? "Este proyecto todavía no tiene precios: ponlos en Planning → Timetable → € Precio." : "Cargando precios…"}
+                {prices.ready ? "Este proyecto todavía no tiene precios: ponlos en Planificación → Horarios → € Precio." : "Cargando precios…"}
               </div>
             ) : fact.sinPrecio > 0 ? (
               <div style={{ fontSize: 11, color: C.dim }}>

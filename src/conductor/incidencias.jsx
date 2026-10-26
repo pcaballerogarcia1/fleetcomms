@@ -8,6 +8,7 @@ import { PanelAdmin } from "./admin.jsx";
 import { enviarAvisos } from "../avisos.js";
 import { C, CATS, PC, S, VEHICULOS, avatarOf, fbAdd, fbUpdate, mono, nuevoComentario, timeAgo, useCollection } from "./comun.js";
 import { CTip } from "./ui.jsx";
+import { tono } from "../tema.js";
 
 // ── INCIDENCIAS ───────────────────────────────────────────────────
 export function ModuloIncidencias({sesion,usuarios}){
@@ -80,7 +81,7 @@ export function ModuloIncidencias({sesion,usuarios}){
                   <div style={{display:"flex",alignItems:"center",gap:6}}><cat.Icono size={14} color={cat.color}/><span style={{fontSize:12,color:cat.color,letterSpacing:0,textTransform:"none"}}>{cat.label}</span></div>
                   <div style={{display:"flex",gap:5}}>
                     <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:`${PC[inc.prioridad]}22`,color:PC[inc.prioridad],border:`1px solid ${PC[inc.prioridad]}44`,textTransform:"capitalize"}}>{inc.prioridad}</span>
-                    <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:"#1d222d",color:C.muted,border:`1px solid ${C.border}`,textTransform:"capitalize"}}>{inc.estado}</span>
+                    <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:tono("#1d222d", "#ebedf2"),color:C.muted,border:`1px solid ${C.border}`,textTransform:"capitalize"}}>{inc.estado}</span>
                   </div>
                 </div>
                 <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{inc.titulo}</div>
@@ -118,7 +119,7 @@ export function ModuloIncidencias({sesion,usuarios}){
                 <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:`${PC[incActual.prioridad]}22`,color:PC[incActual.prioridad],border:`1px solid ${PC[incActual.prioridad]}44`,textTransform:"none"}}>Prioridad {incActual.prioridad}</span>
                 <span style={{fontSize:11,color:C.muted}}>{autor.nombre} · {timeAgo(incActual.fecha)}</span>
               </div>
-              {esAdmin&&<div><label style={{...S.label,marginBottom:8}}>Estado</label><div style={{display:"flex",gap:6}}>{["abierta","en revisión","cerrada"].map(est=><button key={est} onClick={()=>cambiarEstado(incActual,est)} style={{flex:1,padding:"7px 4px",borderRadius:6,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",background:incActual.estado===est?"#1d222d":"none",border:`1px solid ${incActual.estado===est?C.blue:C.border}`,color:incActual.estado===est?C.blueText:C.muted}}>{est}</button>)}</div></div>}
+              {esAdmin&&<div><label style={{...S.label,marginBottom:8}}>Estado</label><div style={{display:"flex",gap:6}}>{["abierta","en revisión","cerrada"].map(est=><button key={est} onClick={()=>cambiarEstado(incActual,est)} style={{flex:1,padding:"7px 4px",borderRadius:6,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",background:incActual.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${incActual.estado===est?C.blue:C.border}`,color:incActual.estado===est?C.blueText:C.muted}}>{est}</button>)}</div></div>}
             </div>
             <div style={{padding:"14px 16px"}}>
               <label style={{...S.label,marginBottom:10}}>Comentarios ({incActual.comentarios?.length||0})</label>

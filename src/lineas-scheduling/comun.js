@@ -4,6 +4,7 @@
 import { TIPOS_VEHICULO } from "../lineas-store.js";
 import { clavePieza, PARAMS_DEFECTO, costeDia, OBJETIVOS, CAMPOS_VEHICULOS, CAMPOS_PRECIO, hayPrecios, minutosCoste, costeDeMinutos } from "../lineas-sched.js";
 import { minToHHMM } from "../gtfs-parse.js";
+import { C } from "../tema.js";
 
 
 
@@ -14,14 +15,7 @@ import { minToHHMM } from "../gtfs-parse.js";
 
 
 // Mismos colores y tipografías que scheduling.jsx
-export const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
-  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff",
-  green: "#3fcf8e", greenDim: "#0f2a1f",
-  orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+export { C };
 
 export const font = "var(--font)";
 export const mono = "var(--mono)";

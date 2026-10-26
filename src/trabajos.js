@@ -1,3 +1,4 @@
+import { C } from "./tema.js";
 // Planning → Trabajos: lo que se hace en cada punto. Un punto se sube una vez
 // y puede llevar varios trabajos (recogida, lavado exterior, lavado interior,
 // mantenimiento preventivo…), cada uno con su frecuencia, su duración y el
@@ -46,23 +47,23 @@ export function visitasAnio(frecuencia, diasServicioSemana = 6) {
 const T = (id, nombre, frecuencia, duracion, vehiculo, personas, color) => ({ id, nombre, frecuencia, duracion, vehiculo, personas, color, todos: true });
 export const PLANTILLAS = {
   residuos: [
-    T("recogida", "Recogida", "diaria", 2, "Camión recolector", 1, "#5b7cfa"),
-    T("lavado-ext", "Lavado exterior", "quincenal", 8, "Hidrolimpiadora", 1, "#3fcf8e"),
-    T("lavado-int", "Lavado interior", "mensual", 12, "Camión lavacontenedores", 2, "#a78bfa"),
-    T("preventivo", "Mantenimiento preventivo", "trimestral", 20, "Furgoneta de taller", 2, "#f59e5b"),
+    T("recogida", "Recogida", "diaria", 2, "Camión recolector", 1, C.blue),
+    T("lavado-ext", "Lavado exterior", "quincenal", 8, "Hidrolimpiadora", 1, C.green),
+    T("lavado-int", "Lavado interior", "mensual", 12, "Camión lavacontenedores", 2, C.violet),
+    T("preventivo", "Mantenimiento preventivo", "trimestral", 20, "Furgoneta de taller", 2, C.orange),
   ],
   contadores: [
-    T("lectura", "Lectura", "bimestral", 3, "Furgoneta", 1, "#5b7cfa"),
-    T("inspeccion", "Inspección", "anual", 10, "Furgoneta", 1, "#3fcf8e"),
-    T("cambio", "Cambio de contador", "a demanda", 30, "Furgoneta de taller", 1, "#f59e5b"),
+    T("lectura", "Lectura", "bimestral", 3, "Furgoneta", 1, C.blue),
+    T("inspeccion", "Inspección", "anual", 10, "Furgoneta", 1, C.green),
+    T("cambio", "Cambio de contador", "a demanda", 30, "Furgoneta de taller", 1, C.orange),
   ],
   mantenimiento: [
-    T("revision", "Revisión preventiva", "mensual", 15, "Furgoneta de taller", 2, "#5b7cfa"),
-    T("limpieza", "Limpieza", "trimestral", 20, "Furgoneta", 1, "#3fcf8e"),
-    T("reparacion", "Reparación", "a demanda", 45, "Furgoneta de taller", 2, "#f59e5b"),
+    T("revision", "Revisión preventiva", "mensual", 15, "Furgoneta de taller", 2, C.blue),
+    T("limpieza", "Limpieza", "trimestral", 20, "Furgoneta", 1, C.green),
+    T("reparacion", "Reparación", "a demanda", 45, "Furgoneta de taller", 2, C.orange),
   ],
   otros: [
-    T("visita", "Visita", "semanal", 15, "Furgoneta", 1, "#5b7cfa"),
+    T("visita", "Visita", "semanal", 15, "Furgoneta", 1, C.blue),
   ],
 };
 export const plantillaDe = sector => (PLANTILLAS[sector] || PLANTILLAS.residuos).map(t => ({ ...t }));

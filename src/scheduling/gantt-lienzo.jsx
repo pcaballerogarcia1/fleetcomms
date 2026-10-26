@@ -7,6 +7,7 @@
 import { useEffect, useRef } from "react";
 import { barrioColor } from "./estilo.js";
 import { ROW_H } from "./gantt-comun.js";
+import { C, alfa } from "../tema.js";
 
 // El nombre que se enseña de la parada: el suyo, o su código, o el barrio
 const CODIGOS = ["pa", "idsap", "id_sap", "codigopoint", "codigo"];
@@ -38,11 +39,11 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
       const deposito = t._depot_exit || t._depot_return;
       const h = 10, y = (ROW_H - h) / 2, ww = Math.max(bw, MIN_VACIO);
       const on = activa === t;
-      g.fillStyle = deposito ? (on ? "#f5b84a" : "rgba(245,184,74,0.8)") : (on ? "#e2e8f0" : "rgba(203,213,225,0.55)");
+      g.fillStyle = deposito ? (on ? C.amber : "rgba(245,184,74,0.8)") : (on ? "#e2e8f0" : "rgba(203,213,225,0.55)");
       g.beginPath(); (g.roundRect ? g.roundRect(x, y, ww, h, 3) : g.rect(x, y, ww, h)); g.fill();
-      g.strokeStyle = "#0b0d12"; g.lineWidth = 1.5; g.stroke(); g.lineWidth = 1;
+      g.strokeStyle = C.bg; g.lineWidth = 1.5; g.stroke(); g.lineWidth = 1;
       if (ww >= 14) {
-        g.strokeStyle = "#0b0d12"; g.lineWidth = 1.6; g.beginPath();
+        g.strokeStyle = C.bg; g.lineWidth = 1.6; g.beginPath();
         const cx = x + ww / 2, cy = ROW_H / 2;
         g.moveTo(cx - 3, cy - 3); g.lineTo(cx + 1, cy); g.lineTo(cx - 3, cy + 3); g.stroke(); g.lineWidth = 1;
       }
@@ -59,14 +60,14 @@ function dibujar(cv, { tareas, dayOffset, pxPerMin, chartW, activa, arrastrada }
         const txt = etiqueta(t);
         if (txt) {
           g.save(); g.beginPath(); g.rect(x + 3, 5, bw - 6, ALTO); g.clip();
-          g.fillStyle = "rgba(255,255,255,0.5)"; g.fillRect(x + 4, 5 + ALTO * 0.2, 3, ALTO * 0.6);
+          g.fillStyle = alfa(0.5); g.fillRect(x + 4, 5 + ALTO * 0.2, 3, ALTO * 0.6);
           g.fillStyle = "#fff"; g.font = `600 ${Math.min(10, bw / 5)}px Inter, system-ui, sans-serif`; g.textBaseline = "middle";
           g.fillText(bw >= 60 ? txt : txt.slice(0, Math.max(2, Math.floor(bw / 7))), x + 10, 5 + ALTO / 2);
           g.restore();
         }
       }
       if (t.windowStart != null) { // con franja horaria: el puntito amarillo del reloj
-        g.fillStyle = "#f5b84a"; g.beginPath(); g.arc(x + bw, 5, 3.5, 0, 2 * Math.PI); g.fill();
+        g.fillStyle = C.amber; g.beginPath(); g.arc(x + bw, 5, 3.5, 0, 2 * Math.PI); g.fill();
       }
       g.globalAlpha = 1;
     }

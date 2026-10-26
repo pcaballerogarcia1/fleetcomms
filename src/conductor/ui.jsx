@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect } from "react";
 import { C, barrioColor, font, mono } from "./comun.js";
 import { useUltimo } from "../use-ultimo.js";
+import { alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // Componente base de botón con hover
 export const Btn = ({children, onClick, style={}, variant="primary", size="md", disabled=false, title=""}) => {
@@ -20,12 +22,12 @@ export const Btn = ({children, onClick, style={}, variant="primary", size="md", 
     xl: {padding:"14px 30px", fontSize:15, borderRadius:9},
   };
   const variants = {
-    primary:  { background: hov?"#263166":C.blueDim, color:C.blueText, border:`1px solid ${C.blue}44` },
+    primary:  { background: hov?tono("#263166", "#e7e9f6"):C.blueDim, color:C.blueText, border:`1px solid ${C.blue}44` },
     success:  { background: hov?"rgba(63,207,142,0.15)":C.greenDim, color:C.green, border:`1px solid ${C.green}44` },
     danger:   { background: hov?"rgba(242,109,109,0.15)":"rgba(242,109,109,0.06)", color:C.red, border:`1px solid ${C.red}44` },
-    ghost:    { background: hov?"rgba(255,255,255,0.06)":"transparent", color: hov?C.text:C.muted, border:`1px solid ${C.border}` },
+    ghost:    { background: hov?alfa(0.06):"transparent", color: hov?C.text:C.muted, border:`1px solid ${C.border}` },
     warning:  { background: hov?"rgba(245,158,91,0.15)":"rgba(245,158,91,0.06)", color:C.orange, border:`1px solid ${C.orange}44` },
-    subtle:   { background: hov?"rgba(255,255,255,0.06)":C.surface2, color:C.muted, border:`1px solid ${C.border}` },
+    subtle:   { background: hov?alfa(0.06):C.surface2, color:C.muted, border:`1px solid ${C.border}` },
   };
   return (
     <button onClick={onClick} disabled={disabled} title={title}
@@ -129,7 +131,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       layersRef.current.push(l);
     } else if(pts.length>1){
       // mientras llega (o si no hay servicio de rutas): de parada a parada, a trazos
-      const l=L.polyline(pts.map(u=>[u.lat,u.lng]),{color:"#2a3142",weight:1.5,opacity:0.4,dashArray:"4,8"}).addTo(map);
+      const l=L.polyline(pts.map(u=>[u.lat,u.lng]),{color:tono("#2a3142", "#ebedf2"),weight:1.5,opacity:0.4,dashArray:"4,8"}).addTo(map);
       layersRef.current.push(l);
     }
     pts.forEach((u)=>{
@@ -163,7 +165,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
 
   return (
     <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>
-      <div ref={divRef} style={{height,background:"#151a26"}}/>
+      <div ref={divRef} style={{height,background:tono("#151a26", "#eaecf3")}}/>
       <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",gap:12}}>
           {[[C.green,"Realizada"],[C.blue,"Pendiente"],[C.orange,"Seleccionada"]].map(([c,l])=>(

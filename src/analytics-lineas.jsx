@@ -8,11 +8,9 @@ import { leerRealPeriodo } from "./lineas-servicio-store.js";
 import { analizarTiempos, PUNTUAL } from "./lineas-runtime.js";
 import { watchRed, watchCfg, guardarCfgLinea, tiempoEfectivo } from "./lineas-store.js";
 import { logAudit } from "./audit.js";
+import { C, alfa } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const MIN_VIAJES = 5; // para «usar todos»: franjas con al menos estos viajes medidos
@@ -52,7 +50,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
       await guardarCfgLinea(projectId, f.lid, { tiempos: { [`${f.dir}|${f.franja}`]: f.real } }, { nombreLinea: linea.nombre, detalle: `tiempos de recorrido de la línea ${linea.nombre} (del análisis de tiempos reales)` });
       n++;
     }
-    setNota(`${n} tiempo${n === 1 ? "" : "s"} de recorrido actualizado${n === 1 ? "" : "s"} en Planning. El Scheduling avisará de que hay que recalcular.`);
+    setNota(`${n} tiempo${n === 1 ? "" : "s"} de recorrido actualizado${n === 1 ? "" : "s"} en Planificación. Rutas avisará de que hay que recalcular.`);
     logAudit({ modulo: "Analytics", accion: "Aplicó tiempos reales a Planning", detalle: `${n} franjas` });
   };
 
@@ -75,7 +73,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0", flexWrap: "wrap" }}>
         <span style={{ fontSize: 11.5, color: C.muted }}>Periodo</span>
         <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? "rgba(255,255,255,0.1)" : "none", color: periodo === d ? "#fff" : C.muted, fontSize: 11.5, fontFamily: font }}>últimos {d} días</button>)}
+          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? alfa(0.1) : "none", color: periodo === d ? C.text : C.muted, fontSize: 11.5, fontFamily: font }}>últimos {d} días</button>)}
         </div>
         <button onClick={analizar} disabled={estado.cargando} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: estado.cargando ? "wait" : "pointer", fontFamily: font }}>{estado.cargando ? "Leyendo los días publicados…" : "Analizar"}</button>
         <span style={{ fontSize: 10.5, color: C.dim }}>Lee los turnos de los días publicados del periodo (una lectura por turno).</span>
@@ -102,7 +100,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
               <th style={{ ...th, textAlign: "left" }}>Línea</th><th style={{ ...th, textAlign: "left" }}>Sentido</th><th style={{ ...th, textAlign: "left" }}>Franja</th>
-              <th style={th}>Viajes</th><th style={th}>Previsto</th><th style={th}>Real</th><th style={th} title="El 85 % de los viajes tarda esto o menos">Real (días malos)</th><th style={th}>Diferencia</th><th style={th}>Puntualidad</th><th style={th}>En Planning</th><th style={th} />
+              <th style={th}>Viajes</th><th style={th}>Previsto</th><th style={th}>Real</th><th style={th} title="El 85 % de los viajes tarda esto o menos">Real (días malos)</th><th style={th}>Diferencia</th><th style={th}>Puntualidad</th><th style={th}>En Planificación</th><th style={th} />
             </tr></thead>
             <tbody>
               {filas.map(f => {
@@ -122,7 +120,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
                     <td style={{ ...td, color: C.muted }}>{plan ?? "—"}′</td>
                     <td style={{ ...td }}>
                       {f.real != null && plan !== f.real
-                        ? <button onClick={() => usar([f])} title={f.n < MIN_VIAJES ? `Solo ${f.n} viaje(s) medido(s): poco para fiarse` : "Poner este tiempo como tiempo de recorrido de esta franja en Planning"} style={{ padding: "2px 9px", borderRadius: 5, border: `1px solid ${C.border2}`, background: "none", color: f.n < MIN_VIAJES ? C.dim : C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font }}>Usar el real</button>
+                        ? <button onClick={() => usar([f])} title={f.n < MIN_VIAJES ? `Solo ${f.n} viaje(s) medido(s): poco para fiarse` : "Poner este tiempo como tiempo de recorrido de esta franja en Planificación"} style={{ padding: "2px 9px", borderRadius: 5, border: `1px solid ${C.border2}`, background: "none", color: f.n < MIN_VIAJES ? C.dim : C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font }}>Usar el real</button>
                         : f.real != null && <span style={{ fontSize: 11, color: C.green, fontFamily: font }}>ya está</span>}
                     </td>
                   </tr>

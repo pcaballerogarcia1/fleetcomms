@@ -27,7 +27,7 @@ test("lecturas por pantalla con los datos de un cliente mediano", async ({ brows
   await anotar(oficina, "Oficina · entrar y lista de proyectos");
   await oficina.getByText("Abrir proyecto").first().click();
   await anotar(oficina, "Oficina · abrir proyecto (Planning)");
-  for (const m of ["Scheduling", "Rostering", "Control", "Analytics"]) {
+  for (const m of ["Rutas", "Cuadrante", "Control", "Análisis"]) {
     await oficina.getByRole("button", { name: m, exact: true }).first().click();
     await anotar(oficina, `Oficina · ${m}`);
   }

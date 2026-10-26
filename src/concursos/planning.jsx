@@ -117,12 +117,12 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: C.bg, fontFamily: font }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Planning del concurso</div>
+        <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Planificación del concurso</div>
         <div className="op-seg">
           <button className={vista === "rendimientos" ? "op-on" : ""} onClick={() => setVista("rendimientos")}><Calculator size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Por rendimientos</button>
           <button className={vista === "mapa" ? "op-on" : ""} onClick={() => setVista("mapa")}><IconoMapa size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Mapa (con coordenadas)</button>
         </div>
-        <div style={{ fontSize: 12, color: C.dim }}>{vista === "rendimientos" ? "Con las cantidades de la ficha y lo que rinde cada equipo. Aquí se sube el listado de contenedores, tenga o no coordenadas." : "Para calcular rutas en Scheduling: listado con coordenadas o zonas dibujadas. ¿Tu listado no tiene coordenadas? Súbelo en «Por rendimientos»."}</div>
+        <div style={{ fontSize: 12, color: C.dim }}>{vista === "rendimientos" ? "Con las cantidades de la ficha y lo que rinde cada equipo. Aquí se sube el listado de contenedores, tenga o no coordenadas." : "Para calcular las rutas: listado con coordenadas o zonas dibujadas. ¿Tu listado no tiene coordenadas? Súbelo en «Por rendimientos»."}</div>
       </div>
 
       {vista === "mapa" ? <div style={{ flex: 1, position: "relative", display: "flex" }}>{mapa}</div> : (

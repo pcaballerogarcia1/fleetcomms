@@ -8,12 +8,9 @@ import { activarAvisos, estadoAvisos } from "./avisos.js";
 import { watchErrors } from "./error-report.js";
 import { auth } from "./firebase.js";
 import { resumenSalud } from "./salud.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface: "#181c25", border: "rgba(255,255,255,0.08)",
-  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", red: "#f26d6d", amber: "#f5b84a",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 14 };
 const titulo = { fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 };
 /* global __APP_VERSION__ */
@@ -28,7 +25,7 @@ function Barra({ etiqueta, valor, limite }) {
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
         <span>{etiqueta}</span><span style={{ color }}>{valor.toLocaleString("es-ES")} de {limite.toLocaleString("es-ES")} · {pct}%</span>
       </div>
-      <div style={{ height: 8, background: C.surface, borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: color }} /></div>
+      <div style={{ height: 8, background: C.surface2, borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: color }} /></div>
     </div>
   );
 }
@@ -104,7 +101,7 @@ export function PanelSalud({ sesion, orgs }) {
         {errLista ? <div style={{ fontSize: 12, color: C.red }}>{errLista}</div> : !res ? <div style={{ fontSize: 12, color: C.muted }}>Cargando…</div> : <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
             {[["Últimas 24 h", res.h24, res.h24 ? C.red : C.green], ["Últimos 7 días", res.d7, res.d7 ? C.amber : C.green], ["Pantallas lentas (7 d)", res.lentos7, res.lentos7 ? C.amber : C.green], ["Versión publicada", VERSION, C.blueText]].map(([l, v, col]) => (
-              <div key={l} style={{ background: C.surface, borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+              <div key={l} style={{ background: C.surface2, borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: col }}>{v}</div>
                 <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{l}</div>
               </div>

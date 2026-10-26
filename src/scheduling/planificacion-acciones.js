@@ -88,7 +88,7 @@ export async function restorePoint(ctx, p) {
   const cuando = p.savedAtMs ? new Date(p.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
   const otraGeneracion = p.stamp && scenarioStampRef.current && p.stamp !== scenarioStampRef.current;
   if (!confirm(`¿Restaurar la versión${cuando ? " del " + cuando : ""}${p.savedBy?.nombre ? " (" + p.savedBy.nombre + ")" : ""}?\n\nLa versión actual no se pierde: queda como punto de restauración.` +
-    (otraGeneracion ? "\n\nOjo: es de un escenario generado antes. Rostering sigue con los turnos del último generado — si trabajáis con Optimizar, vuelve a generar." : ""))) return;
+    (otraGeneracion ? "\n\nOjo: es de un escenario generado antes. Cuadrante sigue con los turnos del último generado — si trabajáis con Optimizar, vuelve a generar." : ""))) return;
   setShowHistorial(false);
   setCloudSync("loading");
   try {
@@ -113,7 +113,7 @@ export async function importFromPlanning(ctx) {
     const allTasks = await loadTasksFromLayers(activeProject._id);
 
     if (allTasks.length === 0) {
-      alert("No hay puntos en planning para este proyecto.\nVe a Planning, sube el Excel y vuelve aquí a importar.");
+      alert("No hay puntos en planning para este proyecto.\nVe a Planificación, sube el Excel y vuelve aquí a importar.");
       setImporting(false);
       return;
     }
@@ -270,7 +270,7 @@ export async function runGenerate(ctx) {
       shiftStart:  vr.schedule[i]?.shiftStart,
       shiftEnd:    vr.schedule[i]?.shiftEnd,
     })));
-    if (bloquesRepetidos) console.warn(`[Scheduling] ${bloquesRepetidos} bloques repetidos quitados`);
+    if (bloquesRepetidos) console.warn(`[Rutas] ${bloquesRepetidos} bloques repetidos quitados`);
 
     // Enrich travel block km with real road distances via OSRM
     setGenPhase("osrm");
@@ -407,14 +407,14 @@ export async function runGenerate(ctx) {
         ? `Ruta maestra: ${maestra.visitas} visitas a la semana de ${maestra.paradas} paradas, cada vehículo en su zona (${maestra.dias.map((d, i) => `Día ${i + 1} = ${NOMBRE_DIA[d]}`).join(", ")}).${vr.unassigned.length ? ` ${vr.unassigned.length} visita(s) no caben en su día: hacen falta más vehículos o más horas.` : ""}`
         : null,
       descargas.descargas > 0
-        ? `${descargas.descargas} viaje(s) a descargar${plantas.length ? "" : " (sin plantas marcadas en Planning: se descarga en el depósito)"}${descargas.rutasPasadas ? ` · ${descargas.rutasPasadas} ruta(s) acaban hasta ${descargas.minPasados} min más tarde de lo previsto por las descargas` : ""}.`
+        ? `${descargas.descargas} viaje(s) a descargar${plantas.length ? "" : " (sin plantas marcadas en Planificación: se descarga en el depósito)"}${descargas.rutasPasadas ? ` · ${descargas.rutasPasadas} ruta(s) acaban hasta ${descargas.minPasados} min más tarde de lo previsto por las descargas` : ""}.`
         : null,
       // rutas larguísimas: sin límite de turno el motor llena el día entero (06:00–22:00)
       largas.n > 0
         ? `Atención: ${largas.n} ruta(s) duran más de ${constraints.maxShiftMin > 0 ? horasMin(constraints.maxShiftMin) : "9 h"} (la más larga, ${horasMin(largas.max)}).${constraints.maxShiftMin > 0 ? "" : " No hay duración máxima de turno: ponla en Restricciones → «Duración máxima de turno» y vuelve a generar."}`
         : null,
       usedCoverWorkers.length > 0
-        ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Rostering — cubiertos por "Conductor necesario".`
+        ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Cuadrante — cubiertos por "Conductor necesario".`
         : null,
     ].filter(Boolean);
     setScaleInfo(scaleMsgs.length ? scaleMsgs.join(" ") : null);
@@ -555,7 +555,7 @@ export async function runGenerate(ctx) {
             // Antes se tragaba en silencio: con modo libre, sin esto
             // Rostering se queda sin turnos que optimizar sin saber por qué.
             console.error("scheduling_roster save:", e);
-            setSaveSummaryError("No se pudieron guardar los turnos para Rostering: " + (e.message || e));
+            setSaveSummaryError("No se pudieron guardar los turnos para Cuadrante: " + (e.message || e));
           }
         }
         console.timeEnd("[PERF] firestore-save");
@@ -965,9 +965,9 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       };
       const total = list => list.reduce((s, x) => s + x.stops, 0);
       const parts = [];
-      if (skipped.length) parts.push(`${total(skipped)} parada(s) NO se publicarán por el cuadrante actual de Rostering:\n${fmt(skipped)}`);
-      if (unstaffed.length) parts.push(`${total(unstaffed)} parada(s) se publicarán SIN conductor asignado en Rostering (usa Optimizar en Rostering):\n${fmt(unstaffed)}`);
-      if (sinConductor.length) parts.push(`${sinConductor.length} ruta(s) (${total(sinConductor)} paradas) no tienen ningún conductor: nadie las verá en Rutas. Asigna conductores a los vehículos en Planning o en Rostering:\n${fmt(sinConductor)}`);
+      if (skipped.length) parts.push(`${total(skipped)} parada(s) NO se publicarán por el cuadrante actual de Cuadrante:\n${fmt(skipped)}`);
+      if (unstaffed.length) parts.push(`${total(unstaffed)} parada(s) se publicarán SIN conductor asignado en Cuadrante (usa Optimizar en Cuadrante):\n${fmt(unstaffed)}`);
+      if (sinConductor.length) parts.push(`${sinConductor.length} ruta(s) (${total(sinConductor)} paradas) no tienen ningún conductor: nadie las verá en la app de conductores. Asigna conductores a los vehículos en Planificación o en Cuadrante:\n${fmt(sinConductor)}`);
       const ok = confirm(`${parts.join("\n\n")}\n\nRegenera u optimiza para corregirlo, o acepta para publicar igualmente.`);
       if (!ok) { setPublishing(false); return; }
     }

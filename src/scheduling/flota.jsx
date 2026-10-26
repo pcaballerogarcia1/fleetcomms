@@ -8,6 +8,7 @@ import { C, TURNO_TYPES, VEHICLE_TYPES, font, mono } from "./estilo.js";
 import { CAMPOS_FICHA, edadDe, valorFicha } from "../trabajador-ficha.js";
 import { AccesoApp } from "./acceso-app.jsx";
 import { CAMPOS_FICHA_VEHICULO, diasHasta, valorFichaVehiculo } from "../vehiculo-ficha.js";
+import { alfa } from "../tema.js";
 
 // ── DEPOT SECTION ─────────────────────────────────────────────────
 // Selector de cochera/depot compartido por vehículos y trabajadores: dos
@@ -50,13 +51,13 @@ function DepotSection({ projectId, formObj, setFormObj }) {
           <button onClick={() => setShowPicker(v => !v)} style={{
             fontSize: 10, padding: "3px 8px", background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
             color: C.blueText, cursor: "pointer", fontFamily: font,
-          }}>Elegir de Planning</button>
+          }}>Elegir de Planificación</button>
         )}
       </div>
       {showPicker && (
         <div style={{ marginBottom: 8 }}>
           {planningDepots.length === 0 ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: C.muted }}>No hay depots en Planning para este proyecto.</div>
+            <div style={{ padding: "8px 12px", fontSize: 11, color: C.muted }}>No hay depots en Planificación para este proyecto.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {planningDepots.map(d => (
@@ -110,7 +111,7 @@ function FichaVehiculoCampos({ obj, setObj, selStyle }) {
             </select>
           ) : (
             <input type={c.tipo === "fecha" ? "date" : "text"} inputMode={c.tipo === "decimal" ? "decimal" : undefined}
-              placeholder={c.k === "autonomiaKm" ? "sin límite — el Scheduling no le dará rutas más largas" : ""}
+              placeholder={c.k === "autonomiaKm" ? "sin límite — no se le darán rutas más largas" : ""}
               value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
               style={{ ...selStyle, flex: "none", colorScheme: "dark" }} />
           )}
@@ -285,11 +286,11 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
                   {[v.marca, v.modelo].filter(Boolean).length > 0 && <span>{[v.marca, v.modelo].filter(Boolean).join(" ")}</span>}
                   {v.combustible && <span>{v.combustible}</span>}
-                  {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="El Scheduling no le da rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? "🔋" : "⛽"} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
+                  {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="No se le dan rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? "🔋" : "⛽"} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
                   <AvisoFecha fecha={v.proximaITV} que="ITV" />
                   <AvisoFecha fecha={v.seguroVence} que="Seguro" />
                   {v.depotLat && v.depotLng && (
-                    <span style={{ color: "#f59e5b", display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ color: C.orange, display: "flex", alignItems: "center", gap: 3 }}>
                       🏠 {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
                     </span>
                   )}
@@ -474,8 +475,8 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
               {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                 <button key={v} onClick={() => setForm({ ...form, rol: v })} style={{
                   padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
-                  background: form.rol === v ? "rgba(255,255,255,0.1)" : "none",
-                  color: form.rol === v ? "#fff" : C.muted,
+                  background: form.rol === v ? alfa(0.1) : "none",
+                  color: form.rol === v ? C.text : C.muted,
                   fontSize: 11, fontFamily: font, transition: "all .12s",
                 }}>{l}</button>
               ))}
@@ -513,8 +514,8 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                     <button key={v} onClick={() => setEditForm({ ...editForm, rol: v })} style={{
                       padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
-                      background: editForm.rol === v ? "rgba(255,255,255,0.1)" : "none",
-                      color: editForm.rol === v ? "#fff" : C.muted,
+                      background: editForm.rol === v ? alfa(0.1) : "none",
+                      color: editForm.rol === v ? C.text : C.muted,
                       fontSize: 11, fontFamily: font, transition: "all .12s",
                     }}>{l}</button>
                   ))}
@@ -554,7 +555,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                       : <span style={{ color: C.red, fontSize: 10 }}>Sin vehículo</span>;
                   })()}
                   {w.depotLat && w.depotLng && (
-                    <span style={{ color: "#f59e5b", display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ color: C.orange, display: "flex", alignItems: "center", gap: 3 }}>
                       🏠 {(+w.depotLat).toFixed(4)}, {(+w.depotLng).toFixed(4)}
                     </span>
                   )}

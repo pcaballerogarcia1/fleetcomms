@@ -20,6 +20,8 @@ import { C, S, fbAdd, fbDelete, fbUpdate, font, useCollection } from "./conducto
 import { ModuloIncidencias } from "./conductor/incidencias.jsx";
 import { ModuloInventario } from "./conductor/inventario.jsx";
 import { ListaPlanes } from "./conductor/rutas.jsx";
+import { alfa } from "./tema.js";
+import { tono } from "./tema.js";
 
 function Login({aviso=""}){
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
@@ -38,7 +40,7 @@ function Login({aviso=""}){
           <div style={{fontSize:24,fontWeight:650,color:C.text,letterSpacing:"-0.02em",marginTop:16}}>Operanzia</div>
           <div style={{fontSize:13.5,color:C.muted,marginTop:6}}>Tus rutas, tu turno y tus avisos</div>
         </div>
-        <div style={{background:"rgba(18,21,28,0.85)",border:`1px solid ${C.border}`,borderRadius:16,padding:22,boxShadow:"0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04)"}}>
+        <div style={{background:tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"),border:`1px solid ${C.border}`,borderRadius:16,padding:22,boxShadow:`0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`}}>
           <div style={{marginBottom:14}}>
             <label className="op-label">Email o usuario</label>
             <input className="op-input" style={{height:44,fontSize:15}} value={email} onChange={e=>setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={e=>e.key==="Enter"&&go()}/>
@@ -209,7 +211,7 @@ export default function App(){
 
   return(
     <div style={S.page}>
-      <div style={{...S.header,background:"rgba(11,13,18,0.86)",borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
+      <div style={{...S.header,background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"),borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <Logo size={26}/>
           <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[tab]||tab}</div>
@@ -229,7 +231,7 @@ export default function App(){
       {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
       {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan} sesion={sesion}/>}
 
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:"rgba(11,13,18,0.9)",borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)",paddingBottom:"env(safe-area-inset-bottom)"}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:tono("rgba(11,13,18,0.9)", "rgba(255,255,255,0.9)"),borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)",paddingBottom:"env(safe-area-inset-bottom)"}}>
         {TABS.map(t=>{
           const active=tab===t.key;
           return(

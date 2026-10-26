@@ -18,13 +18,13 @@ export async function doPublish(ctx, targets, tipo, trabajo = "") {
   setPublishModal(null);
   const projectId = activeProject?._id || null;
   const sameMonth = schedRoster?.mes === viewMes;
-  let scenario = null, porQueNo = !projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Scheduling es de otro mes" : null;
+  let scenario = null, porQueNo = !projectId ? "no hay proyecto abierto" : !sameMonth ? "el escenario de Rutas es de otro mes" : null;
   if (!porQueNo) {
     const { data } = await escenarioParaPublicar(projectId);
-    if (!data) porQueNo = "no se encuentra el escenario de Scheduling (ni en la nube ni en este navegador)";
+    if (!data) porQueNo = "no se encuentra el escenario de Rutas (ni en la nube ni en este navegador)";
     // el cuadrante es de una generación del escenario: si se ha vuelto a
     // generar después, sus turnos ya no casan con las paradas
-    else if (schedRoster?.generatedAt && data.stamp && data.stamp !== schedRoster.generatedAt) porQueNo = "el escenario guardado es de otra generación que este cuadrante — vuelve a generar en Scheduling";
+    else if (schedRoster?.generatedAt && data.stamp && data.stamp !== schedRoster.generatedAt) porQueNo = "el escenario guardado es de otra generación que este cuadrante — vuelve a generar en Rutas";
     else scenario = data;
   }
   // Rutas ya publicadas desde Scheduling para este mes: se duplicarían
@@ -32,7 +32,7 @@ export async function doPublish(ctx, targets, tipo, trabajo = "") {
     try {
       const deScheduling = (await planesPublicados(orgId, projectId, viewMes)).filter(d => !d.data().origenRostering && !planEmpezado(d.data()));
       if (deScheduling.length) {
-        if (!window.confirm(`Hay ${deScheduling.length} ruta(s) de ${viewMes} publicadas desde Scheduling (por vehículo). Si publicas también por trabajador, los conductores las verían repetidas.\n\n¿Quitar las de Scheduling (las no empezadas) y publicar por trabajador?`)) { setPublishModal(null); return; }
+        if (!window.confirm(`Hay ${deScheduling.length} ruta(s) de ${viewMes} publicadas desde Rutas (por vehículo). Si publicas también por trabajador, los conductores las verían repetidas.\n\n¿Quitar las de Rutas (las no empezadas) y publicar por trabajador?`)) { setPublishModal(null); return; }
         for (const d of deScheduling) await deleteDoc(d.ref);
       }
     } catch (e) { alert("No se pudieron revisar las rutas ya publicadas: " + (e.message || e)); return; }
@@ -76,11 +76,11 @@ export function optimizar(ctx) {
   // este proyecto/mes — el botón "no hacía nada" en silencio y parecía
   // roto. Ahora explica por qué, en vez de quedarse callado.
   if (!activeProject) {
-    alert("Abre un proyecto con un escenario generado en Scheduling primero.");
+    alert("Abre un proyecto con un escenario generado en Rutas primero.");
     return;
   }
   if (!schedRoster) {
-    alert("Este proyecto todavía no tiene un escenario generado en Scheduling — no hay turnos que asignar.");
+    alert("Este proyecto todavía no tiene un escenario generado en Rutas — no hay turnos que asignar.");
     return;
   }
   if (schedRoster.mes && schedRoster.mes !== `${year}-${String(month).padStart(2, "0")}`) {
@@ -119,7 +119,7 @@ export function optimizar(ctx) {
   if (assignedCount === 0) {
     alert(skippedNoCode > 0
       ? "No se ha asignado ningún turno nuevo — las celdas ya estaban marcadas manualmente (M/T/N/G), libres o de baja."
-      : "No se ha asignado ningún turno — regenera el escenario en Scheduling para este proyecto/mes.");
+      : "No se ha asignado ningún turno — regenera el escenario en Rutas para este proyecto/mes.");
   } else {
     alert(`Se han asignado ${assignedCount} turno(s).${skippedNoCode > 0 ? ` ${skippedNoCode} trabajador(es) con paradas asignadas no tenían un turno reconocible.` : ""}`);
   }
@@ -139,7 +139,7 @@ export function optimizarLibre(ctx) {
   }
   const shiftsRaw = schedRoster.shifts || [];
   if (!shiftsRaw.length) {
-    alert("El escenario no tiene turnos guardados — regenéralo en Scheduling (modo libre).");
+    alert("El escenario no tiene turnos guardados — regenéralo en Rutas (modo libre).");
     return;
   }
   if (Object.keys(asignRef.current).some(w => Object.keys(asignRef.current[w] || {}).length) &&

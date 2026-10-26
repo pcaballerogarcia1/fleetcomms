@@ -3,18 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import { watchPresence, onlineFrom, orgNames, initialsOf, haceCuanto } from "./presence.js";
 import { roleLabel } from "./roles.js";
+import { C } from "./tema.js";
 
-const GREEN = "#3fcf8e";
-const C = {
-  card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+const GREEN = C.green;
+
 const font = "var(--font)";
 const MAX_VISIBLE = 5;
 
 const PAGINAS = {
-  "/projects": "Proyectos", "/planning": "Planning", "/scheduling": "Scheduling",
-  "/rostering": "Rostering", "/departure": "Departure", "/control": "Control", "/analytics": "Analytics",
+  "/projects": "Proyectos", "/planning": "Planificación", "/scheduling": "Rutas",
+  "/rostering": "Cuadrante", "/departure": "Salida del día", "/control": "Control", "/analytics": "Análisis",
   "/rutas": "App Rutas", "/incidencias": "App Rutas · Incidencias", "/inventario": "App Rutas · Inventario",
 };
 const donde = p => PAGINAS[p.pagina] || (p.app === "rutas" ? "App Rutas" : "Oficina");

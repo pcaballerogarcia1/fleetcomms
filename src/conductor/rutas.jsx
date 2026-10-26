@@ -14,6 +14,7 @@ import { AvisosMovil } from "./avisos-movil.jsx";
 import { DetallePlan } from "./ruta-detalle.jsx";
 import { Btn } from "./ui.jsx";
 import { comprobarLugarFichaje, escucharDepotsFichaje, RADIO_FICHAJE_M } from "../fichaje-depots.js";
+import { tono } from "../tema.js";
 
 // Correctivo: tarjeta de tarea manual (sin KML)
 function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
@@ -42,7 +43,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       {/* Estado */}
       <div style={{display:"flex",gap:5,marginBottom:8}}>
         {["pendiente","en curso","cerrada"].map(est=>(
-          <button key={est} onClick={()=>cambiarEstado(est)} style={{flex:1,padding:"5px 4px",borderRadius:6,cursor:"pointer",fontSize:9,fontFamily:mono,textTransform:"capitalize",letterSpacing:0.5,background:tarea.estado===est?"#1d222d":"none",border:`1px solid ${tarea.estado===est?C.blue:C.border}`,color:tarea.estado===est?C.blueText:C.muted}}>{est}</button>
+          <button key={est} onClick={()=>cambiarEstado(est)} style={{flex:1,padding:"5px 4px",borderRadius:6,cursor:"pointer",fontSize:9,fontFamily:mono,textTransform:"capitalize",letterSpacing:0.5,background:tarea.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${tarea.estado===est?C.blue:C.border}`,color:tarea.estado===est?C.blueText:C.muted}}>{est}</button>
         ))}
       </div>
       {/* Expandir comentarios */}
@@ -52,7 +53,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       {expandida&&(
         <div style={{marginTop:8}}>
           {(tarea.comentarios||[]).map((c,i)=>{const u=getUser(c.usuarioId);return(
-            <div key={i} style={{background:"#0d0f14",borderRadius:6,padding:"7px 10px",marginBottom:5}}>
+            <div key={i} style={{background:C.input,borderRadius:6,padding:"7px 10px",marginBottom:5}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                 <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div><span style={{fontSize:11,color:C.muted}}>{u.nombre}</span></div>
                 <span style={{fontSize:9,color:C.dim}}>{timeAgo(c.fecha)}</span>
@@ -64,7 +65,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
             <input value={comentario} onChange={e=>setCom(e.target.value)} onKeyDown={e=>e.key==="Enter"&&agregarCom()} placeholder="Añadir comentario..." style={{...S.input,flex:1,fontSize:12,padding:"7px 10px"}}/>
             <button onClick={agregarCom} style={{...S.btnSm}}>↑</button>
           </div>
-          {puedeGestionarRutasRol(sesion.rol)&&<button onClick={onDelete} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",width:"100%",padding:"7px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
+          {puedeGestionarRutasRol(sesion.rol)&&<button onClick={onDelete} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,width:"100%",padding:"7px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
         </div>
       )}
     </div>
@@ -364,7 +365,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
       <div style={{padding:"12px 14px 0"}}>
         <div onClick={()=>setVerCuadrante(true)} style={{...S.card,cursor:"pointer",marginBottom:18}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:46,height:46,borderRadius:12,background:"#5b7cfa18",border:"1px solid #5b7cfa33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#5b7cfa"}}><CalendarDays size={22} strokeWidth={1.8}/></div>
+            <div style={{width:46,height:46,borderRadius:12,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.blue}}><CalendarDays size={22} strokeWidth={1.8}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:15,fontWeight:700,marginBottom:3}}>Mi cuadrante</div>
               <div style={{fontSize:11,color:C.muted}}>Tus turnos, libres y vehículo de cada día</div>
@@ -467,19 +468,19 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                   <div style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.7}}>Sube archivos KML de {tipo.label.toLowerCase()}. La app detecta turno, fecha y paradas automáticamente.</div>
                   {esSA&&<div style={{marginBottom:10}}>
                     <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Empresa</div>
-                    <select value={orgDestino} onChange={e=>setOrgDestino(e.target.value)} style={{width:"100%",background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13}}>
+                    <select value={orgDestino} onChange={e=>setOrgDestino(e.target.value)} style={{width:"100%",background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13}}>
                       <option value="">— Elige la empresa —</option>
                       {orgs.map(o=><option key={o.org_id} value={o.org_id}>{o.nombre||o.org_id}</option>)}
                     </select>
                   </div>}
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Fecha de servicio</div>
-                    <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:"dark"}}/>
+                    <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:"dark"}}/>
                     <div style={{fontSize:10.5,color:C.dim,marginTop:4}}>{fechaKml?"Los KML se guardan en esta fecha (y su mes en Control).":"Vacía: la fecha que diga el KML o, si no dice ninguna, este mes."}</div>
                   </div>
-                  {errorMsg&&<div style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
-                  {debugInfo.length>0&&<div style={{background:"#080f1a",border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
-                  <div onClick={()=>fileRef.current.click()} style={{background:"#080f1a",border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
+                  {errorMsg&&<div style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
+                  {debugInfo.length>0&&<div style={{background:tono("#080f1a", "#e6ecf7"),border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
+                  <div onClick={()=>fileRef.current.click()} style={{background:tono("#080f1a", "#e6ecf7"),border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
                     <div style={{marginBottom:8,color:tipo.color}}><tipo.Icono size={30} strokeWidth={1.6}/></div>
                     <div style={{fontSize:13,color:tipo.color,fontWeight:600,marginBottom:4}}>{subiendo?"Procesando…":"Seleccionar KML"}</div>
                     <div style={{fontSize:10,color:C.dim}}>Formato: 02-02-2026.kml</div>
@@ -506,10 +507,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                     </div>
                     <div style={{fontSize:14,fontWeight:700,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
                     <div style={{fontSize:11,color:C.muted,marginBottom:8}}>{tot} paradas · {totalQR} elementos QR</div>
-                    <div style={{height:5,background:"#0b0d12",borderRadius:3,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
+                    <div style={{height:5,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim}}><span>{real} de {tot} realizadas</span><span style={{color:col,fontWeight:700}}>{tasa}%</span></div>
                   </div>
-                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:"#2d1515",border:`1px solid ${C.red}`,color:"#f26d6d",padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}>✕</button>}
+                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}`,color:C.red,padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}>✕</button>}
                 </div>
               </div>
             );
@@ -643,7 +644,7 @@ function MiCuadrante({sesion,onBack}){
               <div key={d} onClick={()=>setDiaSel(d)} style={{
                 borderRadius:8,padding:"5px 2px",textAlign:"center",cursor:"pointer",minHeight:46,
                 background:m?m.bg:C.surface2,
-                border:`${esHoy(d)?2:1}px solid ${diaSel===d?"#fff":esHoy(d)?"#5b7cfa":C.border}`,
+                border:`${esHoy(d)?2:1}px solid ${diaSel===d?"#fff":esHoy(d)?C.blue:C.border}`,
               }}>
                 <div style={{fontSize:10,color:C.dim}}>{d}</div>
                 <div style={{fontSize:14,fontWeight:700,color:m?m.text:C.dim}}>{v?.c||"·"}</div>

@@ -4,27 +4,24 @@ import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { listenRosterMonth } from "../roster-store.js";
 import { doc, onSnapshot } from "firebase/firestore";
+import { C, alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
-export const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
-  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-  blue: "#5b7cfa",
-};
+export { C };
 
 export const font = "var(--font)";
 // ── SHIFT METADATA ─────────────────────────────────────────────────
 export const SHIFTS = ["M", "T", "N", "L", "G", "B", "D"];
 
 export const SHIFT_META = {
-  M: { label: "Mañana",     bg: "#0d2248", text: "#5b7cfa" },
-  T: { label: "Tarde",      bg: "#3d1a00", text: "#f59e5b" },
-  N: { label: "Noche",      bg: "#1a0d3d", text: "#a78bfa" },
-  L: { label: "Libre",      bg: "#1a1f2a", text: "#64748b" },
-  G: { label: "Guardia",    bg: "#2d2200", text: "#f5b84a" },
-  B: { label: "Baja",       bg: "#3d0d0d", text: "#f26d6d" },
-  D: { label: "Disponible", bg: "#0f2a1f", text: "#3fcf8e" },
+  M: { label: "Mañana",     bg: tono("#0d2248", "#e4ecf8"), text: C.blue },
+  T: { label: "Tarde",      bg: tono("#3d1a00", "#f8ede4"), text: C.orange },
+  N: { label: "Noche",      bg: tono("#1a0d3d", "#eae4f8"), text: C.violet },
+  L: { label: "Libre",      bg: tono("#1a1f2a", "#ebedf2"), text: "#64748b" },
+  G: { label: "Guardia",    bg: tono("#2d2200", "#f8f4e4"), text: C.amber },
+  B: { label: "Baja",       bg: tono("#3d0d0d", "#f8e4e4"), text: C.red },
+  D: { label: "Disponible", bg: C.greenDim, text: C.green },
 };
 
 export const DAY_NAMES  = ["D","L","M","X","J","V","S"];
@@ -89,10 +86,10 @@ export function isUnavailable(code) {
 export const VEHICLE_STATUSES = ["D", "T", "A", "I"];
 
 export const VEHICLE_STATUS_META = {
-  D: { label: "Disponible", bg: "#0f2a1f", text: "#3fcf8e" },
-  T: { label: "Taller",     bg: "#3d1a00", text: "#f59e5b" },
-  A: { label: "Avería",     bg: "#3d0d0d", text: "#f26d6d" },
-  I: { label: "ITV",        bg: "#2d2200", text: "#f5b84a" },
+  D: { label: "Disponible", bg: C.greenDim, text: C.green },
+  T: { label: "Taller",     bg: tono("#3d1a00", "#f8ede4"), text: C.orange },
+  A: { label: "Avería",     bg: tono("#3d0d0d", "#f8e4e4"), text: C.red },
+  I: { label: "ITV",        bg: tono("#2d2200", "#f8f4e4"), text: C.amber },
 };
 
 // live=true (Scheduling, solo lectura): sigue todos los cambios de
@@ -185,8 +182,8 @@ export const primaryBtn = {
 };
 
 export const pubBtn = {
-  padding: "3px 10px", borderRadius: 5, background: "#5b7cfa22", border: "1px solid #5b7cfa55",
-  color: "#5b7cfa", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font,
+  padding: "3px 10px", borderRadius: 5, background: `${C.blue}22`, border: `1px solid ${C.blue}55`,
+  color: C.blue, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font,
 };
 
 export const secondaryBtn = {
@@ -197,8 +194,8 @@ export const secondaryBtn = {
 // ── STYLE CONSTANTS ────────────────────────────────────────────────
 export const navBtnStyle = {
   width: 28, height: 28, borderRadius: 6,
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: alfa(0.05),
+  border: `1px solid ${alfa(0.1)}`,
   color: "#94a3b8", fontSize: 18, lineHeight: 1,
   cursor: "pointer", fontFamily: font,
   display: "flex", alignItems: "center", justifyContent: "center",
@@ -207,6 +204,6 @@ export const navBtnStyle = {
 export const thStyle = {
   fontSize: 10, color: "#64748b", fontWeight: 500,
   letterSpacing: 1, textTransform: "uppercase",
-  borderBottom: `1px solid rgba(255,255,255,0.13)`,
+  borderBottom: `1px solid ${alfa(0.13)}`,
   whiteSpace: "nowrap",
 };

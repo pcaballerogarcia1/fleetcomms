@@ -1,3 +1,4 @@
+import { C } from "./tema.js";
 // ── Servicio del día de un proyecto de líneas (Scheduling → Control) ──
 // Lo que se "publica" desde el Scheduling: los turnos de un día concreto,
 // cada uno con sus viajes, el autobús de cada pieza y los trazados que
@@ -258,7 +259,7 @@ export function retrasoActual(turno, real, actual, frac, ahora) {
   return Math.round(ahora - esperado);
 }
 export const estadoPuntualidad = r => (r == null ? "sin" : r < -ADELANTO_OK ? "adelantado" : r > 10 ? "muy" : r > RETRASO_OK ? "tarde" : "ok");
-export const COLOR_PUNTUALIDAD = { ok: "#3fcf8e", tarde: "#f5b84a", muy: "#f26d6d", adelantado: "#a78bfa", sin: "#9aa3b2" };
+export const COLOR_PUNTUALIDAD = { ok: C.green, tarde: C.amber, muy: C.red, adelantado: C.violet, sin: C.muted };
 export const textoRetraso = r => (r == null ? "—" : r === 0 ? "en hora" : r > 0 ? `+${r} min` : `${r} min`);
 
 // ── El día en cifras (Control y el informe) ──

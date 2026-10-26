@@ -1,5 +1,6 @@
+import { C } from "./tema.js";
 // Utilidades de los horarios de líneas (sin React: se comparten entre pantallas)
-export const COLORES_CAL = ["#5b7cfa", "#3fcf8e", "#f5b84a", "#f472b6", "#a78bfa", "#f59e5b", "#22d3ee", "#f26d6d", "#a3e635", "#e879f9", "#2dd4bf", "#facc15"];
+export const COLORES_CAL = [C.blue, C.green, C.amber, "#f472b6", C.violet, C.orange, "#22d3ee", C.red, "#a3e635", "#e879f9", "#2dd4bf", "#facc15"];
 export const MESES_L = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 export const fechaLarga = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 export const hhmmTxt = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;

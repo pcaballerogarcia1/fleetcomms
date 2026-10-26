@@ -1,15 +1,9 @@
+import { C } from "../tema.js";
 // Colores, tipografías y estilos comunes de Scheduling.
 // (Separado de scheduling.jsx sin cambiar su comportamiento.)
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
-export const C = {
-  bg:"#0b0d12", card:"#12151c", surface2:"#181c25",
-  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.14)",
-  blue:"#5b7cfa", blueDim:"#1a2142", blueText:"#b4c3ff",
-  green:"#3fcf8e", greenDim:"#0f2a1f",
-  orange:"#f59e5b", red:"#f26d6d", amber:"#f5b84a",
-  text:"#e6e8ee", muted:"#9aa3b2", dim:"#5d6574",
-};
+export { C };
 export const font = "var(--font)";
 export const mono = "var(--mono)";
 if (typeof document !== "undefined" && !document.getElementById("sched-styles")) {
@@ -29,12 +23,12 @@ if (typeof document !== "undefined" && !document.getElementById("sched-styles"))
 
 
 const BARRIO_PALETTE = [
-  "#5b7cfa","#3fcf8e","#f59e5b","#f26d6d",
-  "#a78bfa","#f5b84a","#f472b6","#22d3ee","#818cf8","#4ade80",
+  C.blue,C.green,C.orange,C.red,
+  C.violet,C.amber,"#f472b6","#22d3ee","#818cf8","#4ade80",
 ];
 const _barrioCache = {};
 export function barrioColor(b) {
-  if (!b) return "#9aa3b2";
+  if (!b) return C.muted;
   if (_barrioCache[b]) return _barrioCache[b];
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;

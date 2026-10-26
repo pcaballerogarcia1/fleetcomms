@@ -479,7 +479,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
           if (r.cambiados) setAvisoServicio(`Control actualizado: ${r.cambiados} turno(s) del ${Number(sv.fecha.slice(8))} con su trabajador${r.empezados ? ` · ${r.empezados} ya empezado(s) no se han cambiado` : ""}`);
         } catch (e) {
           delete firmaServRef.current[sv._id];
-          console.error("Rostering → Control:", e);
+          console.error("Cuadrante → Control:", e);
         }
       }
     }, 2500);

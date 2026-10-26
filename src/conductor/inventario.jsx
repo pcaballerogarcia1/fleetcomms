@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, doc, serverTimestamp, query, where, orderBy, limit, runTransaction } from "firebase/firestore";
 import { C, CATS_INV, S, VEHICULOS, avatarOf, fbAdd, fbDelete, mono, timeAgo, useCollection } from "./comun.js";
+import { tono } from "../tema.js";
 
 export function ModuloInventario({sesion,usuarios}){
   const {data:productos}   = useCollection("inventario","nombre",sesion.org_id);
@@ -110,7 +111,7 @@ export function ModuloInventario({sesion,usuarios}){
         {/* Filtro categoría */}
         <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
           <button onClick={()=>{setCatFilter("");setSoloAlertas(false);}} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:!catFilter&&!soloAlertas?C.blue:C.border,color:!catFilter&&!soloAlertas?C.blueText:C.muted,background:!catFilter&&!soloAlertas?C.blueDim:"none"}}>Todos</button>
-          <button onClick={()=>setSoloAlertas(v=>!v)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:soloAlertas?C.orange:C.border,color:soloAlertas?C.orange:C.muted,background:soloAlertas?"#2a1500":"none"}}>Stock bajo</button>
+          <button onClick={()=>setSoloAlertas(v=>!v)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:soloAlertas?C.orange:C.border,color:soloAlertas?C.orange:C.muted,background:soloAlertas?tono("#2a1500", "#f8eee4"):"none"}}>Stock bajo</button>
           {CATS_INV.map(cat=>(
             <button key={cat} onClick={()=>setCatFilter(catFilter===cat?"":cat)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:catFilter===cat?C.blue:C.border,color:catFilter===cat?C.blueText:C.muted,background:catFilter===cat?C.blueDim:"none"}}>{cat}</button>
           ))}
@@ -172,7 +173,7 @@ export function ModuloInventario({sesion,usuarios}){
             </div>
           </div>
           {/* Barra stock */}
-          <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden"}}>
+          <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden"}}>
             <div style={{height:"100%",background:stockColor(prodActual),borderRadius:3,width:`${Math.min(100,prodActual.stockMin>0?(prodActual.stock/Math.max(prodActual.stock,prodActual.stockMin*2))*100:prodActual.stock>0?100:0)}%`,transition:"width 0.4s"}}/>
           </div>
           <div style={{fontSize:10,color:C.dim,marginTop:4}}>Stock mínimo: {prodActual.stockMin} {prodActual.unidad}</div>
@@ -185,7 +186,7 @@ export function ModuloInventario({sesion,usuarios}){
             ⬆ Entrada
           </button>
           <button onClick={()=>{setFormMov({tipo:"salida",cantidad:1,vehiculo:"",motivo:"",nota:""});setErrForm("");setVista("movimiento");}}
-            style={{...S.btn,padding:"12px",fontSize:13,background:"#2a1500",borderColor:C.orange,color:C.orange,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            style={{...S.btn,padding:"12px",fontSize:13,background:tono("#2a1500", "#f8eee4"),borderColor:C.orange,color:C.orange,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             ⬇ Salida
           </button>
         </div>
@@ -211,7 +212,7 @@ export function ModuloInventario({sesion,usuarios}){
                 </div>
               </div>
               {m.motivo&&<div style={{fontSize:11,color:C.muted,marginBottom:2}}>{m.motivo}</div>}
-              {m.nota&&<div style={{fontSize:11.5,color:"#a78bfa"}}><StickyNote size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.nota}</div>}
+              {m.nota&&<div style={{fontSize:11.5,color:C.violet}}><StickyNote size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.nota}</div>}
               <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
                 <div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div>
                 <span style={{fontSize:10,color:C.dim}}>{u.nombre}</span>
@@ -221,7 +222,7 @@ export function ModuloInventario({sesion,usuarios}){
         })}
 
         {esAdmin&&(
-          <button onClick={()=>eliminarProducto(prodActual.id)} style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",width:"100%",padding:"10px",borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:mono,marginTop:8}}>
+          <button onClick={()=>eliminarProducto(prodActual.id)} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,width:"100%",padding:"10px",borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:mono,marginTop:8}}>
             Eliminar producto
           </button>
         )}
@@ -244,7 +245,7 @@ export function ModuloInventario({sesion,usuarios}){
           <label style={S.label}>Tipo de movimiento</label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button onClick={()=>setFormMov({...formMov,tipo:"entrada"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="entrada"?C.greenDim:"none",borderColor:formMov.tipo==="entrada"?C.green:C.border,color:formMov.tipo==="entrada"?C.green:C.muted}}>⬆ Entrada</button>
-            <button onClick={()=>setFormMov({...formMov,tipo:"salida"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="salida"?"#2a1500":"none",borderColor:formMov.tipo==="salida"?C.orange:C.border,color:formMov.tipo==="salida"?C.orange:C.muted}}>⬇ Salida</button>
+            <button onClick={()=>setFormMov({...formMov,tipo:"salida"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="salida"?tono("#2a1500", "#f8eee4"):"none",borderColor:formMov.tipo==="salida"?C.orange:C.border,color:formMov.tipo==="salida"?C.orange:C.muted}}>⬇ Salida</button>
           </div>
         </div>
 
@@ -281,8 +282,8 @@ export function ModuloInventario({sesion,usuarios}){
           <textarea value={formMov.nota} onChange={e=>setFormMov({...formMov,nota:e.target.value})} placeholder="Observaciones..." rows={2} style={{...S.input,resize:"none"}}/>
         </div>
 
-        {errForm&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
-        <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:14,background:formMov.tipo==="entrada"?C.greenDim:"#2a1500",borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
+        {errForm&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
+        <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:14,background:formMov.tipo==="entrada"?C.greenDim:tono("#2a1500", "#f8eee4"),borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
           {formMov.tipo==="entrada"?"⬆ REGISTRAR ENTRADA":"⬇ REGISTRAR SALIDA"}
         </button>
       </div>
@@ -310,7 +311,7 @@ export function ModuloInventario({sesion,usuarios}){
           <div><label style={S.label}>Stock inicial</label><input type="number" min="0" value={formProd.stock} onChange={e=>setFormProd({...formProd,stock:e.target.value})} style={S.input}/></div>
           <div><label style={S.label}>Stock mínimo</label><input type="number" min="0" value={formProd.stockMin} onChange={e=>setFormProd({...formProd,stockMin:e.target.value})} style={S.input}/></div>
         </div>
-        {errForm&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
+        {errForm&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
         <button onClick={guardarProducto} style={{...S.btn,width:"100%",padding:13,fontSize:14}}>AÑADIR PRODUCTO</button>
       </div>
     </div>

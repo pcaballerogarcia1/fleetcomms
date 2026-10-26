@@ -12,6 +12,7 @@
 // Funciona igual en el navegador (File) y en Node (Blob) — sin DOM.
 
 import { Inflate } from "fflate";
+import { C } from "./tema.js";
 
 // ── zip: índice central y descompresión por trozos ───────────────────
 const u16 = (b, o) => b[o] | (b[o + 1] << 8);
@@ -119,7 +120,7 @@ export async function leerCsv(blob, entries, file, onRow, onBytes) {
 }
 
 // ── Utilidades ───────────────────────────────────────────────────────
-export const PALETA = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f26d6d", "#a78bfa", "#f5b84a", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
+export const PALETA = [C.blue, C.green, C.orange, C.red, C.violet, C.amber, "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
 
 export function tipoRuta(t) {
   const n = Number(t);

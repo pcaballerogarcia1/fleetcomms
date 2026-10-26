@@ -9,6 +9,7 @@ import { Check, Download, FileDown, FileUp, FlaskConical, History, Loader2, Maxi
 import { t } from "../i18n.js";
 import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
+import { alfa } from "../tema.js";
 
 
 
@@ -26,10 +27,10 @@ export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, can
         display: "flex", alignItems: "center", gap: 8,
       }}>
         {/* Paradas importadas de Planning */}
-        <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planning">
+        <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planificación">
           {importing ? <>{girando} Importando…</>
             : tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} paradas</>
-            : <><Download size={14} /> Importar desde Planning</>}
+            : <><Download size={14} /> Importar desde Planificación</>}
         </button>
 
         <div className="op-sep" />
@@ -174,7 +175,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
                 {scaleProgress.stage === "growth" ? `Ronda ${scaleProgress.round}` : `Afinando`}
               </span>
               <span>{scaleProgress.vehicles.toLocaleString()} vehículos</span>
-              <span style={{ color: scaleProgress.unassigned > 0 ? "#f5b84a" : C.green }}>
+              <span style={{ color: scaleProgress.unassigned > 0 ? C.amber : C.green }}>
                 {scaleProgress.unassigned.toLocaleString()} sin asignar
               </span>
               <span>{(scaleProgress.roundMs / 1000).toFixed(1)}s esta prueba</span>
@@ -217,14 +218,14 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
       )}
       {cloudConflict && cloudConflict.projectId === activeProject?._id && !focusMode && (
         <div style={{ padding: "8px 16px", background: "rgba(245,184,74,0.10)", borderBottom: `1px solid rgba(245,184,74,0.35)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12, color: "#f5b84a" }}>
+          <span style={{ fontSize: 12, color: C.amber }}>
             {cloudConflict.meta?.savedBy?.nombre || "Otra persona"} ha guardado otra versión de este escenario mientras lo editabas. Tus cambios están a salvo en este navegador — elige con cuál te quedas.
           </span>
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
             <button onClick={takeTheirScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: C.surface2, border: `1px solid ${C.border}`, color: C.text }}>
               Ver su versión (descarta la mía)
             </button>
-            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(245,184,74,0.15)", border: "1px solid rgba(245,184,74,0.45)", color: "#f5b84a", fontWeight: 600 }}>
+            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(245,184,74,0.15)", border: "1px solid rgba(245,184,74,0.45)", color: C.amber, fontWeight: 600 }}>
               Guardar la mía encima
             </button>
           </div>
@@ -250,7 +251,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
       {/* Auto-scale (virtual fleet) banner */}
       {scaleInfo && !focusMode && (
         <div style={{ padding: "7px 16px", background: "rgba(245,184,74,0.08)", borderBottom: `1px solid rgba(245,184,74,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: "#f5b84a" }}>⚙ {scaleInfo}</span>
+          <span style={{ fontSize: 11, color: C.amber }}>⚙ {scaleInfo}</span>
           <button onClick={() => setScaleInfo(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
         </div>
       )}
@@ -258,10 +259,10 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
       {/* Rostering conflict banner */}
       {rosterConflicts.length > 0 && !focusMode && (
         <div style={{ padding: "5px 16px", background: "rgba(245,184,74,0.07)", borderBottom: `1px solid rgba(245,184,74,0.2)`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f5b84a" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span style={{ fontSize: 11, color: "#f5b84a", fontWeight: 600 }}>Conflictos:</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>Conflictos:</span>
           {rosterConflicts.map((c, i) => (
-            <span key={i} style={{ fontSize: 10, color: "#f5b84a", background: "rgba(245,184,74,0.1)", border: "1px solid rgba(245,184,74,0.2)", borderRadius: 4, padding: "1px 6px" }}>
+            <span key={i} style={{ fontSize: 10, color: C.amber, background: "rgba(245,184,74,0.1)", border: "1px solid rgba(245,184,74,0.2)", borderRadius: 4, padding: "1px 6px" }}>
               {c.name} — día {c.day} ({c.label})
             </span>
           ))}
@@ -285,7 +286,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
             width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
             border: `1px solid ${C.border}`,
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Publicar en Rutas</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Enviar a conductores</div>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 20 }}>
               Se creará un plan por cada vehículo con sus paradas asignadas.
             </div>
@@ -348,7 +349,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                 fontFamily: font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}>
                 {publishing
-                  ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Publicando…</>
+                  ? <><span style={{ display: "inline-block", width: 12, height: 12, border: `2px solid ${alfa(0.3)}`, borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Publicando…</>
                   : "Publicar planes"
                 }
               </button>
@@ -498,7 +499,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
               opacity: vehicles.length + simDelta <= 0 ? 0.5 : 1, marginBottom: 16,
             }}>
               {simRunning
-                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Simulando…</>
+                ? <><span style={{ display: "inline-block", width: 12, height: 12, border: `2px solid ${alfa(0.3)}`, borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Simulando…</>
                 : "Simular"
               }
             </button>

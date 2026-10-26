@@ -6,6 +6,7 @@ import { updateDoc, doc, serverTimestamp, setDoc, getDoc } from "firebase/firest
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { roleLabel, rolesAsignablesPor } from "../roles.js";
 import { C, S, TIPOS_TRABAJO, avatarOf, fmtMes, font, timeAgo } from "./comun.js";
+import { tono } from "../tema.js";
 
 // ── PANEL ADMIN ───────────────────────────────────────────────────
 export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
@@ -75,7 +76,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
               <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input} autoComplete={type==="password"?"new-password":"off"}/></div>
             ))}
             <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{rolesCreables.map(v=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{roleLabel(v)}</button>)}</div></div>
-            {err&&<div style={{background:"#2d1515",color:"#f26d6d",borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
+            {err&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
             <button onClick={crear} disabled={saving} style={{...S.btn,width:"100%",opacity:saving?0.6:1}}>{saving?"Creando…":"CREAR USUARIO"}</button>
           </div>
         )}
@@ -222,7 +223,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                     {isExp?"▲":"▼"}
                   </button>
                   <button onClick={()=>{if(window.confirm("¿Eliminar este plan?"))deletePlan(plan._id);}}
-                    style={{background:"#2d1515",border:`1px solid ${C.red}44`,color:"#f26d6d",padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
+                    style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
                     <X size={15}/>
                   </button>
                 </div>

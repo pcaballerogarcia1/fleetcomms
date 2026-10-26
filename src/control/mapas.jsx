@@ -4,6 +4,7 @@ import { db } from "../firebase.js";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { C, DRIVER_STALE_MS, DRIVER_WARN_MS, barrioColor, computeFleetAlerts, font, mono } from "./datos.js";
 import { useUltimo } from "../use-ultimo.js";
+import { tono } from "../tema.js";
 
 // ── LEAFLET MINI-MAP (read-only, updates on ubicaciones change) ────
 // Stops are drawn on a single canvas overlay instead of one Leaflet DOM
@@ -129,9 +130,9 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
 
   return (
     <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
-      <div ref={divRef} style={{ height, background: "#131e35" }} />
+      <div ref={divRef} style={{ height, background: tono("#131e35", "#e7ecf6") }} />
       <div style={{ background: C.card, padding: "6px 12px", display: "flex", gap: 14, borderTop: `1px solid ${C.border}` }}>
-        {[[C.green, "Realizada"], ["#9aa3b2", "Pendiente"]].map(([color, label]) => (
+        {[[C.green, "Realizada"], [C.muted, "Pendiente"]].map(([color, label]) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
             <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
@@ -301,7 +302,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
         </div>
       )}
 
-      <div ref={divRef} style={{ flex: 1, background: "#131e35" }} />
+      <div ref={divRef} style={{ flex: 1, background: tono("#131e35", "#e7ecf6") }} />
     </div>
   );
 }

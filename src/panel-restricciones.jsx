@@ -3,13 +3,9 @@
 // la izquierda con sus apartados y, a la derecha, solo los ajustes del
 // apartado elegido. Los límites opcionales llevan un interruptor.
 import { useState } from "react";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
-  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", green: "#3fcf8e", red: "#f26d6d", amber: "#f5b84a",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 

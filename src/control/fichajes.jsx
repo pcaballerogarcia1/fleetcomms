@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "../firebase.js";
 import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
 import { C, DIAS_SEMANA_CORTO, fmtDur, fmtFecha, fmtHoraF, fmtMes, font, mono, userName } from "./datos.js";
+import { alfa } from "../tema.js";
 
 export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
   const [fichajes, setFichajes] = useState([]);
@@ -100,8 +101,8 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
               {[["calendario", "Calendario"], ["tabla", "Tabla"]].map(([k, l]) => (
                 <button key={k} onClick={() => setVistaFichajes(k)} style={{
                   padding: "4px 10px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vistaFichajes === k ? "rgba(255,255,255,0.1)" : "none",
-                  color: vistaFichajes === k ? "#fff" : C.muted,
+                  background: vistaFichajes === k ? alfa(0.1) : "none",
+                  color: vistaFichajes === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vistaFichajes === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",
                 }}>{l}</button>

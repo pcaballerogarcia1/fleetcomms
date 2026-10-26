@@ -3,11 +3,9 @@
 // servidores: funciona siempre y no envía nada.
 import { useState, useEffect, useRef, useMemo } from "react";
 import { TITULO, buscarAyuda } from "./help-content.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa",
-};
+
 const font = "var(--font)";
 const RUTAS = { "/planning": "planning", "/scheduling": "scheduling", "/rostering": "rostering", "/control": "control", "/analytics": "analytics" };
 

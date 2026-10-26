@@ -1,11 +1,9 @@
 // Sección "Líneas" del panel de Planning para capas GTFS: buscador de
 // líneas; al elegir una, el mapa muestra solo sus paradas y su recorrido.
 import { useState, useMemo } from "react";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa",
-};
+
 const font = "var(--font)";
 const MAX_LISTA = 150;
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -56,7 +54,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
                   cursor: "pointer", fontFamily: font,
                 }}>
                   <span style={{
-                    minWidth: 34, padding: "2px 5px", borderRadius: 5, background: l.color, color: "#0d0f14",
+                    minWidth: 34, padding: "2px 5px", borderRadius: 5, background: l.color, color: C.input,
                     fontSize: 11, fontWeight: 800, textAlign: "center", flexShrink: 0,
                   }}>{l.nombre}</span>
                   <span style={{ minWidth: 0, flex: 1 }}>

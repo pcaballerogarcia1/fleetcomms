@@ -41,10 +41,10 @@ export function alarmasConcurso({ r, ficha, concurso, calc, adj } = {}) {
   const periodo = revisarPeriodo(servicios, contextoDelConcurso(ficha, concurso));
   if (periodo) bloquea(`Las cantidades de los servicios son las del presupuesto (${periodo.meses} ${periodo.meses === 1 ? "mes" : "meses"}), no las de un año: pásalas al año en la Ficha de requisitos.`, "/documentos");
   const sinKm = (r.dimension?.lineas || []).filter(l => l.sinKm);
-  if (sinKm.length) bloquea(`${sinKm.length === 1 ? "Un transporte no tiene" : `${sinKm.length} transportes no tienen`} los km: sin ellos no se saben los viajes ni las horas. Pulsa «Calcular km por carretera» en Planning o ponlos a mano.`, "/planning");
+  if (sinKm.length) bloquea(`${sinKm.length === 1 ? "Un transporte no tiene" : `${sinKm.length} transportes no tienen`} los km: sin ellos no se saben los viajes ni las horas. Pulsa «Calcular km por carretera» en Planificación o ponlos a mano.`, "/planning");
 
   const cortos = (r.cuenta?.vehiculos || []).filter(v => v.calculadas != null && v.pliego != null && v.calculadas > v.pliego);
-  if (cortos.length) aviso(`Se cuenta con la maquinaria mínima del pliego, pero tus rendimientos piden más: ${cortos.map(v => `${v.tipo} ${v.calculadas} (pliego ${v.pliego})`).join(", ")}. Revisa los rendimientos en Planning o pon más unidades.`, "/planning");
+  if (cortos.length) aviso(`Se cuenta con la maquinaria mínima del pliego, pero tus rendimientos piden más: ${cortos.map(v => `${v.tipo} ${v.calculadas} (pliego ${v.pliego})`).join(", ")}. Revisa los rendimientos en Planificación o pon más unidades.`, "/planning");
 
   // ── el coste ──
   if (pres && r.costeEquivalente) {

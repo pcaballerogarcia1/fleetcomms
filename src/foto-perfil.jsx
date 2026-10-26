@@ -1,12 +1,13 @@
 // El círculo del usuario en la cabecera: su foto o, si no tiene, sus
 // iniciales. Al tocarlo: poner o cambiar la foto (galería o cámara), quitarla
 // cambiar la contraseña (le llega un correo) y cerrar sesión.
-import { Camera, KeyRound, LogOut, Trash2 } from "lucide-react";
+import { Camera, KeyRound, LogOut, Moon, Sun, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { C, MARCA } from "./tema.js";
+import { C, CLARO, MARCA, cambiarTema } from "./tema.js";
 import { guardarFoto, reducirFoto } from "./foto-perfil.js";
 import { esCorreoReal, enviarCambioClave } from "./cambio-clave.js";
 import { usuarioDeCorreo } from "./acceso-app.js";
+import { alfa } from "./tema.js";
 
 const iniciales = u => (((u?.nombre || "")[0] || "") + ((u?.apellidos || "")[0] || "")).toUpperCase() || "?";
 
@@ -15,7 +16,7 @@ export function CirculoPerfil({ usuario, size = 30, style }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
-      background: MARCA.degradado, border: "1px solid rgba(255,255,255,0.18)", color: "#fff",
+      background: MARCA.degradado, border: `1px solid ${alfa(0.18)}`, color: "#fff",
       fontSize: Math.round(size * 0.36), fontWeight: 650, display: "flex", alignItems: "center", justifyContent: "center", ...style,
     }}>
       {usuario?.foto ? <img src={usuario.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : iniciales(usuario)}
@@ -77,6 +78,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
           {esCorreoReal(sesion?.email) && <button role="menuitem" style={opcion} disabled={ocupado} onClick={cambiarClave}><KeyRound size={16} color={C.blue} /> Cambiar mi contraseña</button>}
           {aviso && <div role="status" style={{ padding: "6px 14px 10px", fontSize: 12, color: C.green, lineHeight: 1.45, maxWidth: 260 }}>{aviso}</div>}
           {error && <div style={{ padding: "6px 14px", fontSize: 12, color: C.red }}>{error}</div>}
+          <button role="menuitem" style={opcion} onClick={() => cambiarTema(CLARO ? "oscuro" : "claro")}>{CLARO ? <Moon size={16} color={C.muted} /> : <Sun size={16} color={C.muted} />} {CLARO ? "Aspecto oscuro" : "Aspecto claro"}</button>
           {onCerrarSesion && <button role="menuitem" style={{ ...opcion, borderTop: `1px solid ${C.border}` }} onClick={onCerrarSesion}><LogOut size={16} color={C.red} /> Cerrar sesión</button>}
         </div>
       )}

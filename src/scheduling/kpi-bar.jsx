@@ -119,7 +119,7 @@ export function ClockBadge({ size = 11 }) {
   return (
     <div title="Tiene franja horaria / hora fija" style={{
       position: "absolute", top: -4, right: -4, width: size, height: size, borderRadius: "50%",
-      background: "#f5b84a", border: "1.5px solid #000", zIndex: 6,
+      background: C.amber, border: "1.5px solid #000", zIndex: 6,
       display: "flex", alignItems: "center", justifyContent: "center",
       boxShadow: "0 1px 3px rgba(0,0,0,.7)", pointerEvents: "none",
     }}>

@@ -9,6 +9,7 @@ import { apuntarPesada } from "../pesadas-store.js";
 import { MapaLeaflet } from "./ui.jsx";
 import { NAVEGADORES, abrirNavegacion, elegirNavegador, enlacesContacto, navegadorElegido, telefonoDe, useDictado } from "./contacto.js";
 import { sectorDe } from "../sector.js";
+import { tono } from "../tema.js";
 
 // Botón de dictar con la voz (solo si el móvil lo permite)
 function BotonDictar({ d }) {
@@ -65,7 +66,7 @@ function LectorRfid({ubicaciones,onLeido,codigo="código"}){
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder={`Leer RFID / ${codigo}`}
           onKeyDown={e=>{if(e.key==="Enter"&&texto.trim()){leer(texto.trim());setTexto("");}}}
-          style={{flex:1,minWidth:0,background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
+          style={{flex:1,minWidth:0,background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
         {hayNfc()&&<button onClick={activarNfc} style={{...(nfc?S.btnOk:S.btnGhost),fontSize:11,padding:"7px 10px",flexShrink:0}}>{nfc?"NFC activo":"NFC"}</button>}
       </div>
       {aviso&&<div style={{fontSize:11,marginTop:6,color:aviso.ok?C.green:C.red}}>{aviso.t}</div>}
@@ -87,7 +88,7 @@ function ApuntarPesada({plan,sesion}){
       setF({kg:"",planta:f.planta,fraccion:f.fraccion,ticket:""});setAviso({ok:true,t:`✓ ${kg.toLocaleString("es-ES")} kg apuntados`});
     }catch(e){setAviso({ok:false,t:e.message||String(e)});}
   }
-  const inp={background:"#0d0f14",border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
+  const inp={background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
   if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}><Scale size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Apuntar pesada de báscula</button>;
   return(
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",marginBottom:10}}>
@@ -114,7 +115,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
   return (
     <div id={"u-"+ub.id} style={{...S.card,opacity:done?0.85:1}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
-        <div onClick={onSelect} style={{width:30,height:30,borderRadius:"50%",flexShrink:0,cursor:"pointer",background:done?C.greenDim:isSel?"#2a1f00":C.blueDim,border:`2px solid ${done?C.green:isSel?C.orange:C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:done?C.green:isSel?C.orange:C.blueText}}>
+        <div onClick={onSelect} style={{width:30,height:30,borderRadius:"50%",flexShrink:0,cursor:"pointer",background:done?C.greenDim:isSel?tono("#2a1f00", "#f8f3e4"):C.blueDim,border:`2px solid ${done?C.green:isSel?C.orange:C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:done?C.green:isSel?C.orange:C.blueText}}>
           {ub.orden}
         </div>
         <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={onSelect}>
@@ -123,15 +124,15 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           {ub.comentari&&<div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.comentari}</div>}
           <ContactoParada ub={ub}/>
           {done&&ub.realizadoEn&&<div style={{fontSize:10,color:C.green,marginTop:2}}>✓ {timeAgo(ub.realizadoEn)}</div>}
-          {ub.nota&&<div style={{fontSize:11,color:"#a78bfa",marginTop:2,display:"flex",alignItems:"center",gap:4}}><StickyNote size={12}/> {ub.nota}</div>}
+          {ub.nota&&<div style={{fontSize:11,color:C.violet,marginTop:2,display:"flex",alignItems:"center",gap:4}}><StickyNote size={12}/> {ub.nota}</div>}
           <div style={{fontSize:10,color:C.dim,marginTop:2}}>{ub.pa}</div>
           {onParte&&(
             <div style={{marginTop:4}}>
               {parteFirmado
                 ? <span style={{fontSize:9,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardCheck size={11} style={{verticalAlign:"-2px"}}/> Parte firmado</span>
                 : tieneParteIniciado
-                  ? <span style={{fontSize:9,color:C.orange,background:"#2a1500",border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Parte en curso</span>
-                  : <span style={{fontSize:9,color:C.dim,background:"#0d0f14",border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Sin parte</span>
+                  ? <span style={{fontSize:9,color:C.orange,background:tono("#2a1500", "#f8eee4"),border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Parte en curso</span>
+                  : <span style={{fontSize:9,color:C.dim,background:C.input,border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Sin parte</span>
               }
             </div>
           )}
@@ -143,19 +144,19 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           </div>
           <div style={{display:"flex",gap:4}}>
             {onParte&&<button onClick={onParte} style={{...S.btnGhost,fontSize:10,padding:"4px 6px",flex:1,borderColor:parteFirmado?C.green:tieneParteIniciado?C.orange:C.border,color:parteFirmado?C.green:tieneParteIniciado?C.orange:C.muted}}><ClipboardList size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Parte</button>}
-            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?"#8b5cf6":C.border,color:ub.nota?"#a78bfa":C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Nota"><StickyNote size={14}/></button>
+            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?"#8b5cf6":C.border,color:ub.nota?C.violet:C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Nota"><StickyNote size={14}/></button>
           </div>
         </div>
       </div>
       {ub.elementos.length>0&&(
-        <div style={{marginTop:8,paddingTop:7,borderTop:`1px solid #1e2535`}}>
+        <div style={{marginTop:8,paddingTop:7,borderTop:`1px solid ${tono("#1e2535", "#eaedf3")}`}}>
           <button onClick={onExpand} style={{...S.btnGhost,width:"100%",display:"flex",justifyContent:"space-between",fontSize:10,padding:"4px 10px"}}>
             <span>Elementos QR ({elReal}/{ub.elementos.length})</span><span>{isExp?"▲":"▼"}</span>
           </button>
           {isExp&&(
             <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
               {ub.elementos.map(el=>(
-                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:"#0d0f14",border:`1px solid ${el.realizado?C.green+"44":"#1c2d45"}`,borderRadius:6,padding:"7px 10px"}}>
+                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:C.input,border:`1px solid ${el.realizado?C.green+"44":tono("#1c2d45", "#e7edf5")}`,borderRadius:6,padding:"7px 10px"}}>
                   <div><span style={{fontSize:12,color:el.realizado?C.green:C.blueText,fontWeight:700}}>{el.codiQR}</span><span style={{fontSize:10,color:C.dim,marginLeft:8}}>{el.model}</span></div>
                   <button onClick={()=>onMarcarQR(el.codiQR,!el.realizado)} style={{...(el.realizado?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{el.realizado?<Check size={15}/>:"Marcar"}</button>
                 </div>
@@ -267,7 +268,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         </div>
 
         {/* Barra progreso */}
-        <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden",marginBottom:14}}>
+        <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:14}}>
           <div style={{height:"100%",background:pct===100?C.green:pct>50?C.orange:C.red,borderRadius:3,width:`${pct}%`,transition:"width 0.3s"}}/>
         </div>
 
@@ -275,22 +276,22 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         {PUNTOS_INSPECCION.map(g=>(
           <div key={g.grupo} style={{marginBottom:12}}>
             {/* Cabecera grupo */}
-            <div style={{background:"#151a26",borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{background:tono("#151a26", "#eaecf3"),borderRadius:"6px 6px 0 0",padding:"7px 12px",fontSize:11,fontWeight:700,color:C.blueText,borderBottom:`1px solid ${C.border}`}}>
               {g.grupo}
             </div>
             {/* Puntos */}
             {g.puntos.map((pt,i)=>(
               <div key={pt} onClick={()=>toggle(pt)} style={{
                 display:"flex",alignItems:"center",gap:10,
-                background: checks[pt]?"#0d2010":C.card,
+                background: checks[pt]?tono("#0d2010", "#e7f5ea"):C.card,
                 border:`1px solid ${checks[pt]?C.green+"44":C.border}`,
-                borderTop: i===0?"none":"1px solid #1e2535",
+                borderTop: i===0?"none":`1px solid ${tono("#1e2535", "#eaedf3")}`,
                 padding:"10px 12px",cursor:"pointer",
                 borderRadius: i===g.puntos.length-1?"0 0 6px 6px":"0",
               }}>
                 <div style={{
                   width:22,height:22,borderRadius:4,flexShrink:0,
-                  background:checks[pt]?C.green:"#0d0f14",
+                  background:checks[pt]?C.green:C.input,
                   border:`2px solid ${checks[pt]?C.green:C.border}`,
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:13,color:"white",fontWeight:800,
@@ -426,11 +427,11 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             </div>
           ))}
         </div>
-        <div style={{height:6,background:"#0b0d12",borderRadius:3,overflow:"hidden",marginBottom:10}}>
+        <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:10}}>
           <div style={{height:"100%",background:tasaColor,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/>
         </div>
         {proxima&&(
-          <div style={{background:"#151a26",border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:tono("#151a26", "#eaecf3"),border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:C.blueDim,border:`2px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.blueText,flexShrink:0}}>{proxima.orden}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,color:C.muted,marginBottom:1}}>Próxima parada</div>
@@ -440,7 +441,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"stretch",flexShrink:0}}>
               <button onClick={()=>abrirNavegacion(proxima.lat,proxima.lng)} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}><Navigation size={15}/> Ir</button>
               <select value={nav} onChange={e=>{elegirNavegador(e.target.value);setNav(e.target.value);}} title="Con qué app navegar (se recuerda en este móvil)"
-                style={{background:"#0d0f14",border:`1px solid ${C.border}`,color:C.muted,borderRadius:6,fontSize:10,padding:"3px 4px"}}>
+                style={{background:C.input,border:`1px solid ${C.border}`,color:C.muted,borderRadius:6,fontSize:10,padding:"3px 4px"}}>
                 {NAVEGADORES.map(n=><option key={n.id} value={n.id}>{n.nombre}</option>)}
               </select>
             </div>

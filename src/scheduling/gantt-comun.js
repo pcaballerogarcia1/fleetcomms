@@ -1,3 +1,4 @@
+import { C } from "../tema.js";
 // Gantt del Scheduling de puntos: medidas, columnas y textos que comparten sus piezas.
 
 
@@ -36,7 +37,7 @@ export const TABLE_COLS = [
 
 export const TABLE_W = TABLE_COLS.reduce((sum, c) => sum + c.w, 0) + 8;
 
-export const COL_COLOR = { amplitud: "#3fcf8e", km: "#f59e5b", kmVacio: "#f59e5b" };
+export const COL_COLOR = { amplitud: C.green, km: C.orange, kmVacio: C.orange };
 
 export const rowName = r => [r?.nombre, r?.apellidos].filter(Boolean).join(" ") || r?.name || r?.matricula || "?";
 

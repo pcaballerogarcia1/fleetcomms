@@ -17,8 +17,9 @@
 // }
 
 import { FRANJAS, TIPOS_DIA, nombreCalendario, kmTrazado, franjaDe } from "./gtfs-red.js";
+import { C } from "./tema.js";
 
-export const PALETA_LINEAS = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f26d6d", "#a78bfa", "#f5b84a", "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
+export const PALETA_LINEAS = [C.blue, C.green, C.orange, C.red, C.violet, C.amber, "#f472b6", "#22d3ee", "#84cc16", "#e879f9", "#38bdf8", "#facc15"];
 const r5 = x => Math.round(x * 1e5) / 1e5;
 const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;

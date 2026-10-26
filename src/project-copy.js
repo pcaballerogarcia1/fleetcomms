@@ -143,7 +143,7 @@ export async function duplicarProyecto(src, nombre, { onPaso = () => {}, newId =
     else throw e;
   }
 
-  onPaso("Copiando el escenario de Scheduling…");
+  onPaso("Copiando el escenario de Rutas…");
   // Trozos antes que la ficha (la ficha dice qué versión leer)
   await copiarSubcoleccion(["scheduling_scenarios", srcId, "trozos"], ["scheduling_scenarios", newId, "trozos"], newId, { unoAUno: true });
   await copiarFicha("scheduling_scenarios", srcId, newId);

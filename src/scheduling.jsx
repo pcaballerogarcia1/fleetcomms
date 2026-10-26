@@ -153,7 +153,7 @@ function SchedulingPage({ sesion, onLogout }) {
               onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 3 9 21"/></svg>
-              Planning
+              Planificación
             </a>
             {UserAvatar}
           </div>
@@ -205,8 +205,8 @@ function SchedulingPage({ sesion, onLogout }) {
         </div>
 
         {/* Nav icons */}
-        <RailBtn navKey="planning"      icon={IconPlanning} label="Planning"   tab={tab} goToTab={goToTab} />
-        <RailBtn navKey="planificacion" icon={IconSchedule} label="Scheduling" tab={tab} goToTab={goToTab} />
+        <RailBtn navKey="planning"      icon={IconPlanning} label="Planificación"   tab={tab} goToTab={goToTab} />
+        <RailBtn navKey="planificacion" icon={IconSchedule} label="Rutas" tab={tab} goToTab={goToTab} />
 
         {/* User at bottom */}
         <div style={{ flex: 1 }} />

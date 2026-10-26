@@ -4,6 +4,8 @@ import { CarFront, CircleDot, Droplets, Hammer, MapPin, Megaphone, Settings2, Sp
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore";
+import { C, alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 
 
@@ -12,14 +14,14 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 export const VEHICULOS = ["VH-001 · Furgoneta Iveco","VH-002 · Camión MAN","VH-003 · Furgón Mercedes","VH-004 · Pickup Ford","VH-005 · Renault Master"];
 
 export const CATS = [
-  {label:"Avería mecánica",color:"#f26d6d",icon:"🔧",Icono:Wrench},
-  {label:"Accidente / Golpe",color:"#f59e5b",icon:"⚠️",Icono:CarFront},
-  {label:"Neumáticos",color:"#f5b84a",icon:"⚙️",Icono:CircleDot},
-  {label:"Mantenimiento",color:"#5b7cfa",icon:"🛠️",Icono:Settings2},
-  {label:"Comunicado general",color:"#a78bfa",icon:"📢",Icono:Megaphone},
+  {label:"Avería mecánica",color:C.red,icon:"🔧",Icono:Wrench},
+  {label:"Accidente / Golpe",color:C.orange,icon:"⚠️",Icono:CarFront},
+  {label:"Neumáticos",color:C.amber,icon:"⚙️",Icono:CircleDot},
+  {label:"Mantenimiento",color:C.blue,icon:"🛠️",Icono:Settings2},
+  {label:"Comunicado general",color:C.violet,icon:"📢",Icono:Megaphone},
 ];
 
-export const PC = {alta:"#f26d6d",media:"#f59e5b",baja:"#3fcf8e"};
+export const PC = {alta:C.red,media:C.orange,baja:C.green};
 
 // Haversine distance in km — usado para detectar si el conductor se ha
 // movido de verdad entre dos lecturas de GPS (no solo ruido del sensor).
@@ -93,14 +95,14 @@ export async function fbDelete(colName, id) {
 
 // ── BARRIO COLOR (misma paleta que scheduling) ────────────────────
 const BARRIO_PALETTE = [
-  "#5b7cfa","#3fcf8e","#f59e5b","#f26d6d",
-  "#a78bfa","#f5b84a","#f472b6","#22d3ee","#818cf8","#4ade80",
+  C.blue,C.green,C.orange,C.red,
+  C.violet,C.amber,"#f472b6","#22d3ee","#818cf8","#4ade80",
 ];
 
 const _barrioCache = {};
 
 export function barrioColor(b) {
-  if (!b) return "#9aa3b2";
+  if (!b) return C.muted;
   if (_barrioCache[b]) return _barrioCache[b];
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
@@ -114,25 +116,25 @@ const FONTS = `
 *, *::before, *::after { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 :root {
-  --bg:       #0b0d12;
-  --surface:  #12151c;
-  --surface2: #181c25;
-  --border:   rgba(255,255,255,0.08);
-  --border2:  rgba(255,255,255,0.14);
-  --blue:     #5b7cfa;
-  --blueDim:  #1a2142;
-  --blueText: #b4c3ff;
-  --cyan:     #5b7cfa;
-  --cyanDim:  #1a2142;
-  --cyanText: #b4c3ff;
-  --green:    #3fcf8e;
-  --greenDim: #0f2a1f;
-  --orange:   #f59e5b;
-  --red:      #f26d6d;
-  --amber:    #f5b84a;
-  --text:     #e6e8ee;
-  --muted:    #9aa3b2;
-  --dim:      #5d6574;
+  --bg:       ${C.bg};
+  --surface:  ${C.card};
+  --surface2: ${C.surface2};
+  --border:   ${alfa(0.08)};
+  --border2:  ${alfa(0.14)};
+  --blue:     ${C.blue};
+  --blueDim:  ${C.blueDim};
+  --blueText: ${C.blueText};
+  --cyan:     ${C.blue};
+  --cyanDim:  ${C.blueDim};
+  --cyanText: ${C.blueText};
+  --green:    ${C.green};
+  --greenDim: ${C.greenDim};
+  --orange:   ${C.orange};
+  --red:      ${C.red};
+  --amber:    ${C.amber};
+  --text:     ${C.text};
+  --muted:    ${C.muted};
+  --dim:      ${C.dim};
   --font:     'Inter Variable', 'Inter', system-ui, sans-serif;
   --mono:     var(--font);
   --radius:   8px;
@@ -143,7 +145,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); marg
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: ${alfa(0.15)}; border-radius: 2px; }
 
 @keyframes fadeUp   { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
@@ -171,26 +173,18 @@ export const mono = "var(--mono)";
 
 export const font = "var(--font)";
 
-export const C = {
-  bg:"#0b0d12", card:"#12151c", surface2:"#181c25",
-  border:"rgba(255,255,255,0.08)", border2:"rgba(255,255,255,0.14)",
-  cyan:"#5b7cfa", cyanDim:"#1a2142", cyanText:"#b4c3ff",
-  green:"#3fcf8e", greenDim:"#0f2a1f",
-  orange:"#f59e5b", red:"#f26d6d", amber:"#f5b84a",
-  text:"#e6e8ee", muted:"#9aa3b2", dim:"#5d6574",
-  blue:"#5b7cfa", blueDim:"#1a2142", blueText:"#b4c3ff",
-};
+export { C };
 
 export const S = {
   page:   {fontFamily:font, background:C.bg, minHeight:"100vh", width:"100%", maxWidth:520, margin:"0 auto", color:C.text},
-  input:  {width:"100%", background:"#0d0f14", border:"1px solid rgba(255,255,255,0.1)", color:C.text, padding:"10px 13px", borderRadius:10, fontSize:14, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
-  label:  {fontSize:12.5, color:"#c9ced8", display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
+  input:  {width:"100%", background:C.input, border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"10px 13px", borderRadius:10, fontSize:14, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
+  label:  {fontSize:12.5, color:C.text, display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
   btn:    {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"10px 18px", borderRadius:7, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnGhost:{background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.1)", color:"#c9ced8", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnGhost:{background:alfa(0.03), border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font, transition:"all .15s"},
   btnSm:  {background:"rgba(91,124,250,0.16)", border:"1px solid rgba(91,124,250,0.4)", color:"#d6deff", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
   btnOk:  {background:"rgba(63,207,142,0.12)", border:"1px solid rgba(63,207,142,0.35)", color:C.green, padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
   card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 2px rgba(0,0,0,.3)"},
-  header: {background:"rgba(11,13,18,0.86)", borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
+  header: {background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"), borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────
@@ -383,10 +377,10 @@ export const PUNTOS_INSPECCION = [
 export const TIPOS_TRABAJO = [
   // genérico: recogida, reparto, revisiones… (el nombre del trabajo lo pone quien publica)
   { key:"ruta",   label:"Ruta de servicio",          icon:"📍", Icono:MapPin,   color:"#22b8cf", kml:true  },
-  { key:"prev",   label:"Mantenimiento Preventivo", icon:"🛠️", Icono:Wrench,   color:"#5b7cfa", kml:true  },
-  { key:"corr",   label:"Mantenimiento Correctivo", icon:"🔩", Icono:Hammer,   color:"#f59e5b", kml:false },
-  { key:"ext",    label:"Limpieza Exterior",         icon:"🚿", Icono:Droplets, color:"#3fcf8e", kml:true  },
-  { key:"int",    label:"Limpieza Interior",          icon:"🧹", Icono:Sparkles, color:"#a78bfa", kml:true  },
+  { key:"prev",   label:"Mantenimiento Preventivo", icon:"🛠️", Icono:Wrench,   color:C.blue, kml:true  },
+  { key:"corr",   label:"Mantenimiento Correctivo", icon:"🔩", Icono:Hammer,   color:C.orange, kml:false },
+  { key:"ext",    label:"Limpieza Exterior",         icon:"🚿", Icono:Droplets, color:C.green, kml:true  },
+  { key:"int",    label:"Limpieza Interior",          icon:"🧹", Icono:Sparkles, color:C.violet, kml:true  },
 ];
 
 // ── FICHAJE (entrada/salida + kms de la jornada) ────────────────────
@@ -404,13 +398,13 @@ export function fmtDuracion(desde, hasta){
 // (colección cuadrantes, un doc por usuario y mes: solo lo leen él y los
 // gestores).
 export const CUADRANTE_META={
-  M:{label:"Mañana",bg:"#0d2248",text:"#5b7cfa"},
-  T:{label:"Tarde",bg:"#3d1a00",text:"#f59e5b"},
-  N:{label:"Noche",bg:"#1a0d3d",text:"#a78bfa"},
-  L:{label:"Libre",bg:"#1a1f2a",text:"#64748b"},
-  G:{label:"Guardia",bg:"#2d2200",text:"#f5b84a"},
-  B:{label:"Baja",bg:"#3d0d0d",text:"#f26d6d"},
-  D:{label:"Disponible",bg:"#0f2a1f",text:"#3fcf8e"},
+  M:{label:"Mañana",bg:tono("#0d2248", "#e4ecf8"),text:C.blue},
+  T:{label:"Tarde",bg:tono("#3d1a00", "#f8ede4"),text:C.orange},
+  N:{label:"Noche",bg:tono("#1a0d3d", "#eae4f8"),text:C.violet},
+  L:{label:"Libre",bg:tono("#1a1f2a", "#ebedf2"),text:"#64748b"},
+  G:{label:"Guardia",bg:tono("#2d2200", "#f8f4e4"),text:C.amber},
+  B:{label:"Baja",bg:tono("#3d0d0d", "#f8e4e4"),text:C.red},
+  D:{label:"Disponible",bg:C.greenDim,text:C.green},
 };
 
 export const MESES_ES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

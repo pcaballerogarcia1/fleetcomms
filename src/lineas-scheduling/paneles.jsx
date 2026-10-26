@@ -4,6 +4,7 @@ import { TIPOS_DIA } from "../gtfs-red.js";
 import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstrategia, porQueSinTipo, hayPrecios as hayPreciosP } from "../lineas-sched.js";
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lineas-horarios-util.js";
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
+import { alfa } from "../tema.js";
 
 
 export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado, optJunto, onOptimizarJunto, onAplicarJunto, aFondo, setAFondo }) {
@@ -31,7 +32,7 @@ export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt,
             const off = !hayPrecio(o);
             return (
               <button key={o.id} disabled={off} onClick={() => setObjetivo(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda}
-                style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? "rgba(255,255,255,0.1)" : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>
+                style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: objetivo === o.id ? alfa(0.1) : "none", color: objetivo === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: objetivo === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>
             );
           })}
         </div>
@@ -268,7 +269,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
             <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
               {lista.map(o => {
                 const off = o.precios && !o.precios.some(k => precios[k] > 0);
-                return <button key={o.id} disabled={off} onClick={() => set(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda} style={{ padding: "4px 9px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: val === o.id ? "rgba(255,255,255,0.1)" : "none", color: val === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: val === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
+                return <button key={o.id} disabled={off} onClick={() => set(o.id)} title={off ? "Pon los precios en Restricciones" : o.ayuda} style={{ padding: "4px 9px", borderRadius: 4, border: "none", cursor: off ? "not-allowed" : "pointer", background: val === o.id ? alfa(0.1) : "none", color: val === o.id ? "#fff" : off ? C.dim : C.muted, fontSize: 11, fontWeight: val === o.id ? 600 : 400, fontFamily: font }}>{o.nombre}</button>;
               })}
             </div>
           </div>
@@ -315,7 +316,7 @@ export function ResumenCalendarios({ red, porCalendario, claveDe, claveVDe, prec
             )}
           </tbody>
         </table>
-        {!cals.length && <div style={{ padding: "10px 16px", fontSize: 11, color: C.dim }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planning («Sustituir red») para tener todos los calendarios.</div>}
+        {!cals.length && <div style={{ padding: "10px 16px", fontSize: 11, color: C.dim }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planificación («Sustituir red») para tener todos los calendarios.</div>}
         <div style={{ padding: "10px 16px", fontSize: 10.5, color: C.dim, lineHeight: 1.6 }}>
           Cada calendario tiene su propio escenario y su propia estrategia: optimizar uno no cambia los demás. Las restricciones (jornada, pausas, flota…) son comunes a todos. Los costes usan los precios actuales de Restricciones.
         </div>
@@ -347,7 +348,7 @@ export function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
           const fila = (l, variante) => (
             <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: variante ? "3px 4px 3px 26px" : "4px 4px", cursor: "pointer" }}>
               <input type="checkbox" checked={set.has(l.id)} onChange={() => poner(set.has(l.id) ? [...set].filter(x => x !== l.id) : [...set, l.id])} />
-              {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+              {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
               <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(s => s.cabecera).join(" ↔ ")}</span>
             </label>
           );
@@ -360,7 +361,7 @@ export function SelectorLineas({ lineas, elegidas, onCambiar, onCerrar }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px" }}>
                 <input type="checkbox" checked={n === ids.length} ref={el => { if (el) el.indeterminate = n > 0 && n < ids.length; }}
                   onChange={() => poner(n < ids.length ? [...new Set([...set, ...ids])] : [...set].filter(id => !ids.includes(id)))} />
-                <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: g.lineas[0].color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{g.nombre}</span>
+                <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: g.lineas[0].color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{g.nombre}</span>
                 <button onClick={() => setAbiertos(prev => { const x = new Set(prev); if (x.has(g.clave)) x.delete(g.clave); else x.add(g.clave); return x; })}
                   style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: font }}>{abierto ? "▾" : "▸"} {n < ids.length ? `${n} de ` : ""}{ids.length} variantes</button>
               </div>

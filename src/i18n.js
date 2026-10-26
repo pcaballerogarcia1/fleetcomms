@@ -5,11 +5,11 @@ import { useState, useEffect } from "react";
 // nombres de calle, etc.), esos se quedan siempre en el idioma original.
 const DICT = {
   es: {
-    proyectos: "Proyectos", planning: "Planning", scheduling: "Scheduling",
-    rostering: "Rostering", control: "Control", analytics: "Analytics",
+    proyectos: "Proyectos", planning: "Planificación", scheduling: "Rutas",
+    rostering: "Cuadrante", control: "Control", analytics: "Análisis", departure: "Salida del día",
     fullscreen: "Pantalla completa", exitFullscreen: "Salir de pantalla completa", logout: "Cerrar sesión",
     vehiculos: "Vehículos", trabajadores: "Trabajadores", restricciones: "Restricciones",
-    importar: "Importar", publicarRutas: "Publicar en Rutas", generarEscenario: "Generar escenario",
+    importar: "Importar", publicarRutas: "Enviar a conductores", generarEscenario: "Generar escenario",
     generando: "Generando…", calculandoKm: "Calculando km…",
     planes: "Planes", mapaFlota: "Mapa de flota", fichajes: "Fichajes",
     produccion: "Producción", personal: "Personal", varios: "Varios",
@@ -17,7 +17,7 @@ const DICT = {
   },
   en: {
     proyectos: "Projects", planning: "Planning", scheduling: "Scheduling",
-    rostering: "Rostering", control: "Control", analytics: "Analytics",
+    rostering: "Rostering", control: "Control", analytics: "Analytics", departure: "Departure",
     fullscreen: "Fullscreen", exitFullscreen: "Exit fullscreen", logout: "Log out",
     vehiculos: "Vehicles", trabajadores: "Workers", restricciones: "Constraints",
     importar: "Import", publicarRutas: "Publish to Routes", generarEscenario: "Generate scenario",

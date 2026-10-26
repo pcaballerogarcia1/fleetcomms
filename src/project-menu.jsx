@@ -4,11 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { duplicarProyecto, nombreCopia } from "./project-copy.js";
 import { logAudit } from "./audit.js";
 import { SECTORES, sectorDe } from "./sector.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
   const [open, setOpen] = useState(false);
@@ -115,7 +113,7 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
                 borderRadius: 7, padding: "7px 9px", fontSize: 12.5, fontFamily: font, outline: "none",
               }} />
               <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.45, margin: "8px 0 10px" }}>
-                No se copian los planes publicados en Rutas, los fichajes ni el historial de generaciones. Vehículos, trabajadores y cuadrantes son de toda la organización y la copia los usa igual.
+                No se copian las rutas enviadas a los conductores, los fichajes ni el historial de generaciones. Vehículos, trabajadores y cuadrantes son de toda la organización y la copia los usa igual.
               </div>
               {copiando && <div style={{ fontSize: 11.5, color: C.blue, marginBottom: 8 }}>{paso}</div>}
               {error && <div style={{ fontSize: 11.5, color: C.red, lineHeight: 1.4, marginBottom: 8 }}>{error}</div>}

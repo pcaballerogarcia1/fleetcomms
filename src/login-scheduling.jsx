@@ -5,18 +5,14 @@ import { auth, getUserProfileSafe } from "./firebase.js";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { OlvideClave } from "./olvide-clave.jsx";
+import { C, alfa } from "./tema.js";
+import { tono } from "./tema.js";
 
 // Extracted out of scheduling.jsx so the login screen doesn't have to
 // download the Scheduling/Planning/Rostering bundle just to show a form —
 // this is the only piece of that module needed before authentication.
 
-const C = {
-  bg:"#0b0d12", card:"#12151c",
-  border:"rgba(255,255,255,0.08)",
-  blue:"#5b7cfa", blueDim:"#1a2142", blueText:"#b4c3ff",
-  red:"#f26d6d",
-  text:"#e6e8ee", muted:"#9aa3b2", dim:"#5d6574",
-};
+
 const font = "var(--font)";
 if (typeof document !== "undefined" && !document.getElementById("sched-styles")) {
   const s = document.createElement("style");
@@ -74,7 +70,7 @@ export function LoginScheduling({ onLogin }) {
           <div style={{ fontSize: 22, fontWeight: 650, color: C.text, marginTop: 16, letterSpacing: "-0.02em" }}>Entra en Operanzia</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Planificación y operaciones de flota</div>
         </div>
-        <div style={{ background: "rgba(18,21,28,0.85)", border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, boxShadow: "0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
+        <div style={{ background: tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"), border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, boxShadow: `0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`, backdropFilter: "blur(8px)" }}>
           <div style={{ marginBottom: 14 }}>
             <label className="op-label" htmlFor="login-email">Email o usuario</label>
             <input id="login-email" className="op-input" value={email} onChange={e => setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={onEnter} />
@@ -93,7 +89,7 @@ export function LoginScheduling({ onLogin }) {
           </button>
           <OlvideClave texto={email} color={C.muted} />
         </div>
-        <div style={{ textAlign: "center", fontSize: 11.5, color: C.dim, marginTop: 18 }}>Acceso para la oficina · los conductores entran por la app de Rutas</div>
+        <div style={{ textAlign: "center", fontSize: 11.5, color: C.dim, marginTop: 18 }}>Acceso para la oficina · los conductores entran por la app de conductores</div>
       </div>
     </div>
   );

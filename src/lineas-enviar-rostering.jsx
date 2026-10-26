@@ -8,11 +8,10 @@ import { diasDelMes, turnosDelMes, nombreDiaRoster } from "./lineas-rostering.js
 import { saveScenarioRoster } from "./roster-store.js";
 import { logAudit } from "./audit.js";
 import { COLORES_CAL } from "./lineas-horarios-util.js";
+import { C } from "./tema.js";
+import { tono } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const irARostering = () => { window.history.pushState({}, "", "/rostering"); window.dispatchEvent(new PopStateEvent("popstate")); };
@@ -44,7 +43,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
         porDia[dia] = await turnosDe(dia);
       }
       const { shifts, cals, calDia } = turnosDelMes(red, dias, porDia);
-      setEstado({ trabajando: true, texto: "Guardando en el Rostering…" });
+      setEstado({ trabajando: true, texto: "Guardando en el cuadrante…" });
       await saveScenarioRoster(projectId, {
         projectId, orgId, mes, turnoByWorker: {}, modo: "libre", moves: [], generatedAt: new Date().toISOString(),
         lineas: true, cals, calDia,
@@ -52,17 +51,17 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
       logAudit({ modulo: "Scheduling", accion: "Envió los turnos de líneas al Rostering", detalle: `${MESES[month - 1]} ${year} · ${shifts.length} turnos · ${cals.map(c => `${c.nombre}: ${c.dias} días`).join(" · ")}` });
       setEstado({ ok: true, n: shifts.length, dias: Object.keys(calDia).length });
     } catch (e) {
-      console.error("Enviar a Rostering:", e);
+      console.error("Enviar al cuadrante:", e);
       setEstado({ error: e.message || String(e) });
     }
   }
 
-  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : "#222c58") : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
   const trabajando = !!estado?.trabajando;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => !trabajando && onCerrar()}>
       <div onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", maxHeight: "100%", overflowY: "auto", background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 12, fontFamily: font, boxShadow: "0 20px 60px rgba(0,0,0,.5)", padding: "18px 20px" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Enviar a Rostering</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Enviar al cuadrante</div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>
           Cada día del mes se cubre con los turnos del calendario que circula ese día (laborables, sábados, festivos…). En Rostering, <b style={{ color: C.text }}>Optimizar</b> reparte la plantilla con sus reglas, sin cambiar ningún turno de día.
         </div>
@@ -71,7 +70,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Enviados {estado.n.toLocaleString("es-ES")} turnos de {estado.dias} días de {MESES[month - 1]}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>En Rostering, ve a {MESES[month - 1]} de {year} y pulsa «Optimizar».</div>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button onClick={() => { onCerrar(); irARostering(); }} style={btn(true)}>Ir a Rostering</button>
+              <button onClick={() => { onCerrar(); irARostering(); }} style={btn(true)}>Ir al cuadrante</button>
               <button onClick={onCerrar} style={btn(false)}>Cerrar</button>
             </div>
           </div>
@@ -89,7 +88,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
                     <span style={{ width: 10, height: 10, borderRadius: 5, background: COLORES_CAL[i % COLORES_CAL.length], flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDiaRoster(red, dia)}</span>
                     <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{n} día{n > 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: 11, whiteSpace: "nowrap", color: e === "nuevo" ? C.amber : C.green }} title={e === "nuevo" ? "Este calendario aún no se ha calculado en el Scheduling: se calcula ahora con las restricciones de siempre" : undefined}>
+                    <span style={{ fontSize: 11, whiteSpace: "nowrap", color: e === "nuevo" ? C.amber : C.green }} title={e === "nuevo" ? "Este calendario aún no se ha calculado en Rutas: se calcula ahora con las restricciones de siempre" : undefined}>
                       {e === "pantalla" ? "✓ el de pantalla" : e === "guardado" ? "✓ calculado" : "se calculará"}
                     </span>
                   </div>
@@ -98,12 +97,12 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
               {sinServicio > 0 && <div style={{ padding: "8px 12px", fontSize: 11.5, color: C.dim }}>{sinServicio} día{sinServicio > 1 ? "s" : ""} sin servicio (ningún calendario circula)</div>}
               {!usados.length && <div style={{ padding: 12, fontSize: 12, color: C.amber }}>Ese mes no circula ningún calendario de la red.</div>}
             </div>
-            <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Sustituye lo que hubiera en Rostering de este proyecto. Lo que ya se haya asignado a mano en el cuadrante se respeta.</div>
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Sustituye lo que hubiera en el cuadrante de este proyecto. Lo que ya se haya asignado a mano en el cuadrante se respeta.</div>
             {estado?.error && <div style={{ fontSize: 12, color: C.red, marginTop: 10 }}>No se pudo enviar: {estado.error}</div>}
             {trabajando && <div style={{ fontSize: 12, color: C.blue, marginTop: 10 }}>{estado.texto}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
               <button onClick={onCerrar} disabled={trabajando} style={btn(false)}>Cancelar</button>
-              <button onClick={enviar} disabled={trabajando || !usados.length} style={btn(true, trabajando || !usados.length)}>{trabajando ? "Enviando…" : "Enviar a Rostering"}</button>
+              <button onClick={enviar} disabled={trabajando || !usados.length} style={btn(true, trabajando || !usados.length)}>{trabajando ? "Enviando…" : "Enviar al cuadrante"}</button>
             </div>
           </>
         )}

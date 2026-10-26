@@ -124,7 +124,7 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
         ] : []),
       ] },
       ...(sector.ver.capacidad || c.usarCapacidad ? [{ id: "capacidad", nombre: "Capacidad y descargas", items: [
-        ["usarCapacidad", "Tener en cuenta lo que cabe en el camión", <Interruptor on={!!c.usarCapacidad} onCambiar={v => onChange({ ...CAPACIDAD_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarCapacidad: v })} />, "Cada camión carga lo que pone su ficha (Flota → Capacidad, m³). Cuando la siguiente parada no cabe, va a la planta de descarga más cercana, descarga y sigue; y descarga al final antes de volver al depósito. Las plantas se marcan en Planning → Depots («Planta»); si no hay, descarga en su depósito."],
+        ["usarCapacidad", "Tener en cuenta lo que cabe en el camión", <Interruptor on={!!c.usarCapacidad} onCambiar={v => onChange({ ...CAPACIDAD_DEFECTO, ...Object.fromEntries(Object.entries(c).filter(([, x]) => x != null)), usarCapacidad: v })} />, "Cada camión carga lo que pone su ficha (Flota → Capacidad, m³). Cuando la siguiente parada no cabe, va a la planta de descarga más cercana, descarga y sigue; y descarga al final antes de volver al depósito. Las plantas se marcan en Planificación → Depots («Planta»); si no hay, descarga en su depósito."],
         ...(c.usarCapacidad ? [
           ["llenadoPct", "Llenado medio de los contenedores", numero("llenadoPct", 1, 100, "%")],
           ["compactacion", "Compactación del camión", numero("compactacion", 1, 10, ": 1"), "Cuánto reduce el volumen el camión (un compactador de carga lateral suele ir de 3 a 5)."],
@@ -150,16 +150,16 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
       { id: "561", nombre: "Conducción (UE 561/2006)", items: [
         ["sin561", "Aplicar la UE 561/2006", sino("sin561", true), "Apagado si la actividad está exenta (p. ej. la recogida de residuos)."],
       ] },
-      { id: "rostering", nombre: "Rostering", items: [
+      { id: "rostering", nombre: "Cuadrante", items: [
         ["rosterMode", "Quién trabaja cada día", (
           <select value={c.rosterMode || "cuadrante"} onChange={e => set("rosterMode", e.target.value)}
             style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
             <option value="cuadrante">Respetar el cuadrante</option>
-            <option value="libre">Libre — optimizar turnos después en Rostering</option>
+            <option value="libre">Libre — optimizar turnos después en Cuadrante</option>
           </select>
         ), (c.rosterMode || "cuadrante") === "cuadrante"
           ? "Cada conductor trabaja el turno de su cuadrante ese día (M/T/N obligan, L/B no trabaja, D/G/vacío = turno de su ficha)."
-          : "Las rutas se calculan sin mirar quién trabaja. Después, en Rostering → Optimizar, se asigna trabajador y vehículo a cada turno según las reglas."],
+          : "Las rutas se calculan sin mirar quién trabaja. Después, en Cuadrante → Optimizar, se asigna trabajador y vehículo a cada turno según las reglas."],
       ] },
       { id: "coste-c", nombre: "Coste", items: [
         ["costeHora", "Coste por hora de conductor", limite("costeHora", null, "€/h", { decimal: true }), "Para el coste estimado de los indicadores."],

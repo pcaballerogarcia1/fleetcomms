@@ -154,7 +154,7 @@ export async function saveShiftMoves(projectId, scenario, movedTo, newMoves) {
     const mainSnap = await tx.get(mainRef);
     const main = mainSnap.exists() ? mainSnap.data() : {};
     if (scenario.generatedAt && main.generatedAt && main.generatedAt !== scenario.generatedAt) {
-      throw new Error("el escenario de Scheduling se ha vuelto a generar mientras tanto; vuelve a optimizar");
+      throw new Error("el escenario de Rutas se ha vuelto a generar mientras tanto; vuelve a optimizar");
     }
     const moves = [...(main.moves || []), ...newMoves];
     if (!main.parts) {

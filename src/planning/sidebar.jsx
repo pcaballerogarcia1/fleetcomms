@@ -9,6 +9,7 @@ import { logAudit } from "../audit.js";
 import { barrioColor, cambiarDepots, coordQuality, getBarrio, getContenedor, getFraccion, idbDel } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
 import { useSector } from "../sector.js";
+import { alfa } from "../tema.js";
 
 // Flecha y cabecera plegable de cada sección del panel
 const Chevron = ({ open }) => (
@@ -144,11 +145,11 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 background: showManual ? "rgba(245,158,91,0.15)" : "none",
                 border: `1px solid ${showManual ? "rgba(245,158,91,0.5)" : C.border}`,
                 borderRadius: 5,
-                color: showManual ? "#f59e5b" : C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
+                color: showManual ? C.orange : C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
                 width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "all .12s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = "#f59e5b"; e.currentTarget.style.borderColor = "#f59e5b55"; }}
+              onMouseEnter={e => { e.currentTarget.style.color = C.orange; e.currentTarget.style.borderColor = `${C.orange}55`; }}
               onMouseLeave={e => { if (!showManual) { e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border; } }}
             >+</button>
           } />
@@ -227,7 +228,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 }}
                 style={{
                   flex: 1, padding: "6px", background: "rgba(245,158,91,0.12)",
-                  border: "1px solid rgba(245,158,91,0.35)", color: "#f59e5b",
+                  border: "1px solid rgba(245,158,91,0.35)", color: C.orange,
                   borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: savingManualDepot ? "wait" : "pointer",
                   fontFamily: font, transition: "all .12s", opacity: savingManualDepot ? 0.6 : 1,
                 }}
@@ -276,10 +277,10 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               <div key={d.id} style={{
                 display: "flex", alignItems: "center", gap: 8,
                 background: C.surface2, border: "1px solid rgba(245,158,91,0.2)",
-                borderLeft: "3px solid #f59e5b",
+                borderLeft: `3px solid ${C.orange}`,
                 borderRadius: 7, padding: "7px 10px", marginBottom: 4,
               }}>
-                <span style={{ fontSize: 9, color: "#f59e5b", fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ fontSize: 9, color: C.orange, fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
@@ -292,7 +293,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                     if (projectId) cambiarDepots(projectId, orgId, cambio).catch(e => window.alert("No se ha podido cambiar: " + (e.message || "error desconocido")));
                     else setDepots(cambio);
                   }}
-                  style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? "#3fcf8e" : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? C.green : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
                   {d.planta ? "Planta" : "Depósito"}
                 </button>}
                 <button
@@ -465,8 +466,8 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       const q = coordQuality(layer.markers);
                       if (!q.invalid && !q.far) return null;
                       return (
-                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f5b84a", marginTop: 2 }}
-                          title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Scheduling. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
+                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
+                          title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Rutas. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
                           ⚠ {[
                             q.invalid && `${q.invalid.toLocaleString()} sin coordenadas válidas`,
                             q.far && `${q.far.toLocaleString()} muy lejos del resto`,
@@ -475,13 +476,13 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       );
                     })()}
                     {layer._missing && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f5b84a", marginTop: 2 }}
-                        title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planning, se sube sola y aparece aquí.">
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
+                        title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planificación, se sube sola y aparece aquí.">
                         ⚠ {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
                       </div>
                     )}
                     {layer._loadError && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: "#f26d6d", marginTop: 2 }}>
+                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.red, marginTop: 2 }}>
                         No se pudieron cargar los puntos: {layer._loadError}
                       </div>
                     )}
@@ -539,7 +540,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       <label title={isCustom ? `Color: ${color} — clic para cambiar` : "Clic para personalizar"} style={{ position: "relative", flexShrink: 0, cursor: "pointer" }}>
                         <div style={{
                           width: 16, height: 16, borderRadius: 3, background: color,
-                          border: isCustom ? `2px solid rgba(255,255,255,0.6)` : `1px solid rgba(255,255,255,0.2)`,
+                          border: isCustom ? `2px solid ${alfa(0.6)}` : `1px solid ${alfa(0.2)}`,
                           boxShadow: isCustom ? `0 0 0 1px ${color}` : "none", transition: "transform .12s",
                         }}
                           onMouseEnter={e => e.currentTarget.style.transform = "scale(1.2)"}

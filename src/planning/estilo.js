@@ -1,3 +1,5 @@
+import { C } from "../tema.js";
+import { tono } from "../tema.js";
 // Planning de rutas por puntos: colores, fuentes y estilos de mapa.
 
 
@@ -10,33 +12,13 @@
 
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────
-export const C = {
-  bg:      "#0b0d12",
-  card:    "#12151c",
-  surface2:"#181c25",
-  border:  "rgba(255,255,255,0.08)",
-  border2: "rgba(255,255,255,0.14)",
-  blue:    "#5b7cfa",
-  blueDim: "#1a2142",
-  blueText:"#b4c3ff",
-  cyan:    "#5b7cfa",
-  cyanDim: "#1a2142",
-  cyanText:"#b4c3ff",
-  green:   "#3fcf8e",
-  greenDim:"#0f2a1f",
-  orange:  "#f59e5b",
-  red:     "#f26d6d",
-  amber:   "#f5b84a",
-  text:    "#e6e8ee",
-  muted:   "#9aa3b2",
-  dim:     "#5d6574",
-};
+export { C };
 
 export const font = "var(--font)";
 export const mono = "var(--mono)";
 export const LAYER_COLORS = [
-  "#5b7cfa","#f59e5b","#3fcf8e","#f26d6d",
-  "#a78bfa","#f5b84a","#f472b6","#22d3ee",
+  C.blue,C.orange,C.green,C.red,
+  C.violet,C.amber,"#f472b6","#22d3ee",
 ];
 
 // ── MAP STYLES ────────────────────────────────────────────────────
@@ -48,7 +30,7 @@ export const MAP_STYLES = [
     // estilo: base minimalista en gris/oscuro pensada para pintar datos
     // encima) sin necesidad de key, con el mismo esquema {z}/{y}/{x} que ya
     // usa "Satélite" un poco más abajo.
-    key: "dark", label: "Oscuro", preview: "#1a2035",
+    key: "dark", label: "Oscuro", preview: tono("#1a2035", "#e9ebf4"),
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     // El "Base" de Esri es solo el fondo, sin nombres de calles/barrios —
     // esos vienen en una capa "Reference" aparte pensada para apilar encima.

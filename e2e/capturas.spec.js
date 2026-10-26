@@ -30,16 +30,16 @@ test("capturas", async ({ browser }) => {
   await page.waitForURL(/\/planning/);
   await page.locator('input[type="file"]').nth(1).setInputFiles({ name: "puntos.csv", mimeType: "text/csv", buffer: csvPuntos() });
   await page.waitForTimeout(4000); await shot(page, "03-planning");
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await page.waitForURL(/\/scheduling/); await shot(page, "04-scheduling-vacio");
   try {
-    await page.getByRole("button", { name: /Importar desde Planning/ }).click();
+    await page.getByRole("button", { name: /Importar desde Planificación/ }).click();
     await page.waitForTimeout(2500);
     await page.getByRole("button", { name: /Generar escenario/ }).first().click();
     await page.waitForTimeout(12000);
   } catch (e) { console.log("scheduling:", e.message); }
   await shot(page, "05-scheduling");
-  for (const [m, r, n] of [["Rostering", "/rostering", "06-rostering"], ["Control", "/control", "07-control"], ["Analytics", "/analytics", "08-analytics"]]) {
+  for (const [m, r, n] of [["Cuadrante", "/rostering", "06-rostering"], ["Control", "/control", "07-control"], ["Análisis", "/analytics", "08-analytics"]]) {
     await page.getByRole("button", { name: m, exact: true }).first().click();
     await page.waitForURL(new RegExp(r)); await shot(page, n);
   }
@@ -96,23 +96,23 @@ test("capturas oficina", async ({ browser }) => {
   await p.waitForURL(/\/planning/);
   await p.locator('input[type="file"]').nth(1).setInputFiles({ name: "puntos.csv", mimeType: "text/csv", buffer: csvPuntos() });
   await p.waitForTimeout(3000);
-  await ir("Scheduling");
-  try { await p.getByRole("button", { name: /Importar desde Planning/ }).click(); await p.waitForTimeout(2000); await p.getByRole("button", { name: /Generar escenario/ }).first().click(); await p.waitForTimeout(12000); } catch (e) { console.log(e.message); }
+  await ir("Rutas");
+  try { await p.getByRole("button", { name: /Importar desde Planificación/ }).click(); await p.waitForTimeout(2000); await p.getByRole("button", { name: /Generar escenario/ }).first().click(); await p.waitForTimeout(12000); } catch (e) { console.log(e.message); }
   await paso("01-restricciones", () => p.getByRole("button", { name: /Restricciones/ }).first().click());
   await p.keyboard.press("Escape"); await p.getByRole("button", { name: /Restricciones/ }).first().click().catch(() => {});
   await paso("02-indicadores", () => p.getByRole("button", { name: /Todos los indicadores/ }).first().click());
   await p.getByRole("button", { name: /Todos los indicadores/ }).first().click().catch(() => {});
-  await paso("03-publicar", () => p.getByRole("button", { name: /Publicar en Rutas/ }).first().click());
+  await paso("03-publicar", () => p.getByRole("button", { name: /Enviar a conductores/ }).first().click());
   await p.keyboard.press("Escape");
   await p.goto("/scheduling"); await p.waitForTimeout(2500);
-  await paso("04-rostering", () => ir("Rostering"));
+  await paso("04-rostering", () => ir("Cuadrante"));
   await paso("05-rostering-vehiculos", () => p.getByRole("button", { name: "Vehículos", exact: true }).first().click());
   await paso("06-control", () => ir("Control"));
   await paso("07-control-flota", () => p.getByRole("button", { name: /flota/i }).first().click());
-  await paso("08-analytics", () => ir("Analytics"));
+  await paso("08-analytics", () => ir("Análisis"));
   for (const [n, t] of [["09-an-pesadas", "Pesadas"], ["10-an-personal", "Personal"], ["11-an-varios", "Varios"]]) await paso(n, () => p.getByRole("button", { name: t, exact: true }).first().click());
-  await paso("12-inventario", async () => { await ir("Planning"); await p.getByText("Inventario", { exact: true }).first().click(); });
-  await paso("13-timetable", () => p.getByText("Timetable", { exact: true }).first().click());
+  await paso("12-inventario", async () => { await ir("Planificación"); await p.getByText("Inventario", { exact: true }).first().click(); });
+  await paso("13-timetable", () => p.getByText("Horarios", { exact: true }).first().click());
   // líneas
   await p.goto("/projects"); await p.waitForTimeout(1500);
   await p.getByText("Nuevo proyecto").first().click();
@@ -133,14 +133,14 @@ test("capturas oficina", async ({ browser }) => {
   const mapa = await p.locator(".leaflet-container").first().boundingBox();
   await p.mouse.click(mapa.x + mapa.width / 2, mapa.y + mapa.height / 2); await p.waitForTimeout(1500);
   for (const [n, t] of [["18-lin-horarios", "Horarios de salida"], ["19-lin-relevos", "Puntos de relevo"], ["20-lin-vacios", "Vacíos"], ["21-lin-flota", "Flota"]]) await paso(n, () => p.getByText(t, { exact: true }).first().click());
-  await ir("Scheduling");
+  await ir("Rutas");
   await p.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first().waitFor({ timeout: 60_000 }).catch(() => {});
   await shot("22-lin-sched");
   await paso("23-lin-sched-turnos", () => p.getByRole("button", { name: /Trabajadores/ }).first().click());
   await paso("24-lin-restricciones", () => p.getByRole("button", { name: /Restricciones/ }).first().click());
   await p.getByRole("button", { name: /Restricciones/ }).first().click().catch(() => {});
   await paso("25-lin-calendarios", () => p.getByText("Calendarios", { exact: true }).first().click());
-  await paso("26-lin-rostering", () => ir("Rostering"));
+  await paso("26-lin-rostering", () => ir("Cuadrante"));
   await paso("27-lin-control", () => ir("Control"));
-  await paso("28-lin-analytics", () => ir("Analytics"));
+  await paso("28-lin-analytics", () => ir("Análisis"));
 });

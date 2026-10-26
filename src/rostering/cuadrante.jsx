@@ -6,6 +6,7 @@ import { Scale, Sparkles } from "lucide-react";
 import { checkWorkerMonth } from "../roster-optimizer.js";
 import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnStyle, pubBtn, thStyle } from "./datos.js";
 import { ModeTabs } from "./vehiculos.jsx";
+import { tono } from "../tema.js";
 
 
 export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }) {
@@ -52,7 +53,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
             Reglas
           </button>
 
-          {avisoServicio && <span style={{ fontSize: 11, color: "#3fcf8e", borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
+          {avisoServicio && <span style={{ fontSize: 11, color: C.green, borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
           {calsLineas && calsLineas.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10, flexWrap: "wrap" }} title="Calendarios de la red de líneas que circulan este mes">
               {calsLineas.map(c => (
@@ -68,8 +69,8 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
             <span title="Turnos del escenario (modo libre) con trabajador asignado"
               style={{
                 fontSize: 11, fontWeight: 600, borderRadius: 6, padding: "3px 8px",
-                color: coveredCount === libreShifts.length ? "#3fcf8e" : "#f5b84a",
-                background: coveredCount === libreShifts.length ? "#3fcf8e18" : "#f5b84a18",
+                color: coveredCount === libreShifts.length ? C.green : C.amber,
+                background: coveredCount === libreShifts.length ? `${C.green}18` : `${C.amber}18`,
               }}>
               {coveredCount}/{libreShifts.length} turnos cubiertos
             </span>
@@ -118,7 +119,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
         ) : workers.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: C.dim, fontSize: 13, gap: 8 }}>
             <div style={{ fontSize: 32 }}>👥</div>
-            <div>Sin trabajadores. Añade trabajadores en el módulo de Scheduling.</div>
+            <div>Sin trabajadores. Añade trabajadores en el módulo de Rutas.</div>
           </div>
         ) : (
           <table style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: NAME_W + daysInMonth * CELL_W + STATS_W + PUB_W }}>
@@ -143,15 +144,15 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                     <th key={d} style={{
                       width: CELL_W, minWidth: CELL_W,
                       position: "sticky", top: 0, zIndex: 3,
-                      background: today ? "#1a2142" : weekend ? "#151922" : C.card,
+                      background: today ? C.blueDim : weekend ? tono("#151922", "#ebedf2") : C.card,
                       borderBottom: `2px solid ${today ? C.blue : C.border}`,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#f59e5b" : C.dim }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#f59e5b88" : C.muted }}>
+                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? `${C.orange}88` : C.muted }}>
                         {d}
                       </div>
                       {calsLineas && (() => {
@@ -200,7 +201,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                 const stats = workerStats(w._id);
                 const check = checkWorkerMonth(d => workedInterval(w._id, d), daysInMonth, rules, +horasPorTrabajador[w._id] || 0, { year, month });
                 const ruleIssues = check.issues;
-                const rowBg = wi % 2 === 0 ? C.bg : "#12161f";
+                const rowBg = wi % 2 === 0 ? C.bg : tono("#12161f", "#eaedf3");
                 const shiftMeta = w.turno ? SHIFT_META[w.turno] : null;
 
                 return (
@@ -285,7 +286,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                             cursor: "pointer",
                             background: meta
                               ? (isManual ? meta.bg : meta.bg + "55")
-                              : (today ? "#0e2040" : weekend ? "#141c30" : "transparent"),
+                              : (today ? tono("#0e2040", "#e4ecf8") : weekend ? tono("#141c30", "#e8ecf5") : "transparent"),
                             color: meta ? (isManual ? meta.text : meta.text + "88") : C.dim,
                             borderRight: !isManual && sched
                               ? `1px dashed ${SHIFT_META[sched].text}44`
@@ -306,7 +307,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
-                              boxShadow: "inset 0 0 0 2px #5b7cfa",
+                              boxShadow: `inset 0 0 0 2px ${C.blue}`,
                               background: "rgba(79,142,247,0.12)",
                             }} />
                           )}
@@ -326,8 +327,8 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           <span title={ruleIssues.length ? ruleIssues.join(" · ") : `${check.hours}h de ${check.cap}h · máx. ${check.maxRun} días seguidos`}
                             style={{
                               fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "0 4px",
-                              color: ruleIssues.length ? "#f26d6d" : C.muted,
-                              background: ruleIssues.length ? "#f26d6d22" : "transparent",
+                              color: ruleIssues.length ? C.red : C.muted,
+                              background: ruleIssues.length ? `${C.red}22` : "transparent",
                             }}>
                             {ruleIssues.length ? "⚠ " : ""}{Math.round(check.hours)}h
                           </span>
@@ -354,13 +355,13 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                       {w.uid ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
                           <button disabled={!!publishing} onClick={() => setPublishModal({ targets: [w] })}
-                            title={`Publicar en Rutas a ${usuarios.find(u => u._id === w.uid)?.email || "su usuario"}`}
+                            title={`Enviar a conductores a ${usuarios.find(u => u._id === w.uid)?.email || "su usuario"}`}
                             style={pubBtn}>
                             Publicar
                           </button>
                           {publicados[w.uid] && (
                             <span title={`Publicado ${new Date(publicados[w.uid]).toLocaleString()}`}
-                              style={{ fontSize: 10, color: "#3fcf8e" }}>✓</span>
+                              style={{ fontSize: 10, color: C.green }}>✓</span>
                           )}
                           <button onClick={() => { if (confirm("¿Desvincular este trabajador de su usuario de la app?")) linkWorker(w._id, null); }}
                             title="Desvincular usuario" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 11, padding: 0 }}>×</button>
@@ -405,7 +406,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                   return (
                     <td key={d} style={{
                       width: CELL_W, textAlign: "center", height: 38,
-                      background: today ? "#1a2142" : C.surface2,
+                      background: today ? C.blueDim : C.surface2,
                       borderRight: `1px solid ${C.border}`,
                       borderTop: `2px solid ${C.border2}`,
                       verticalAlign: "middle", padding: "2px 0",
@@ -570,7 +571,7 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
                 </div>
               ) : sched ? (
                 <div style={{ fontSize: 10, color: C.dim }}>
-                  Sin detalle de paradas/km guardado — regenera el escenario en Scheduling para verlo aquí.
+                  Sin detalle de paradas/km guardado — regenera el escenario en Rutas para verlo aquí.
                 </div>
               ) : null}
             </div>

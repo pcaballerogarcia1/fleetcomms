@@ -13,7 +13,7 @@ import { cambiarVehiculo, cubrir, deshacerAusencia, escucharFichajesDia, escucha
 import { C, font } from "./tema.js";
 
 const hora = min => `${String(Math.floor((((min % 1440) + 1440) % 1440) / 60)).padStart(2, "0")}:${String(((min % 60) + 60) % 60).padStart(2, "0")}`;
-const TURNO = { M: { t: "Mañana", c: "#5b7cfa" }, T: { t: "Tarde", c: "#f59e5b" }, N: { t: "Noche", c: "#a78bfa" } };
+const TURNO = { M: { t: "Mañana", c: C.blue }, T: { t: "Tarde", c: C.orange }, N: { t: "Noche", c: C.violet } };
 const ESTADO_VEH = { T: "en el taller", A: "averiado", I: "en la ITV" };
 const ymd = f => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
 
@@ -32,8 +32,8 @@ function Reloj() {
 const minutosDeHoy = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
 // Color e icono del estado del fichaje
 const FICHAJE = {
-  dentro: { c: "#3fcf8e", I: LogIn }, salio: { c: "#8b95a5", I: LogOut }, tarde: { c: "#f26d6d", I: AlertTriangle },
-  pendiente: { c: "#8b95a5", I: Clock }, noFicho: { c: "#f26d6d", I: AlertTriangle }, sinApp: { c: "#5f6b7d", I: Clock },
+  dentro: { c: C.green, I: LogIn }, salio: { c: "#8b95a5", I: LogOut }, tarde: { c: C.red, I: AlertTriangle },
+  pendiente: { c: "#8b95a5", I: Clock }, noFicho: { c: C.red, I: AlertTriangle }, sinApp: { c: "#5f6b7d", I: Clock },
 };
 
 function Pastilla({ code }) {
@@ -100,7 +100,7 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
     <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Departure</div>
+          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Salida del día</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{esHoy ? `Hoy, ${fechaTxt}` : esManana ? `Mañana, ${fechaTxt}` : fechaTxt.charAt(0).toUpperCase() + fechaTxt.slice(1)}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -159,7 +159,7 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
       <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><CalendarDays size={16} color={C.muted} /> Turnos del día</div>
       <div style={{ ...tarjeta, padding: 0, overflow: "hidden" }}>
         {cargando ? <div style={{ padding: 18, color: C.muted, fontSize: 13 }}>Cargando el cuadrante…</div>
-          : !dia.filas.length ? <div style={{ padding: 18, color: C.muted, fontSize: 13 }}>Nadie tiene turno este día en el cuadrante de Rostering.</div>
+          : !dia.filas.length ? <div style={{ padding: 18, color: C.muted, fontSize: 13 }}>Nadie tiene turno este día en el cuadrante.</div>
           : dia.filas.map((fl, i) => (
             <div key={fl.worker._id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 16px", borderTop: i ? `1px solid ${C.border}` : "none", flexWrap: "wrap" }}>
               <div style={{ width: 92, fontSize: 13, color: C.text, fontWeight: 600 }}>{hora(fl.turno.s)}–{hora(fl.turno.e)}</div>

@@ -5,6 +5,8 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { barrioColor, coordQuality, getBarrio, isJunkCoord, routeStats } from "./datos.js";
 import { C, MAP_STYLES, font } from "./estilo.js";
 import { useUltimo } from "../use-ultimo.js";
+import { alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // ── POPUP HTML ────────────────────────────────────────────────────
 function makePopupHtml(marker, color) {
@@ -16,16 +18,16 @@ function makePopupHtml(marker, color) {
     .filter(([k]) => !["nombre","name"].includes(k.toLowerCase()))
     .map(([k,v]) => `
       <tr>
-        <td style="color:#9aa3b2;padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
-        <td style="color:#e6e8ee;font-size:11px;word-break:break-word;">${v ?? "—"}</td>
+        <td style="color:${C.muted};padding:3px 12px 3px 0;font-size:11px;white-space:nowrap;vertical-align:top;">${k}</td>
+        <td style="color:${C.text};font-size:11px;word-break:break-word;">${v ?? "—"}</td>
       </tr>`)
     .join("");
 
   return `
     <div style="font-family:'Inter',sans-serif;min-width:180px;max-width:300px;padding:12px 14px;">
-      ${title ? `<div style="font-size:13px;font-weight:600;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.08);">${title}</div>` : ""}
-      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : '<div style="color:#9aa3b2;font-size:12px;">Sin campos adicionales</div>'}
-      <div style="font-size:10px;color:#5d6574;margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
+      ${title ? `<div style="font-size:13px;font-weight:600;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${alfa(0.08)};">${title}</div>` : ""}
+      ${rows ? `<table style="width:100%;border-collapse:collapse;">${rows}</table>` : `<div style="color:${C.muted};font-size:12px;">Sin campos adicionales</div>`}
+      <div style="font-size:10px;color:${C.dim};margin-top:8px;font-family:monospace;">${marker.lat?.toFixed(5)}, ${marker.lng?.toFixed(5)}</div>
     </div>`;
 }
 
@@ -118,7 +120,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
           const lat = parseFloat(m.lat), lng = parseFloat(m.lng);
           if (isJunkCoord(lat, lng)) return;
           const barrio = getBarrio(m);
-          const color = barrio ? barrioColor(barrio, barrioColors) : (layer.color || '#5b7cfa');
+          const color = barrio ? barrioColor(barrio, barrioColors) : (layer.color || C.blue);
           allPts.push(lat, lng, color); // packed flat for cache efficiency
           ptMarkers.push(m);
           if (!q.isFar(lat, lng)) allPoints.push([lat, lng]); // los muy lejanos no mueven el encuadre
@@ -237,7 +239,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
           const size = 14;
           const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
           const hasWindow = windowedKeys?.has(puntoKey);
-          const border = hasWindow ? "3px solid rgba(0,0,0,0.85)" : "2px solid rgba(255,255,255,0.8)";
+          const border = hasWindow ? "3px solid rgba(0,0,0,0.85)" : `2px solid ${alfa(0.8)}`;
           const icon = L.divIcon({
             className: "",
             html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;transition:transform .15s;"></div>`,
@@ -276,7 +278,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
         className: "",
         html: `<div title="${d.nombre}" style="
           width:36px;height:36px;border-radius:8px;
-          background:#f59e5b;border:2.5px solid rgba(255,255,255,0.95);
+          background:${C.orange};border:2.5px solid ${alfa(0.95)};
           box-shadow:0 3px 14px rgba(245,158,91,0.7);
           display:flex;align-items:center;justify-content:center;
           cursor:pointer;
@@ -284,13 +286,13 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
         iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -20],
       });
       const fields = Object.entries(d.fields || {}).map(([k, v]) =>
-        `<tr><td style="color:#9aa3b2;padding:2px 10px 2px 0;font-size:11px;">${k}</td><td style="color:#e6e8ee;font-size:11px;">${v}</td></tr>`
+        `<tr><td style="color:${C.muted};padding:2px 10px 2px 0;font-size:11px;">${k}</td><td style="color:${C.text};font-size:11px;">${v}</td></tr>`
       ).join("");
       const popupHtml = `<div style="font-family:'Inter',sans-serif;min-width:160px;padding:10px 12px;">
-        <div style="font-size:11px;font-weight:700;color:#f59e5b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Depot ${i + 1}</div>
-        <div style="font-size:13px;font-weight:600;color:#e6e8ee;margin-bottom:6px;">${d.nombre}</div>
+        <div style="font-size:11px;font-weight:700;color:${C.orange};text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Depot ${i + 1}</div>
+        <div style="font-size:13px;font-weight:600;color:${C.text};margin-bottom:6px;">${d.nombre}</div>
         ${fields ? `<table style="width:100%;border-collapse:collapse;">${fields}</table>` : ""}
-        <div style="font-size:10px;color:#5d6574;margin-top:6px;font-family:monospace;">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
+        <div style="font-size:10px;color:${C.dim};margin-top:6px;font-family:monospace;">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
       </div>`;
       const dm = L.marker([d.lat, d.lng], { icon: dIcon, zIndexOffset: 500 })
         .bindPopup(popupHtml, { maxWidth: 280 });
@@ -344,7 +346,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
       const pin = L.marker([pt.lat, pt.lng], {
         icon: L.divIcon({
           className: "",
-          html: `<div style="width:22px;height:22px;border-radius:50%;background:#5b7cfa;border:2px solid #fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);">${i + 1}</div>`,
+          html: `<div style="width:22px;height:22px;border-radius:50%;background:${C.blue};border:2px solid #fff;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);">${i + 1}</div>`,
           iconSize: [22, 22], iconAnchor: [11, 11],
         }),
         zIndexOffset: 1000,
@@ -356,12 +358,12 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     if (selected.length > 1) {
       if (routeData?.geometry) {
         selPolyRef.current = L.geoJSON(routeData.geometry, {
-          style: { color: "#5b7cfa", weight: 3.5, opacity: 0.9 },
+          style: { color: C.blue, weight: 3.5, opacity: 0.9 },
         }).addTo(map);
       } else {
         selPolyRef.current = L.polyline(
           selected.map(p => [p.lat, p.lng]),
-          { color: "#5b7cfa", weight: 2, dashArray: "6 4", opacity: 0.5 }
+          { color: C.blue, weight: 2, dashArray: "6 4", opacity: 0.5 }
         ).addTo(map);
       }
     }
@@ -464,7 +466,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
   return (
     <div style={{ flex: 1, position: "relative", height: "100%" }}>
       {/* Map container */}
-      <div ref={divRef} className="planning-map" style={{ width: "100%", height: "100%", background: "#181c25" }} />
+      <div ref={divRef} className="planning-map" style={{ width: "100%", height: "100%", background: C.surface2 }} />
 
       {/* Selection mode toggle */}
       <button
@@ -500,7 +502,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
             cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.4)", transition: "all .15s",
           }}
         >
-          <div style={{ width: 10, height: 10, borderRadius: 2, background: currentStyle.preview, border: "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: currentStyle.preview, border: `1px solid ${alfa(0.2)}`, flexShrink: 0 }} />
           {currentStyle.label}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ opacity: 0.5 }}>
             <polyline points="6 9 12 15 18 9"/>
@@ -531,7 +533,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
                 onMouseEnter={e => { if (s.key !== mapStyle) e.currentTarget.style.background = C.surface2; }}
                 onMouseLeave={e => { if (s.key !== mapStyle) e.currentTarget.style.background = "none"; }}
               >
-                <div style={{ width: 14, height: 14, borderRadius: 3, background: s.preview, border: `1px solid rgba(255,255,255,0.15)`, flexShrink: 0 }} />
+                <div style={{ width: 14, height: 14, borderRadius: 3, background: s.preview, border: `1px solid ${alfa(0.15)}`, flexShrink: 0 }} />
                 {s.label}
                 {s.key === mapStyle && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{ marginLeft: "auto" }}>
@@ -548,7 +550,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
       {selMode && selected.length === 0 && (
         <div style={{
           position: "absolute", bottom: 30, left: "50%", transform: "translateX(-50%)",
-          zIndex: 900, background: "rgba(15,17,23,0.88)", border: `1px solid ${C.border}`,
+          zIndex: 900, background: tono("rgba(15,17,23,0.88)", "rgba(255,255,255,0.88)"), border: `1px solid ${C.border}`,
           borderRadius: 8, padding: "8px 16px", fontSize: 12, color: C.muted,
           backdropFilter: "blur(4px)", whiteSpace: "nowrap",
         }}>
@@ -560,7 +562,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
       {selMode && selected.length > 0 && (
         <div style={{
           position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-          zIndex: 900, background: "rgba(22,27,39,0.95)", border: `1px solid ${C.border}`,
+          zIndex: 900, background: tono("rgba(22,27,39,0.95)", "rgba(255,255,255,0.95)"), border: `1px solid ${C.border}`,
           borderRadius: 10, padding: "12px 16px", minWidth: 280,
           boxShadow: "0 4px 24px rgba(0,0,0,.5)", backdropFilter: "blur(6px)",
         }}>

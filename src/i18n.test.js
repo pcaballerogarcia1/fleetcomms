@@ -5,7 +5,7 @@ import { t } from "./i18n.js";
 // que no existen en el entorno de test (node, sin jsdom).
 describe("t", () => {
   it("traduce una clave conocida en español", () => {
-    expect(t("planning", "es")).toBe("Planning");
+    expect(t("planning", "es")).toBe("Planificación");
     expect(t("logout", "es")).toBe("Cerrar sesión");
   });
   it("traduce una clave conocida en inglés", () => {
@@ -13,7 +13,7 @@ describe("t", () => {
     expect(t("vehiculos", "en")).toBe("Vehicles");
   });
   it("cae a español si el idioma no existe en el diccionario", () => {
-    expect(t("planning", "fr")).toBe("Planning");
+    expect(t("planning", "fr")).toBe("Planificación");
   });
   it("devuelve la propia key si no existe traducción en ningún idioma", () => {
     expect(t("clave_inexistente", "es")).toBe("clave_inexistente");

@@ -52,7 +52,7 @@ export function CalculoConcurso({ concursoId, irA }) {
         {cabecera}
         <div style={{ ...tarjeta, padding: 20, marginTop: 18, maxWidth: 680 }}>
           <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>Aún no hay nada que calcular</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>El cálculo parte del <b style={{ color: C.text }}>estudio de costes del Ayuntamiento</b> (si el pliego lo trae: úsalo desde la Ficha de requisitos) o de los servicios de la ficha con lo que rinde cada equipo en Planning.</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>El cálculo parte del <b style={{ color: C.text }}>estudio de costes del Ayuntamiento</b> (si el pliego lo trae: úsalo desde la Ficha de requisitos) o de los servicios de la ficha con lo que rinde cada equipo en Planificación.</div>
           <button className="op-btn op-primario" style={{ marginTop: 12 }} onClick={() => irA?.("/documentos")}><FileText size={14} /> Ir a Documentos</button>
         </div>
       </div>
@@ -85,7 +85,7 @@ export function CalculoConcurso({ concursoId, irA }) {
 
       {r.estudio && (
         <div className="op-segmentado" style={{ display: "inline-flex", gap: 4, marginTop: 14, padding: 3, background: C.surface2, borderRadius: 10 }}>
-          {[["estudio", "Desde el estudio del Ayuntamiento"], ["rendimientos", "Por rendimientos (Planning)"]].map(([m, n]) => (
+          {[["estudio", "Desde el estudio del Ayuntamiento"], ["rendimientos", "Por rendimientos (Planificación)"]].map(([m, n]) => (
             <button key={m} className={`op-btn ${r.modo === m ? "op-primario" : "op-fantasma"}`} style={{ height: 30 }} onClick={() => cambiar({ base: m })}>{n}</button>
           ))}
         </div>
@@ -214,7 +214,7 @@ export function CalculoConcurso({ concursoId, irA }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Las horas, las personas de cada equipo y el absentismo se cambian en Planning; los salarios, abajo.</div>
+      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Las horas, las personas de cada equipo y el absentismo se cambian en Planificación; los salarios, abajo.</div>
 
       {titulo("Vehículos")}
       <div style={{ ...tarjeta, overflow: "auto" }}>

@@ -9,7 +9,7 @@ import { FRECUENCIAS, columnasDe, cumple, idNuevo, plantillaDe, resumenTrabajos 
 import { useUltimo } from "../use-ultimo.js";
 import { C, font, mono } from "./estilo.js";
 
-const COLORES = ["#5b7cfa", "#3fcf8e", "#a78bfa", "#f59e5b", "#f472b6", "#22d3ee", "#f5b84a", "#f26d6d"];
+const COLORES = [C.blue, C.green, C.violet, C.orange, "#f472b6", "#22d3ee", C.amber, C.red];
 // con punto de miles también en las cifras de 4 (el navegador no lo pone en español: «1560»)
 const NUM = (() => { try { return new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 0 }); } catch { return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }); } })();
 const fmt = n => (n == null ? "—" : NUM.format(Math.round(n)));

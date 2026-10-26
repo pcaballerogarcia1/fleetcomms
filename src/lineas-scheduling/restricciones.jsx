@@ -88,7 +88,7 @@ function TiposTurno({ tipos, onChange }) {
 }
 
 // ── Grupos de líneas ─────────────────────────────────────────────────────
-const COLORES_GRUPO = ["#5b7cfa", "#3fcf8e", "#f59e5b", "#f472b6", "#a78bfa", "#f5b84a", "#22d3ee", "#f26d6d"];
+const COLORES_GRUPO = [C.blue, C.green, C.orange, "#f472b6", C.violet, C.amber, "#22d3ee", C.red];
 function GruposLineas({ red, grupos, onChange }) {
   const lista = grupos || [];
   const nombres = [...new Set((red?.lineas || []).map(l => String(l.nombre)))].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
@@ -201,8 +201,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
         ["costeKm", "Coste por km", limite("costeKm", "€/km (con los vacíos)", { decimal: true, step: 0.01 })],
       ] },
       { id: "autonomia", nombre: "Autonomía", items: [
-        ["cargaEntreSalidas", "Se cargan en cochera entre una salida y otra", sino("cargaEntreSalidas"), "Para los autobuses con autonomía (Planning → Flota). Encendido: cada salida de cochera tiene que caber en la autonomía. Apagado: solo cargan de noche, así que cuenta el día entero."],
-      ], nota: "La autonomía de cada autobús se pone en Planning → Flota. Ninguna salida de cochera pasa de los km que aguanta la flota de su tipo; si no llega, entra otro autobús." },
+        ["cargaEntreSalidas", "Se cargan en cochera entre una salida y otra", sino("cargaEntreSalidas"), "Para los autobuses con autonomía (Planificación → Flota). Encendido: cada salida de cochera tiene que caber en la autonomía. Apagado: solo cargan de noche, así que cuenta el día entero."],
+      ], nota: "La autonomía de cada autobús se pone en Planificación → Flota. Ninguna salida de cochera pasa de los km que aguanta la flota de su tipo; si no llega, entra otro autobús." },
       { id: "cochera", nombre: "Cochera", items: [
         ["margenCochera", "Rato mínimo en cochera entre dos salidas", numero("margenCochera", "min")],
         ["amplitudBusMax", "Amplitud máxima del autobús", limite("amplitudBusMax", "min de la salida a la vuelta a cochera"), "Pasado este tiempo fuera, el autobús vuelve a cochera."],

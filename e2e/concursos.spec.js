@@ -50,7 +50,7 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await expect(page.getByText(/Servicios y cantidades al año \(2\)/)).toBeVisible();
   await foto("ficha");
   // Planning del concurso: dimensionar por rendimientos con los servicios de la ficha
-  await page.getByRole("button", { name: "Planning", exact: true }).click();
+  await page.getByRole("button", { name: "Planificación", exact: true }).click();
   await page.waitForURL(/\/planning/);
   await expect(page.getByText("Equipos por tipo de vehículo")).toBeVisible();
   // 1.992 + 230 lavados de soterrados a 25 por turno = 89 turnos al año → 1 vehículo
@@ -92,14 +92,14 @@ test("un concurso se crea, se abre con sus módulos y no se mezcla con la operat
   await foto("alternativas");
 
   // sus módulos, y no los de la operativa diaria
-  for (const m of ["Documentos", "Planning", "Scheduling", "Rostering", "Cálculo", "Alternativas", "Resumen"]) {
+  for (const m of ["Documentos", "Planificación", "Rutas", "Cuadrante", "Cálculo", "Alternativas", "Resumen"]) {
     await expect(page.getByRole("button", { name: m, exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Departure", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Salida del día", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Control", exact: true })).toHaveCount(0);
 
   // Rostering del concurso: la plantilla real no está
-  await page.getByRole("button", { name: "Rostering", exact: true }).click();
+  await page.getByRole("button", { name: "Cuadrante", exact: true }).click();
   await page.waitForURL(/\/rostering/);
   await page.waitForTimeout(1500);
   await expect(page.getByText("Plantilla Real")).toHaveCount(0);

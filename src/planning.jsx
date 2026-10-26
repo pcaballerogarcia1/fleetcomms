@@ -475,7 +475,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
             Operanzia
           </div>
           <div style={{ width: 1, height: 16, background: C.border2 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planning</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planificación</div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -539,7 +539,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
         {[
           { key: "mapa",      label: "Mapa" },
           { key: "trabajos",  label: "Trabajos" },
-          { key: "timetable", label: "Timetable" },
+          { key: "timetable", label: "Horarios" },
           { key: "inventario", label: "Inventario" },
           { key: "recursos",  label: "Recursos" },
         ].map(t => (

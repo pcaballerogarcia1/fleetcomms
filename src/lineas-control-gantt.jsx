@@ -5,11 +5,9 @@
 // puntualidad. El viaje en curso crece hasta la línea de «ahora».
 import { useState, useEffect, useMemo, useRef } from "react";
 import { hhmm, textoRetraso, COLOR_PUNTUALIDAD, ADELANTO_OK, RETRASO_OK } from "./lineas-servicio.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");

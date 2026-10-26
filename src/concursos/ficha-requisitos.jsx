@@ -211,7 +211,7 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Cada servicio de la ficha lleva el equipo de su apartado; Planning cuenta un vehículo de cada tipo y las personas de cada equipo. Lo que el pliego no fija (p. ej. el mantenimiento) lo eliges tú.</div>
+        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Cada servicio de la ficha lleva el equipo de su apartado; Planificación cuenta un vehículo de cada tipo y las personas de cada equipo. Lo que el pliego no fija (p. ej. el mantenimiento) lo eliges tú.</div>
       </>}
 
       {propuestas.length > 0 && <>

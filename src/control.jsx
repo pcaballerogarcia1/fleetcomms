@@ -7,6 +7,7 @@ import { AvisoConductores } from "./control/aviso-conductores.jsx";
 import { PanelFichajes } from "./control/fichajes.jsx";
 import { MapaControl, MapaFlota } from "./control/mapas.jsx";
 import { ActivityFeed, PlanCard } from "./control/planes.jsx";
+import { alfa } from "./tema.js";
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
 export function ControlPage({ sesion, orgId: orgIdProp }) {
@@ -188,8 +189,8 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
               {[["planes", t("planes", lang)], ["flota", t("mapaFlota", lang)], ["fichajes", t("fichajes", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
-                  background: vista === k ? "rgba(255,255,255,0.1)" : "none",
-                  color: vista === k ? "#fff" : C.muted,
+                  background: vista === k ? alfa(0.1) : "none",
+                  color: vista === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
                   transition: "all .12s",
                 }}>{l}</button>

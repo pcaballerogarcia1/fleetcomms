@@ -7,12 +7,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas, pasosPorParada } from "./lineas-sched.js";
 import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
+import { C, alfa } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -71,7 +68,7 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
                 <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar calendario o código…" style={{ width: "calc(100% - 16px)", margin: "0 8px 4px", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
               )}
               {vis.map(c => fila(c.id, c.nombre, `${c.fechas.length} día${c.fechas.length > 1 ? "s" : ""} · ${num(c.viajes)} viajes${c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}`, colorDe.get(c.id)))}
-              {!cals.length && <div style={{ fontSize: 11, color: C.dim, padding: "4px 8px 8px", lineHeight: 1.5 }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planning («Sustituir red») para elegir cualquiera.</div>}
+              {!cals.length && <div style={{ fontSize: 11, color: C.dim, padding: "4px 8px 8px", lineHeight: 1.5 }}>Esta red se importó antes de leer los calendarios. Vuelve a importar el GTFS en Planificación («Sustituir red») para elegir cualquiera.</div>}
             </div>
           </div>
           {meses.length > 0 && (
@@ -93,7 +90,7 @@ export function SelectorCalendario({ red, valor, onCambiar, ancho = 300 }) {
                         return (
                           <button key={f} disabled={!c} onClick={() => elegir(c.id)} title={c ? `${fechaLarga(f)} · ${c.nombre}` : `${fechaLarga(f)} · sin servicio en el GTFS`}
                             style={{ height: 20, borderRadius: 4, border: sel ? "1.5px solid #fff" : "1px solid transparent", padding: 0, fontSize: 9.5, fontFamily: mono, cursor: c ? "pointer" : "default",
-                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? "#0d0f14" : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
+                              background: c ? colorDe.get(c.id) + (sel ? "" : "55") : "transparent", color: c ? (sel ? C.input : C.text) : C.dim, fontWeight: sel ? 800 : 400 }}>{i + 1}</button>
                         );
                       })}
                     </div>
@@ -119,7 +116,7 @@ function TablaPasos({ red, linea, sentido, salidas, cfgLinea }) {
   if (!salidas.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Sin expediciones este día en este sentido.</div>;
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
-      {aproximado && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber, borderBottom: `1px solid ${C.border}` }}>Pasos aproximados (repartidos por la distancia entre paradas): vuelve a importar el GTFS en Planning para tener los reales.</div>}
+      {aproximado && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber, borderBottom: `1px solid ${C.border}` }}>Pasos aproximados (repartidos por la distancia entre paradas): vuelve a importar el GTFS en Planificación para tener los reales.</div>}
       <div style={{ overflow: "auto", maxHeight: "calc(100vh - 260px)" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0 }}>
           <thead style={{ position: "sticky", top: 0, zIndex: 2, background: C.surface2 }}>
@@ -189,9 +186,9 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
           {grupos.slice(0, 400).map(g => {
             const fila = (l, variante) => (
               <button key={l.id} onClick={() => { setSel(l.id); setEditando(null); }} style={{ display: "flex", alignItems: "center", gap: 8, width: variante ? "calc(100% - 20px)" : "100%", marginLeft: variante ? 20 : 0, textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
-                {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
+                {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
                 <span style={{ flex: 1, fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(x => x.cabecera).join(" ↔ ")}</span>
-                {editadaEn(l) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+                {editadaEn(l) && <span title="Horarios cambiados a mano en Planificación" style={{ fontSize: 10, color: C.amber }}>✎</span>}
               </button>
             );
             if (g.lineas.length === 1) return fila(g.lineas[0], false);
@@ -201,9 +198,9 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
               <div key={g.clave}>
                 <button onClick={() => setAbiertos(prev => { const n = new Set(prev); if (n.has(g.clave)) n.delete(g.clave); else n.add(g.clave); return n; })}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
-                  <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: "#0d0f14", fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
+                  <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
                   <span style={{ flex: 1, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes</span>
-                  {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planning" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+                  {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planificación" style={{ fontSize: 10, color: C.amber }}>✎</span>}
                 </button>
                 {abierto && g.lineas.map(l => fila(l, true))}
               </div>
@@ -217,7 +214,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
           {!esCalendario(dia) && red.dias?.[dia] && <span style={{ fontSize: 11, color: C.dim }}>día de referencia {new Date(red.dias[dia] + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</span>}
           <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
             {[["hora", "Salidas por hora"], ["parada", "Pasos por parada"]].map(([v, t]) => (
-              <button key={v} onClick={() => setVista(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: vista === v ? "rgba(255,255,255,0.1)" : "none", color: vista === v ? "#fff" : C.muted, fontSize: 11, fontWeight: vista === v ? 600 : 400, fontFamily: font }}>{t}</button>
+              <button key={v} onClick={() => setVista(v)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: vista === v ? alfa(0.1) : "none", color: vista === v ? C.text : C.muted, fontSize: 11, fontWeight: vista === v ? 600 : 400, fontFamily: font }}>{t}</button>
             ))}
           </div>
           {vista === "parada" && linea && linea.sentidos.length > 1 && (
@@ -276,7 +273,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
               return (
                 <div key={s.dir} style={{ background: C.card, border: `1px solid ${editado ? C.amber + "88" : C.border}`, borderRadius: 10, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ minWidth: 34, padding: "2px 6px", borderRadius: 5, background: linea.color, color: "#0d0f14", fontSize: 12, fontWeight: 800, textAlign: "center" }}>{linea.nombre}</span>
+                    <span style={{ minWidth: 34, padding: "2px 6px", borderRadius: 5, background: linea.color, color: C.input, fontSize: 12, fontWeight: 800, textAlign: "center" }}>{linea.nombre}</span>
                     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.dir === 0 ? C.green : C.amber }}>{s.dir === 0 ? "IDA" : "VUELTA"}</span>
                     <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>→ {s.cabecera}</span>
                     <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, fontFamily: mono }}>{salidas.length} salidas</span>
@@ -287,7 +284,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
                       {editable && <button onClick={() => window.confirm("¿Volver a las salidas del GTFS en este sentido y día?") && guardar(s, null)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${C.amber}88`, color: C.amber, borderRadius: 5, padding: "2px 8px", fontSize: 10.5, cursor: "pointer", fontFamily: font }}>Volver a las del GTFS</button>}
                     </div>
                   )}
-                  {aproximado && salidas.length > 0 && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber }}>Horas aproximadas: vuelve a importar el GTFS en Planning para tener las exactas.</div>}
+                  {aproximado && salidas.length > 0 && <div style={{ padding: "6px 14px", fontSize: 10.5, color: C.amber }}>Horas aproximadas: vuelve a importar el GTFS en Planificación para tener las exactas.</div>}
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead><tr>
                       <th style={{ fontSize: 9, color: C.dim, textAlign: "left", padding: "6px 14px", letterSpacing: 1 }}>HORA</th>

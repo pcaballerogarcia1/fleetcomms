@@ -5,11 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { leerKg, resumenPesadas } from "./pesadas.js";
 import { apuntarPesada, borrarPesada, escucharPesadas } from "./pesadas-store.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", orange: "#f59e5b", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();

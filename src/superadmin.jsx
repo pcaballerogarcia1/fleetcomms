@@ -7,20 +7,15 @@ import {
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { PanelSalud } from "./superadmin-salud.jsx";
+import { C, alfa } from "./tema.js";
+import { tono } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25",
-  border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff",
-  green: "#3fcf8e", greenDim: "#0f2a1f",
-  orange: "#f59e5b", red: "#f26d6d", amber: "#f5b84a",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const S = {
   input: {
-    width: "100%", background: "rgba(255,255,255,0.04)",
+    width: "100%", background: alfa(0.04),
     border: `1px solid ${C.border}`, color: C.text,
     padding: "10px 13px", borderRadius: 7, fontSize: 13,
     boxSizing: "border-box", fontFamily: font, outline: "none",
@@ -599,7 +594,7 @@ function SuperAdminPanel({ sesion }) {
         )}
 
         {err && (
-          <div style={{ background: "#3b0000", border: "1px solid #f26d6d", borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: "#f26d6d", fontSize: 13, wordBreak: "break-all" }}>
+          <div style={{ background: tono("#3b0000", "#f8e4e4"), border: `1px solid ${C.red}`, borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: C.red, fontSize: 13, wordBreak: "break-all" }}>
             ⚠ {err}
           </div>
         )}

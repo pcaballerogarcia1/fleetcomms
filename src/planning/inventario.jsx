@@ -112,7 +112,7 @@ export function TabInventario({ layers, projectId, orgId }) {
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px", fontFamily: font }}>
       <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Inventario de {T.elementos}</div>
       <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.55, maxWidth: 900 }}>
-        La ficha de cada {T.elemento}. {ver.volumen ? "Scheduling usa sus litros para saber cuándo se llena el camión, y l" : "L"}a app del conductor recibe sus RFID o códigos: al leer la etiqueta, la parada se marca sola. Los «Retirados» y «Pendientes de instalar» no cuentan en las rutas.
+        La ficha de cada {T.elemento}. {ver.volumen ? "Rutas usa sus litros para saber cuándo se llena el camión, y l" : "L"}a app del conductor recibe sus RFID o códigos: al leer la etiqueta, la parada se marca sola. Los «Retirados» y «Pendientes de instalar» no cuentan en las rutas.
       </div>
       <div style={{ display: "flex", gap: 14, margin: "12px 0", flexWrap: "wrap", fontSize: 12, color: C.muted }}>
         <span><b style={{ color: C.text }}>{res.total}</b> {T.elementos}</span>

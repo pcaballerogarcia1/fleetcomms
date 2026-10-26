@@ -61,7 +61,7 @@ test("de la red GTFS a los turnos, con cochera y un cambio a mano", async ({ pag
   await expect.poll(async () => ((await leer(`planning_depots/${pid}`))?.depots || []).length).toBe(1);
 
   // 4) Scheduling: los dos pasos
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await expect(page.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first()).toBeVisible({ timeout: 60_000 });
   // los km en vacío están en «Todos los indicadores» (arriba solo van los 5 principales)
   await page.getByRole("button", { name: /Todos los indicadores/ }).first().click();
@@ -150,10 +150,10 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   await page.getByRole("button", { name: "Importar", exact: true }).click();
   await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
   // primero se calcula el Scheduling (para que haya un escenario anterior al cambio)
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await expect(page.getByText(/194 viajes/).first()).toBeVisible({ timeout: 60_000 });
   // Planning → Horarios de salida: la de las 06:00 de la ida de la L1 pasa a las 05:45, y se quita otra
-  await page.getByRole("button", { name: "Planning", exact: true }).first().click();
+  await page.getByRole("button", { name: "Planificación", exact: true }).first().click();
   await page.getByRole("button", { name: "Horarios de salida" }).click();
   await page.getByTitle(/^06:00 · pincha/).first().click();
   const caja = page.locator("td input").first(); // la caja de la hora que se está cambiando
@@ -177,13 +177,13 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   await expect(page.getByText(/Se puede relevar en 3 de 4 cabeceras/)).toBeVisible();
   await expect.poll(async () => (await leer(`planning_settings/${pid}`))?.lineasCfg?._relevos?.no || []).toContain("B");
   // el Scheduling avisa y usa las horas nuevas (un viaje menos)
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
-  await expect(page.getByText(/Se ha modificado el Planning/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
+  await expect(page.getByText(/Se ha modificado la planificación/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/193 viajes/).first()).toBeVisible({ timeout: 60_000 });
   // y el escenario está recalculado de verdad (el indicador de viajes, no solo el rótulo de arriba)
   await expect(page.getByText("193", { exact: true }).first()).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Entendido" }).click();
-  await expect(page.getByText(/Se ha modificado el Planning/)).toBeHidden();
+  await expect(page.getByText(/Se ha modificado la planificación/)).toBeHidden();
   expect(errores).toEqual([]);
 });
 
@@ -208,7 +208,7 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   await expect(page.getByText("Aún no hay ningún día publicado")).toBeVisible({ timeout: 30_000 });
 
   // Scheduling → paso 2 → Publicar a Control para hoy
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Publicar a Control" }).click();
@@ -263,7 +263,7 @@ test("publicar a Control: la oficina lo sigue y el conductor coge y empieza su t
   await movil.close();
 
   // Analytics: el análisis de tiempos reales lee el día publicado
-  await page.getByRole("button", { name: "Analytics", exact: true }).first().click();
+  await page.getByRole("button", { name: "Análisis", exact: true }).first().click();
   await page.getByRole("button", { name: "Analizar" }).click();
   await expect(page.getByText("Días publicados", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Puntualidad de salida/).first()).toBeVisible();
@@ -309,25 +309,25 @@ test("crear la red a mano (sin GTFS): paradas en el mapa, ida y vuelta, y el Sch
   // La red ya se ve como cualquier otra, y el Scheduling saca autobuses y turnos
   await page.getByRole("button", { name: "Ver la red" }).click();
   await expect(page.getByText(/Centro – Hospital|Parada 1 ↔ Parada 3|Parada 3 ↔ Parada 1/).first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await expect(page.getByText(/piezas de media|\d+ (partido|refuerzo|mañana|tarde|noche|sin tipo)/).first()).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible();
 
   // Enviar el mes al Rostering: cada día con los turnos de su calendario
-  await page.getByRole("button", { name: "Enviar a Rostering" }).first().click();
+  await page.getByRole("button", { name: "Enviar al cuadrante" }).first().click();
   await expect(page.getByText(/Cada día del mes se cubre con los turnos del calendario/)).toBeVisible();
   await expect(page.getByText("Laborables", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Enviar a Rostering" }).last().click();
+  await page.getByRole("button", { name: "Enviar al cuadrante" }).last().click();
   await expect(page.getByText(/✓ Enviados \d+ turnos/)).toBeVisible({ timeout: 60_000 });
   const roster = await leer(`scheduling_roster/${pid}`);
   expect(roster).toMatchObject({ lineas: true, modo: "libre" });
   expect(roster.cals.map(c => c.id)).toContain("cal:lab");
-  await page.getByRole("button", { name: "Ir a Rostering" }).click();
+  await page.getByRole("button", { name: "Ir al cuadrante" }).click();
   await expect(page.getByText(/turnos\/día/).first()).toBeVisible({ timeout: 30_000 });
 
   // volver a editar: el diseño sigue ahí
-  await page.getByRole("button", { name: "Planning", exact: true }).first().click();
+  await page.getByRole("button", { name: "Planificación", exact: true }).first().click();
   await page.getByRole("button", { name: "Diseñar red" }).click();
   await expect(page.getByText("Diseñar la red")).toBeVisible();
   await expect(page.locator('input[value="Centro – Hospital"]')).toBeVisible();
@@ -358,13 +358,13 @@ test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin c
   await expect(page.getByText(/2 líneas/).first()).toBeVisible({ timeout: 60_000 });
 
   // 1) el mes al Rostering y Optimizar
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await page.getByRole("button", { name: /Trabajadores/ }).first().click();
   await expect(page.locator('.sched-block[draggable="true"]').first()).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Enviar a Rostering" }).first().click();
-  await page.getByRole("button", { name: "Enviar a Rostering" }).last().click();
+  await page.getByRole("button", { name: "Enviar al cuadrante" }).first().click();
+  await page.getByRole("button", { name: "Enviar al cuadrante" }).last().click();
   await expect(page.getByText(/✓ Enviados \d+ turnos/)).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Ir a Rostering" }).click();
+  await page.getByRole("button", { name: "Ir al cuadrante" }).click();
   await expect(page.getByText(/turnos\/día/).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Optimizar", exact: true }).click();
   await expect(page.getByText("Resultado de la optimización")).toBeVisible({ timeout: 30_000 });
@@ -375,7 +375,7 @@ test("cada turno, de un trabajador: Rostering → Control → «Mi turno» sin c
   const conTurnoMasTarde = Object.entries(cuad.dias).filter(([d, x]) => x.t && Number(d) > dia.getDate());
 
   // 2) publicar el día: avisa de que circula el calendario del GTFS, se cambia a él y se publica
-  await page.getByRole("button", { name: "Scheduling", exact: true }).first().click();
+  await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await page.getByRole("button", { name: "Publicar a Control" }).click();
   const cambiar = page.getByRole("button", { name: /^Cambiar a «/ });
   if (await cambiar.count()) {

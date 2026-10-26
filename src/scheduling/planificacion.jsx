@@ -28,6 +28,7 @@ import {
 import {
   BarraHerramientas, ProgresoGeneracion, AvisosEscenario, VentanaPublicar, VentanaHistorial, VentanaSimulador,
 } from "./planificacion-paneles.jsx";
+import { tono } from "../tema.js";
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
@@ -654,7 +655,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           display: "flex", alignItems: "center", gap: 6,
         }}>
           {schedule && <div style={{
-            background: "rgba(23,32,53,0.9)", border: `1px solid ${C.border}`,
+            background: tono("rgba(23,32,53,0.9)", "rgba(255,255,255,0.9)"), border: `1px solid ${C.border}`,
             borderRadius: 8, padding: "5px 12px", fontSize: 11,
             display: "flex", gap: 12, backdropFilter: "blur(4px)",
           }}>
@@ -665,7 +666,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           <button
             onClick={() => setFocusMode(false)}
             style={{
-              padding: "5px 12px", background: "rgba(23,32,53,0.9)", border: `1px solid ${C.border2}`,
+              padding: "5px 12px", background: tono("rgba(23,32,53,0.9)", "rgba(255,255,255,0.9)"), border: `1px solid ${C.border2}`,
               color: C.muted, borderRadius: 8, cursor: "pointer",
               fontFamily: font, fontSize: 11, fontWeight: 600,
               display: "flex", alignItems: "center", gap: 5, backdropFilter: "blur(4px)",
@@ -748,11 +749,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: C.dim }}>
           {!tasks.length
             ? <>
-                <div style={{ fontSize: 13, color: C.muted }}>Importa los datos desde Planning para empezar</div>
-                <div style={{ fontSize: 11 }}>Planning → Timetable → Exportar a Scheduling</div>
+                <div style={{ fontSize: 13, color: C.muted }}>Importa los datos desde Planificación para empezar</div>
+                <div style={{ fontSize: 11 }}>Planificación → Horarios → Exportar a Rutas</div>
               </>
             : <>
-                <div style={{ fontSize: 13, color: C.muted }} title="Cada elemento de Planning (p. ej. cada contenedor) es una parada; los que comparten sitio cuentan como un solo punto en el Timetable.">{tasks.length.toLocaleString()} paradas listas{(() => { const n = new Set(tasks.map(t => t._id)).size; return n < tasks.length ? ` en ${n.toLocaleString()} puntos` : ""; })()}</div>
+                <div style={{ fontSize: 13, color: C.muted }} title="Cada elemento de Planificación (p. ej. cada contenedor) es una parada; los que comparten sitio cuentan como un solo punto en Horarios.">{tasks.length.toLocaleString()} paradas listas{(() => { const n = new Set(tasks.map(t => t._id)).size; return n < tasks.length ? ` en ${n.toLocaleString()} puntos` : ""; })()}</div>
                 <div style={{ fontSize: 11 }}>
                   {(vehicles.length > 0 || workers.length > 0)
                     ? "Pulsa «Generar escenario» para asignar paradas"

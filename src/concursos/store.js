@@ -7,11 +7,12 @@
 import { collection, deleteDoc, deleteField, doc, FieldPath, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
+import { C } from "../tema.js";
 
 export const ESTADOS = [
-  { id: "estudio", nombre: "En estudio", color: "#5b7cfa" },
-  { id: "presentado", nombre: "Presentado", color: "#f5b84a" },
-  { id: "ganado", nombre: "Ganado", color: "#3fcf8e" },
+  { id: "estudio", nombre: "En estudio", color: C.blue },
+  { id: "presentado", nombre: "Presentado", color: C.amber },
+  { id: "ganado", nombre: "Ganado", color: C.green },
   { id: "perdido", nombre: "Perdido", color: "#8b95a5" },
 ];
 export const TIPOS_CONCURSO = [
@@ -177,7 +178,7 @@ export async function volcarInventarioAlMapa(concursoId, { nombre, marcadores, c
   if (capaAnterior) await deleteDoc(doc(db, "planning_layers", capaAnterior)).catch(() => {});
   const id = Date.now() + Math.random();
   const docId = `${c.projectId}_${id}`;
-  const capa = { id, name: `Inventario · ${nombre}`, type: "xlsx", color: "#3fcf8e", visible: true, projectId: c.projectId, orgId: c.espacio, createdAt: serverTimestamp() };
+  const capa = { id, name: `Inventario · ${nombre}`, type: "xlsx", color: C.green, visible: true, projectId: c.projectId, orgId: c.espacio, createdAt: serverTimestamp() };
   if (marcadores.length > 500) {
     const { uploadLayerMarkers } = await import("../layer-store.js");
     const cloud = await uploadLayerMarkers(docId, c.projectId, marcadores);

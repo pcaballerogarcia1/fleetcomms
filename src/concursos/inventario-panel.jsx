@@ -37,7 +37,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
         setProgreso(null); setOcupado("Guardando las coordenadas…");
         await guardarCoordenadas(concursoId, { contenedores, municipio: muni || null, geocodificado: geo });
       }
-      setOcupado("Pasando al mapa del Planning…");
+      setOcupado("Pasando al mapa de Planificación…");
       await volcarInventarioAlMapa(concursoId, { nombre: inventario.nombre, marcadores: marcadoresDe(contenedores), capaAnterior: inventario.capa || null });
       setOcupado(null);
       onVerMapa?.();
@@ -158,7 +158,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
             {inventario.capa
               ? <>En el mapa del Planning{inventario.geocodificado ? <>: <b style={{ color: C.text }}>{inventario.geocodificado.portal}</b> direcciones en su portal{inventario.geocodificado.calle ? <>, <b style={{ color: C.amber }}>{inventario.geocodificado.calle}</b> en el centro de su calle (aproximado)</> : null}{inventario.geocodificado.nada ? <>, <b style={{ color: C.red }}>{inventario.geocodificado.nada}</b> sin encontrar</> : null}.</> : "."}</>
               : yaConCoordenadas === inventario.contenedores.length ? "El listado trae coordenadas: pásalo al mapa para hacer rutas, turnos y cuadrantes como en Proyectos."
-              : "Sitúa cada dirección en el mapa (buscador oficial de direcciones, CartoCiudad) y pásalo al Planning para hacer rutas, turnos y cuadrantes como en Proyectos."}
+              : "Sitúa cada dirección en el mapa (buscador oficial de direcciones, CartoCiudad) y pásalo a Planificación para hacer rutas, turnos y cuadrantes como en Proyectos."}
           </div>
           {yaConCoordenadas < inventario.contenedores.length && (
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.muted }}>

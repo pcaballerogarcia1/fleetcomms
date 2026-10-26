@@ -226,7 +226,7 @@ export function moverViajesTurno(res, claves, turnoDestino) {
     for (const tramo of tramosDe(pz.viajes)) {
       const e = esElegido(tramo);
       if (marca !== null && e !== marca) {
-        if (!puedeRelevar(dondeAcaba(grupo))) return { error: "Para eso habría que relevar en una cabecera donde no se puede (Planning → Puntos de relevo)" };
+        if (!puedeRelevar(dondeAcaba(grupo))) return { error: "Para eso habría que relevar en una cabecera donde no se puede (Planificación → Puntos de relevo)" };
         cerrar();
       }
       marca = e; grupo.push(...tramo);

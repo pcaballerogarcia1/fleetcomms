@@ -12,7 +12,7 @@ test("el administrador recorre todos los módulos sin errores", async ({ page })
   await expect(page.getByText("Proyecto de puntos")).toBeVisible();
   await page.getByText("Abrir proyecto").first().click();
   await page.waitForURL(/\/planning/);
-  for (const [modulo, ruta] of [["Scheduling", "/scheduling"], ["Rostering", "/rostering"], ["Control", "/control"], ["Analytics", "/analytics"], ["Planning", "/planning"]]) {
+  for (const [modulo, ruta] of [["Rutas", "/scheduling"], ["Cuadrante", "/rostering"], ["Control", "/control"], ["Análisis", "/analytics"], ["Planificación", "/planning"]]) {
     await page.getByRole("button", { name: modulo, exact: true }).first().click();
     await page.waitForURL(new RegExp(ruta));
     await page.waitForTimeout(800);

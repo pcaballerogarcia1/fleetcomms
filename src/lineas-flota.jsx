@@ -5,11 +5,9 @@
 // Se guardan en planning_settings.lineasCfg._flota.lista.
 import { useRef, useState } from "react";
 import { TIPOS_VEHICULO } from "./lineas-store.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
@@ -114,7 +112,7 @@ export function FlotaLineas({ cfg, onGuardar }) {
               ))}
             </tbody>
           </table>
-          {!lista.length && <div style={{ padding: 16, fontSize: 12, color: C.dim }}>Aún no hay autobuses. Sube un Excel con tu flota o añádelos a mano. Sin flota, el Scheduling calcula los autobuses que hacen falta sin límite de autonomía.</div>}
+          {!lista.length && <div style={{ padding: 16, fontSize: 12, color: C.dim }}>Aún no hay autobuses. Sube un Excel con tu flota o añádelos a mano. Sin flota, Rutas calcula los autobuses que hacen falta sin límite de autonomía.</div>}
         </div>
       </div>
     </div>

@@ -1,16 +1,22 @@
-/* ── Base visual de Operanzia (tema oscuro refinado, ver src/tema.js) ── */
+/* ── Base visual de Operanzia: aspecto oscuro y claro (ver src/tema.js) ── */
 @import "@fontsource-variable/inter";
 
 :root {
-  --bg: #0b0d12;
-  --card: #12151c;
-  --surface: #181c25;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #e6e8ee;
-  --muted: #9aa3b2;
-  --dim: #5d6574;
-  --accent: #5b7cfa;
+  --bg: #0c0f14;
+  --card: #131821;
+  --surface: #1a202b;
+  --border: rgba(var(--veil), 0.08);
+  --border-strong: rgba(var(--veil), 0.14);
+  --text: #e7eaf0;
+  --muted: #9ba4b3;
+  --dim: #5f6878;
+  --accent: #4f7fe0;
+  --veil: 255, 255, 255;        /* velos y líneas: blanco transparente en oscuro */
+  --fuerte: #ffffff;            /* texto al pasar el ratón / seleccionado */
+  --etiqueta: #c9ced8;
+  --input: #0e1218;
+  --primario: #3f6fd6;
+  --primario-hover: #4b7be0;
   --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: var(--font);
 
@@ -28,6 +34,26 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Aspecto claro (src/tema.js pone data-tema en <html>) */
+:root[data-tema="claro"] {
+  --bg: #f4f5f8;
+  --card: #ffffff;
+  --surface: #eef0f4;
+  --border: rgba(16, 24, 40, 0.11);
+  --border-strong: rgba(16, 24, 40, 0.2);
+  --text: #141b2b;
+  --muted: #545f73;
+  --dim: #8790a1;
+  --accent: #1f4e9c;
+  --veil: 16, 24, 40;
+  --fuerte: #0b1222;
+  --etiqueta: #3c4658;
+  --input: #ffffff;
+  --primario: #1b2a4a;
+  --primario-hover: #23375f;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -55,14 +81,14 @@ input::placeholder, textarea::placeholder { color: var(--dim); opacity: 1; }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; border-radius: 4px; }
 
-::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: #fff; }
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--fuerte); }
 
 /* barras de desplazamiento finas y discretas */
-* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
+* { scrollbar-width: thin; scrollbar-color: rgba(var(--veil), 0.14) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-thumb { background: rgba(var(--veil), 0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--veil), 0.22); background-clip: padding-box; border: 2px solid transparent; }
 
 /* transiciones suaves por defecto en lo que se pulsa */
 button, a, [role="button"] { transition: background-color .12s ease, border-color .12s ease, color .12s ease, opacity .12s ease; }
@@ -85,7 +111,7 @@ code {
 html body { background: var(--bg); color: var(--text); font-family: var(--font); }
 html ::-webkit-scrollbar { width: 10px; height: 10px; }
 html ::-webkit-scrollbar-track { background: transparent; }
-html ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+html ::-webkit-scrollbar-thumb { background: rgba(var(--veil), 0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
 html .planning-map .leaflet-popup-content-wrapper, html .planning-map .leaflet-popup-tip { background: var(--card); color: var(--text); border-color: var(--border); }
 html .planning-map .leaflet-control-zoom a { background: var(--card) !important; color: var(--text) !important; border-color: var(--border) !important; }
 
@@ -96,48 +122,48 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 .op-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 30px; padding: 0 11px; border-radius: 8px; flex-shrink: 0; white-space: nowrap;
-  background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
-  color: #c9ced8; font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em; cursor: pointer;
+  background: rgba(var(--veil), 0.035); border: 1px solid rgba(var(--veil), 0.09);
+  color: var(--etiqueta); font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em; cursor: pointer;
 }
-.op-btn:hover:not(:disabled) { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); color: #fff; }
-.op-btn:active:not(:disabled) { background: rgba(255,255,255,0.1); }
+.op-btn:hover:not(:disabled) { background: rgba(var(--veil), 0.07); border-color: rgba(var(--veil), 0.16); color: var(--fuerte); }
+.op-btn:active:not(:disabled) { background: rgba(var(--veil), 0.1); }
 .op-btn:disabled { opacity: .45; cursor: not-allowed; }
 .op-btn svg { flex-shrink: 0; opacity: .85; }
-.op-btn.op-activo { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); color: #fff; }
-.op-btn.op-ok { color: #3fcf8e; }
+.op-btn.op-activo { background: rgba(var(--veil), 0.09); border-color: rgba(var(--veil), 0.18); color: var(--fuerte); }
+.op-btn.op-ok { color: #2fb57a; }
 .op-primario {
-  background: linear-gradient(180deg, #6a88ff 0%, #5470f0 100%); border-color: rgba(255,255,255,0.12);
-  color: #fff; font-weight: 600; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px rgba(91,124,250,0.28);
+  background: var(--primario); border-color: transparent;
+  color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
-.op-primario:hover:not(:disabled) { background: linear-gradient(180deg, #7893ff 0%, #5d79f5 100%); border-color: rgba(255,255,255,0.2); }
+.op-primario:hover:not(:disabled) { background: var(--primario-hover); border-color: transparent; color: #fff; }
 .op-primario svg { opacity: 1; }
-.op-fantasma { background: transparent; border-color: transparent; color: #9aa3b2; }
-.op-fantasma:hover:not(:disabled) { background: rgba(255,255,255,0.06); border-color: transparent; }
+.op-fantasma { background: transparent; border-color: transparent; color: var(--muted); }
+.op-fantasma:hover:not(:disabled) { background: rgba(var(--veil), 0.06); border-color: transparent; }
 .op-icono { width: 30px; padding: 0; }
-.op-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
-.op-seg > button { height: 24px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #9aa3b2; font-size: 12px; font-weight: 500; cursor: pointer; }
-.op-seg > button:hover { color: #e6e8ee; }
-.op-seg > button.op-on { background: rgba(255,255,255,0.1); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
-.op-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+.op-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(var(--veil), 0.04); border: 1px solid rgba(var(--veil), 0.07); flex-shrink: 0; }
+.op-seg > button { height: 24px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; }
+.op-seg > button:hover { color: var(--text); }
+.op-seg > button.op-on { background: rgba(var(--veil), 0.1); color: var(--fuerte); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.op-sep { width: 1px; height: 18px; background: rgba(var(--veil), 0.08); flex-shrink: 0; }
 @keyframes op-spin { to { transform: rotate(360deg); } }
 .op-girando { animation: op-spin .7s linear infinite; }
 
 /* ── Campos de texto ────────────────────────────────────────────────── */
 .op-input {
   width: 100%; height: 38px; padding: 0 12px; border-radius: 9px;
-  background: #0d0f14; border: 1px solid rgba(255,255,255,0.1); color: #e6e8ee;
+  background: var(--input); border: 1px solid rgba(var(--veil), 0.12); color: var(--text);
   font-size: 13.5px; outline: none; transition: border-color .12s, box-shadow .12s;
 }
-.op-input:hover { border-color: rgba(255,255,255,0.16); }
-.op-input:focus { border-color: rgba(91,124,250,0.7); box-shadow: 0 0 0 3px rgba(91,124,250,0.18); }
-.op-label { display: block; font-size: 12.5px; font-weight: 500; color: #c9ced8; margin-bottom: 6px; }
+.op-input:hover { border-color: rgba(var(--veil), 0.16); }
+.op-input:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.op-label { display: block; font-size: 12.5px; font-weight: 500; color: var(--etiqueta); margin-bottom: 6px; }
 
 /* ── Tarjetas ───────────────────────────────────────────────────────── */
-.op-tarjeta { background: #12151c; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: border-color .15s, box-shadow .15s; }
-.op-tarjeta:hover { border-color: rgba(255,255,255,0.14); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
-.op-tarjeta.op-activa { border-color: rgba(91,124,250,0.55); box-shadow: 0 0 0 1px rgba(91,124,250,0.35), 0 8px 28px rgba(0,0,0,.35); }
+.op-tarjeta { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: border-color .15s, box-shadow .15s; }
+.op-tarjeta:hover { border-color: rgba(var(--veil), 0.14); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+.op-tarjeta.op-activa { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 8px 28px rgba(0,0,0,.35); }
 .op-pastilla { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap; }
-.op-btn-peligro:hover:not(:disabled) { color: #f26d6d !important; background: rgba(242,109,109,0.08) !important; }
+.op-btn-peligro:hover:not(:disabled) { color: #e05555 !important; background: rgba(242,109,109,0.08) !important; }
 
 /* Barra de pestañas que se desplaza en horizontal sin enseñar la barra de desplazamiento */
 .op-sin-barra { scrollbar-width: none; }
@@ -149,3 +175,9 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
   .op-cabecera-migas { order: 2; flex: 1 1 100% !important; padding-bottom: 2px; }
   .op-cabecera-quien { display: none; }
 }
+
+/* sombras más suaves en el aspecto claro */
+:root[data-tema="claro"] .op-tarjeta { box-shadow: 0 1px 2px rgba(16,24,40,.06); }
+:root[data-tema="claro"] .op-tarjeta:hover { box-shadow: 0 8px 24px rgba(16,24,40,.10); }
+:root[data-tema="claro"] .leaflet-popup-content-wrapper, :root[data-tema="claro"] .leaflet-popup-tip { box-shadow: 0 10px 30px rgba(16,24,40,.16); }
+:root[data-tema="claro"] .op-seg > button.op-on { background: #ffffff; box-shadow: 0 1px 2px rgba(16,24,40,.12); }

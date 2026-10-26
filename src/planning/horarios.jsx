@@ -7,6 +7,8 @@ import { logAudit, logAuditGrouped } from "../audit.js";
 import { TT_PAGINA, getBarrio, loadXLSX, normTxt } from "./datos.js";
 import { C, font, mono } from "./estilo.js";
 import { useUltimo } from "../use-ultimo.js";
+import { alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // ── TIMETABLE ROW ─────────────────────────────────────────────────
 function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = null, defaultPrice = null, onPrice }) {
@@ -63,13 +65,13 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
             e.currentTarget.style.background = "transparent";
             e.currentTarget.style.borderColor = "transparent";
           }}
-          title="Nombre del punto — se sincroniza con el mapa y con Scheduling"
+          title="Nombre del punto — se sincroniza con el mapa y con Rutas"
           style={{
             width: "100%", fontWeight: 500, fontSize: 12, color: C.text, marginBottom: 2,
             background: "transparent", border: "1px solid transparent", borderRadius: 4,
             padding: "2px 4px", marginLeft: -4, outline: "none", fontFamily: font,
           }}
-          onFocus={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = C.border2; }}
+          onFocus={e => { e.currentTarget.style.background = alfa(0.05); e.currentTarget.style.borderColor = C.border2; }}
         />
         <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>
           {(() => {
@@ -98,7 +100,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
           onBlur={e => onUpdate({ horaInicio: e.target.value || null })}
           title="Hora exacta obligatoria — si además hay franja horaria, la franja manda"
           style={{
-            width: "100%", background: "rgba(255,255,255,0.04)",
+            width: "100%", background: alfa(0.04),
             border: `1px solid ${localStart ? C.blue + "55" : C.border}`,
             color: localStart ? C.blueText : C.muted,
             padding: "6px 8px", borderRadius: 6, fontSize: 12,
@@ -117,7 +119,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
             onBlur={e => onUpdate({ franjaInicio: e.target.value || null })}
             title="Franja horaria: la parada solo puede hacerse dentro de este rango — el vehículo espera si llega antes, y no se asigna ese día si llegaría tarde"
             style={{
-              width: "100%", background: "rgba(255,255,255,0.04)",
+              width: "100%", background: alfa(0.04),
               border: `1px solid ${franjaIni ? C.green + "55" : C.border}`,
               color: franjaIni ? C.green : C.muted,
               padding: "6px 6px", borderRadius: 6, fontSize: 11,
@@ -132,7 +134,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
             onBlur={e => onUpdate({ franjaFin: e.target.value || null })}
             title="Fin de la franja horaria"
             style={{
-              width: "100%", background: "rgba(255,255,255,0.04)",
+              width: "100%", background: alfa(0.04),
               border: `1px solid ${franjaFin ? C.green + "55" : C.border}`,
               color: franjaFin ? C.green : C.muted,
               padding: "6px 6px", borderRadius: 6, fontSize: 11,
@@ -155,7 +157,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
             }}
             placeholder="—"
             style={{
-              width: 56, background: "rgba(255,255,255,0.04)",
+              width: 56, background: alfa(0.04),
               border: `1px solid ${localDur ? C.amber + "55" : C.border}`,
               color: localDur ? C.amber : C.muted,
               padding: "6px 8px", borderRadius: 6, fontSize: 12,
@@ -182,7 +184,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
               placeholder={defaultPrice != null ? String(defaultPrice) : "—"}
               title={defaultPrice != null ? `Vacío = precio por defecto (${fmtEur(defaultPrice)})` : "Precio de este punto"}
               style={{
-                width: 64, background: "rgba(255,255,255,0.04)",
+                width: 64, background: alfa(0.04),
                 border: `1px solid ${localPrice ? C.green + "55" : C.border}`,
                 color: localPrice ? C.green : C.muted,
                 padding: "6px 8px", borderRadius: 6, fontSize: 12,
@@ -487,7 +489,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
     ws["!cols"] = colWidths;
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Timetable");
+    XLSX.utils.book_append_sheet(wb, ws, "Horarios");
     XLSX.writeFile(wb, barrioFiltro ? `timetable_${barrioFiltro.replace(/\s+/g, "_")}.xlsx` : "timetable.xlsx");
   }
 
@@ -588,7 +590,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
           <span style={{ fontSize: 11, color: C.muted }}>puntos</span>
           {/* varios elementos en el mismo sitio (una isla de contenedores) son un punto aquí y una parada cada uno en Scheduling */}
           {!isLarge && totalMarkers > effectiveEntries.length && (
-            <span style={{ fontSize: 11, color: C.dim }} title="Los elementos con las mismas coordenadas son un solo punto en el Timetable. En Scheduling cada uno es una parada.">
+            <span style={{ fontSize: 11, color: C.dim }} title="Los elementos con las mismas coordenadas son un solo punto en Horarios. En Rutas cada uno es una parada.">
               · {totalMarkers.toLocaleString()} elementos (algunos en el mismo sitio)
             </span>
           )}
@@ -647,7 +649,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 padding: "6px 12px", borderRadius: 7, cursor: "pointer",
                 background: showDurPanel ? "rgba(245,184,74,0.15)" : "rgba(245,184,74,0.07)",
                 border: `1px solid ${showDurPanel ? "rgba(245,184,74,0.5)" : "rgba(245,184,74,0.22)"}`,
-                color: "#f5b84a", fontSize: 12, fontWeight: 500,
+                color: C.amber, fontSize: 12, fontWeight: 500,
                 fontFamily: font, transition: "all .15s",
               }}
               onMouseEnter={e => { e.currentTarget.style.background = "rgba(245,184,74,0.15)"; }}
@@ -713,13 +715,13 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               color: C.blueText, fontSize: 12, fontWeight: 500,
               fontFamily: font, transition: "all .15s", textDecoration: "none",
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = "#263166"; }}
+              onMouseEnter={e => { e.currentTarget.style.background = tono("#263166", "#e7e9f6"); }}
               onMouseLeave={e => { e.currentTarget.style.background = C.blueDim; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
               </svg>
-              Scheduling
+              Rutas
             </a>
           </div>
         )}
@@ -782,10 +784,10 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
           background: "rgba(245,184,74,0.05)", flexShrink: 0,
           display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
         }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f5b84a" strokeWidth="2" style={{ flexShrink: 0 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          <span style={{ fontSize: 13, color: "#f5b84a", fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: C.amber, fontWeight: 600 }}>
             Duración por parada
           </span>
           <span style={{ fontSize: 12, color: C.muted }}>
@@ -815,7 +817,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 padding: "7px 16px", borderRadius: 7, cursor: "pointer",
                 background: applyingDur ? C.surface2 : "rgba(245,184,74,0.15)",
                 border: `1px solid rgba(245,184,74,0.4)`,
-                color: "#f5b84a", fontSize: 12, fontWeight: 600,
+                color: C.amber, fontSize: 12, fontWeight: 600,
                 fontFamily: font, transition: "all .15s",
                 opacity: applyingDur ? 0.6 : 1,
               }}

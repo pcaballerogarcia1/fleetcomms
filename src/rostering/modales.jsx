@@ -178,7 +178,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
           {lectura && (
             <div style={{ border: `1px solid ${C.blue}55`, background: `${C.blue}10`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
               {lectura.sinTexto ? (
-                <div style={{ fontSize: 12, color: C.amber || "#f5b84a", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: C.amber || C.amber, lineHeight: 1.5 }}>
                   Este PDF es una imagen escaneada: no tiene texto que leer. Rellena las reglas a mano con el PDF al lado, o
                   busca la versión en texto del convenio en el BOE o el boletín de tu provincia.
                 </div>
@@ -302,7 +302,7 @@ export function PublishModal({ targets, mes, onClose, onConfirm }) {
   const [trabajo, setTrabajo] = useState(() => trabajoRecordado(tipo));
   const names = targets.map(w => [w.nombre, w.apellidos].filter(Boolean).join(" "));
   return (
-    <ModalShell title="Publicar en Rutas" onClose={onClose} width={440}>
+    <ModalShell title="Enviar a conductores" onClose={onClose} width={440}>
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
         {targets.length === 1 ? names[0] : `${targets.length} trabajadores`} · {mes}
       </div>
@@ -341,7 +341,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
     <ModalShell title="Resultado de la optimización" onClose={onClose} width={560}>
       <div style={{
         fontSize: 13, fontWeight: 600, marginBottom: 12,
-        color: allCovered ? "#3fcf8e" : "#f5b84a",
+        color: allCovered ? C.green : C.amber,
       }}>
         {result.covered} de {result.total} turnos cubiertos
         {result.outOfMonth > 0 && <span style={{ color: C.dim, fontWeight: 400, fontSize: 11 }}> · {result.outOfMonth} fuera de este mes (no se optimizan)</span>}
@@ -406,7 +406,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
                 <td style={{ padding: "3px 8px" }}>{nameOf(s.id)}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.hours} / {s.maxHoras || "—"}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.days}</td>
-                <td style={{ padding: "3px 8px", textAlign: "right", color: rules.maxDiasSeguidos && s.maxRun > rules.maxDiasSeguidos ? "#f26d6d" : C.text }}>{s.maxRun}</td>
+                <td style={{ padding: "3px 8px", textAlign: "right", color: rules.maxDiasSeguidos && s.maxRun > rules.maxDiasSeguidos ? C.red : C.text }}>{s.maxRun}</td>
                 <td style={{ padding: "3px 8px", textAlign: "right" }}>{s.weekends}</td>
               </tr>
             ))}

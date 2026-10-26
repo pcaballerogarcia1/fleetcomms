@@ -7,11 +7,12 @@ import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 import { C, barrioColor, font } from "./estilo.js";
 import { SECTORES, sectorDe } from "../sector.js";
+import { alfa } from "../tema.js";
 
 // ── TAB PROYECTOS ─────────────────────────────────────────────────
 const PROJECT_STATUS = {
   nuevo:        { label: "Nuevo",       color: C.muted },
-  con_planning: { label: "Planning",    color: C.blue  },
+  con_planning: { label: "Planificación",    color: C.blue  },
   schedulado:   { label: "Schedulado",  color: C.green },
   publicado:    { label: "Publicado",   color: C.amber },
 };
@@ -25,7 +26,7 @@ const TIPOS_PROYECTO = [
   { id: "lineas", nombre: "Líneas regulares", detalle: "Autobuses: líneas con ida y vuelta, horarios y tiempos de recorrido" },
 ];
 
-const PROJECT_COLORS = ["#5b7cfa","#3fcf8e","#f59e5b","#f26d6d","#a78bfa","#f5b84a","#f472b6","#22d3ee"];
+const PROJECT_COLORS = [C.blue,C.green,C.orange,C.red,C.violet,C.amber,"#f472b6","#22d3ee"];
 
 export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin }) {
   const [projects,    setProjects]    = useState([]);
@@ -205,7 +206,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       style={{
                         width: 20, height: 20, borderRadius: "50%",
                         background: p.color || C.surface2,
-                        border: `1px solid ${p.color ? "rgba(255,255,255,0.5)" : C.border2}`,
+                        border: `1px solid ${p.color ? alfa(0.5) : C.border2}`,
                         cursor: "pointer", padding: 0,
                       }}
                     />
@@ -231,7 +232,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                         <button key={c} onClick={() => setProjectColor(p._id, c)} title={c}
                           style={{
                             width: 18, height: 18, borderRadius: "50%", background: c, cursor: "pointer", padding: 0,
-                            border: p.color === c ? "2px solid #fff" : "1px solid rgba(255,255,255,0.3)",
+                            border: p.color === c ? "2px solid #fff" : `1px solid ${alfa(0.3)}`,
                           }} />
                       ))}
                     </div>
@@ -240,8 +241,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 </div>
 
                 {/* Planning section */}
-                <div style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planning</div>
+                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
+                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planificación</div>
                   {p.tipo === "lineas" ? (
                     p.redResumen ? (
                       <div>
@@ -253,7 +254,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin red — importa el GTFS en Planning</div>
+                      <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin red — importa el GTFS en Planificación</div>
                     )
                   ) : p.planning ? (
                     <div>
@@ -267,13 +268,13 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       </div>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin planning — importa desde Planning</div>
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin planning — importa desde Planificación</div>
                   )}
                 </div>
 
                 {/* Scheduling section */}
-                <div style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Scheduling</div>
+                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
+                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Rutas</div>
                   {p.scheduling ? (
                     <div>
                       <div style={{ display: "flex", gap: 20 }}>
@@ -304,7 +305,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                           <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Vehículos</div>
                           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                             {p.scheduling.vehicles.slice(0, 8).map((v, i) => (
-                              <span key={v.nombre + i} title={v.turno || ""} style={{ fontSize: 9, background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 6px" }}>{v.nombre}</span>
+                              <span key={v.nombre + i} title={v.turno || ""} style={{ fontSize: 9, background: alfa(0.05), border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 6px" }}>{v.nombre}</span>
                             ))}
                             {p.scheduling.vehicles.length > 8 && (
                               <span style={{ fontSize: 9, color: C.dim, padding: "1px 6px" }}>+{p.scheduling.vehicles.length - 8} más</span>
@@ -314,7 +315,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       )}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{p.tipo === "lineas" ? "Genera vehículos y turnos en Scheduling" : "Sin schedule — genera el VRP"}</div>
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{p.tipo === "lineas" ? "Genera vehículos y turnos en Rutas" : "Sin schedule — genera el VRP"}</div>
                   )}
                 </div>
 

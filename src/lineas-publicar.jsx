@@ -9,11 +9,10 @@ import { loadRosterMonth } from "./roster-store.js";
 import { diaDeFecha, nombreDiaRoster } from "./lineas-rostering.js";
 import { nombreDia } from "./lineas-sched.js";
 import { logAudit } from "./audit.js";
+import { C } from "./tema.js";
+import { tono } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 const fechaTxt = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 const irAControl = () => { window.history.pushState({}, "", "/control"); window.dispatchEvent(new PopStateEvent("popstate")); };
@@ -42,7 +41,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
         const [y, m] = fecha.split("-").map(Number);
         const { asignaciones } = await loadRosterMonth(orgId, y, m);
         roster = await aplicarRosterAlServicio({ _id: sid, fecha, dia }, orgId, asignaciones, await leerTrabajadores(orgId));
-      } catch (e) { console.error("Rostering → servicio:", e); roster = { error: e.message || String(e) }; }
+      } catch (e) { console.error("Cuadrante → servicio:", e); roster = { error: e.message || String(e) }; }
       logAudit({ modulo: "Scheduling", accion: "Publicó el servicio de líneas a Control", detalle: `${fechaTxt(fecha)} · ${nombreDia(dia, red)} · ${servicio.resumen.turnos} turnos${roster?.asignados ? ` · ${roster.asignados} con trabajador del Rostering` : ""}` });
       setEstado({ ok: true, roster });
     } catch (e) {
@@ -57,7 +56,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
     } catch (e) { alert("No se pudo quitar: " + (e.message || e)); }
   }
 
-  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : "#222c58") : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
   const r = servicio.resumen;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCerrar}>
@@ -77,7 +76,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
                     {estado.roster.sinUsuario > 0 && <span style={{ color: C.amber }}> {estado.roster.sinUsuario} de esos trabajadores no tienen usuario de la app vinculado (se vincula en Rostering, columna «Rutas»).</span>}
                     {estado.roster.asignados < r.turnos && " El resto los puede coger cualquier conductor en el móvil."}
                   </>
-                : "El Rostering no tiene trabajadores para ese día (envía el mes desde «Enviar a Rostering» y optimiza): los conductores cogerán su turno en el móvil, en «Mi turno»."}
+                : "El cuadrante no tiene trabajadores para ese día (envía el mes desde «Enviar al cuadrante» y optimiza): los conductores cogerán su turno en el móvil, en «Mi turno»."}
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button onClick={() => { onCerrar(); irAControl(); }} style={btn(true)}>Ver en Control</button>

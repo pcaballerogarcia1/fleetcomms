@@ -6,11 +6,9 @@
 // Se guardan en planning_settings.lineasCfg._vacios.pares: { "a|b": [km, min, "c" | "m"] }.
 import { useMemo, useState } from "react";
 import { cabecerasDeRed, ID_COCHERA, PARAMS_DEFECTO } from "./lineas-sched.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  blue: "#5b7cfa", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d", text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -126,7 +124,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
             <tbody>
               {vis.slice(0, 600).map(r => {
                 const v = pares[r.clave], est = estimado(r), ed = editando?.clave === r.clave;
-                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 9.5, fontWeight: 700, color: "#f59e5b", border: "1px solid #f59e5b88", borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
+                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 9.5, fontWeight: 700, color: C.orange, border: `1px solid ${C.orange}88`, borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
                 return (
                   <tr key={r.clave}>
                     <td style={td}>{pinta(r.a)}</td>

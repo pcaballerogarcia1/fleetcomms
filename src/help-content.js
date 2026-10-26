@@ -19,7 +19,7 @@ export const AYUDA = {
     },
     {
       q: "¿Puedo importar un GTFS de autobuses aquí?",
-      a: "No: las redes de autobuses (GTFS) van en un proyecto de \"Líneas regulares\", que tiene su propio Planning con ida y vuelta, tiempos de recorrido y tipos de vehículo por línea. Créalo desde Proyectos → \"+ Nuevo proyecto\" eligiendo \"Líneas regulares\". Las capas GTFS importadas antes en este Planning se siguen viendo.",
+      a: "No: las redes de autobuses (GTFS) van en un proyecto de \"Líneas regulares\", que tiene su propia planificación con ida y vuelta, tiempos de recorrido y tipos de vehículo por línea. Créalo desde Proyectos → \"+ Nuevo proyecto\" eligiendo \"Líneas regulares\". Las capas GTFS importadas antes en esta planificación se siguen viendo.",
       tags: "gtfs autobús autobuses líneas red transporte zip operador",
     },
     {
@@ -43,15 +43,15 @@ export const AYUDA = {
       pasos: [
         "Pulsa \"+\" en la cabecera de Depots y escribe latitud, longitud y nombre, o usa \"Importar CSV / KML / Excel\".",
         "Aparece en el mapa como una casa naranja.",
-        "Después, en Scheduling → Vehículos, asígnalo a cada vehículo con \"Importar desde Planning\".",
+        "Después, en Rutas → Vehículos, asígnalo a cada vehículo con \"Importar desde Planificación\".",
       ],
       tags: "base nave planta cochera depot salida",
     },
     {
       q: "¿Cómo pongo franjas horarias a unas paradas?",
-      a: "En la pestaña Timetable. Una franja es un rango en el que se puede hacer la parada; la hora de inicio es una hora exacta. Si hay las dos, manda la franja.",
+      a: "En la pestaña Horarios. Una franja es un rango en el que se puede hacer la parada; la hora de inicio es una hora exacta. Si hay las dos, manda la franja.",
       pasos: [
-        "Ve a la pestaña Timetable (puedes filtrar por barrio en el panel izquierdo).",
+        "Ve a la pestaña Horarios (puedes filtrar por barrio en el panel izquierdo).",
         "En la fila de la parada, rellena \"Franja horaria\" (inicio y fin) o \"Hora inicio\", y la \"Duración\".",
         "Se guarda solo al salir del campo.",
       ],
@@ -59,14 +59,14 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo cambio la duración de todas las paradas a la vez?",
-      a: "En Timetable, botón \"Duración\": pones los minutos y pulsas \"Aplicar a todos\".",
+      a: "En Horarios, botón \"Duración\": pones los minutos y pulsas \"Aplicar a todos\".",
       tags: "minutos por parada tiempo servicio",
     },
     {
       q: "¿Cómo edito los horarios en Excel y los vuelvo a subir?",
-      a: "Exporta el Timetable, edítalo fuera y vuelve a importarlo. La app reconoce cada parada por sus coordenadas.",
+      a: "Exporta Horarios, edítalo fuera y vuelve a importarlo. La app reconoce cada parada por sus coordenadas.",
       pasos: [
-        "En Timetable pulsa \"Excel\" para descargarlo.",
+        "En Horarios pulsa \"Excel\" para descargarlo.",
         "Cambia horas, franjas o duraciones sin tocar la columna Coordenadas.",
         "Pulsa \"Importar\" y elige el archivo; al terminar verás cuántas paradas se actualizaron.",
       ],
@@ -74,7 +74,7 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo pongo precio a los puntos para la facturación?",
-      a: "Solo administradores. En Timetable, con \"€ Precio\" puedes fijar un precio por defecto, aplicar un precio a todos los puntos de un barrio o poner precio a un punto concreto. Se usa en Analytics → Facturación.",
+      a: "Solo administradores. En Horarios, con \"€ Precio\" puedes fijar un precio por defecto, aplicar un precio a todos los puntos de un barrio o poner precio a un punto concreto. Se usa en Análisis → Facturación.",
       tags: "precio euros facturación importe tarifa",
     },
     {
@@ -94,7 +94,7 @@ export const AYUDA = {
       q: "¿Cómo genero un escenario?",
       a: "Necesitas paradas importadas y al menos un vehículo o trabajador dado de alta.",
       pasos: [
-        "En VRP / Gantt pulsa \"Importar desde Planning\".",
+        "En VRP / Gantt pulsa \"Importar desde Planificación\".",
         "Da de alta vehículos (con su depósito y turno) en la pestaña Vehículos y, si quieres, conductores en Trabajadores.",
         "Revisa las \"Restricciones\" (ventana horaria, duración máxima de turno, días máximos…).",
         "Pulsa \"Generar escenario\" y espera a que termine la barra de progreso sin recargar la página.",
@@ -103,14 +103,14 @@ export const AYUDA = {
     },
     {
       q: "El botón \"Generar escenario\" está desactivado",
-      a: "Falta importar las paradas o no hay ningún vehículo ni trabajador dado de alta. Pulsa \"Importar desde Planning\" y añade al menos un recurso.",
+      a: "Falta importar las paradas o no hay ningún vehículo ni trabajador dado de alta. Pulsa \"Importar desde Planificación\" y añade al menos un recurso.",
       tags: "gris deshabilitado no puedo generar",
     },
     {
       q: "¿Por qué me quedan paradas sin asignar?",
       a: "Suele ser por franjas horarias muy estrechas que ninguna ruta puede cumplir, o por límites ajustados en Restricciones.",
       pasos: [
-        "Mira las paradas del panel \"Sin asignar\" (abajo): si tienen franja horaria, amplíala en Planning → Timetable.",
+        "Mira las paradas del panel \"Sin asignar\" (abajo): si tienen franja horaria, amplíala en Planificación → Horarios.",
         "Sube \"Días máximos de escenario\" o la \"Duración máxima de turno\" en Restricciones, o añade vehículos.",
         "También puedes arrastrar una parada sin asignar a la fila de un vehículo.",
       ],
@@ -152,7 +152,7 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo vuelvo a una versión anterior del escenario?",
-      a: "Botón \"Historial\" de la barra de Scheduling → \"Puntos de restauración\" → \"Restaurar\" en la versión que quieras.",
+      a: "Botón \"Historial\" de la barra de Rutas → \"Puntos de restauración\" → \"Restaurar\" en la versión que quieras.",
       pasos: [
         "Se guarda una versión antes de volver a generar, antes de restaurar, antes de guardar encima de otra persona y cada 30 min de edición (máximo 15).",
         "En \"Resumen de cada generación\" puedes comparar los indicadores de cada generación.",
@@ -171,17 +171,17 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo envío las rutas a los conductores?",
-      a: "Con \"Publicar en Rutas\": se crea un plan por vehículo y día que el conductor ve en su móvil.",
+      a: "Con \"Enviar a conductores\": se crea un plan por vehículo y día que el conductor ve en su móvil.",
       pasos: [
-        "Pulsa \"Publicar en Rutas\".",
+        "Pulsa \"Enviar a conductores\".",
         "Elige el tipo de plan y el mes.",
-        "Pulsa \"Publicar planes\". Los días en que el conductor no está disponible según Rostering se omiten.",
+        "Pulsa \"Publicar planes\". Los días en que el conductor no está disponible según Cuadrante se omiten.",
       ],
       tags: "publicar planes app conductor móvil rutas",
     },
     {
       q: "Aparece un aviso de \"Conflictos\"",
-      a: "Un conductor tiene ruta un día en que Rostering lo marca como Libre o Baja. Corrige su celda en Rostering si sí trabaja, o reasigna esa ruta a otro conductor o regenera el escenario.",
+      a: "Un conductor tiene ruta un día en que el cuadrante lo marca como Libre o Baja. Corrige su celda en el cuadrante si sí trabaja, o reasigna esa ruta a otro conductor o regenera el escenario.",
       tags: "conflicto baja libre rostering conductor",
     },
     {
@@ -215,9 +215,9 @@ export const AYUDA = {
     },
     {
       q: "¿Qué hace el botón \"Optimizar\"?",
-      a: "Rellena el cuadrante con los turnos del escenario de Scheduling. No toca lo que has escrito a mano.",
+      a: "Rellena el cuadrante con los turnos del escenario de Rutas. No toca lo que has escrito a mano.",
       pasos: [
-        "Necesitas un escenario generado en Scheduling para ese proyecto y mes.",
+        "Necesitas un escenario generado en Rutas para ese proyecto y mes.",
         "En modo libre asigna trabajador y vehículo a cada turno respetando las \"Reglas\"; esas celdas se marcan como \"Asignado por Optimizar\".",
         "Si editas una de esas celdas a mano, deja de ser de Optimizar. Al volver a optimizar solo se recalcula lo que puso la optimización anterior.",
       ],
@@ -230,7 +230,7 @@ export const AYUDA = {
     },
     {
       q: "\"Optimizar\" dice que no hay escenario o no hay turnos",
-      a: "Genera antes el escenario en Scheduling para ese proyecto y mes. Si el escenario es de otro mes, cambia el mes del cuadrante con ‹ ›.",
+      a: "Genera antes el escenario en Rutas para ese proyecto y mes. Si el escenario es de otro mes, cambia el mes del cuadrante con ‹ ›.",
       tags: "error optimizar sin escenario",
     },
     {
@@ -268,7 +268,7 @@ export const AYUDA = {
     },
     {
       q: "No veo a ningún conductor en el mapa",
-      a: "El conductor tiene que tener abierta la app de campo en Rutas y haber aceptado el permiso de ubicación del móvil. Aunque salga desconectado puede seguir marcando paradas y fichando.",
+      a: "El conductor tiene que tener abierta la app de conductores y haber aceptado el permiso de ubicación del móvil. Aunque salga desconectado puede seguir marcando paradas y fichando.",
       tags: "no aparece conductor desconectado ubicación",
     },
     {
@@ -288,12 +288,12 @@ export const AYUDA = {
     },
     {
       q: "¿Puedo cambiar un plan desde Control?",
-      a: "No. Control solo muestra lo que pasa en campo. Los planes se crean desde Scheduling con \"Publicar en Rutas\".",
+      a: "No. Control solo muestra lo que pasa en campo. Los planes se crean desde Rutas con \"Enviar a conductores\".",
       tags: "editar plan cambiar",
     },
     {
       q: "Un conductor no ve ningún plan en su móvil",
-      a: "Comprueba por este orden: que se publicó con \"Publicar en Rutas\"; que el mes publicado es el actual; que el conductor tiene vinculado en Trabajadores el mismo vehículo; y que su cuenta está activa.",
+      a: "Comprueba por este orden: que se publicó con \"Enviar a conductores\"; que el mes publicado es el actual; que el conductor tiene vinculado en Trabajadores el mismo vehículo; y que su cuenta está activa.",
       tags: "conductor no ve plan app vacía",
     },
   ],
@@ -302,7 +302,7 @@ export const AYUDA = {
   planning_lineas: [
     {
       q: "¿Cómo pongo las cocheras?",
-      a: "En el panel izquierdo, \"Cocheras\" → \"+ Añadir\" y pincha en el mapa donde está. Ponle nombre en la lista y arrástrala en el mapa para moverla. En la ficha de cada línea (pestaña Vehículos) puedes fijar su cochera; si no, el Scheduling usa la más cercana. Sin cocheras no se calculan las salidas y vueltas a cochera ni sus km en vacío.",
+      a: "En el panel izquierdo, \"Cocheras\" → \"+ Añadir\" y pincha en el mapa donde está. Ponle nombre en la lista y arrástrala en el mapa para moverla. En la ficha de cada línea (pestaña Vehículos) puedes fijar su cochera; si no, Rutas usa la más cercana. Sin cocheras no se calculan las salidas y vueltas a cochera ni sus km en vacío.",
       tags: "cochera cocheras depósito garaje añadir mover vacío",
     },
     {
@@ -330,7 +330,7 @@ export const AYUDA = {
       a: "Pestaña \"Tiempos\" de la línea: minutos de cabecera a cabecera en cada franja horaria, con la mediana de los viajes de un laborable. Si un valor no te cuadra, escríbelo encima y queda como corregido (en ámbar); vacíalo para volver al calculado.",
       pasos: [
         "La regulación en cabecera es el margen mínimo entre la llegada de un viaje y la salida del siguiente.",
-        "Estos tiempos y la regulación son los que usará el Scheduling de líneas.",
+        "Estos tiempos y la regulación son los que usará las rutas de líneas.",
       ],
       tags: "tiempo recorrido franja hora punta valle regulación cabecera minutos corregir",
     },
@@ -340,8 +340,8 @@ export const AYUDA = {
       tags: "tipología vehículo tipo autobús articulado midibús eléctrico preferente",
     },
     {
-      q: "¿Por qué no veo Timetable ni los puntos del Planning normal?",
-      a: "Porque este proyecto es de \"Líneas regulares\": el Planning de puntos (residuos, reparto…) es para otro tipo de proyecto. El tipo se elige al crear el proyecto.",
+      q: "¿Por qué no veo Horarios ni los puntos de Planificación normal?",
+      a: "Porque este proyecto es de \"Líneas regulares\": la planificación de puntos (residuos, reparto…) es para otro tipo de proyecto. El tipo se elige al crear el proyecto.",
       tags: "timetable puntos residuos tipo proyecto",
     },
   ],
@@ -373,7 +373,7 @@ export const AYUDA = {
     },
     {
       q: "¿Cómo se calculan los km en vacío?",
-      a: "Con las cocheras del Planning: cada bloque sale de la cochera de su línea (la fijada en su ficha o la más cercana) hasta la primera cabecera y vuelve a ella al acabar. A eso se suman los vacíos entre cabeceras. Los vacíos los conduce el conductor y cuentan como trabajo; salen en el Gantt en gris rayado. La distancia es la línea recta por el factor de rodeo, a la velocidad en vacío (los dos en Restricciones). La eficiencia de vehículo es km con viajeros / km totales, y el coste usa los km totales.",
+      a: "Con las cocheras de Planificación: cada bloque sale de la cochera de su línea (la fijada en su ficha o la más cercana) hasta la primera cabecera y vuelve a ella al acabar. A eso se suman los vacíos entre cabeceras. Los vacíos los conduce el conductor y cuentan como trabajo; salen en el Gantt en gris rayado. La distancia es la línea recta por el factor de rodeo, a la velocidad en vacío (los dos en Restricciones). La eficiencia de vehículo es km con viajeros / km totales, y el coste usa los km totales.",
       tags: "vacío vacíos cochera depósito km kilómetros salida vuelta eficiencia",
     },
     {
@@ -383,7 +383,7 @@ export const AYUDA = {
     },
     {
       q: "Sale un aviso de horarios aproximados",
-      a: "La red se importó antes de que se guardaran las horas de salida de cada viaje, así que se reparten entre la primera y la última. Vuelve a importar el GTFS en Planning (\"Sustituir red\") para usar los horarios exactos; la configuración de las líneas se conserva.",
+      a: "La red se importó antes de que se guardaran las horas de salida de cada viaje, así que se reparten entre la primera y la última. Vuelve a importar el GTFS en Planificación (\"Sustituir red\") para usar los horarios exactos; la configuración de las líneas se conserva.",
       tags: "aproximado horarios salidas reimportar",
     },
   ],
@@ -403,7 +403,7 @@ export const AYUDA = {
       q: "¿Cómo funciona la Facturación?",
       a: "Solo la ven los administradores. Cada parada tiene un precio (el suyo o el de por defecto). Cuando el conductor la marca como hecha, su importe pasa de Pendiente a Facturado.",
       pasos: [
-        "Pon los precios en Planning → Timetable → \"€ Precio\".",
+        "Pon los precios en Planificación → Horarios → \"€ Precio\".",
         "\"Previsto del mes\" es el importe de todas las paradas de los planes del mes.",
         "Las paradas sin precio no cuentan; la pantalla dice cuántas son.",
       ],
@@ -427,7 +427,7 @@ export const AYUDA = {
   ],
 };
 
-export const TITULO = { planning: "Planning", scheduling: "Scheduling", planning_lineas: "Planning de líneas", scheduling_lineas: "Scheduling de líneas", rostering: "Rostering", control: "Control", analytics: "Analytics" };
+export const TITULO = { planning: "Planificación", scheduling: "Rutas", planning_lineas: "Planificación de líneas", scheduling_lineas: "Rutas de líneas", rostering: "Cuadrante", control: "Control", analytics: "Análisis" };
 
 const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 

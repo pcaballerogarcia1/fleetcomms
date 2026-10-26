@@ -8,11 +8,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { watchMisTurnos, cogerTurno, dejarTurno, empezarTurno, terminarTurno, guardarReal, escribirPosicion } from "./lineas-servicio-store.js";
 import { minutosDesde, hhmm, avanzar, retrasoActual, viajeActual, estadoPuntualidad, COLOR_PUNTUALIDAD, textoRetraso, servicioVigente, fechaLocal } from "./lineas-servicio.js";
 import { proximosTurnos } from "./lineas-rostering.js";
+import { C } from "./tema.js";
 
-const C = {
-  bg: "#0b0d12", card: "#12151c", surface2: "#181c25", border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.14)",
-  text: "#e6e8ee", muted: "#9aa3b2", dim: "#5d6574", blue: "#5b7cfa", blueDim: "#1a2142", blueText: "#b4c3ff", green: "#3fcf8e", amber: "#f5b84a", red: "#f26d6d",
-};
+
 const font = "var(--font)";
 const mono = "var(--mono)";
 const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -42,7 +40,7 @@ function ListaTurnos({ servicio, sesion, onError }) {
               <div style={{ fontSize: 14, color: C.text, fontFamily: mono }}>{hhmm(t.inicio)} – {hhmm(t.fin)}</div>
               <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.tipo ? `${t.tipo} · ` : ""}Bus {(t.buses || []).join(" + ")} · líneas {(t.lineas || []).join(", ")}</div>
             </div>
-            <button onClick={() => coger(t)} disabled={!!cogiendo} style={{ padding: "10px 14px", borderRadius: 9, border: "none", background: C.blue, color: "#0d0f14", fontWeight: 700, fontSize: 13.5, fontFamily: font, cursor: "pointer", opacity: cogiendo && cogiendo !== t.id ? 0.5 : 1 }}>{cogiendo === t.id ? "…" : "Coger"}</button>
+            <button onClick={() => coger(t)} disabled={!!cogiendo} style={{ padding: "10px 14px", borderRadius: 9, border: "none", background: C.blue, color: C.input, fontWeight: 700, fontSize: 13.5, fontFamily: font, cursor: "pointer", opacity: cogiendo && cogiendo !== t.id ? 0.5 : 1 }}>{cogiendo === t.id ? "…" : "Coger"}</button>
           </div>
         ))}
         {!lista.length && <div style={{ padding: 20, fontSize: 13, color: C.muted, textAlign: "center" }}>Ningún turno con «{q}».</div>}
@@ -120,7 +118,7 @@ function HojaTurno({ servicio, turno, sesion }) {
   const est = estadoPuntualidad(retraso);
   const salt = new Set(real.saltados || []);
   const primero = turno.viajes[0];
-  const btnGrande = color => ({ width: "100%", padding: "16px", borderRadius: 12, border: "none", background: color, color: "#0d0f14", fontSize: 17, fontWeight: 800, fontFamily: font, cursor: "pointer" });
+  const btnGrande = color => ({ width: "100%", padding: "16px", borderRadius: 12, border: "none", background: color, color: C.input, fontSize: 17, fontWeight: 800, fontFamily: font, cursor: "pointer" });
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
@@ -143,7 +141,7 @@ function HojaTurno({ servicio, turno, sesion }) {
           {v ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {!v.v && <span style={{ padding: "3px 9px", borderRadius: 7, background: v.color, color: "#0d0f14", fontWeight: 800, fontSize: 16 }}>{v.l}</span>}
+                {!v.v && <span style={{ padding: "3px 9px", borderRadius: 7, background: v.color, color: C.input, fontWeight: 800, fontSize: 16 }}>{v.l}</span>}
                 <span style={{ fontSize: 13, color: C.muted }}>Bus {v.bus}</span>
                 <span style={{ marginLeft: "auto", fontSize: 22, fontWeight: 800, color: COLOR_PUNTUALIDAD[est], fontFamily: mono }}>{retraso == null ? "…" : textoRetraso(retraso)}</span>
               </div>
@@ -180,7 +178,7 @@ function HojaTurno({ servicio, turno, sesion }) {
               {hueco >= 15 && <div style={{ padding: "6px 8px", fontSize: 12, color: C.muted }}><Coffee size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Pausa de {hueco >= 60 ? `${Math.floor(hueco / 60)} h ${hueco % 60 ? `${hueco % 60} min` : ""}` : `${hueco} min`} ({hhmm(prev.arr)}–{hhmm(x.dep)})</div>}
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderRadius: 8, background: esActual ? C.blueDim : "none", opacity: l != null || salt.has(x.k) ? 0.5 : x.v ? 0.65 : 1 }}>
                 <span style={{ width: 46, fontFamily: mono, fontSize: 14, color: C.text }}>{hhmm(x.dep)}</span>
-                {!x.v ? <span style={{ minWidth: 26, padding: "2px 6px", borderRadius: 6, background: x.color, color: "#0d0f14", fontWeight: 800, fontSize: 12, textAlign: "center" }}>{x.l}</span> : <span style={{ minWidth: 26, fontSize: 11, color: C.dim }}>vacío</span>}
+                {!x.v ? <span style={{ minWidth: 26, padding: "2px 6px", borderRadius: 6, background: x.color, color: C.input, fontWeight: 800, fontSize: 12, textAlign: "center" }}>{x.l}</span> : <span style={{ minWidth: 26, fontSize: 11, color: C.dim }}>vacío</span>}
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.on} → {x.dn}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: salt.has(x.k) ? C.red : l != null ? C.green : C.dim }}>{x.v ? "" : salt.has(x.k) ? "no hecha" : l != null ? "✓" : s != null ? "en curso" : ""}</span>
               </div>

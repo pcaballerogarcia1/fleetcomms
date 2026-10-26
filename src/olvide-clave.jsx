@@ -2,8 +2,9 @@
 // para cambiarla al correo escrito en el campo de arriba.
 import { useState } from "react";
 import { enviarCambioClave } from "./cambio-clave.js";
+import { C } from "./tema.js";
 
-export function OlvideClave({ texto, color = "#8b93a7", colorOk = "#3fcf8e", colorError = "#f26d6d" }) {
+export function OlvideClave({ texto, color = "#8b93a7", colorOk = C.green, colorError = C.red }) {
   const [estado, setEstado] = useState(null); // { ok, texto }
   const [enviando, setEnviando] = useState(false);
   async function pedir() {

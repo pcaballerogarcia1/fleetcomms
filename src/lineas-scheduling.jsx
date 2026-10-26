@@ -27,6 +27,8 @@ import {
 import { Gantt } from "./lineas-scheduling/gantt.jsx";
 import { PanelOptimizar, PorQueSinTipo, ResumenCalendarios, SelectorLineas } from "./lineas-scheduling/paneles.jsx";
 import { Restricciones } from "./lineas-scheduling/restricciones.jsx";
+import { alfa } from "./tema.js";
+import { tono } from "./tema.js";
 
 export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const [subTab, setSubTab] = useState("escenario");
@@ -168,7 +170,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
           detalle: `${r.diaNombre} · ${r.kpis.viajes} viajes · ${r.kpis.autobuses} autobuses · ${Math.round(r.kpis.kmVacio || 0)} km en vacío${r.turnos ? ` · ${r.kpis.turnos} turnos` : ""}`,
         });
       } catch (e) {
-        console.error("Scheduling de líneas:", e);
+        console.error("Rutas de líneas:", e);
         setNota({ texto: `No se pudo calcular: ${e.message || e}`, error: true });
       } finally {
         setCalculando(false);
@@ -445,7 +447,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   if (!red) return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: C.bg, fontFamily: font }}>
       {cabecera}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: 13 }}>Importa primero la red (GTFS) en Planning para generar el escenario.</div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: 13 }}>Importa primero la red (GTFS) en Planificación para generar el escenario.</div>
     </div>
   );
 
@@ -458,7 +460,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
   const etiquetaOpt = [infoCal?.objetivoV && `vehículos: ${nombreObjetivo(infoCal.objetivoV)}`, infoCal?.objetivoT && `turnos: ${nombreObjetivo(infoCal.objetivoT)}`].filter(Boolean).join(" · ");
   const paso = (v, n, l, aviso) => (
     <button key={v} onClick={() => setModo(v)} title={aviso || undefined} className={modo === v ? "op-on" : ""} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span style={{ width: 16, height: 16, borderRadius: 8, fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", background: modo === v ? C.blue : "rgba(255,255,255,0.08)", color: modo === v ? "#fff" : C.muted }}>{n}</span>
+      <span style={{ width: 16, height: 16, borderRadius: 8, fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", background: modo === v ? C.blue : alfa(0.08), color: modo === v ? "#fff" : C.muted }}>{n}</span>
       {l}
       {aviso && <span style={{ width: 7, height: 7, borderRadius: 4, background: C.amber }} />}
     </button>
@@ -512,9 +514,9 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
                 <Send size={14} />
                 Publicar a Control
               </button>
-              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al Rostering: cada día, los del calendario que circula" className="op-btn op-fantasma">
+              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al cuadrante: cada día, los del calendario que circula" className="op-btn op-fantasma">
                 <CalendarRange size={14} />
-                Enviar a Rostering
+                Enviar al cuadrante
               </button>
             </>}
             <div style={{ flex: 1 }} />
@@ -523,13 +525,13 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
               <TrendingUp size={14} />
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
             </button>
-            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} className="op-btn op-primario" style={{ height: 32, padding: "0 14px", ...(pendientes ? { background: C.amber, color: "#0d0f14", boxShadow: "none" } : {}) }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
+            <button onClick={() => { setPanelLineas(false); if (perderManuales(fase)) { marcarPlanningVisto(dia); calcular(params, fase); } }} disabled={calculando} className="op-btn op-primario" style={{ height: 32, padding: "0 14px", ...(pendientes ? { background: C.amber, color: C.input, boxShadow: "none" } : {}) }}>{calculando ? "Generando…" : `${modo === "vehicles" ? "Generar vehículos" : "Generar turnos"}${pendientes ? " con los cambios" : ""}`}</button>
           </div>
 
           {avisoPlanning && (
-            <div style={{ padding: "7px 16px", fontSize: 12, color: "#0d0f14", background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-              <span>⚠ <b>Se ha modificado el Planning</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
-              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: "#0d0f14", border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
+            <div style={{ padding: "7px 16px", fontSize: 12, color: C.input, background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <span>⚠ <b>Se ha modificado la planificación</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
+              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: C.input, border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
             </div>
           )}
           {manualesActuales.length > 0 && (
@@ -588,7 +590,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
       )}
       {nota && (
         <div onClick={() => setNota(null)} style={{ position: "fixed", left: "50%", bottom: 22, transform: "translateX(-50%)", zIndex: 3000, maxWidth: "min(760px, calc(100vw - 32px))", padding: "9px 16px", borderRadius: 9, fontSize: 12.5, cursor: "pointer",
-          background: nota.error ? "#3a1620" : "#0d2f22", border: `1px solid ${nota.error ? C.red : C.green}`, color: nota.error ? "#fecaca" : "#bbf7d0", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}>{nota.texto}</div>
+          background: nota.error ? tono("#3a1620", "#f6e7eb") : tono("#0d2f22", "#e5f8f1"), border: `1px solid ${nota.error ? C.red : C.green}`, color: nota.error ? "#fecaca" : "#bbf7d0", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}>{nota.texto}</div>
       )}
     </div>
   );

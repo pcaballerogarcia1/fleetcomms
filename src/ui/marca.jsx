@@ -1,6 +1,7 @@
 // La marca de Operanzia: el cuadrado con la «O» en el degradado azul →
 // violeta de operanzia.com, y el nombre al lado.
 import { MARCA } from "../tema.js";
+import { C } from "../tema.js";
 
 export function Logo({ size = 22 }) {
   return (
@@ -16,7 +17,7 @@ export function Logo({ size = 22 }) {
   );
 }
 
-export function Marca({ size = 22, texto = true, color = "#e6e8ee" }) {
+export function Marca({ size = 22, texto = true, color = C.text }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <Logo size={size} />

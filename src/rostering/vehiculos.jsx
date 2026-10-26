@@ -5,6 +5,8 @@ import { logAuditGrouped, addCells } from "../audit.js";
 import { saveVehicleCells, mergeCells } from "../roster-store.js";
 import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { C, DAY_NAMES, MONTH_NAMES, VEHICLE_STATUSES, VEHICLE_STATUS_META, font, navBtnStyle, useVehicleAvailability, thStyle } from "./datos.js";
+import { alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // Selector "Trabajadores / Vehículos" — compartido entre las dos vistas
 // del módulo Rostering.
@@ -15,8 +17,8 @@ export function ModeTabs({ mode, setMode }) {
         <button key={m} onClick={() => setMode(m)} style={{
           padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
           fontFamily: font, fontSize: 12, fontWeight: 600,
-          background: mode === m ? "rgba(255,255,255,0.1)" : "transparent",
-          color: mode === m ? "#fff" : C.muted,
+          background: mode === m ? alfa(0.1) : "transparent",
+          color: mode === m ? C.text : C.muted,
           transition: "all .12s",
         }}>{label}</button>
       ))}
@@ -262,7 +264,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
         ) : vehicles.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: C.dim, fontSize: 13, gap: 8 }}>
             <div style={{ fontSize: 32 }}>🚐</div>
-            <div>Sin vehículos. Añade vehículos en el módulo de Scheduling.</div>
+            <div>Sin vehículos. Añade vehículos en el módulo de Rutas.</div>
           </div>
         ) : (
           <table style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: NAME_W + daysInMonth * CELL_W + STATS_W }}>
@@ -282,15 +284,15 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                     <th key={d} style={{
                       width: CELL_W, minWidth: CELL_W,
                       position: "sticky", top: 0, zIndex: 3,
-                      background: today ? "#1a2142" : weekend ? "#151922" : C.card,
+                      background: today ? C.blueDim : weekend ? tono("#151922", "#ebedf2") : C.card,
                       borderBottom: `2px solid ${today ? C.blue : C.border}`,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? "#f59e5b" : C.dim }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? "#f59e5b88" : C.muted }}>
+                      <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? `${C.orange}88` : C.muted }}>
                         {d}
                       </div>
                     </th>
@@ -309,7 +311,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
             <tbody>
               {vehicles.map((v, vi) => {
                 const stats = vehicleStats(v._id);
-                const rowBg = vi % 2 === 0 ? C.bg : "#12161f";
+                const rowBg = vi % 2 === 0 ? C.bg : tono("#12161f", "#eaedf3");
                 const vLabel = v.nombre || v.matricula || "Vehículo";
 
                 return (
@@ -362,7 +364,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                             width: CELL_W, minWidth: CELL_W, height: 32,
                             textAlign: "center", fontSize: 11, fontWeight: 700,
                             cursor: "pointer",
-                            background: meta ? meta.bg : (today ? "#0e2040" : weekend ? "#141c30" : "transparent"),
+                            background: meta ? meta.bg : (today ? tono("#0e2040", "#e4ecf8") : weekend ? tono("#141c30", "#e8ecf5") : "transparent"),
                             color: meta ? meta.text : C.dim,
                             borderRight: `1px solid ${C.border}`,
                             borderBottom: `1px solid ${C.border}`,
@@ -373,7 +375,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                           {selected && (
                             <div style={{
                               position: "absolute", inset: 0, pointerEvents: "none",
-                              boxShadow: "inset 0 0 0 2px #5b7cfa",
+                              boxShadow: `inset 0 0 0 2px ${C.blue}`,
                               background: "rgba(79,142,247,0.12)",
                             }} />
                           )}
@@ -418,7 +420,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                   return (
                     <td key={d} style={{
                       width: CELL_W, textAlign: "center", height: 38,
-                      background: today ? "#1a2142" : C.surface2,
+                      background: today ? C.blueDim : C.surface2,
                       borderRight: `1px solid ${C.border}`,
                       borderTop: `2px solid ${C.border2}`,
                       verticalAlign: "middle", padding: "2px 0",
