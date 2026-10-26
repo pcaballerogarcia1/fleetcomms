@@ -761,7 +761,8 @@ export async function generateScenario(tasks, resources, constraints) {
         const cargaDe = t => (1 - optT) + optT * ((t.duracion || 15) / avgTaskDur);
         const cosLat = Math.cos(((withCoords[0]?.lat || 40) * Math.PI) / 180);
         let centros = rawClusters.map(centro);
-        for (let it = 0; it < 6 && !_outOfTime(); it++) {
+        const limiteZonas = Date.now() + 60_000; // tope propio (no depende de otros límites del motor)
+        for (let it = 0; it < 6 && Date.now() < limiteZonas; it++) {
           const prefs = withCoords.map(t => {
             const d = centros.map(c => ((c.lat - t.lat) ** 2) + ((c.lng - t.lng) * cosLat) ** 2);
             const orden = d.map((_, ci) => ci).sort((a, b) => d[a] - d[b]);
@@ -913,7 +914,7 @@ export async function generateScenario(tasks, resources, constraints) {
     // franjas horizontales de lado a lado de la zona: cada día una franja larga).
     const durMedia = withC.length ? withC.reduce((x, t) => x + (t.duracion || 15), 0) / withC.length : 15;
     const porDia = Math.max(10, Math.floor(Math.max(60, state[i].shiftEnd - state[i].shiftStart) / (durMedia + 2)));
-    const ordered = withC.length > 2 * porDia ? await ordenarPorBloques(withC, depot, porDia, _scenarioStart + SCENARIO_TIME_BUDGET_MS)
+    const ordered = withC.length > 2 * porDia ? await ordenarPorBloques(withC, depot, porDia, Date.now() + 60_000)
       : withC.length > 1500 ? stripSort(withC) : await twoOpt(nnTSP(withC, depot));
     const hinted = reorderByWindowHint(ordered, state[i].shiftStart, state[i].shiftEnd);
     sortedQueues.push([...hinted, ...noC]);
