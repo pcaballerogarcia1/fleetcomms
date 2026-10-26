@@ -160,7 +160,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
           <select value={tipoFiltro} onChange={e=>setTipoFiltro(e.target.value)}
             style={{...S.input,flex:1,minWidth:140,fontSize:11,padding:"7px 10px"}}>
             <option value="">Todos los tipos</option>
-            {TIPOS.map(t=><option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+            {TIPOS.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <select value={mesFiltro} onChange={e=>setMesFiltro(e.target.value)}
             style={{...S.input,flex:1,minWidth:120,fontSize:11,padding:"7px 10px"}}>

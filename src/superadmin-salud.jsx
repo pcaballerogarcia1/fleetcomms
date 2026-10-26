@@ -9,6 +9,7 @@ import { watchErrors } from "./error-report.js";
 import { auth } from "./firebase.js";
 import { resumenSalud } from "./salud.js";
 import { C } from "./tema.js";
+import { Bell, BellOff } from "lucide-react";
 
 
 const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 14 };
@@ -68,7 +69,7 @@ export function PanelSalud({ sesion, orgs }) {
   return (
     <div>
       <div style={{ ...card, display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ fontSize: 22 }}>{avisos === "activos" ? "🔔" : "🔕"}</div>
+        <div style={{ fontSize: 22 }}>{avisos === "activos" ? <Bell size={22} /> : <BellOff size={22} />}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Avisos de errores en este dispositivo</div>
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>

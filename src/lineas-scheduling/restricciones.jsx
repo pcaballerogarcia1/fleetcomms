@@ -4,6 +4,8 @@ import { PARAMS_DEFECTO, TIPOS_TURNO_DEFECTO, revisarRestricciones } from "../li
 import { SelectorCalendario } from "../lineas-horarios.jsx";
 import { PanelRestricciones, Interruptor, IconoCategoria } from "../panel-restricciones.jsx";
 import { C, MINIMOS, aHHMM, deHHMM, font, hm, mono } from "./comun.js";
+import { AlertTriangle, OctagonX, X } from "lucide-react";
+import { tono } from "../tema.js";
 
 function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = false, textoVacio = "—", step, onCambiar }) {
   const [texto, setTexto] = useState(null); // null = no se está editando
@@ -25,7 +27,7 @@ function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = f
 function TiposTurno({ tipos, onChange }) {
   const lista = tipos || [];
   const cambiar = (i, cambio) => onChange(lista.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
-  const estiloCampo = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: "dark" };
+  const estiloCampo = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") };
   // vacio = true: se puede dejar en blanco (null = sin límite)
   const hora = (i, k, vacio = false, deshabilitado = false) => (
     <input type="time" disabled={deshabilitado} value={vacio && !(lista[i][k] > 0) ? "" : aHHMM(lista[i][k])}
@@ -69,7 +71,7 @@ function TiposTurno({ tipos, onChange }) {
                     {x.cambiosBus !== 0 ? "permite" : "no"}
                   </label>
                 </td>
-                <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
+                <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
               </tr>
             ))}
           </tbody>
@@ -111,7 +113,7 @@ function GruposLineas({ red, grupos, onChange }) {
                 style={{ width: 200, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontWeight: 600, fontFamily: font, outline: "none" }} />
               <span style={{ fontSize: 11, color: C.dim }}>{(g.lineas || []).length} línea{(g.lineas || []).length === 1 ? "" : "s"} · pulsa una línea para meterla o sacarla</span>
               <span style={{ flex: 1 }} />
-              <button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este grupo (las líneas quedan sin grupo)" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button>
+              <button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este grupo (las líneas quedan sin grupo)" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               {nombres.map(n => {
@@ -300,7 +302,7 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       avisos={revision.length > 0 && (
         <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(242,109,109,0.5)" : "rgba(245,184,74,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(242,109,109,0.08)" : "rgba(245,184,74,0.07)" }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
-          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? "⛔" : "⚠"} {x.texto}</div>)}
+          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? <OctagonX size={12} style={{ verticalAlign: "-2px" }} /> : <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} />} {x.texto}</div>)}
         </div>
       )} />
   );

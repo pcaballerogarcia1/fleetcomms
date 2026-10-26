@@ -11,6 +11,7 @@ import { CAPACIDAD_DEFECTO } from "./capacidad.js";
 import { DIAS, FRECUENCIAS_DEFECTO } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import { useSector } from "../sector.js";
+import { tono } from "../tema.js";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
 const AL_ENCENDER = { maxStops: 100, maxDays: 5, vehiculoNecesarioMaxMin: 960, personalNecesarioMaxMin: 480, costeKm: 0.9, maxShiftMin: 480, breakAfter: 240, costeHora: 22 };
@@ -85,7 +86,7 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
   };
   const hora = key => (
     <input type="time" value={minToTime(c[key])} onChange={e => { const m = timeToMin(e.target.value); if (m !== null) set(key, m); }}
-      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: "dark" }} />
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") }} />
   );
   const sino = (key, invertido = false) => <Interruptor on={invertido ? !c[key] : !!c[key]} onCambiar={v => set(key, invertido ? !v : v)} />;
 

@@ -78,7 +78,7 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
           <>
             <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 12.5, color: C.text }}>
               Mes
-              <input type="month" value={mes} disabled={trabajando} onChange={e => e.target.value && setMes(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: "dark" }} />
+              <input type="month" value={mes} disabled={trabajando} onChange={e => e.target.value && setMes(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }} />
             </label>
             <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
               {usados.map(([dia, n], i) => {

@@ -550,7 +550,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                           {durLabel && <span style={{ color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>{durLabel}</span>}
                           {stopCount > 0 && <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{stopCount}p</span>}
                           {dayKm > 0 && <span style={{ color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>{dayKm.toFixed(1)}km</span>}
-                          {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}>🏠</span>}
+                          {row.depotLat && row.depotLng && <span title={`Depot: ${(+row.depotLat).toFixed(4)}, ${(+row.depotLng).toFixed(4)}`} style={{ flexShrink: 0 }}><Home size={11} /></span>}
                         </div>
                       </div>
                     </>

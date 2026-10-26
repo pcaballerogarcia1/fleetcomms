@@ -5,6 +5,7 @@ import { useState } from "react";
 import { TabTrabajadores, TabVehiculos } from "../scheduling/flota.jsx";
 import { C, font } from "./estilo.js";
 import { ImportarRecursos } from "./importar-recursos.jsx";
+import { Ayuda } from "../ui/ayuda.jsx";
 
 export function TabRecursos({ vehicles = [], workers = [], loadingV, loadingW, activeProject, onProjectUpdate, orgId }) {
   const [sub, setSub] = useState("vehiculos");
@@ -23,7 +24,7 @@ export function TabRecursos({ vehicles = [], workers = [], loadingV, loadingW, a
             border: `1px solid ${sub === k ? C.blue : C.border}`, fontWeight: sub === k ? 600 : 400,
           }}>{l}</button>
         ))}
-        <span style={{ fontSize: 11.5, color: C.dim, marginLeft: 8 }}>Vehículos y trabajadores son de toda la empresa: los mismos en todos los proyectos.</span>
+        <Ayuda texto="Vehículos y trabajadores son de toda la empresa: los mismos en todos los proyectos." />
       </div>
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {sub === "vehiculos" && <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>

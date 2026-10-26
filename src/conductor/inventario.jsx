@@ -1,5 +1,5 @@
 // App del conductor → Inventario (almacén).
-import { ChevronLeft, StickyNote, Truck } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, StickyNote, Truck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { db } from "../firebase.js";
 import { collection, onSnapshot, doc, serverTimestamp, query, where, orderBy, limit, runTransaction } from "firebase/firestore";
@@ -183,11 +183,11 @@ export function ModuloInventario({sesion,usuarios}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
           <button onClick={()=>{setFormMov({tipo:"entrada",cantidad:1,vehiculo:"",motivo:"",nota:""});setErrForm("");setVista("movimiento");}}
             style={{...S.btn,padding:"12px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            ⬆ Entrada
+            <ArrowUp size={14} style={{ verticalAlign: "-2px" }} /> Entrada
           </button>
           <button onClick={()=>{setFormMov({tipo:"salida",cantidad:1,vehiculo:"",motivo:"",nota:""});setErrForm("");setVista("movimiento");}}
             style={{...S.btn,padding:"12px",fontSize:13,background:tono("#2a1500", "#f8eee4"),borderColor:C.orange,color:C.orange,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            ⬇ Salida
+            <ArrowDown size={14} style={{ verticalAlign: "-2px" }} /> Salida
           </button>
         </div>
 
@@ -200,7 +200,7 @@ export function ModuloInventario({sesion,usuarios}){
             <div key={m.id} style={{...S.card}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:16}}>{m.tipo==="entrada"?"⬆":"⬇"}</span>
+                  <span style={{fontSize:16}}>{m.tipo==="entrada"?<ArrowUp size={16} />:<ArrowDown size={16} />}</span>
                   <div>
                     <span style={{fontSize:13,fontWeight:700,color:m.tipo==="entrada"?C.green:C.orange}}>{m.tipo==="entrada"?"+":"-"}{m.cantidad} {prodActual.unidad}</span>
                     {m.vehiculo&&<span style={{fontSize:11,color:C.muted,marginLeft:8}}><Truck size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.vehiculo.split("·")[0].trim()}</span>}
@@ -244,8 +244,8 @@ export function ModuloInventario({sesion,usuarios}){
         <div style={{marginBottom:14}}>
           <label style={S.label}>Tipo de movimiento</label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <button onClick={()=>setFormMov({...formMov,tipo:"entrada"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="entrada"?C.greenDim:"none",borderColor:formMov.tipo==="entrada"?C.green:C.border,color:formMov.tipo==="entrada"?C.green:C.muted}}>⬆ Entrada</button>
-            <button onClick={()=>setFormMov({...formMov,tipo:"salida"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="salida"?tono("#2a1500", "#f8eee4"):"none",borderColor:formMov.tipo==="salida"?C.orange:C.border,color:formMov.tipo==="salida"?C.orange:C.muted}}>⬇ Salida</button>
+            <button onClick={()=>setFormMov({...formMov,tipo:"entrada"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="entrada"?C.greenDim:"none",borderColor:formMov.tipo==="entrada"?C.green:C.border,color:formMov.tipo==="entrada"?C.green:C.muted}}><ArrowUp size={14} style={{ verticalAlign: "-2px" }} /> Entrada</button>
+            <button onClick={()=>setFormMov({...formMov,tipo:"salida"})} style={{...S.btn,padding:"12px",background:formMov.tipo==="salida"?tono("#2a1500", "#f8eee4"):"none",borderColor:formMov.tipo==="salida"?C.orange:C.border,color:formMov.tipo==="salida"?C.orange:C.muted}}><ArrowDown size={14} style={{ verticalAlign: "-2px" }} /> Salida</button>
           </div>
         </div>
 
@@ -284,7 +284,7 @@ export function ModuloInventario({sesion,usuarios}){
 
         {errForm&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
         <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:14,background:formMov.tipo==="entrada"?C.greenDim:tono("#2a1500", "#f8eee4"),borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
-          {formMov.tipo==="entrada"?"⬆ REGISTRAR ENTRADA":"⬇ REGISTRAR SALIDA"}
+          {formMov.tipo==="entrada"?"REGISTRAR ENTRADA":"REGISTRAR SALIDA"}
         </button>
       </div>
     </div>

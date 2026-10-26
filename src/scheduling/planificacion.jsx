@@ -29,6 +29,7 @@ import {
   BarraHerramientas, ProgresoGeneracion, AvisosEscenario, VentanaPublicar, VentanaHistorial, VentanaSimulador,
 } from "./planificacion-paneles.jsx";
 import { tono } from "../tema.js";
+import { ClipboardList } from "lucide-react";
 
 // ── PLANIFICACION TAB ─────────────────────────────────────────────
 export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUpdate, orgId, sesion = null }) {
@@ -623,7 +624,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   if (!activeProject) {
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: C.dim }}>
-        <div style={{ fontSize: 32 }}>📋</div>
+        <ClipboardList size={32} color={C.dim} />
         <div style={{ fontSize: 14, color: C.muted, fontWeight: 600 }}>Ningún proyecto activo</div>
         <div style={{ fontSize: 12, color: C.dim }}>Abre o crea un proyecto desde la pestaña Proyectos</div>
       </div>

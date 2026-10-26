@@ -2,7 +2,7 @@
 // la tabla de trabajadores × días y el resumen del turno de una celda).
 
 
-import { Scale, Sparkles } from "lucide-react";
+import { AlertTriangle, Scale, Sparkles, Users } from "lucide-react";
 import { checkWorkerMonth } from "../roster-optimizer.js";
 import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnStyle, pubBtn, thStyle } from "./datos.js";
 import { ModeTabs } from "./vehiculos.jsx";
@@ -118,7 +118,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
           </div>
         ) : workers.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: C.dim, fontSize: 13, gap: 8 }}>
-            <div style={{ fontSize: 32 }}>👥</div>
+            <Users size={32} color={C.dim} />
             <div>Sin trabajadores. Añade trabajadores en el módulo de Rutas.</div>
           </div>
         ) : (
@@ -330,7 +330,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                               color: ruleIssues.length ? C.red : C.muted,
                               background: ruleIssues.length ? `${C.red}22` : "transparent",
                             }}>
-                            {ruleIssues.length ? "⚠ " : ""}{Math.round(check.hours)}h
+                            {ruleIssues.length ? <AlertTriangle size={11} style={{ verticalAlign: "-1px", marginRight: 2 }} /> : null}{Math.round(check.hours)}h
                           </span>
                         )}
                         {SHIFTS.filter(s => stats[s]).map(s => (
@@ -375,7 +375,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                             const sug = suggestUser(w);
                             const linked = new Set(workers.map(x => x.uid).filter(Boolean));
                             return [
-                              ...(sug ? [<option key={"s" + sug._id} value={sug._id}>★ {[sug.nombre, sug.apellidos].filter(Boolean).join(" ")}</option>] : []),
+                              ...(sug ? [<option key={"s" + sug._id} value={sug._id}>{[sug.nombre, sug.apellidos].filter(Boolean).join(" ")} (sugerido)</option>] : []),
                               ...usuarios.filter(u => !linked.has(u._id) && u._id !== sug?._id).map(u => (
                                 <option key={u._id} value={u._id}>{[u.nombre, u.apellidos].filter(Boolean).join(" ") || u.email}</option>
                               )),

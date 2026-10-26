@@ -4,6 +4,7 @@
 // apartado elegido. Los límites opcionales llevan un interruptor.
 import { useState } from "react";
 import { C } from "./tema.js";
+import { Ayuda } from "./ui/ayuda.jsx";
 
 
 const font = "var(--font)";
@@ -53,8 +54,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
   const fila = it => (
     <div key={String(it[0])} style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
       <div>
-        <div style={{ fontSize: 12, lineHeight: 1.35, color: usadoK(it[0]) ? C.text : C.muted, fontWeight: usadoK(it[0]) ? 600 : 400 }}>{it[1]}</div>
-        {it[3] && <div style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.45, marginTop: 2 }}>{it[3]}</div>}
+        <div style={{ fontSize: 12, lineHeight: 1.35, color: usadoK(it[0]) ? C.text : C.muted, fontWeight: usadoK(it[0]) ? 600 : 400 }}>{it[1]}<Ayuda texto={it[3]} /></div>
       </div>
       <div>{it[2]}</div>
     </div>
@@ -73,7 +73,7 @@ export function PanelRestricciones({ titulo = "Restricciones", cabecera, categor
         <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{titulo}</span>
         {cabecera}
         <span style={{ flex: 1 }} />
-        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar ✕</button>}
+        {onCerrar && <button onClick={onCerrar} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>Cerrar</button>}
       </div>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", background: C.bg }}>

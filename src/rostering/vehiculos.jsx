@@ -7,6 +7,7 @@ import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { C, DAY_NAMES, MONTH_NAMES, VEHICLE_STATUSES, VEHICLE_STATUS_META, font, navBtnStyle, useVehicleAvailability, thStyle } from "./datos.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
+import { Truck } from "lucide-react";
 
 // Selector "Trabajadores / Vehículos" — compartido entre las dos vistas
 // del módulo Rostering.
@@ -263,7 +264,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
           </div>
         ) : vehicles.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: C.dim, fontSize: 13, gap: 8 }}>
-            <div style={{ fontSize: 32 }}>🚐</div>
+            <Truck size={32} color={C.dim} />
             <div>Sin vehículos. Añade vehículos en el módulo de Rutas.</div>
           </div>
         ) : (

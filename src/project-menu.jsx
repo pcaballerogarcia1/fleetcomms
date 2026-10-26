@@ -5,6 +5,7 @@ import { duplicarProyecto, nombreCopia } from "./project-copy.js";
 import { logAudit } from "./audit.js";
 import { SECTORES, sectorDe } from "./sector.js";
 import { C } from "./tema.js";
+import { tono } from "./tema.js";
 
 
 const font = "var(--font)";
@@ -82,7 +83,7 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
                   const s = sectorDe(e.target.value);
                   onProjectUpdate({ sector: s.id }).catch(err => setError(err.message || String(err)));
                   logAudit({ modulo: "Proyectos", accion: "Cambió el sector", detalle: `${activeProject.nombre} → ${s.nombre}`, projectId: activeProject._id, proyecto: activeProject.nombre, orgId: activeProject.org_id });
-                }} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: font, colorScheme: "dark" }}>
+                }} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }}>
                   {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 4, lineHeight: 1.4 }}>Cambia las palabras de las pantallas ({sectorDe(activeProject).t.elementos}…) y oculta lo que no aplica.</div>

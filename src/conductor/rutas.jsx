@@ -475,7 +475,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                   </div>}
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Fecha de servicio</div>
-                    <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:"dark"}}/>
+                    <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:tono("dark","light")}}/>
                     <div style={{fontSize:10.5,color:C.dim,marginTop:4}}>{fechaKml?"Los KML se guardan en esta fecha (y su mes en Control).":"Vacía: la fecha que diga el KML o, si no dice ninguna, este mes."}</div>
                   </div>
                   {errorMsg&&<div style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
@@ -510,7 +510,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                     <div style={{height:5,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim}}><span>{real} de {tot} realizadas</span><span style={{color:col,fontWeight:700}}>{tasa}%</span></div>
                   </div>
-                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}`,color:C.red,padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}>✕</button>}
+                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}`,color:C.red,padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}><X size={14} /></button>}
                 </div>
               </div>
             );

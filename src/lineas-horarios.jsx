@@ -8,6 +8,7 @@ import { TIPOS_DIA, FRANJAS, franjaDe } from "./gtfs-red.js";
 import { salidasDe, duracionViaje, esCalendario, nombreDia, claveSalidas, pasosPorParada } from "./lineas-sched.js";
 import { COLORES_CAL, MESES_L, fechaLarga, hhmmTxt, leerHora, agruparVariantes, textoVariante } from "./lineas-horarios-util.js";
 import { C, alfa } from "./tema.js";
+import { Pencil } from "lucide-react";
 
 
 const font = "var(--font)";
@@ -188,7 +189,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
               <button key={l.id} onClick={() => { setSel(l.id); setEditando(null); }} style={{ display: "flex", alignItems: "center", gap: 8, width: variante ? "calc(100% - 20px)" : "100%", marginLeft: variante ? 20 : 0, textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: l.id === linea?.id ? C.blueDim : "none", border: "none", cursor: "pointer", fontFamily: font }}>
                 {!variante && <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l.color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l.nombre}</span>}
                 <span style={{ flex: 1, fontSize: 11, color: l.id === linea?.id ? C.blueText : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{variante ? textoVariante(l) : l.sentidos.map(x => x.cabecera).join(" ↔ ")}</span>
-                {editadaEn(l) && <span title="Horarios cambiados a mano en Planificación" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+                {editadaEn(l) && <span title="Horarios cambiados a mano en Planificación" style={{ color: C.amber, display: "inline-flex" }}><Pencil size={11} /></span>}
               </button>
             );
             if (g.lineas.length === 1) return fila(g.lineas[0], false);
@@ -200,7 +201,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "6px 6px", borderRadius: 6, marginBottom: 1, background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
                   <span style={{ minWidth: 34, padding: "1px 5px", borderRadius: 5, background: l0.color, color: C.input, fontSize: 10.5, fontWeight: 800, textAlign: "center" }}>{l0.nombre}</span>
                   <span style={{ flex: 1, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes</span>
-                  {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planificación" style={{ fontSize: 10, color: C.amber }}>✎</span>}
+                  {g.lineas.some(editadaEn) && <span title="Horarios cambiados a mano en Planificación" style={{ color: C.amber, display: "inline-flex" }}><Pencil size={11} /></span>}
                 </button>
                 {abierto && g.lineas.map(l => fila(l, true))}
               </div>
@@ -280,7 +281,7 @@ export function Horarios({ red, cfg, diaInicial, editable = false, onGuardar, on
                   </div>
                   {editado && (
                     <div style={{ padding: "6px 14px", fontSize: 11, color: C.amber, display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}` }}>
-                      ✎ Cambiado a mano en Planning{nuevas || quitadas ? ` (${[nuevas && `${nuevas} nueva${nuevas > 1 ? "s" : ""} o movida${nuevas > 1 ? "s" : ""}`, quitadas && `${quitadas} quitada${quitadas > 1 ? "s" : ""} o movida${quitadas > 1 ? "s" : ""}`].filter(Boolean).join(", ")} respecto al GTFS)` : ""}
+                      <Pencil size={12} style={{ verticalAlign: "-2px" }} /> Cambiado a mano en Planificación{nuevas || quitadas ? ` (${[nuevas && `${nuevas} nueva${nuevas > 1 ? "s" : ""} o movida${nuevas > 1 ? "s" : ""}`, quitadas && `${quitadas} quitada${quitadas > 1 ? "s" : ""} o movida${quitadas > 1 ? "s" : ""}`].filter(Boolean).join(", ")} respecto al GTFS)` : ""}
                       {editable && <button onClick={() => window.confirm("¿Volver a las salidas del GTFS en este sentido y día?") && guardar(s, null)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${C.amber}88`, color: C.amber, borderRadius: 5, padding: "2px 8px", fontSize: 10.5, cursor: "pointer", fontFamily: font }}>Volver a las del GTFS</button>}
                     </div>
                   )}

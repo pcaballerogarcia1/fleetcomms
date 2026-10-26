@@ -5,6 +5,7 @@ import { costeDia, OBJETIVOS_VEHICULOS, OBJETIVOS_TURNOS, nombreDia, nombreEstra
 import { COLORES_CAL, fechaLarga, agruparVariantes, textoVariante } from "../lineas-horarios-util.js";
 import { C, font, mono, nombreObjetivo, norm, num } from "./comun.js";
 import { alfa } from "../tema.js";
+import { AlertTriangle } from "lucide-react";
 
 
 export function PanelOptimizar({ fase, p, diaNombre, objetivo, setObjetivo, opt, onOptimizar, onAplicar, onRestricciones, bloqueado, optJunto, onOptimizarJunto, onAplicarJunto, aFondo, setAFondo }) {
@@ -168,7 +169,7 @@ export function PorQueSinTipo({ res, p, onRestricciones }) {
   return (
     <div style={{ padding: "7px 16px", fontSize: 11.5, color: C.text, background: "rgba(245,184,74,0.07)", borderBottom: "1px solid rgba(245,184,74,0.3)", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ color: C.amber, fontWeight: 700 }}>⚠ {num(d.total)} turno{d.total > 1 ? "s" : ""} sin tipo</span>
+        <span style={{ color: C.amber, fontWeight: 700 }}><AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {num(d.total)} turno{d.total > 1 ? "s" : ""} sin tipo</span>
         <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontSize: 11.5, fontFamily: font }}>{abierto ? "ocultar por qué" : "ver por qué"}</button>
         <button onClick={onRestricciones} style={{ marginLeft: "auto", background: "none", border: `1px solid ${C.border2}`, borderRadius: 5, padding: "2px 9px", color: C.blueText, cursor: "pointer", fontSize: 11, fontFamily: font }}>Cambiar en Restricciones</button>
       </div>

@@ -417,7 +417,7 @@ export async function runGenerate(ctx) {
         ? `${usedCoverWorkers.length} vehículo(s) salen ${coverDaysCount} día(s) con todos sus conductores en Libre/Baja según Cuadrante — cubiertos por "Conductor necesario".`
         : null,
     ].filter(Boolean);
-    setScaleInfo(scaleMsgs.length ? scaleMsgs.join(" ") : null);
+    setScaleInfo(scaleMsgs.length ? scaleMsgs : null); // una línea en pantalla; el resto, al desplegar
     requestAnimationFrame(() => requestAnimationFrame(() => {
       console.log(`[PERF] pintado tras setSchedules: ${(performance.now() - t_setSchedules).toFixed(0)}ms`);
     }));

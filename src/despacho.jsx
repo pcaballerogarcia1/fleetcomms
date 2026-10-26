@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MOTIVOS, NIVEL_TEXTO, candidatos, diaDeDespacho, estadoFichaje, nombre, vehiculosLibres } from "./despacho.js";
 import { cambiarVehiculo, cubrir, deshacerAusencia, escucharFichajesDia, escucharGridVehiculos, escucharMes, escucharPlanes, escucharReglas, estadoVehiculo, noViene } from "./despacho-store.js";
 import { C, font } from "./tema.js";
+import { tono } from "./tema.js";
 
 const hora = min => `${String(Math.floor((((min % 1440) + 1440) % 1440) / 60)).padStart(2, "0")}:${String(((min % 60) + 60) % 60).padStart(2, "0")}`;
 const TURNO = { M: { t: "Mañana", c: C.blue }, T: { t: "Tarde", c: C.orange }, N: { t: "Noche", c: C.violet } };
@@ -109,7 +110,7 @@ export function DespachoPage({ orgId, workers = [], vehicles = [] }) {
             <button className={esHoy ? "op-on" : ""} onClick={() => setFecha(hoy)}>Hoy</button>
             <button className={esManana ? "op-on" : ""} onClick={() => setFecha(manana)}>Mañana</button>
           </div>
-          <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} className="op-input" style={{ width: 150, height: 30, colorScheme: "dark" }} />
+          <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} className="op-input" style={{ width: 150, height: 30, colorScheme: tono("dark", "light") }} />
         </div>
       </div>
 

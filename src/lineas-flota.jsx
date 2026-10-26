@@ -6,6 +6,7 @@
 import { useRef, useState } from "react";
 import { TIPOS_VEHICULO } from "./lineas-store.js";
 import { C } from "./tema.js";
+import { X } from "lucide-react";
 
 
 const font = "var(--font)";
@@ -107,7 +108,7 @@ export function FlotaLineas({ cfg, onGuardar }) {
                     </span>
                   </td>
                   <td style={td}><input defaultValue={b.nota || ""} onBlur={e => e.target.value !== (b.nota || "") && cambiar(b.id, { nota: e.target.value })} style={{ ...inp, width: 260 }} /></td>
-                  <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm(`¿Quitar el ${b.matricula} de la flota?`) && guardar(lista.filter(x => x.id !== b.id))} title="Quitar de la flota" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
+                  <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm(`¿Quitar el ${b.matricula} de la flota?`) && guardar(lista.filter(x => x.id !== b.id))} title="Quitar de la flota" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
                 </tr>
               ))}
             </tbody>

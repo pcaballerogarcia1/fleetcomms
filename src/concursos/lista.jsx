@@ -10,6 +10,7 @@ import { C, font } from "../tema.js";
 import { Vigilancia } from "./vigilancia.jsx";
 import { crearConcursoDesdePlataforma, documentosUtiles, licitacionDeEnlace, tipoPorCpv } from "./plataforma.js";
 import { ESTADOS, TIPOS_CONCURSO, cambiarConcurso, crearConcurso, escucharConcursos } from "./store.js";
+import { tono } from "../tema.js";
 
 const fechaTxt = f => (f ? new Date(`${f}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : null);
 
@@ -154,7 +155,7 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
               </div>
               <div style={{ flex: 1 }}>
                 <label className="op-label">Fecha límite de presentación</label>
-                <input className="op-input" type="date" value={nuevo.fechaLimite} onChange={e => setNuevo(n => ({ ...n, fechaLimite: e.target.value }))} style={{ colorScheme: "dark" }} />
+                <input className="op-input" type="date" value={nuevo.fechaLimite} onChange={e => setNuevo(n => ({ ...n, fechaLimite: e.target.value }))} style={{ colorScheme: tono("dark", "light") }} />
               </div>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

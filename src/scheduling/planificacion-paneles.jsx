@@ -5,7 +5,8 @@
 
 
 
-import { Check, Download, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
+import { Check, Download, Info, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
+import { useState } from "react";
 import { t } from "../i18n.js";
 import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
@@ -249,12 +250,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
       )}
 
       {/* Auto-scale (virtual fleet) banner */}
-      {scaleInfo && !focusMode && (
-        <div style={{ padding: "7px 16px", background: "rgba(245,184,74,0.08)", borderBottom: `1px solid rgba(245,184,74,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: C.amber }}>⚙ {scaleInfo}</span>
-          <button onClick={() => setScaleInfo(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
-        </div>
-      )}
+      {scaleInfo && !focusMode && <AvisoCalculo mensajes={scaleInfo} onCerrar={() => setScaleInfo(null)} />}
 
       {/* Rostering conflict banner */}
       {rosterConflicts.length > 0 && !focusMode && (
@@ -541,5 +537,31 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
         </div>
       )}
     </>
+  );
+}
+
+// Los avisos del cálculo en una sola línea (lo importante primero); el resto, al desplegar
+function AvisoCalculo({ mensajes, onCerrar }) {
+  const [abierto, setAbierto] = useState(false);
+  const lista = (Array.isArray(mensajes) ? mensajes : [mensajes]).filter(Boolean);
+  // «Distancias y tiempos…» es informativo: va al final
+  const orden = [...lista.filter(m => !/^Distancias y tiempos/.test(m)), ...lista.filter(m => /^Distancias y tiempos/.test(m))];
+  if (!orden.length) return null;
+  return (
+    <div style={{ padding: "6px 16px", background: `${C.amber}14`, borderBottom: `1px solid ${C.amber}40`, flexShrink: 0, fontSize: 11.5, color: C.text }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Info size={13} color={C.amber} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, whiteSpace: abierto ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{orden[0]}</span>
+        {orden.length > 1 || orden[0].length > 110
+          ? <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", color: C.blueText, cursor: "pointer", fontSize: 11.5, padding: 0, flexShrink: 0 }}>{abierto ? "Ver menos" : `Ver todo${orden.length > 1 ? ` (${orden.length})` : ""}`}</button>
+          : null}
+        <button onClick={onCerrar} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex", padding: 0, flexShrink: 0 }}><X size={14} /></button>
+      </div>
+      {abierto && orden.length > 1 && (
+        <ul style={{ margin: "6px 0 2px", paddingLeft: 21, color: C.muted, lineHeight: 1.55 }}>
+          {orden.slice(1).map((m, i) => <li key={i}>{m}</li>)}
+        </ul>
+      )}
+    </div>
   );
 }

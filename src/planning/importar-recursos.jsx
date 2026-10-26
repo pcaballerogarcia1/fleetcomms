@@ -8,6 +8,7 @@ import { logAudit } from "../audit.js";
 import { db } from "../firebase.js";
 import { PLANTILLA_TRABAJADORES, PLANTILLA_VEHICULOS, leerTrabajadores, leerVehiculos, planTrabajadores, planVehiculos } from "../recursos-importar.js";
 import { C, font } from "./estilo.js";
+import { Ayuda } from "../ui/ayuda.jsx";
 
 const COLECCION = { vehiculos: "scheduling_vehicles", trabajadores: "scheduling_workers" };
 
@@ -73,9 +74,7 @@ export function ImportarRecursos({ tipo, vehicles = [], workers = [], orgId }) {
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => leer(e.target.files?.[0])} />
         <button onClick={() => fileRef.current?.click()} style={btn}><Upload size={14} /> Subir Excel/CSV de {nombre}</button>
         <button onClick={plantilla} style={{ ...btn, background: "none" }}><Download size={14} /> Descargar plantilla</button>
-        <span style={{ fontSize: 11.5, color: C.dim }}>
-          {tipo === "vehiculos" ? "Columnas: Nombre, Matrícula, Tipo, Capacidad, Turno, Marca, Modelo, Nº de bastidor, Fecha de matriculación, Fecha de alta, Propiedad, Combustible, Autonomía (km), Consumo, Depósito, MMA, Tara, Plazas, Km actuales, Próxima ITV, Seguro vence (y Latitud/Longitud de su base). Solo el nombre o la matrícula son obligatorios; los que ya existen se actualizan por la matrícula." : "Columnas: Nombre y Apellidos (o Nombre completo), DNI/NIE, Fecha de nacimiento (o Edad), Nacionalidad, Categoría, Correo electrónico, Teléfono, Dirección, Permiso de conducir, Fecha de alta, Turno, Rol y Vehículo (su matrícula o nombre). Solo el nombre es obligatorio; los que ya existen se actualizan."}
-        </span>
+        <Ayuda ancho={360} texto={tipo === "vehiculos" ? "Columnas: Nombre, Matrícula, Tipo, Capacidad, Turno, Marca, Modelo, Nº de bastidor, Fecha de matriculación, Fecha de alta, Propiedad, Combustible, Autonomía (km), Consumo, Depósito, MMA, Tara, Plazas, Km actuales, Próxima ITV, Seguro vence (y Latitud/Longitud de su base). Solo el nombre o la matrícula son obligatorios; los que ya existen se actualizan por la matrícula." : "Columnas: Nombre y Apellidos (o Nombre completo), DNI/NIE, Fecha de nacimiento (o Edad), Nacionalidad, Categoría, Correo electrónico, Teléfono, Dirección, Permiso de conducir, Fecha de alta, Turno, Rol y Vehículo (su matrícula o nombre). Solo el nombre es obligatorio; los que ya existen se actualizan."} />
       </div>
       {estado && <div style={{ fontSize: 12.5, color: estado.ok ? C.green : C.red, marginTop: 8 }}>{estado.texto}</div>}
       {plan && (

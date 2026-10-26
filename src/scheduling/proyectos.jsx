@@ -8,6 +8,7 @@ import { db } from "../firebase.js";
 import { C, barrioColor, font } from "./estilo.js";
 import { SECTORES, sectorDe } from "../sector.js";
 import { alfa } from "../tema.js";
+import { tono } from "../tema.js";
 
 // ── TAB PROYECTOS ─────────────────────────────────────────────────
 const PROJECT_STATUS = {
@@ -268,7 +269,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       </div>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin planning — importa desde Planificación</div>
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sin puntos todavía</div>
                   )}
                 </div>
 
@@ -315,7 +316,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       )}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{p.tipo === "lineas" ? "Genera vehículos y turnos en Rutas" : "Sin schedule — genera el VRP"}</div>
+                    <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{p.tipo === "lineas" ? "Genera vehículos y turnos en Rutas" : "Sin rutas todavía"}</div>
                   )}
                 </div>
 
@@ -345,7 +346,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 <select
                   value={newModal.orgId || effectiveOrgId || ""}
                   onChange={e => setNewModal(p => ({ ...p, orgId: e.target.value }))}
-                  style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: "dark" }}
+                  style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: tono("dark", "light") }}
                 >
                   <option value="">— Selecciona una organización —</option>
                   {orgs.map(o => <option key={o.org_id} value={o.org_id}>{o.nombre}</option>)}
@@ -372,7 +373,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
             {(newModal.tipo || "puntos") === "puntos" && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Sector</label>
-                <select value={sectorDe(newModal.sector).id} onChange={e => setNewModal(p => ({ ...p, sector: e.target.value }))} style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: "dark" }}>
+                <select value={sectorDe(newModal.sector).id} onChange={e => setNewModal(p => ({ ...p, sector: e.target.value }))} style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: tono("dark", "light") }}>
                   {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre} — {s.detalle}</option>)}
                 </select>
               </div>
@@ -388,7 +389,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
               <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Mes de servicio</label>
               <input type="month" value={newModal.mes}
                 onChange={e => setNewModal(p => ({ ...p, mes: e.target.value }))}
-                style={{ ...inpStyle, marginBottom: 0, width: "auto", colorScheme: "dark" }} />
+                style={{ ...inpStyle, marginBottom: 0, width: "auto", colorScheme: tono("dark", "light") }} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button onClick={() => setNewModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>

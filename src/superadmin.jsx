@@ -9,6 +9,7 @@ import { limpiarEmail, mensajeAuth } from "./auth-mensajes.js";
 import { PanelSalud } from "./superadmin-salud.jsx";
 import { C, alfa } from "./tema.js";
 import { tono } from "./tema.js";
+import { Building2 } from "lucide-react";
 
 
 const font = "var(--font)";
@@ -107,7 +108,7 @@ function LoginSA({ onLogin }) {
           </div>
           {err && (
             <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16 }}>
-              ⚠ {err}
+              {err}
             </div>
           )}
           <button onClick={go} disabled={loading} style={{ ...S.btn, width: "100%", padding: 12, opacity: loading ? 0.6 : 1 }}>
@@ -250,7 +251,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, padding: "0 24px", background: C.card }}>
-        {[["info", "⚙️ Configuración"], ["usuarios", `👥 Usuarios (${usuarios.length})`]].map(([k, l]) => (
+        {[["info", "Configuración"], ["usuarios", `Usuarios (${usuarios.length})`]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             background: "none", border: "none", cursor: "pointer", fontFamily: font, fontSize: 13,
             color: tab === k ? C.blueText : C.muted, fontWeight: tab === k ? 600 : 400,
@@ -295,12 +296,12 @@ function OrgDetail({ org, onBack, onUpdate }) {
                       border: `1px solid ${form.activo === v ? (v ? C.green : C.red) : C.border}`,
                       color: form.activo === v ? (v ? C.green : C.red) : C.muted,
                     }}>
-                      {v ? "✓ Activa" : "✕ Suspendida"}
+                      {v ? "Activa" : "Suspendida"}
                     </button>
                   ))}
                 </div>
               </div>
-              {err && <div style={{ color: C.red, fontSize: 12, marginBottom: 12 }}>⚠ {err}</div>}
+              {err && <div style={{ color: C.red, fontSize: 12, marginBottom: 12 }}>{err}</div>}
               <button onClick={guardar} disabled={saving} style={{ ...S.btn, width: "100%", opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -366,7 +367,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
                       </select>
                     </div>
                   </div>
-                  {addErr && <div style={{ color: C.red, fontSize: 12, marginTop: 12 }}>⚠ {addErr}</div>}
+                  {addErr && <div style={{ color: C.red, fontSize: 12, marginTop: 12 }}>{addErr}</div>}
                   <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                     <button onClick={() => setShowAdd(false)} disabled={addBusy} style={{ ...S.btnGhost, flex: 1 }}>Cancelar</button>
                     <button onClick={crearUsuario} disabled={addBusy} style={{ ...S.btn, flex: 1, opacity: addBusy ? 0.6 : 1 }}>
@@ -521,7 +522,7 @@ function SuperAdminPanel({ sesion }) {
 
       <div style={{ padding: "24px", maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-          {[["orgs", "🏢 Organizaciones"], ["salud", "🩺 Salud"]].map(([k, l]) => (
+          {[["orgs", "Organizaciones"], ["salud", "Salud"]].map(([k, l]) => (
             <button key={k} onClick={() => setVista(k)} style={{ ...S.btnGhost, ...(vista === k ? { background: C.blueDim, borderColor: `${C.blue}66`, color: C.blueText, fontWeight: 600 } : {}) }}>{l}</button>
           ))}
         </div>
@@ -547,7 +548,7 @@ function SuperAdminPanel({ sesion }) {
           borderColor:  showCrear ? C.border : `${C.blue}44`,
           color:        showCrear ? C.muted : C.blueText,
         }}>
-          {showCrear ? "✕ Cancelar" : "+ Nueva organización"}
+          {showCrear ? "Cancelar" : "+ Nueva organización"}
         </button>
 
         {showCrear && (
@@ -586,7 +587,7 @@ function SuperAdminPanel({ sesion }) {
                   type="email" placeholder="admin@empresa.com" style={S.input} />
               </div>
             </div>
-            {err && <div style={{ color: C.red, fontSize: 12, marginBottom: 12 }}>⚠ {err}</div>}
+            {err && <div style={{ color: C.red, fontSize: 12, marginBottom: 12 }}>{err}</div>}
             <button onClick={crearOrg} disabled={saving} style={{ ...S.btn, width: "100%", opacity: saving ? 0.6 : 1 }}>
               {saving ? "Creando…" : "Crear organización"}
             </button>
@@ -595,7 +596,7 @@ function SuperAdminPanel({ sesion }) {
 
         {err && (
           <div style={{ background: tono("#3b0000", "#f8e4e4"), border: `1px solid ${C.red}`, borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: C.red, fontSize: 13, wordBreak: "break-all" }}>
-            ⚠ {err}
+            {err}
           </div>
         )}
 
@@ -606,7 +607,7 @@ function SuperAdminPanel({ sesion }) {
 
         {orgs.length === 0 && !showCrear && (
           <div style={{ textAlign: "center", padding: "60px 0", color: C.dim }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🏢</div>
+            <Building2 size={36} color={C.dim} style={{ marginBottom: 12 }} />
             <div style={{ fontSize: 14 }}>Sin organizaciones — crea la primera</div>
           </div>
         )}

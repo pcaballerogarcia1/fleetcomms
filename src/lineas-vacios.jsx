@@ -7,6 +7,7 @@
 import { useMemo, useState } from "react";
 import { cabecerasDeRed, ID_COCHERA, PARAMS_DEFECTO } from "./lineas-sched.js";
 import { C } from "./tema.js";
+import { X } from "lucide-react";
 
 
 const font = "var(--font)";
@@ -140,7 +141,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
                     <td style={{ ...td, fontSize: 11, color: v?.[2] === "m" ? C.amber : v ? C.green : C.dim }}>{v?.[2] === "m" ? "a mano" : v ? "por carretera" : "estimado"}</td>
                     <td style={{ ...td, textAlign: "right" }}>
                       {ed
-                        ? <><button onClick={() => guardarFila(r)} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer", marginRight: 4 }}>✓</button><button onClick={() => setEditando(null)} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}>✕</button></>
+                        ? <><button onClick={() => guardarFila(r)} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer", marginRight: 4 }}>✓</button><button onClick={() => setEditando(null)} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}><X size={12} /></button></>
                         : <button onClick={() => setEditando({ clave: r.clave, km: String((v || est)[0]).replace(".", ","), min: String((v || est)[1]) })} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.blueText, borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Cambiar</button>}
                     </td>
                   </tr>

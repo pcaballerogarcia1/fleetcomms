@@ -4,7 +4,7 @@
 // KpiBar, Gantt con vista Tabla/Compacta y zoom) con lo propio de los
 // autobuses: los viajes de cada línea en su color, los relevos de conductor
 // (T12) y la pestaña de horarios de salida. El cálculo está en lineas-sched.js.
-import { CalendarRange, Check, ChevronDown, FileDown, Send, SlidersHorizontal, Sparkles, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarRange, Check, ChevronDown, FileDown, Pencil, Send, SlidersHorizontal, Sparkles, TrendingUp } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { watchRed, watchCfg, watchSchedParams, guardarSchedParams, watchCocheras, cambiarManuales, watchCambioPlanning } from "./lineas-store.js";
 import {
@@ -530,13 +530,13 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
 
           {avisoPlanning && (
             <div style={{ padding: "7px 16px", fontSize: 12, color: C.input, background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-              <span>⚠ <b>Se ha modificado la planificación</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
+              <span><AlertTriangle size={13} style={{ verticalAlign: "-2px" }} /> <b>Se ha modificado la planificación</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
               <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: C.input, border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
             </div>
           )}
           {manualesActuales.length > 0 && (
             <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(91,124,250,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
-              <span>✎ {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
+              <span><Pencil size={12} style={{ verticalAlign: "-2px" }} /> {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
               <button onClick={deshacer} disabled={calculando} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 5, padding: "2px 9px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Deshacer el último</button>
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>

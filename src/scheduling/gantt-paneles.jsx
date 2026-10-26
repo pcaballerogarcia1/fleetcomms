@@ -2,7 +2,7 @@
 // tooltip, panel de detalle y reasignación, jornada media y tareas sin asignar).
 
 
-import { ChevronLeft, ChevronRight, Minus, Plus, Rows2, Rows3, TriangleAlert } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Minus, Plus, Rows2, Rows3, TriangleAlert, Truck } from "lucide-react";
 import { minToTime } from "../vrp-engine.js";
 import { C, barrioColor, fmtDurHM, mono } from "./estilo.js";
 import { ROW_H, UNASSIGNED_RENDER_CAP, ZOOM_STEPS } from "./gantt-comun.js";
@@ -160,7 +160,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
               if (!v) return null;
               return (
                 <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 5, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.blue, fontWeight: 700, flexShrink: 0 }}>🚛</div>
+                  <div style={{ width: 20, height: 20, borderRadius: 5, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.blue, fontWeight: 700, flexShrink: 0 }}><Truck size={12} /></div>
                   <div>
                     <div style={{ fontSize: 10, color: C.dim, marginBottom: 1 }}>Vehículo asignado</div>
                     <div style={{ fontSize: 11, color: C.blue, fontWeight: 600 }}>{v.nombre || v.matricula}{v.matricula && v.nombre ? ` · ${v.matricula}` : ""}</div>
@@ -318,7 +318,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
           </span>
           {jornadaStats.max - jornadaStats.min > 120 && (
             <span style={{ fontSize: 10.5, color: C.amber, display: "flex", alignItems: "center", gap: 4 }} title="Hay más de 2h de diferencia entre el turno más corto y el más largo del día">
-              ⚠ turnos descompensados
+              <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> turnos descompensados
             </span>
           )}
         </div>

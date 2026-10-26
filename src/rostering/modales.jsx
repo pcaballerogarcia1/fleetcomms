@@ -361,7 +361,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
             ))}
           </div>
           <div style={{ fontSize: 11, color: C.dim, marginBottom: 14 }}>
-            Scheduling mueve esas rutas al nuevo día (mismo vehículo y horario). Revísalas en el Gantt antes de publicar.
+            Rutas mueve esas rutas al nuevo día (mismo vehículo y horario). Revísalas en el Gantt antes de publicar.
           </div>
         </>
       )}

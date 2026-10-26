@@ -8,6 +8,8 @@ import { escucharInventario, guardarInventario } from "../inventario-store.js";
 import { useUltimo } from "../use-ultimo.js";
 import { C, font, mono } from "./estilo.js";
 import { useSector } from "../sector.js";
+import { X } from "lucide-react";
+import { tono } from "../tema.js";
 
 const POR_PAGINA = 200;
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
@@ -104,7 +106,7 @@ export function TabInventario({ layers, projectId, orgId }) {
   const editable = (c, campo, ancho, tipo = "text") => (
     <input key={`${c.id}:${campo}:${remoto.v}`} type={tipo} defaultValue={c[campo] ?? ""}
       onBlur={e => { const v = tipo === "number" ? (parseFloat(e.target.value) > 0 ? parseFloat(e.target.value) : null) : e.target.value.trim(); if (v !== (c[campo] ?? (tipo === "number" ? null : ""))) cambiar(c.id, { [campo]: v }); }}
-      style={{ ...inp, width: ancho, ...(tipo !== "date" ? {} : { colorScheme: "dark" }), ...(campo === "rfid" || campo === "codigo" ? { fontFamily: mono } : {}) }} />
+      style={{ ...inp, width: ancho, ...(tipo !== "date" ? {} : { colorScheme: tono("dark", "light") }), ...(campo === "rfid" || campo === "codigo" ? { fontFamily: mono } : {}) }} />
   );
 
   if (!projectId) return <div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Abre un proyecto para ver su inventario.</div>;
@@ -162,7 +164,7 @@ export function TabInventario({ layers, projectId, orgId }) {
                   <td style={{ ...td, fontSize: 10.5, color: C.muted, whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.lat}, ${c.lng}`}>{c.nombre || `${(+c.lat).toFixed(4)}, ${(+c.lng).toFixed(4)}`}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <button title="Quitar del inventario (para dejarlo pero sin usarlo, ponlo como «Retirado»)" onClick={() => { if (!window.confirm(`¿Quitar ${c.codigo || "este contenedor"} del inventario?`)) return; setLista(l => l.filter(x => x.id !== c.id)); setBorrados(b => [...b, c.id]); setCambiados(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
-                      style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
+                      style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}><X size={14} /></button>
                   </td>
                 </tr>
               ))}

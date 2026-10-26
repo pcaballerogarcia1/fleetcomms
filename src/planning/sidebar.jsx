@@ -1,5 +1,5 @@
 // Planning de rutas por puntos: el panel lateral (capas, filtros, precios).
-import { Loader2, Upload, Warehouse } from "lucide-react";
+import { AlertTriangle, Loader2, Upload, Warehouse } from "lucide-react";
 import { useState, useRef } from "react";
 import { db } from "../firebase.js";
 import { doc, deleteDoc, updateDoc } from "firebase/firestore";
@@ -468,7 +468,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       return (
                         <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
                           title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Rutas. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
-                          ⚠ {[
+                          <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {[
                             q.invalid && `${q.invalid.toLocaleString()} sin coordenadas válidas`,
                             q.far && `${q.far.toLocaleString()} muy lejos del resto`,
                           ].filter(Boolean).join(" · ")}
@@ -478,7 +478,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                     {layer._missing && (
                       <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
                         title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planificación, se sube sola y aparece aquí.">
-                        ⚠ {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
+                        <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
                       </div>
                     )}
                     {layer._loadError && (

@@ -167,7 +167,7 @@ function ErrorList({ now }) {
   const grupos = useMemo(() => groupErrors(list), [list]);
   if (error) return <div style={{ padding: 20, fontSize: 12, color: C.red }}>No se pudieron cargar los errores ({error.code || String(error)}).</div>;
   if (list === null) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>Cargando…</div>;
-  if (!grupos.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>No hay errores registrados. 👍</div>;
+  if (!grupos.length) return <div style={{ padding: 20, fontSize: 12, color: C.dim }}>No hay errores registrados.</div>;
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px 16px" }}>
       {grupos.map(g => (

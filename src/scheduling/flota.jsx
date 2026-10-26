@@ -9,6 +9,8 @@ import { CAMPOS_FICHA, edadDe, valorFicha } from "../trabajador-ficha.js";
 import { AccesoApp } from "./acceso-app.jsx";
 import { CAMPOS_FICHA_VEHICULO, diasHasta, valorFichaVehiculo } from "../vehiculo-ficha.js";
 import { alfa } from "../tema.js";
+import { BatteryCharging, Fuel, Home, KeyRound, Pencil, Phone, Truck, X } from "lucide-react";
+import { tono } from "../tema.js";
 
 // ── DEPOT SECTION ─────────────────────────────────────────────────
 // Selector de cochera/depot compartido por vehículos y trabajadores: dos
@@ -69,7 +71,7 @@ function DepotSection({ projectId, formObj, setFormObj }) {
                   onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
                   onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
                 >
-                  <span style={{ marginRight: 6 }}>🏠</span>
+                  <Home size={13} style={{ marginRight: 6, verticalAlign: "-2px" }} />
                   <b>{d.nombre}</b>
                   <span style={{ color: C.dim, marginLeft: 8, fontSize: 10, fontFamily: mono }}>{(+d.lat).toFixed(5)}, {(+d.lng).toFixed(5)}</span>
                 </button>
@@ -87,9 +89,7 @@ function DepotSection({ projectId, formObj, setFormObj }) {
           step="0.00001" style={inpStyle} />
         {(formObj.depotLat || formObj.depotLng) && (
           <button onClick={() => setFormObj({ ...formObj, depotLat: "", depotLng: "" })} title="Quitar depot"
-            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}>
-            ×
-          </button>
+            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}><X size={14} /></button>
         )}
       </div>
     </div>
@@ -113,7 +113,7 @@ function FichaVehiculoCampos({ obj, setObj, selStyle }) {
             <input type={c.tipo === "fecha" ? "date" : "text"} inputMode={c.tipo === "decimal" ? "decimal" : undefined}
               placeholder={c.k === "autonomiaKm" ? "sin límite — no se le darán rutas más largas" : ""}
               value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
-              style={{ ...selStyle, flex: "none", colorScheme: "dark" }} />
+              style={{ ...selStyle, flex: "none", colorScheme: tono("dark", "light") }} />
           )}
         </label>
       ))}
@@ -286,26 +286,22 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
                   {[v.marca, v.modelo].filter(Boolean).length > 0 && <span>{[v.marca, v.modelo].filter(Boolean).join(" ")}</span>}
                   {v.combustible && <span>{v.combustible}</span>}
-                  {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="No se le dan rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? "🔋" : "⛽"} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
+                  {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="No se le dan rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? <BatteryCharging size={12} style={{ verticalAlign: "-2px" }} /> : <Fuel size={12} style={{ verticalAlign: "-2px" }} />} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
                   <AvisoFecha fecha={v.proximaITV} que="ITV" />
                   <AvisoFecha fecha={v.seguroVence} que="Seguro" />
                   {v.depotLat && v.depotLng && (
                     <span style={{ color: C.orange, display: "flex", alignItems: "center", gap: 3 }}>
-                      🏠 {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
+                      <Home size={11} /> {(+v.depotLat).toFixed(4)}, {(+v.depotLng).toFixed(4)}
                     </span>
                   )}
                 </div>
               </div>
               <button onClick={() => startEdit(v)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
-                ✎
-              </button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><Pencil size={13} /></button>
               <button onClick={() => remove(v._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
-                ×
-              </button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -360,7 +356,7 @@ function FichaCampos({ obj, setObj, selStyle, siempre = false }) {
               {c.l}
               <input type={c.tipo === "fecha" ? "date" : c.tipo === "numero" ? "number" : c.tipo === "email" ? "email" : "text"}
                 value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
-                style={{ ...selStyle, flex: "none", colorScheme: "dark" }} />
+                style={{ ...selStyle, flex: "none", colorScheme: tono("dark", "light") }} />
             </label>
           ))}
         </div>
@@ -545,32 +541,28 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   {w.categoria && <span>{w.categoria}</span>}
                   {edadDe(w) != null && <span>{edadDe(w)} años</span>}
                   {w.nacionalidad && <span>{w.nacionalidad}</span>}
-                  {w.telefono && <span>☎ {w.telefono}</span>}
+                  {w.telefono && <span><Phone size={11} style={{ verticalAlign: "-1px" }} /> {w.telefono}</span>}
                   {w.email && <span>{w.email}</span>}
-                  {w.uid && <span style={{ color: C.blueText }} title="Tiene acceso a la app">🔑 {w.usuario || "app"}</span>}
+                  {w.uid && <span style={{ color: C.blueText }} title="Tiene acceso a la app"><KeyRound size={11} style={{ verticalAlign: "-1px" }} /> {w.usuario || "app"}</span>}
                   {(() => {
                     const v = (vehicles || []).find(v => v._id === w.vehiculoId);
                     return v
-                      ? <span style={{ color: C.blue, background: C.blueDim, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}>🚛 {v.nombre || v.matricula}</span>
+                      ? <span style={{ color: C.blue, background: C.blueDim, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}><Truck size={11} style={{ verticalAlign: "-1px" }} /> {v.nombre || v.matricula}</span>
                       : <span style={{ color: C.red, fontSize: 10 }}>Sin vehículo</span>;
                   })()}
                   {w.depotLat && w.depotLng && (
                     <span style={{ color: C.orange, display: "flex", alignItems: "center", gap: 3 }}>
-                      🏠 {(+w.depotLat).toFixed(4)}, {(+w.depotLng).toFixed(4)}
+                      <Home size={11} /> {(+w.depotLat).toFixed(4)}, {(+w.depotLng).toFixed(4)}
                     </span>
                   )}
                 </div>
               </div>
               <button onClick={() => startEdit(w)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
-                ✎
-              </button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><Pencil size={13} /></button>
               <button onClick={() => remove(w._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
-                ×
-              </button>
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><X size={14} /></button>
             </div>
           ))}
         </div>

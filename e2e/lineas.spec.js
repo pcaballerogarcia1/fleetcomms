@@ -159,7 +159,7 @@ test("cambiar una hora de salida en Planning: la usa el Scheduling y avisa del c
   const caja = page.locator("td input").first(); // la caja de la hora que se está cambiando
   await caja.fill("05:45");
   await caja.press("Enter");
-  await expect(page.getByText(/Cambiado a mano en Planning/).first()).toBeVisible();
+  await expect(page.getByText(/Cambiado a mano en Planificación/).first()).toBeVisible();
   await page.getByTitle(/^06:20 · pincha/).first().click();
   await page.getByRole("button", { name: "Quitar", exact: true }).click();
   await expect.poll(async () => Object.keys((await leer(`planning_settings/${pid}`))?.lineasCfg?.L1?.salidas || {}).length).toBe(1);

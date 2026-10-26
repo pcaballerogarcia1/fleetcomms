@@ -304,7 +304,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
         const idx  = prev.findIndex(s => s.lat === d.lat && s.lng === d.lng);
         setSelected(idx >= 0
           ? prev.filter((_, i) => i !== idx)
-          : [...prev, { lat: d.lat, lng: d.lng, nombre: `🏠 ${d.nombre}` }]
+          : [...prev, { lat: d.lat, lng: d.lng, nombre: d.nombre }]
         );
       });
       dm.addTo(map);

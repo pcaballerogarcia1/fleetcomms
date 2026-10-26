@@ -3,9 +3,10 @@ import { useState, useEffect, useMemo } from "react";
 import { claveViaje } from "../lineas-sched.js";
 import { C, COLS, PAGINA, ROW_H, TABLE_W, ZOOM_STEPS, filasDe, font, hhmm, hm, horaEje, mono, norm, num } from "./comun.js";
 import { tono } from "../tema.js";
+import { Pin, X as XIcon } from "lucide-react";
 
 const celda = (r, k) => {
-  if (k === "nombre") return r.manual ? `${r.nombre} ✎` : r.nombre;
+  if (k === "nombre") return r.manual ? `${r.nombre} (a mano)` : r.nombre;
   if (k === "inicio" || k === "fin") return hhmm(r[k]);
   if (k === "amplitud" || k === "conduccion" || k === "pausas") return r[k] ? hm(r[k]) : "—";
   if (k === "km" || k === "kmVacio") return Math.round(r[k]).toLocaleString("es-ES");
@@ -72,7 +73,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
 
   const chincheta = r => (
     <button onClick={e => { e.stopPropagation(); alternarAncla(r.id); }} title={anclados.includes(r.id) ? "Desanclar" : "Anclar arriba (para trabajar con esta fila a mano)"}
-      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 4, fontSize: 10, opacity: anclados.includes(r.id) ? 1 : 0.28, filter: anclados.includes(r.id) ? "none" : "grayscale(1)" }}>📌</button>
+      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 4, fontSize: 10, opacity: anclados.includes(r.id) ? 1 : 0.28, color: anclados.includes(r.id) ? C.blue : C.muted, display: "inline-flex" }}><Pin size={11} /></button>
   );
   const pintarFila = (r, ri) => (
           <div key={r.nombre} {...zonaDe(r.id)} style={{ display: "flex", height: ROW_H, borderBottom: `1px solid ${C.border}`, background: sobre === r.id ? "rgba(91,124,250,0.18)" : ri % 2 ? tono("rgba(23,32,53,0.45)", "rgba(255,255,255,0.45)") : "transparent", outline: sobre === r.id ? `1px solid ${C.blue}` : "none", outlineOffset: -1, width: leftW + ancho }}>
@@ -194,7 +195,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
           <span style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", fontSize: 11.5, color: C.text, background: C.blueDim, border: `1px solid ${C.blue}`, borderRadius: 6, padding: "3px 6px 3px 10px" }}>
             {sel.size} {modo === "vehicles" ? "expedicion(es)" : "viaje(s)"} elegidos · arrástralos a otro {modo === "vehicles" ? "autobús" : "turno"}
             <button onClick={() => { if (onMover && onMover(tipoVarios, [...sel], null)) setSel(new Set()); }} style={{ background: C.green, border: "none", color: tono("#06281a", "#e4f8f0"), borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: font }}>A {modo === "vehicles" ? "uno nuevo" : "un turno nuevo"}</button>
-            <button onClick={() => setSel(new Set())} title="Quitar la selección (Esc)" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
+            <button onClick={() => setSel(new Set())} title="Quitar la selección (Esc)" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }}><XIcon size={13} /></button>
           </span>
         )}
       </div>
@@ -225,7 +226,7 @@ export function Gantt({ res, modo, filtro, paradasPorId, onMover }) {
           // Ancladas: fijas arriba mientras se recorre el resto (para pasar piezas entre ellas)
           <div style={{ position: "sticky", top: arr ? 60 : 30, zIndex: 5, background: C.bg, borderBottom: `2px solid ${C.blue}`, boxShadow: "0 6px 14px rgba(0,0,0,0.45)", width: leftW + ancho }}>
             <div style={{ position: "sticky", left: 0, display: "flex", alignItems: "center", gap: 10, height: 22, padding: "0 10px", fontSize: 10, color: C.blueText, fontWeight: 700, letterSpacing: 0.5, width: "max-content" }}>
-              📌 {filasAncladas.length} {modo === "vehicles" ? "autobús(es)" : "turno(s)"} anclado(s) arriba
+              <Pin size={12} style={{ verticalAlign: "-2px" }} /> {filasAncladas.length} {modo === "vehicles" ? "autobús(es)" : "turno(s)"} anclado(s) arriba
               <button onClick={() => setAnclados([])} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 7px", fontSize: 10, cursor: "pointer", fontFamily: font }}>Desanclar todos</button>
             </div>
             {filasAncladas.map((r, ri) => pintarFila(r, ri))}

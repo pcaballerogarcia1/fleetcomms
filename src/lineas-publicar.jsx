@@ -87,7 +87,7 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
           <>
             <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 12.5, color: C.text }}>
               Día del servicio
-              <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: "dark" }} />
+              <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }} />
               {fecha !== hoy && <button onClick={() => setFecha(hoy)} style={{ ...btn(false), padding: "4px 9px", fontSize: 11 }}>Hoy</button>}
             </label>
             <div style={{ fontSize: 11.5, marginTop: 6, color: vale ? C.dim : C.amber }}>

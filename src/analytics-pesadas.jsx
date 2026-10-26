@@ -6,6 +6,8 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { leerKg, resumenPesadas } from "./pesadas.js";
 import { apuntarPesada, borrarPesada, escucharPesadas } from "./pesadas-store.js";
 import { C } from "./tema.js";
+import { X } from "lucide-react";
+import { tono } from "./tema.js";
 
 
 const font = "var(--font)";
@@ -120,8 +122,8 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
         <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 4 }}>Apuntar una pesada</div>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Del ticket de la báscula. Los conductores también pueden apuntarlas desde su ruta en la app. Si la planta te da un Excel, súbelo entero.</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, colorScheme: "dark" }} />
-          <input type="time" value={f.hora} onChange={e => setF({ ...f, hora: e.target.value })} style={{ ...inp, colorScheme: "dark" }} />
+          <input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light") }} />
+          <input type="time" value={f.hora} onChange={e => setF({ ...f, hora: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light") }} />
           <input list="pes-veh" value={f.vehiculo} onChange={e => setF({ ...f, vehiculo: e.target.value })} placeholder="Camión" style={{ ...inp, width: 130 }} />
           <input list="pes-pla" value={f.planta} onChange={e => setF({ ...f, planta: e.target.value })} placeholder="Planta" style={{ ...inp, width: 130 }} />
           <input list="pes-fra" value={f.fraccion} onChange={e => setF({ ...f, fraccion: e.target.value })} placeholder="Fracción" style={{ ...inp, width: 120 }} />
@@ -159,7 +161,7 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
                 <td style={{ ...td, fontFamily: mono, textAlign: "right" }}>{Math.round(p.kg).toLocaleString("es-ES")}</td>
                 <td style={{ ...td, fontFamily: mono }}>{p.ticket}</td>
                 <td style={{ ...td, color: C.muted }}>{p.creadoNombre}</td>
-                <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm("¿Borrar esta pesada?") && borrarPesada(p._id).catch(e => setError(e.message))} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>✕</button></td>
+                <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm("¿Borrar esta pesada?") && borrarPesada(p._id).catch(e => setError(e.message))} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
               </tr>
             ))}
           </tbody>

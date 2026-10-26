@@ -259,8 +259,8 @@ function EditorCalendarios({ d, cambiar }) {
               })}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11.5, color: C.muted }}>
-              del <input type="date" value={c.desde} onChange={e => e.target.value && cambiarCal(c.id, { desde: e.target.value })} style={{ ...inp, colorScheme: "dark", flex: 1 }} />
-              al <input type="date" value={c.hasta} onChange={e => e.target.value && cambiarCal(c.id, { hasta: e.target.value })} style={{ ...inp, colorScheme: "dark", flex: 1 }} />
+              del <input type="date" value={c.desde} onChange={e => e.target.value && cambiarCal(c.id, { desde: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
+              al <input type="date" value={c.hasta} onChange={e => e.target.value && cambiarCal(c.id, { hasta: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
             </div>
             <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Días sin servicio (festivos…) y días que se añaden:</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
@@ -268,7 +268,7 @@ function EditorCalendarios({ d, cambiar }) {
               {(c.con || []).map(f => <span key="c${f}" style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(63,207,142,.12)", color: C.green, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { con: c.con.filter(x => x !== f) })}>+ {fechaCorta(f)} ×</span>)}
             </div>
             <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
-              <input type="date" value={nuevaFecha[c.id] || ""} onChange={e => setNuevaFecha(n => ({ ...n, [c.id]: e.target.value }))} style={{ ...inp, colorScheme: "dark", flex: 1 }} />
+              <input type="date" value={nuevaFecha[c.id] || ""} onChange={e => setNuevaFecha(n => ({ ...n, [c.id]: e.target.value }))} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
               <button disabled={!nuevaFecha[c.id]} onClick={() => { cambiarCal(c.id, { sin: [...new Set([...(c.sin || []), nuevaFecha[c.id]])].sort() }); setNuevaFecha(n => ({ ...n, [c.id]: "" })); }} style={btn()}>Sin servicio</button>
               <button disabled={!nuevaFecha[c.id]} onClick={() => { cambiarCal(c.id, { con: [...new Set([...(c.con || []), nuevaFecha[c.id]])].sort() }); setNuevaFecha(n => ({ ...n, [c.id]: "" })); }} style={btn()}>Añadir</button>
             </div>

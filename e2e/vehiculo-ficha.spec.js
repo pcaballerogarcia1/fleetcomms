@@ -23,7 +23,7 @@ test("la ficha del vehículo se rellena a la derecha y se guarda", async ({ page
   await page.getByLabel("Próxima ITV").fill(itv);
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/v1-ficha-vehiculo.png` });
   await page.getByRole("button", { name: "Guardar", exact: true }).last().click();
-  await expect(page.getByText("🔋 180 km")).toBeVisible();
+  await expect(page.getByText("180 km", { exact: false }).first()).toBeVisible();
   await expect(page.getByText("ITV en 10 días")).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/v2-guardado.png` });
   const v = (await listar("scheduling_vehicles")).find(x => x.marca === "Renault");

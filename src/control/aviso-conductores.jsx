@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { C, font } from "./datos.js";
+import { Megaphone } from "lucide-react";
 
 export function AvisoConductores({ orgId, usuarios }) {
   const [abierto, setAbierto] = useState(false);
@@ -25,7 +26,7 @@ export function AvisoConductores({ orgId, usuarios }) {
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAbierto(a => !a); setEstado(null); }} title="Mandar un aviso al móvil de los conductores"
         style={{ background: "rgba(91,124,250,0.10)", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
-        📣 Aviso al móvil
+        <Megaphone size={14} style={{ verticalAlign: "-2px" }} /> Aviso al móvil
       </button>
       {abierto && (
         <div style={{ position: "absolute", right: 0, top: 36, zIndex: 50, width: 340, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,.5)", display: "flex", flexDirection: "column", gap: 8 }}>
