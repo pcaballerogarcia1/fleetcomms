@@ -99,10 +99,10 @@ export function TabInventario({ layers, projectId, orgId }) {
   }, [lista, q, estado]);
   const res = useMemo(() => resumenInventario(lista), [lista]);
 
-  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 10.5, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 8px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
+  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 4, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
+  const th = { fontSize: 11, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 8px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
   const td = { padding: "4px 8px", borderTop: `1px solid ${C.border}` };
-  const btn = (principal) => ({ padding: "7px 13px", borderRadius: 7, border: principal ? "none" : `1px solid ${C.border2}`, background: principal ? C.blue : "none", color: principal ? "#fff" : C.text, fontSize: 12, fontWeight: principal ? 600 : 400, cursor: "pointer", fontFamily: font });
+  const btn = (principal) => ({ padding: "7px 13px", borderRadius: 8, border: principal ? "none" : `1px solid ${C.border2}`, background: principal ? C.blue : "none", color: principal ? "#fff" : C.text, fontSize: 12, fontWeight: principal ? 600 : 400, cursor: "pointer", fontFamily: font });
   const editable = (c, campo, ancho, tipo = "text") => (
     <input key={`${c.id}:${campo}:${remoto.v}`} type={tipo} defaultValue={c[campo] ?? ""}
       onBlur={e => { const v = tipo === "number" ? (parseFloat(e.target.value) > 0 ? parseFloat(e.target.value) : null) : e.target.value.trim(); if (v !== (c[campo] ?? (tipo === "number" ? null : ""))) cambiar(c.id, { [campo]: v }); }}
@@ -137,7 +137,7 @@ export function TabInventario({ layers, projectId, orgId }) {
           <button onClick={descartar} disabled={guardando} style={{ ...btn(false), color: C.muted }}>Descartar</button>
         </>}
       </div>
-      <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>El Excel: una fila por {T.elemento} con «Código» o «RFID» para encontrarlo, y las columnas que quieras cambiar ({`Tipo, ${ver.volumen ? "Litros" : "Capacidad"}, ${T.categoria}, Estado, Instalado, Revisado, ${T.revision}, Notas`}). Si el código no está y la fila trae Lat/Lng, se añade.</div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>El Excel: una fila por {T.elemento} con «Código» o «RFID» para encontrarlo, y las columnas que quieras cambiar ({`Tipo, ${ver.volumen ? "Litros" : "Capacidad"}, ${T.categoria}, Estado, Instalado, Revisado, ${T.revision}, Notas`}). Si el código no está y la fila trae Lat/Lng, se añade.</div>
       {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
       {nota && <div style={{ fontSize: 12, color: C.green, marginBottom: 8 }}>{nota}</div>}
       {cargando ? <div style={{ fontSize: 12, color: C.muted }}>Cargando…</div> : (
@@ -161,10 +161,10 @@ export function TabInventario({ layers, projectId, orgId }) {
                   <td style={td}>{editable(c, "revisado", 125, "date")}</td>
                   <td style={td}>{editable(c, "lavado", 125, "date")}</td>
                   <td style={td}>{editable(c, "notas", 180)}</td>
-                  <td style={{ ...td, fontSize: 10.5, color: C.muted, whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.lat}, ${c.lng}`}>{c.nombre || `${(+c.lat).toFixed(4)}, ${(+c.lng).toFixed(4)}`}</td>
+                  <td style={{ ...td, fontSize: 11, color: C.muted, whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.lat}, ${c.lng}`}>{c.nombre || `${(+c.lat).toFixed(4)}, ${(+c.lng).toFixed(4)}`}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <button title="Quitar del inventario (para dejarlo pero sin usarlo, ponlo como «Retirado»)" onClick={() => { if (!window.confirm(`¿Quitar ${c.codigo || "este contenedor"} del inventario?`)) return; setLista(l => l.filter(x => x.id !== c.id)); setBorrados(b => [...b, c.id]); setCambiados(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
-                      style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}><X size={14} /></button>
+                      style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 15 }}><X size={14} /></button>
                   </td>
                 </tr>
               ))}

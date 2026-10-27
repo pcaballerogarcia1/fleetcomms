@@ -9,6 +9,7 @@ import { C, font, mono } from "./estilo.js";
 import { useUltimo } from "../use-ultimo.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 // ── TIMETABLE ROW ─────────────────────────────────────────────────
 function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = null, defaultPrice = null, onPrice }) {
@@ -103,7 +104,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
             width: "100%", background: alfa(0.04),
             border: `1px solid ${localStart ? C.blue + "55" : C.border}`,
             color: localStart ? C.blueText : C.muted,
-            padding: "6px 8px", borderRadius: 6, fontSize: 12,
+            padding: "6px 8px", borderRadius: 8, fontSize: 12,
             fontFamily: mono, outline: "none", cursor: "pointer",
           }}
         />
@@ -122,7 +123,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
               width: "100%", background: alfa(0.04),
               border: `1px solid ${franjaIni ? C.green + "55" : C.border}`,
               color: franjaIni ? C.green : C.muted,
-              padding: "6px 6px", borderRadius: 6, fontSize: 11,
+              padding: "6px 6px", borderRadius: 8, fontSize: 11,
               fontFamily: mono, outline: "none", cursor: "pointer",
             }}
           />
@@ -137,7 +138,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
               width: "100%", background: alfa(0.04),
               border: `1px solid ${franjaFin ? C.green + "55" : C.border}`,
               color: franjaFin ? C.green : C.muted,
-              padding: "6px 6px", borderRadius: 6, fontSize: 11,
+              padding: "6px 6px", borderRadius: 8, fontSize: 11,
               fontFamily: mono, outline: "none", cursor: "pointer",
             }}
           />
@@ -160,7 +161,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
               width: 56, background: alfa(0.04),
               border: `1px solid ${localDur ? C.amber + "55" : C.border}`,
               color: localDur ? C.amber : C.muted,
-              padding: "6px 8px", borderRadius: 6, fontSize: 12,
+              padding: "6px 8px", borderRadius: 8, fontSize: 12,
               fontFamily: mono, outline: "none", textAlign: "right",
             }}
           />
@@ -187,7 +188,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
                 width: 64, background: alfa(0.04),
                 border: `1px solid ${localPrice ? C.green + "55" : C.border}`,
                 color: localPrice ? C.green : C.muted,
-                padding: "6px 8px", borderRadius: 6, fontSize: 12,
+                padding: "6px 8px", borderRadius: 8, fontSize: 12,
                 fontFamily: mono, outline: "none", textAlign: "right",
               }}
             />
@@ -198,16 +199,7 @@ function TimetableRow({ entry, onUpdate, onDelete, canPrice = false, price = nul
 
       {/* Acciones */}
       <td style={{ padding: "10px 12px 10px 4px", verticalAlign: "middle", width: 36 }}>
-        <button onClick={onDelete} title="Eliminar" style={{
-          width: 26, height: 26, borderRadius: 6,
-          background: "none", border: `1px solid ${C.border}`,
-          color: C.dim, cursor: "pointer", fontSize: 14,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "all .15s", fontFamily: font,
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
-        >×</button>
+        <BotonCerrar onClick={onDelete} title="Eliminar" onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }} onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }} />
       </td>
     </tr>
   );
@@ -586,7 +578,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
         display: "flex", alignItems: "center", gap: 28,
       }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{effectiveEntries.length.toLocaleString()}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{effectiveEntries.length.toLocaleString()}</span>
           <span style={{ fontSize: 11, color: C.muted }}>puntos</span>
           {/* varios elementos en el mismo sitio (una isla de contenedores) son un punto aquí y una parada cada uno en Scheduling */}
           {!isLarge && totalMarkers > effectiveEntries.length && (
@@ -596,23 +588,23 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
           )}
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{withTime.length}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{withTime.length}</span>
           <span style={{ fontSize: 11, color: C.muted }}>programados</span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{effectiveEntries.length - withTime.length}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{effectiveEntries.length - withTime.length}</span>
           <span style={{ fontSize: 11, color: C.muted }}>sin hora</span>
         </div>
         {barrios.length > 0 && (
           <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{barrios.length}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{barrios.length}</span>
             <span style={{ fontSize: 11, color: C.muted }}>barrios</span>
           </div>
         )}
         {canPrice && importeTotal.count > 0 && (
           <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}
             title={`${importeTotal.count.toLocaleString()} puntos con precio${importeTotal.sinPrecio ? ` · ${importeTotal.sinPrecio.toLocaleString()} sin precio` : ""}`}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: C.green }}>{fmtEur(importeTotal.total)}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{fmtEur(importeTotal.total)}</span>
             <span style={{ fontSize: 11, color: C.muted }}>importe total</span>
           </div>
         )}
@@ -631,7 +623,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 title="Precio por punto: por defecto y por barrio (solo administradores)"
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                  padding: "6px 12px", borderRadius: 8, cursor: "pointer",
                   background: showPricePanel ? "rgba(63,207,142,0.15)" : "rgba(63,207,142,0.07)",
                   border: `1px solid ${showPricePanel ? "rgba(63,207,142,0.5)" : "rgba(63,207,142,0.22)"}`,
                   color: C.green, fontSize: 12, fontWeight: 500, fontFamily: font, transition: "all .15s",
@@ -646,7 +638,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               title="Fijar duración por defecto para todas las paradas"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                padding: "6px 12px", borderRadius: 8, cursor: "pointer",
                 background: showDurPanel ? "rgba(245,184,74,0.15)" : "rgba(245,184,74,0.07)",
                 border: `1px solid ${showDurPanel ? "rgba(245,184,74,0.5)" : "rgba(245,184,74,0.22)"}`,
                 color: C.amber, fontSize: 12, fontWeight: 500,
@@ -665,7 +657,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               title={barrioFiltro ? `Exportar barrio "${barrioFiltro}"` : "Exportar todo el timetable"}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                padding: "6px 12px", borderRadius: 8, cursor: "pointer",
                 background: "rgba(63,207,142,0.08)", border: `1px solid rgba(63,207,142,0.25)`,
                 color: C.green, fontSize: 12, fontWeight: 500,
                 fontFamily: font, transition: "all .15s",
@@ -695,7 +687,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               title="Importar Excel con el mismo formato que se descarga (empareja por Coordenadas)"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 12px", borderRadius: 7, cursor: importing ? "default" : "pointer",
+                padding: "6px 12px", borderRadius: 8, cursor: importing ? "default" : "pointer",
                 background: "rgba(79,142,247,0.08)", border: `1px solid rgba(79,142,247,0.25)`,
                 color: C.blueText, fontSize: 12, fontWeight: 500,
                 fontFamily: font, transition: "all .15s", opacity: importing ? 0.6 : 1,
@@ -710,7 +702,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
             </button>
             <a href="/scheduling" style={{
               display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+              padding: "6px 12px", borderRadius: 8, cursor: "pointer",
               background: C.blueDim, border: `1px solid ${C.blue}44`,
               color: C.blueText, fontSize: 12, fontWeight: 500,
               fontFamily: font, transition: "all .15s", textDecoration: "none",
@@ -740,13 +732,13 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
             <span style={{ fontSize: 12, color: C.muted }}>Por defecto</span>
             <input type="number" min="0" step="0.01" value={priceInput}
               onChange={e => setPriceInput(e.target.value)} placeholder="€"
-              style={{ width: 80, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+              style={{ width: 80, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
             <button disabled={savingPrice}
               onClick={() => withSaving(async () => {
                 await saveDefaultPrice(ttProjectId, orgId, parsePrice(priceInput));
                 logAudit({ modulo: "Planning", accion: "Cambió el precio por defecto", detalle: parsePrice(priceInput) == null ? "sin precio" : fmtEur(parsePrice(priceInput)) });
               })}
-              style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+              style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
               {savingPrice ? "Guardando…" : "Guardar"}
             </button>
             {barrioFiltro && (
@@ -755,7 +747,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 <span style={{ fontSize: 12, color: C.muted }}>Todos los de {barrioFiltro}</span>
                 <input type="number" min="0" step="0.01" value={barrioPriceInput}
                   onChange={e => setBarrioPriceInput(e.target.value)} placeholder="€ (vacío = quitar)"
-                  style={{ width: 120, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
+                  style={{ width: 120, background: C.surface2, border: "1px solid rgba(63,207,142,0.35)", color: C.text, borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: font, outline: "none", textAlign: "center" }} />
                 <button disabled={savingPrice}
                   onClick={() => {
                     const p = parsePrice(barrioPriceInput);
@@ -768,7 +760,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                       logAudit({ modulo: "Planning", accion: "Cambió el precio de un barrio", detalle: `${barrioFiltro} · ${list.length} puntos · ${p == null ? "precio por defecto" : fmtEur(p)}` });
                     });
                   }}
-                  style={{ padding: "7px 14px", borderRadius: 7, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
+                  style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "rgba(63,207,142,0.15)", border: "1px solid rgba(63,207,142,0.4)", color: C.green, fontSize: 12, fontWeight: 600, fontFamily: font }}>
                   Aplicar a {(grouped[barrioFiltro] || []).length} puntos
                 </button>
               </>
@@ -804,7 +796,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               style={{
                 width: 72, background: C.surface2,
                 border: `1px solid rgba(245,184,74,0.35)`,
-                color: C.text, borderRadius: 7, padding: "7px 10px",
+                color: C.text, borderRadius: 8, padding: "7px 10px",
                 fontSize: 13, fontFamily: font, outline: "none",
                 textAlign: "center",
               }}
@@ -814,7 +806,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               onClick={applyDefaultDuration}
               disabled={applyingDur || !durInput || parseInt(durInput, 10) < 1}
               style={{
-                padding: "7px 16px", borderRadius: 7, cursor: "pointer",
+                padding: "7px 16px", borderRadius: 8, cursor: "pointer",
                 background: applyingDur ? C.surface2 : "rgba(245,184,74,0.15)",
                 border: `1px solid rgba(245,184,74,0.4)`,
                 color: C.amber, fontSize: 12, fontWeight: 600,
@@ -824,13 +816,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
             >
               {applyingDur ? "Aplicando…" : "Aplicar a todos"}
             </button>
-            <button
-              onClick={() => setShowDurPanel(false)}
-              style={{
-                background: "none", border: "none", color: C.dim,
-                cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 4px",
-              }}
-            >×</button>
+            <BotonCerrar onClick={() => setShowDurPanel(false)} />
           </div>
         </div>
       )}
@@ -855,7 +841,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
             }}>
               <div style={{
                 padding: "10px 14px 6px",
-                fontSize: 9, color: C.dim, letterSpacing: 1.5,
+                fontSize: 10, color: C.dim, letterSpacing: 1.5,
                 textTransform: "uppercase", fontWeight: 600, flexShrink: 0,
               }}>
                 Barrios
@@ -927,7 +913,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 placeholder="Buscar punto por nombre, código, línea…"
                 style={{ width: "100%", maxWidth: 420, boxSizing: "border-box", background: C.surface2, border: `1px solid ${C.border}`,
-                  color: C.text, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontFamily: font, outline: "none" }} />
+                  color: C.text, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontFamily: font, outline: "none" }} />
               {qNorm && <span style={{ marginLeft: 10, fontSize: 11, color: C.dim }}>{totalFiltradas.toLocaleString()} coincidencias</span>}
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1008,10 +994,7 @@ export function TabTimetable({ layers, projectId: ttProjectId, canPrice = false,
                 <span style={{ fontSize: 12, color: C.dim }}>
                   Mostrando {tope.toLocaleString()} de {totalFiltradas.toLocaleString()} puntos
                 </span>
-                <button onClick={() => setPaginas({ clave: claveLista, n: nPaginas + 1 })} style={{
-                  padding: "5px 12px", borderRadius: 6, background: C.surface2, border: `1px solid ${C.border2}`,
-                  color: C.text, fontSize: 12, cursor: "pointer", fontFamily: font,
-                }}>Mostrar {Math.min(TT_PAGINA, totalFiltradas - tope).toLocaleString()} más</button>
+                <button onClick={() => setPaginas({ clave: claveLista, n: nPaginas + 1 })} className="op-btn">Mostrar {Math.min(TT_PAGINA, totalFiltradas - tope).toLocaleString()} más</button>
               </div>
             )}
           </div>

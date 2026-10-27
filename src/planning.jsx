@@ -12,6 +12,7 @@ import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
 import { useUltimo } from "./use-ultimo.js";
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false, activeProject = null, onProjectUpdate = null, vehicles = [], workers = [], loadingV = false, loadingW = false, orgRecursos = null }) {
@@ -474,7 +475,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
             Operanzia
           </div>
           <div style={{ width: 1, height: 16, background: C.border2 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Planificación</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Planificación</div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -516,13 +517,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               <span style={{ flex: 1 }}>{err}</span>
-              <button onClick={() => setErrors(prev => prev.filter((_, j) => j !== i))}
-                style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1, transition: "color .12s" }}
-                onMouseEnter={e => e.currentTarget.style.color = C.red}
-                onMouseLeave={e => e.currentTarget.style.color = C.dim}
-              >
-                ×
-              </button>
+              <BotonCerrar onClick={() => setErrors(prev => prev.filter((_, j) => j !== i))} onMouseEnter={e => e.currentTarget.style.color = C.red} onMouseLeave={e => e.currentTarget.style.color = C.dim} />
             </div>
           ))}
         </div>

@@ -57,7 +57,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
     setOcupado(false);
   }
 
-  const opcion = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 14, cursor: "pointer", textAlign: "left" };
+  const opcion = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 15, cursor: "pointer", textAlign: "left" };
   return (
     <div ref={caja} style={{ position: "relative" }}>
       <button onClick={() => setAbierto(a => !a)} title="Tu perfil" aria-label="Tu perfil" style={{ padding: 0, background: "none", border: "none", cursor: "pointer", borderRadius: "50%" }}>
@@ -69,7 +69,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
             <CirculoPerfil usuario={{ ...sesion, foto }} size={40} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[sesion?.nombre, sesion?.apellidos].filter(Boolean).join(" ") || "Tu perfil"}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[sesion?.nombre, sesion?.apellidos].filter(Boolean).join(" ") || "Tu perfil"}</div>
               {sesion?.email && <div style={{ fontSize: 12, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{usuarioDeCorreo(sesion.email)}</div>}
             </div>
           </div>

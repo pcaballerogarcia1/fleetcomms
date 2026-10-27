@@ -19,16 +19,16 @@ const kgTxt = kg => (kg >= 10000 ? `${(kg / 1000).toLocaleString("es-ES", { maxi
 
 function Kpi({ label, value, sub }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", minWidth: 150, flex: "1 1 150px" }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 16px", minWidth: 150, flex: "1 1 150px" }}>
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginTop: 4, fontFamily: mono }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.text, marginTop: 4, fontFamily: mono }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
 function Grafico({ titulo, datos, x }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, flex: "1 1 320px", minWidth: 280 }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, flex: "1 1 320px", minWidth: 280 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>{titulo}</div>
       {datos.length ? (
         <div style={{ height: 220 }}>
@@ -106,8 +106,8 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
 
-  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 8px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card };
+  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 8px", fontSize: 12, fontFamily: font, outline: "none" };
+  const th = { fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card };
   const td = { padding: "6px 10px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.text };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: font }}>
@@ -118,7 +118,7 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
         <Kpi label="Fracción principal" value={res.porFraccion[0]?.name ?? "—"} sub={res.porFraccion[0] ? kgTxt(res.porFraccion[0].kg) : null} />
       </div>
 
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 4 }}>Apuntar una pesada</div>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Del ticket de la báscula. Los conductores también pueden apuntarlas desde su ruta en la app. Si la planta te da un Excel, súbelo entero.</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -129,9 +129,9 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
           <input list="pes-fra" value={f.fraccion} onChange={e => setF({ ...f, fraccion: e.target.value })} placeholder="Fracción" style={{ ...inp, width: 120 }} />
           <input value={f.kg} onChange={e => setF({ ...f, kg: e.target.value })} onKeyDown={e => e.key === "Enter" && apuntar()} placeholder="Kg netos" style={{ ...inp, width: 90, fontFamily: mono }} />
           <input value={f.ticket} onChange={e => setF({ ...f, ticket: e.target.value })} placeholder="Nº ticket" style={{ ...inp, width: 100 }} />
-          <button onClick={apuntar} style={{ padding: "7px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Apuntar</button>
+          <button onClick={apuntar} className="op-btn op-primario">Apuntar</button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
-          <button onClick={() => fileRef.current?.click()} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.border2}`, background: "none", color: C.text, fontSize: 12, cursor: "pointer", fontFamily: font }}>Subir Excel de la báscula</button>
+          <button onClick={() => fileRef.current?.click()} className="op-btn">Subir Excel de la báscula</button>
           <datalist id="pes-veh">{vehiculos.map(v => <option key={v} value={v} />)}</datalist>
           <datalist id="pes-pla">{plantas.map(v => <option key={v} value={v} />)}</datalist>
           <datalist id="pes-fra">{fracciones.map(v => <option key={v} value={v} />)}</datalist>
@@ -147,7 +147,7 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
         <Grafico titulo="Kg por planta" datos={res.porPlanta} x="name" />
       </div>
 
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "auto", maxHeight: 420 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "auto", maxHeight: 420 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>{["Fecha", "Hora", "Camión", "Planta", "Fracción", "Kg", "Ticket", "Apuntó", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -161,7 +161,7 @@ export function PesadasAnalytics({ orgId, mes, planes = [], sesion, projectId })
                 <td style={{ ...td, fontFamily: mono, textAlign: "right" }}>{Math.round(p.kg).toLocaleString("es-ES")}</td>
                 <td style={{ ...td, fontFamily: mono }}>{p.ticket}</td>
                 <td style={{ ...td, color: C.muted }}>{p.creadoNombre}</td>
-                <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm("¿Borrar esta pesada?") && borrarPesada(p._id).catch(e => setError(e.message))} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
+                <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm("¿Borrar esta pesada?") && borrarPesada(p._id).catch(e => setError(e.message))} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15 }}><X size={13} /></button></td>
               </tr>
             ))}
           </tbody>

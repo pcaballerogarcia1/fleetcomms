@@ -34,17 +34,17 @@ export function PlantillaSubrogar({ calc, cambiar, personalEstudio, tarjeta, tit
       <div style={{ ...tarjeta, padding: "12px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <Users size={16} color={C.blue} />
-          <div style={{ flex: "1 1 300px", fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+          <div style={{ flex: "1 1 300px", fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
             {pl ? <><b style={{ color: C.text }}>{pl.nombre}</b>: {pl.personas} personas ({F1.format(pl.etc)} a jornada completa), <b style={{ color: C.text }}>{eur(pl.coste)}</b> al año{pl.ssPct != null ? ` (bruto + ${pl.ssPct} % de Seguridad Social)` : " (coste para la empresa)"} con un {pl.absentismoPct} % de cobertura de bajas y vacaciones{personalEstudio ? <> · el estudio pone <b style={{ color: C.text }}>{eur(personalEstudio)}</b> ({pl.coste > personalEstudio ? "+" : ""}{F1.format((pl.coste / personalEstudio - 1) * 100)} %)</> : null}</>
               : "Si hay que subrogar la plantilla actual, sube la lista que publica el Ayuntamiento (categoría, antigüedad, jornada, sueldo o coste): su coste sustituye al personal del estudio."}
           </div>
           <button className="op-btn" disabled={ocupado} onClick={() => ref.current?.click()}><Upload size={14} /> {pl ? "Cambiar lista" : "Subir lista de personal"}</button>
-          {pl && <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: C.text }}><input type="checkbox" checked={!!calc.usarPlantilla} onChange={e => cambiar({ usarPlantilla: e.target.checked })} style={{ accentColor: C.blue }} /> Usarla</label>}
+          {pl && <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: C.text }}><input type="checkbox" checked={!!calc.usarPlantilla} onChange={e => cambiar({ usarPlantilla: e.target.checked })} style={{ accentColor: C.blue }} /> Usarla</label>}
           {pl && <button className="op-btn op-fantasma op-icono" title="Quitar la lista" onClick={() => cambiar({ plantilla: null, usarPlantilla: false })}><Trash2 size={14} /></button>}
           <input ref={ref} type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; subir(f); }} />
         </div>
-        {ocupado && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>Leyendo…</div>}
-        {error && <div style={{ fontSize: 12.5, color: C.red, marginTop: 6 }}>{error}</div>}
+        {ocupado && <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Leyendo…</div>}
+        {error && <div style={{ fontSize: 13, color: C.red, marginTop: 6 }}>{error}</div>}
         {pl?.porCategoria?.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
             {pl.porCategoria.map(x => <div key={x.categoria} style={{ background: C.surface2, borderRadius: 8, padding: "5px 10px", fontSize: 12, color: C.muted }}><b style={{ color: C.text }}>{x.categoria}</b>: {x.personas} · {eur(x.coste)}</div>)}

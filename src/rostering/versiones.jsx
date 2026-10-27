@@ -12,7 +12,7 @@ function Turno({ c }) {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 3px", borderRadius: 4,
-      fontSize: 10.5, fontWeight: 700, background: m?.bg || C.surface2, color: m?.text || C.dim, border: `1px solid ${(m?.text || C.border)}55`,
+      fontSize: 11, fontWeight: 700, background: m?.bg || C.surface2, color: m?.text || C.dim, border: `1px solid ${(m?.text || C.border)}55`,
     }}>{c || "·"}</span>
   );
 }
@@ -64,7 +64,7 @@ export function VentanaVersiones({ orgId, year, month, grid, asign, workers, aut
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Versiones del cuadrante</div>
           <button onClick={onCerrar} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex" }}><X size={18} /></button>
         </div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
           Guarda el cuadrante de este mes con un nombre para probar cambios, compararlo con el actual o volver a él.
         </div>
 
@@ -85,11 +85,11 @@ export function VentanaVersiones({ orgId, year, month, grid, asign, workers, aut
                 <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreVersionCuadrante(v)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreVersionCuadrante(v)}</span>
                       <button title="Cambiar el nombre" aria-label="Renombrar versión" onClick={() => { const n = window.prompt("Nombre de esta versión:", v.nombre || ""); if (n != null) hacer("renombrar", () => renombrarVersion(orgId, year, month, v.id, n)); }}
                         style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", padding: 0, display: "inline-flex" }}><Pencil size={11} /></button>
                     </div>
-                    <div style={{ fontSize: 10.5, color: C.dim }}>{fecha(v.at)}{v.autor?.nombre ? ` · ${v.autor.nombre}` : ""} · {v.trabajadores || 0} trabajadores</div>
+                    <div style={{ fontSize: 11, color: C.dim }}>{fecha(v.at)}{v.autor?.nombre ? ` · ${v.autor.nombre}` : ""} · {v.trabajadores || 0} trabajadores</div>
                   </div>
                   <button className="op-btn" onClick={() => comparar(v)} disabled={!!ocupado}><ArrowLeftRight size={13} />Comparar</button>
                   <button className="op-btn" onClick={() => restaurar(v)} disabled={!!ocupado}><RotateCcw size={13} />Volver a esta</button>
@@ -107,10 +107,10 @@ export function VentanaVersiones({ orgId, year, month, grid, asign, workers, aut
               <button onClick={() => setComparando(null)} aria-label="Cerrar comparación" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex" }}><X size={15} /></button>
             </div>
             {comparando.cargando ? <div style={{ color: C.muted, fontSize: 12 }}><Loader2 size={13} className="op-girando" /> Cargando…</div>
-              : !comparando.dif.celdas ? <div style={{ color: C.green, fontSize: 12.5 }}>Son iguales: no cambia ningún turno.</div>
+              : !comparando.dif.celdas ? <div style={{ color: C.green, fontSize: 13 }}>Son iguales: no cambia ningún turno.</div>
               : (
                 <>
-                  <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
                     {comparando.dif.celdas === 1 ? "Cambia" : "Cambian"} <b style={{ color: C.text }}>{comparando.dif.celdas} {comparando.dif.celdas === 1 ? "turno" : "turnos"}</b> de <b style={{ color: C.text }}>{comparando.dif.porTrabajador.length} {comparando.dif.porTrabajador.length === 1 ? "trabajador" : "trabajadores"}</b>. Cada día se ve así: día, turno en la versión → turno ahora.
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -119,7 +119,7 @@ export function VentanaVersiones({ orgId, year, month, grid, asign, workers, aut
                         <div style={{ width: 150, flexShrink: 0, fontSize: 12, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreTrab(t.wid)}</div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {t.dias.map(x => (
-                            <span key={x.d} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 5px" }}>
+                            <span key={x.d} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "2px 5px" }}>
                               <b style={{ color: C.text }}>{x.d}</b><Turno c={x.antes} />→<Turno c={x.ahora} />
                             </span>
                           ))}

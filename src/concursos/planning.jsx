@@ -110,7 +110,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
     setTimeout(calcularKm, 0);
   });
 
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
   const th = { textAlign: "left", padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   const td = { padding: "5px 10px", fontSize: 13, color: C.text, whiteSpace: "nowrap" };
 
@@ -141,9 +141,9 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 18 }}>
               {[["Vehículos", r.resumen.vehiculos, "uno por equipo y turno al día"], ["Personas", r.resumen.personas, `${num(r.resumen.personasExactas)} a jornada completa`], ["Turnos al año", num(r.resumen.turnosAnio), "de todos los servicios"], ["Horas al año", num(r.resumen.horasAnio), "de trabajo de las personas"]].map(([l, v, n]) => (
                 <div key={l} className="op-tarjeta" style={{ padding: "12px 16px" }}>
-                  <div style={{ fontSize: 12.5, color: C.muted }}>{l}</div>
-                  <div style={{ fontSize: 24, fontWeight: 650, color: C.text, marginTop: 2 }}>{v}</div>
-                  <div style={{ fontSize: 11.5, color: C.dim }}>{n}</div>
+                  <div style={{ fontSize: 13, color: C.muted }}>{l}</div>
+                  <div style={{ fontSize: 28, fontWeight: 650, color: C.text, marginTop: 2 }}>{v}</div>
+                  <div style={{ fontSize: 12, color: C.dim }}>{n}</div>
                 </div>
               ))}
             </div>
@@ -165,7 +165,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
 
             {/* servicios */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Servicios de la ficha</div>
+              <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Servicios de la ficha</div>
               {resumen && <button className="op-btn" onClick={usarTodosInventario} title="Pone en cada servicio lo que rinde con los puntos del inventario">Usar los rendimientos del inventario</button>}
               {transportes.length > 0 && <button className="op-btn" disabled={km?.ocupado} onClick={calcularKm} title="Busca cada origen y el destino que da el pliego y mide la ruta por carretera">{km?.ocupado ? "Midiendo…" : "Calcular km por carretera"}</button>}
               {km?.error && <span style={{ fontSize: 12, color: C.amber }}>{km.error}</span>}
@@ -185,16 +185,16 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                           const e = conInventario(l.id);
                           return <>
                             <td style={td}><input className="op-input" type="number" min={0.5} step={0.5} value={porServicio[l.id]?.minCont ?? ""} placeholder={String(minutosOrientativos(l))} onChange={ev => cambiarServicio(l.id, "minCont", ev.target.value === "" ? null : Number(ev.target.value))} style={{ width: 70, height: 30 }} /></td>
-                            <td style={td}>{e ? <span title={`${num(e.porPunto)} contenedores por punto en ${e.puntos} puntos; ${e.minPorContenedor} min por contenedor`}><b>{e.porTurno}</b> <span style={{ color: C.dim, fontSize: 11.5 }}>({num(e.porPunto)}/punto{vanJuntas(servicios.find(x => x.id === l.id), servicios, resumen) ? ", todas las fracciones" : ""})</span> <button className="op-btn op-fantasma" style={{ height: 24, padding: "0 6px", fontSize: 11 }} onClick={() => cambiarServicio(l.id, "porTurno", e.porTurno)}>Usar</button></span> : <span style={{ color: C.dim, fontSize: 12 }}>no va por puntos</span>}</td>
+                            <td style={td}>{e ? <span title={`${num(e.porPunto)} contenedores por punto en ${e.puntos} puntos; ${e.minPorContenedor} min por contenedor`}><b>{e.porTurno}</b> <span style={{ color: C.dim, fontSize: 12 }}>({num(e.porPunto)}/punto{vanJuntas(servicios.find(x => x.id === l.id), servicios, resumen) ? ", todas las fracciones" : ""})</span> <button className="op-btn op-fantasma" style={{ height: 24, padding: "0 6px", fontSize: 11 }} onClick={() => cambiarServicio(l.id, "porTurno", e.porTurno)}>Usar</button></span> : <span style={{ color: C.dim, fontSize: 12 }}>no va por puntos</span>}</td>
                           </>;
                         })()}
                         {esTransporte(l) ? (
                           <td style={td} title={l.kmDesde || porServicio[l.id]?.kmDesde ? `Ruta por carretera desde «${porServicio[l.id]?.kmDesde || l.kmDesde}» hasta «${porServicio[l.id]?.kmHasta || l.kmHasta}»` : "Km de ida y toneladas por viaje"}>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                               <input className="op-input" type="number" min={0} value={l.kmIda ?? ""} placeholder="km" onChange={e => cambiarVarios(l.id, { kmIda: e.target.value === "" ? null : Number(e.target.value), minutosIda: null })} style={{ width: 70, height: 30 }} />
-                              <span style={{ fontSize: 11.5, color: C.dim }}>km ida ·</span>
+                              <span style={{ fontSize: 12, color: C.dim }}>km ida ·</span>
                               <input className="op-input" type="number" min={1} value={porServicio[l.id]?.cargaViaje ?? ""} placeholder={String(parametros.cargaViaje)} onChange={e => cambiarServicio(l.id, "cargaViaje", e.target.value === "" ? null : Number(e.target.value))} style={{ width: 60, height: 30 }} />
-                              <span style={{ fontSize: 11.5, color: C.dim }}>{l.unidad || "t"}/viaje</span>
+                              <span style={{ fontSize: 12, color: C.dim }}>{l.unidad || "t"}/viaje</span>
                             </div>
                             <div style={{ fontSize: 11, color: l.viajesAnio ? C.muted : C.amber, marginTop: 2 }}>{l.viajesAnio ? `${num(l.viajesAnio)} viajes al año · ${num(l.horasViaje)} h por viaje${l.minutosIda ? ` (${l.minutosIda} min de ida)` : ""}` : "sin km: pon los km de ida o pulsa «Calcular km»"}</div>
                           </td>
@@ -218,8 +218,8 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
             </div>
 
             {/* equipos */}
-            <div style={{ fontSize: 14, fontWeight: 650, color: C.text, marginBottom: 4 }}>Equipos por tipo de vehículo</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8 }}>Cada tipo de vehículo, con los servicios que hace, las personas que lleva y cuántos hacen falta. Los servicios con el mismo vehículo lo comparten.</div>
+            <div style={{ fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 4 }}>Equipos por tipo de vehículo</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Cada tipo de vehículo, con los servicios que hace, las personas que lleva y cuántos hacen falta. Los servicios con el mismo vehículo lo comparten.</div>
             <div style={{ ...tarjeta, overflow: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
                 <thead><tr>{["Vehículo", "Servicios", "Personas por equipo", "Turnos al año", "Turnos cada día", "Vehículos", "Ocupación"].map(h => <th key={h} style={{ ...th, textAlign: ["Vehículo", "Servicios"].includes(h) ? "left" : "right" }}>{h}</th>)}</tr></thead>
@@ -238,7 +238,7 @@ export function PlanningConcurso({ concursoId, mapa, irADocumentos }) {
                 </tbody>
               </table>
             </div>
-            <div style={{ fontSize: 11.5, color: C.dim, marginTop: 10, lineHeight: 1.5, maxWidth: 820 }}>
+            <div style={{ fontSize: 12, color: C.dim, marginTop: 10, lineHeight: 1.5, maxWidth: 820 }}>
               Turnos al año = cantidad al año ÷ lo que rinde un equipo en un turno (en los transportes: viajes × horas por viaje ÷ horas del turno; viajes = cantidad ÷ carga; horas = ida y vuelta por carretera, un 15 % más lento que un coche, más la carga y descarga). Vehículos = turnos que hacen falta cada día de servicio, por tipo de vehículo, redondeado hacia arriba. Personas = horas al año (cada turno con las personas de su equipo) ÷ horas de un trabajador (convenio, descontando el absentismo). El vehículo y las personas de cada servicio vienen del pliego cuando lo exige («pliego»); si no, orientativos. Se guarda solo y lo usa Cálculo.
             </div>
           </>}

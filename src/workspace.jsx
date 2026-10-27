@@ -83,7 +83,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
       boxShadow: active ? `inset 0 0 0 1px ${alfa(0.06)}` : "none",
       cursor: "pointer", fontFamily: font, fontSize: 13,
       color: active ? C.text : C.muted, fontWeight: active ? 550 : 450,
-      padding: "5px 10px", borderRadius: 7, transition: "all .12s",
+      padding: "5px 10px", borderRadius: 8, transition: "all .12s",
     }}
       onMouseEnter={e => { if (!active) { e.currentTarget.style.color = C.text; e.currentTarget.style.background = C.surface2; } }}
       onMouseLeave={e => { if (!active) { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = "none"; } }}
@@ -99,11 +99,11 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
     }}>
       <div className="op-sin-barra op-cabecera-migas" style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 auto", minWidth: 0, overflowX: "auto", whiteSpace: "nowrap" }}>
         <button onClick={() => go("/projects")} title="Proyectos" style={{ background: "none", border: "none", padding: "0 6px 0 0", cursor: "pointer", display: "flex" }}><Marca size={22} /></button>
-        <span style={{ color: alfa(0.12), margin: "0 6px", fontSize: 18, fontWeight: 300 }}>/</span>
+        <span style={{ color: alfa(0.12), margin: "0 6px", fontSize: 20, fontWeight: 300 }}>/</span>
         {crumb(t("proyectos", lang), "/projects", path === "/projects")}
         {crumb("Concursos", "/concursos", path === "/concursos")}
         {activeProject?.concurso && <>
-          <span style={{ color: alfa(0.12), margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
+          <span style={{ color: alfa(0.12), margin: "0 2px", fontSize: 20, fontWeight: 300 }}>/</span>
           <span title="Concurso: trabaja con sus propios datos, aparte de la operativa" style={{ fontSize: 13, color: C.text, fontWeight: 550, padding: "5px 6px", display: "flex", alignItems: "center", gap: 6, maxWidth: 260, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
             <span className="op-pastilla" style={{ background: "rgba(245,184,74,0.14)", color: C.amber }}>Concurso</span>{activeProject.concursoNombre || activeProject.nombre}
           </span>
@@ -115,7 +115,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {RUTAS_CONCURSO.filter(([ruta]) => ruta !== "/documentos").map(([ruta, , nombre]) => <span key={ruta}>{crumb(nombre, ruta, path === ruta)}</span>)}
         </>}
         {activeProject && !activeProject.concurso && <>
-          <span style={{ color: alfa(0.12), margin: "0 2px", fontSize: 18, fontWeight: 300 }}>/</span>
+          <span style={{ color: alfa(0.12), margin: "0 2px", fontSize: 20, fontWeight: 300 }}>/</span>
           {/* Nombre del proyecto: al pincharlo, menú con "Duplicar proyecto" */}
           <ProjectMenu activeProject={activeProject} onOpenProject={onOpenProject} onProjectUpdate={onProjectUpdate} />
           <span style={{ width: 1, height: 18, background: C.border, margin: "0 8px" }} />
@@ -140,12 +140,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         <button
           onClick={() => setLang(lang === "es" ? "en" : "es")}
           title="ES / EN"
-          style={{
-            padding: "4px 9px", borderRadius: 7, background: C.surface2,
-            border: `1px solid ${C.border}`, color: C.muted, cursor: "pointer",
-            fontSize: 10, fontWeight: 700, fontFamily: font, letterSpacing: .5,
-            transition: "all .15s",
-          }}
+          className="op-btn"
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
         >{lang.toUpperCase()}</button>
@@ -154,7 +149,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         </button>
         {RUTAS_CON_PROYECTO.includes(path) && (
           <button onClick={onFullscreen} title={t("fullscreen", lang)} style={{
-            width: 30, height: 30, borderRadius: 7, background: C.surface2,
+            width: 30, height: 30, borderRadius: 8, background: C.surface2,
             border: `1px solid ${C.border}`, color: C.dim, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s",
           }}

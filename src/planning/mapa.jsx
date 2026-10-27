@@ -502,7 +502,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
             cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.4)", transition: "all .15s",
           }}
         >
-          <div style={{ width: 10, height: 10, borderRadius: 2, background: currentStyle.preview, border: `1px solid ${alfa(0.2)}`, flexShrink: 0 }} />
+          <div style={{ width: 10, height: 10, borderRadius: 4, background: currentStyle.preview, border: `1px solid ${alfa(0.2)}`, flexShrink: 0 }} />
           {currentStyle.label}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ opacity: 0.5 }}>
             <polyline points="6 9 12 15 18 9"/>
@@ -512,7 +512,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
           <div style={{
             position: "absolute", top: "calc(100% + 6px)", right: 0,
             background: C.card, border: `1px solid ${C.border}`,
-            borderRadius: 9, overflow: "hidden",
+            borderRadius: 8, overflow: "hidden",
             boxShadow: "0 6px 24px rgba(0,0,0,.5)", minWidth: 150,
           }}>
             {MAP_STYLES.map(s => (
@@ -533,7 +533,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
                 onMouseEnter={e => { if (s.key !== mapStyle) e.currentTarget.style.background = C.surface2; }}
                 onMouseLeave={e => { if (s.key !== mapStyle) e.currentTarget.style.background = "none"; }}
               >
-                <div style={{ width: 14, height: 14, borderRadius: 3, background: s.preview, border: `1px solid ${alfa(0.15)}`, flexShrink: 0 }} />
+                <div style={{ width: 14, height: 14, borderRadius: 4, background: s.preview, border: `1px solid ${alfa(0.15)}`, flexShrink: 0 }} />
                 {s.label}
                 {s.key === mapStyle && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.5" style={{ marginLeft: "auto" }}>
@@ -563,7 +563,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
         <div style={{
           position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
           zIndex: 900, background: tono("rgba(22,27,39,0.95)", "rgba(255,255,255,0.95)"), border: `1px solid ${C.border}`,
-          borderRadius: 10, padding: "12px 16px", minWidth: 280,
+          borderRadius: 12, padding: "12px 16px", minWidth: 280,
           boxShadow: "0 4px 24px rgba(0,0,0,.5)", backdropFilter: "blur(6px)",
         }}>
           {/* Selected points list */}
@@ -594,23 +594,19 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Por carretera</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{routeData.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>{routeData.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
                   </div>
                   <div style={{ width: 1, height: 36, background: C.border }} />
                   <div>
                     <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Tiempo estimado</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
                       {routeData.minutes >= 60
                         ? `${Math.floor(routeData.minutes / 60)}h ${routeData.minutes % 60}min`
                         : `${routeData.minutes} min`}
                     </div>
                   </div>
                   <div style={{ flex: 1 }} />
-                  <button onClick={() => setSelected([])} style={{
-                    background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-                    color: C.dim, cursor: "pointer", fontSize: 11, padding: "4px 10px",
-                    fontFamily: font, transition: "all .12s",
-                  }}
+                  <button onClick={() => setSelected([])} className="op-btn"
                     onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
                   >Limpiar</button>
@@ -619,14 +615,10 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>Línea recta (aprox.)</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{haversineStats.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>{haversineStats.km.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>km</span></div>
                   </div>
                   <div style={{ flex: 1 }} />
-                  <button onClick={() => setSelected([])} style={{
-                    background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-                    color: C.dim, cursor: "pointer", fontSize: 11, padding: "4px 10px",
-                    fontFamily: font, transition: "all .12s",
-                  }}
+                  <button onClick={() => setSelected([])} className="op-btn"
                     onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
                   >Limpiar</button>

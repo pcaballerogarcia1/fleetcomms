@@ -63,16 +63,16 @@ const KPI_AYUDA = {
 function KpiCard({ label, value, sub, color = C.blue }) {
   return (
     <div title={KPI_AYUDA[label]} className="op-tarjeta" style={{ padding: "14px 18px", flex: 1, minWidth: 150, cursor: KPI_AYUDA[label] ? "help" : undefined }}>
-      <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 650, color: color === C.red || color === C.orange ? color : C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 650, color: color === C.red || color === C.orange ? color : C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
 
 function Panel({ title, height = 260, children, empty }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 320 }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", flex: 1, minWidth: 320 }}>
       <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>{title}</div>
       {empty ? (
         <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: C.dim, fontSize: 12 }}>
@@ -320,13 +320,13 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Análisis</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{sectorDe(activeProject).ver.pesadas ? "Producción, facturación, pesadas, personal e incidencias" : "Producción, facturación, personal e incidencias"}</div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{sectorDe(activeProject).ver.pesadas ? "Producción, facturación, pesadas, personal e incidencias" : "Producción, facturación, personal e incidencias"}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
               {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ...(sectorDe(activeProject).ver.pesadas ? [["pesadas", "Pesadas"]] : []), ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
-                  padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
+                  padding: "5px 11px", borderRadius: 4, border: "none", cursor: "pointer",
                   background: vista === k ? alfa(0.1) : "none",
                   color: vista === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
@@ -339,7 +339,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
               onChange={e => setMesFilter(e.target.value)}
               style={{
                 background: C.surface2, border: `1px solid ${C.border2}`,
-                color: C.text, borderRadius: 7, padding: "5px 10px",
+                color: C.text, borderRadius: 8, padding: "5px 10px",
                 fontSize: 12, fontFamily: font, cursor: "pointer", outline: "none",
               }}
             >
@@ -492,7 +492,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={varios.porCategoria}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="name" tick={{ ...axisStyle, fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={50} />
+                    <XAxis dataKey="name" tick={{ ...axisStyle, fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={50} />
                     <YAxis tick={axisStyle} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>

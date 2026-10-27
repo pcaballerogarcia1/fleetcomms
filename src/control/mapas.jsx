@@ -291,7 +291,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
             return (
               <div key={d.uid} style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
-                background: C.card, border: `1px solid ${C.red}55`, borderRadius: 7,
+                background: C.card, border: `1px solid ${C.red}55`, borderRadius: 8,
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.red, flexShrink: 0 }} />
                 <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{d.nombre || "?"}</span>

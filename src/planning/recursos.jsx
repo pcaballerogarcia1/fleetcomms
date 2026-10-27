@@ -19,7 +19,7 @@ export function TabRecursos({ vehicles = [], workers = [], loadingV, loadingW, a
       <div style={{ display: "flex", gap: 6, padding: "10px 20px", borderBottom: `1px solid ${C.border}`, alignItems: "center", flexWrap: "wrap" }}>
         {SUBS.map(([k, l]) => (
           <button key={k} onClick={() => setSub(k)} style={{
-            padding: "5px 12px", borderRadius: 7, fontSize: 12.5, fontFamily: font, cursor: "pointer",
+            padding: "5px 12px", borderRadius: 8, fontSize: 13, fontFamily: font, cursor: "pointer",
             background: sub === k ? C.blueDim : "none", color: sub === k ? C.blueText : C.muted,
             border: `1px solid ${sub === k ? C.blue : C.border}`, fontWeight: sub === k ? 600 : 400,
           }}>{l}</button>
@@ -56,8 +56,8 @@ function VehiculosTrabajos({ vehicles, activeProject, onProjectUpdate }) {
     setMapa(siguiente); setError(null);
     Promise.resolve(onProjectUpdate?.({ vehiculosTrabajos: siguiente })).catch(e => setError(`No se pudo guardar: ${e.message || e}`));
   }
-  const th = { textAlign: "center", padding: "8px 10px", fontSize: 10.5, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
-  const td = { padding: "7px 10px", borderTop: `1px solid ${C.border}`, fontSize: 12.5, color: C.text, textAlign: "center" };
+  const th = { textAlign: "center", padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
+  const td = { padding: "7px 10px", borderTop: `1px solid ${C.border}`, fontSize: 13, color: C.text, textAlign: "center" };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px 40px" }}>
       <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.55, maxWidth: 900, marginBottom: 12 }}>
@@ -65,15 +65,15 @@ function VehiculosTrabajos({ vehicles, activeProject, onProjectUpdate }) {
       </div>
       {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
       {!trabajos.length ? (
-        <div style={{ fontSize: 12.5, color: C.dim }}>Este proyecto aún no tiene trabajos: créalos en la pestaña Trabajos.</div>
+        <div style={{ fontSize: 13, color: C.dim }}>Este proyecto aún no tiene trabajos: créalos en la pestaña Trabajos.</div>
       ) : !vehicles.length ? (
-        <div style={{ fontSize: 12.5, color: C.dim }}>La empresa aún no tiene vehículos: añádelos en «Vehículos».</div>
+        <div style={{ fontSize: 13, color: C.dim }}>La empresa aún no tiene vehículos: añádelos en «Vehículos».</div>
       ) : (
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "auto", background: C.card, display: "inline-block", minWidth: 420, maxWidth: "100%" }}>
           <table style={{ borderCollapse: "collapse" }}>
             <thead><tr>
               <th style={{ ...th, textAlign: "left" }}>Vehículo</th>
-              {trabajos.map(t => <th key={t.id} style={th}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: t.color || C.blue, marginRight: 5 }} />{t.nombre}</th>)}
+              {trabajos.map(t => <th key={t.id} style={th}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 4, background: t.color || C.blue, marginRight: 5 }} />{t.nombre}</th>)}
             </tr></thead>
             <tbody>
               {vehicles.map(v => (

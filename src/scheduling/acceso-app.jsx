@@ -111,16 +111,16 @@ export function AccesoApp({ worker, orgId, selStyle }) {
   }
 
   const realEmail = esCorreoReal(perfil?.email);
-  const btn = { padding: "7px 12px", borderRadius: 7, fontSize: 12, fontFamily: font, cursor: "pointer", border: `1px solid ${C.border}`, background: "none", color: C.text };
+  const btn = { padding: "7px 12px", borderRadius: 8, fontSize: 12, fontFamily: font, cursor: "pointer", border: `1px solid ${C.border}`, background: "none", color: C.text };
   const btnAzul = { ...btn, background: C.blue, border: "none", color: "#fff", fontWeight: 600 };
-  const etiqueta = { display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: C.muted, flex: "1 1 160px" };
+  const etiqueta = { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: C.muted, flex: "1 1 160px" };
 
   return (
     <div data-testid="acceso-app" style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Acceso a la app</div>
 
       {hecho && (
-        <div style={{ background: C.greenDim, border: `1px solid ${C.green}55`, borderRadius: 8, padding: "10px 12px", marginBottom: 10, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+        <div style={{ background: C.greenDim, border: `1px solid ${C.green}55`, borderRadius: 8, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
           Dáselo a {worker.nombre || "el trabajador"} (la contraseña no se vuelve a enseñar):
           <div>Usuario: <b style={{ fontFamily: mono }}>{hecho.usuario}</b></div>
           <div>Contraseña: <b style={{ fontFamily: mono }}>{hecho.clave}</b></div>
@@ -132,7 +132,7 @@ export function AccesoApp({ worker, orgId, selStyle }) {
       )}
 
       {perfil ? (
-        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.7 }}>
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>
           <div>Usuario: <b style={{ fontFamily: mono }}>{usuarioDeCorreo(perfil.email)}</b> · {roleLabel(perfil.rol)} · {perfil.activo === false
             ? <span style={{ color: C.red, fontWeight: 600 }}>bloqueado</span>
             : <span style={{ color: C.green, fontWeight: 600 }}>puede entrar</span>}</div>
@@ -142,17 +142,17 @@ export function AccesoApp({ worker, orgId, selStyle }) {
               {perfil.activo === false ? "Desbloquear el acceso" : "Bloquear el acceso"}
             </button>
           </div>
-          <div style={{ fontSize: 11.5, color: C.dim, marginTop: 8 }}>{realEmail
+          <div style={{ fontSize: 12, color: C.dim, marginTop: 8 }}>{realEmail
             ? "Su contraseña la cambia él: le llega un enlace a su correo (desde la entrada de la app, «¿Has olvidado tu contraseña?», o desde su menú)."
             : "Entra con un usuario sin correo: no podrá cambiar su contraseña él solo. Si quieres que pueda, bloquea este acceso y créale otro con su correo."}</div>
         </div>
       ) : existente ? (
-        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
           Ya tiene un usuario en la app con su correo (<b>{existente.email}</b>, {roleLabel(existente.rol)}).
           <div style={{ marginTop: 8 }}><button style={btnAzul} disabled={trabajando} onClick={unirExistente}>Unir esta ficha a ese usuario</button></div>
         </div>
       ) : worker.uid ? (
-        <div style={{ fontSize: 12.5, color: C.dim }}>Su usuario de la app ya no existe.</div>
+        <div style={{ fontSize: 13, color: C.dim }}>Su usuario de la app ya no existe.</div>
       ) : (
         <div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Aún no puede entrar en la app. Elige con qué entra (mejor su correo, así podrá cambiar su contraseña él solo) y su contraseña; entrará como {roleLabel(rolApp)}.</div>
@@ -165,7 +165,7 @@ export function AccesoApp({ worker, orgId, selStyle }) {
             </label>
             <button style={btn} onClick={() => setClave(generarClave())}>Otra</button>
           </div>
-          {!usuario.includes("@") && <div style={{ fontSize: 11.5, color: C.amber, marginTop: 8 }}>Sin correo podrá entrar, pero no podrá cambiar su contraseña él solo. Mejor pon su correo (o rellénalo en la ficha).</div>}
+          {!usuario.includes("@") && <div style={{ fontSize: 12, color: C.amber, marginTop: 8 }}>Sin correo podrá entrar, pero no podrá cambiar su contraseña él solo. Mejor pon su correo (o rellénalo en la ficha).</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button style={btnAzul} disabled={trabajando} onClick={crear}>{trabajando ? "Creando…" : "Crear su acceso"}</button>
           </div>

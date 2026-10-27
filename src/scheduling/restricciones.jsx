@@ -12,6 +12,7 @@ import { DIAS, FRECUENCIAS_DEFECTO } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import { useSector } from "../sector.js";
 import { tono } from "../tema.js";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 // Valor con el que se enciende un límite opcional (apagado = sin límite)
 const AL_ENCENDER = { maxStops: 100, maxDays: 5, vehiculoNecesarioMaxMin: 960, personalNecesarioMaxMin: 480, costeKm: 0.9, maxShiftMin: 480, breakAfter: 240, costeHora: 22 };
@@ -64,7 +65,7 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
     setSelectedTpl("");
   }
   // ── controles ──
-  const estiloNum = { width: 72, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" };
+  const estiloNum = { width: 72, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" };
   const sufijo = s => s && <span style={{ fontSize: 11, color: C.dim }}>{s}</span>;
   const numero = (key, min, max, suf) => (
     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -86,7 +87,7 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
   };
   const hora = key => (
     <input type="time" value={minToTime(c[key])} onChange={e => { const m = timeToMin(e.target.value); if (m !== null) set(key, m); }}
-      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") }} />
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.blueText, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") }} />
   );
   const sino = (key, invertido = false) => <Interruptor on={invertido ? !c[key] : !!c[key]} onCambiar={v => set(key, invertido ? !v : v)} />;
 
@@ -108,13 +109,13 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
               {DIAS.map(d => {
                 const on = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio).includes(d);
                 return <button key={d} onClick={() => { const act = String(c.diasServicio ?? FRECUENCIAS_DEFECTO.diasServicio); const nuevo = DIAS.filter(x => (x === d ? !on : act.includes(x))).join(""); if (nuevo) set("diasServicio", nuevo); }}
-                  style={{ width: 26, height: 24, borderRadius: 5, border: `1px solid ${on ? C.blue : C.border}`, background: on ? "rgba(91,124,250,0.18)" : "none", color: on ? C.blueText : C.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>{d}</button>;
+                  style={{ width: 26, height: 24, borderRadius: 4, border: `1px solid ${on ? C.blue : C.border}`, background: on ? "rgba(91,124,250,0.18)" : "none", color: on ? C.blueText : C.dim, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>{d}</button>;
               })}
             </span>
           ), "Día 1 del escenario es el primero de estos (normalmente el lunes)."],
           ["frecuenciaDefecto", "Frecuencia si el Excel no la dice", (
             <select value={c.frecuenciaDefecto ?? FRECUENCIAS_DEFECTO.frecuenciaDefecto} onChange={e => set("frecuenciaDefecto", e.target.value)}
-              style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
+              style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
               <option value="diaria">Todos los días de servicio</option>
               <option value="L-V">De lunes a viernes</option>
               <option value="3">3 veces por semana</option>
@@ -154,7 +155,7 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
       { id: "rostering", nombre: "Cuadrante", items: [
         ["rosterMode", "Quién trabaja cada día", (
           <select value={c.rosterMode || "cuadrante"} onChange={e => set("rosterMode", e.target.value)}
-            style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
+            style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", cursor: "pointer" }}>
             <option value="cuadrante">Respetar el cuadrante</option>
             <option value="libre">Libre — optimizar turnos después en Cuadrante</option>
           </select>
@@ -188,12 +189,12 @@ export function ConstraintsPanel({ c: c0, onChange, orgId, onCerrar }) {
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <span style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("plantillas", lang)}</span>
       <select value={selectedTpl} onChange={e => e.target.value ? cargarPlantilla(e.target.value) : setSelectedTpl("")}
-        style={{ background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 8px", fontSize: 11, fontFamily: font, cursor: "pointer", outline: "none", maxWidth: 180 }}>
+        style={{ background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "4px 8px", fontSize: 11, fontFamily: font, cursor: "pointer", outline: "none", maxWidth: 180 }}>
         <option value="">— ninguna —</option>
         {templates.map(tpl => <option key={tpl._id} value={tpl._id}>{tpl.nombre}</option>)}
       </select>
-      {selectedTpl && <button onClick={borrarPlantillaActual} title="Eliminar esta plantilla" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1 }}>×</button>}
-      <button onClick={guardarPlantilla} style={{ padding: "4px 9px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, fontSize: 10.5, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>Guardar como plantilla</button>
+      {selectedTpl && <BotonCerrar onClick={borrarPlantillaActual} title="Eliminar esta plantilla" />}
+      <button onClick={guardarPlantilla} className="op-btn" style={{ whiteSpace: "nowrap" }}>Guardar como plantilla</button>
     </div>
   );
 

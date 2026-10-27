@@ -72,7 +72,7 @@ export function Vigilancia({ orgId, onAbrir }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setAbierta(a => !a)}>
         <Radar size={17} color={C.blue} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Vigilar licitaciones por CPV</div>
+          <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Vigilar licitaciones por CPV</div>
           <div style={{ fontSize: 12, color: C.muted }}>{cpvs.length ? `${cpvs.length} CPV · ${lista.length} licitaciones en plazo${v?.ultima ? ` · última búsqueda ${new Date(v.ultima).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}` : ""}` : "Elige tus CPV y Operanzia te avisa de cada licitación nueva en la Plataforma de Contratación."}</div>
         </div>
         {buscando && <Loader2 size={15} className="op-girando" color={C.muted} />}
@@ -95,22 +95,22 @@ export function Vigilancia({ orgId, onAbrir }) {
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
             <button className="op-btn op-primario" disabled={!cpvs.length || !!buscando} onClick={buscar}>{buscando ? <Loader2 size={14} className="op-girando" /> : <Radar size={14} />} Buscar ahora</button>
-            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: C.text }}>
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: C.text }}>
               <input type="checkbox" checked={!!v?.autoCrear} onChange={e => guardarVigilancia(orgId, { autoCrear: e.target.checked })} style={{ accentColor: C.blue }} /> Crear el concurso solo (con sus datos oficiales y sus pliegos leídos)
             </label>
           </div>
-          {buscando && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>{buscando}</div>}
-          {error && <div style={{ fontSize: 12.5, color: C.red, marginTop: 8 }}>{error}</div>}
+          {buscando && <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>{buscando}</div>}
+          {error && <div style={{ fontSize: 13, color: C.red, marginTop: 8 }}>{error}</div>}
           {lista.length > 0 && (
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
               {lista.map(l => {
                 const hecho = creadas[l.id.replace(/[^\w-]/g, "_")];
                 return (
-                  <div key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", background: C.surface2, borderRadius: 10, padding: "8px 12px", flexWrap: "wrap" }}>
+                  <div key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", background: C.surface2, borderRadius: 12, padding: "8px 12px", flexWrap: "wrap" }}>
                     <div style={{ flex: "1 1 320px", minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.titulo}>{l.titulo}</div>
-                      <div style={{ fontSize: 11.5, color: C.muted }}>{l.organo || "—"}{l.lugar ? ` · ${l.lugar}` : ""} · CPV {(l.cpvs || []).slice(0, 3).join(", ")} · {l.presupuestoSinIva != null ? `${eur(l.presupuestoSinIva)} sin IVA` : "sin presupuesto"} · {l.fechaLimite ? `hasta el ${new Date(`${l.fechaLimite}T12:00:00`).toLocaleDateString("es-ES")}` : "sin fecha límite"}</div>
-                      {creando?.id === l.id && <div style={{ fontSize: 11.5, color: C.blue }}>{creando.progreso}</div>}
+                      <div style={{ fontSize: 12, color: C.muted }}>{l.organo || "—"}{l.lugar ? ` · ${l.lugar}` : ""} · CPV {(l.cpvs || []).slice(0, 3).join(", ")} · {l.presupuestoSinIva != null ? `${eur(l.presupuestoSinIva)} sin IVA` : "sin presupuesto"} · {l.fechaLimite ? `hasta el ${new Date(`${l.fechaLimite}T12:00:00`).toLocaleDateString("es-ES")}` : "sin fecha límite"}</div>
+                      {creando?.id === l.id && <div style={{ fontSize: 12, color: C.blue }}>{creando.progreso}</div>}
                     </div>
                     {l.enlace && <a className="op-btn op-fantasma" style={{ height: 28, fontSize: 12 }} href={l.enlace} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Plataforma</a>}
                     {hecho ? <button className="op-btn" style={{ height: 28, fontSize: 12 }} onClick={() => onAbrir?.({ _id: hecho })}>Abrir concurso</button>
@@ -121,7 +121,7 @@ export function Vigilancia({ orgId, onAbrir }) {
               })}
             </div>
           )}
-          <div style={{ fontSize: 11.5, color: C.dim, marginTop: 10, lineHeight: 1.5 }}>Por ahora busca cuando alguien abre Concursos (si hace más de una hora) o al pulsar «Buscar ahora». Para que busque solo aunque nadie entre, hace falta configurar la cuenta de servicio en Vercel.</div>
+          <div style={{ fontSize: 12, color: C.dim, marginTop: 10, lineHeight: 1.5 }}>Por ahora busca cuando alguien abre Concursos (si hace más de una hora) o al pulsar «Buscar ahora». Para que busque solo aunque nadie entre, hace falta configurar la cuenta de servicio en Vercel.</div>
         </div>
       )}
     </div>

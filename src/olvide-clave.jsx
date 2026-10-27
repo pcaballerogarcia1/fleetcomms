@@ -4,7 +4,7 @@ import { useState } from "react";
 import { enviarCambioClave } from "./cambio-clave.js";
 import { C } from "./tema.js";
 
-export function OlvideClave({ texto, color = "#8b93a7", colorOk = C.green, colorError = C.red }) {
+export function OlvideClave({ texto, color = C.muted, colorOk = C.green, colorError = C.red }) {
   const [estado, setEstado] = useState(null); // { ok, texto }
   const [enviando, setEnviando] = useState(false);
   async function pedir() {
@@ -20,7 +20,7 @@ export function OlvideClave({ texto, color = "#8b93a7", colorOk = C.green, color
       <button type="button" onClick={pedir} disabled={enviando} style={{ background: "none", border: "none", color, fontSize: 13, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit" }}>
         {enviando ? "Enviando…" : "¿Has olvidado tu contraseña?"}
       </button>
-      {estado && <div role="status" style={{ fontSize: 12.5, marginTop: 8, lineHeight: 1.5, color: estado.ok ? colorOk : colorError }}>{estado.texto}</div>}
+      {estado && <div role="status" style={{ fontSize: 13, marginTop: 8, lineHeight: 1.5, color: estado.ok ? colorOk : colorError }}>{estado.texto}</div>}
     </div>
   );
 }

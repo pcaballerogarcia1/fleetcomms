@@ -97,7 +97,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
     await onGuardar({ [r.clave]: [Math.round(km * 10) / 10, min, "m"] });
   };
 
-  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
+  const th = { fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "6px 10px", fontSize: 12, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px" }}>
@@ -107,15 +107,15 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
           Km y minutos de un autobús en vacío entre cabeceras cercanas y entre cada cochera y cada cabecera. El Scheduling los usa para los vacíos, para lo que tarda el conductor en ir a otra cabecera y para la toma desde la cochera. Los pares sin calcular usan la estimación (línea recta × {String(PARAMS_DEFECTO.factorRodeo).replace(".", ",")} a {PARAMS_DEFECTO.velocidadVacio} km/h).
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 10px", flexWrap: "wrap" }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cabecera o cochera…" style={{ width: 260, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
-          <button onClick={calcular} disabled={!!calculando || !lista.length} style={{ padding: "7px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: calculando ? "wait" : "pointer", fontFamily: font }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cabecera o cochera…" style={{ width: 260, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+          <button onClick={calcular} disabled={!!calculando || !lista.length} className="op-btn op-primario">
             {calculando || `Calcular por carretera (${lista.length} pares)`}
           </button>
-          <span style={{ fontSize: 11.5, color: hechos === lista.length && lista.length ? C.green : C.muted }}>{hechos} de {lista.length} con tiempo por carretera o a mano{aMano ? ` · ${aMano} a mano` : ""}</span>
+          <span style={{ fontSize: 12, color: hechos === lista.length && lista.length ? C.green : C.muted }}>{hechos} de {lista.length} con tiempo por carretera o a mano{aMano ? ` · ${aMano} a mano` : ""}</span>
         </div>
-        {!(cocheras || []).length && <div style={{ fontSize: 11.5, color: C.amber, marginBottom: 8 }}>Sin cocheras: solo salen los pares entre cabeceras. Añádelas en «Red y mapa».</div>}
+        {!(cocheras || []).length && <div style={{ fontSize: 12, color: C.amber, marginBottom: 8 }}>Sin cocheras: solo salen los pares entre cabeceras. Añádelas en «Red y mapa».</div>}
         {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
-        <div style={{ fontSize: 10.5, color: C.dim, marginBottom: 8 }}>Por carretera con el servicio público OSRM; los minutos de coche × {String(FACTOR_BUS).replace(".", ",")} (autobús). Lo que corrijas a mano no lo pisa el cálculo.</div>
+        <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Por carretera con el servicio público OSRM; los minutos de coche × {String(FACTOR_BUS).replace(".", ",")} (autobús). Lo que corrijas a mano no lo pisa el cálculo.</div>
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "auto", maxHeight: "calc(100vh - 330px)", background: C.card }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
@@ -125,7 +125,7 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
             <tbody>
               {vis.slice(0, 600).map(r => {
                 const v = pares[r.clave], est = estimado(r), ed = editando?.clave === r.clave;
-                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 9.5, fontWeight: 700, color: C.orange, border: `1px solid ${C.orange}88`, borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
+                const pinta = x => <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{x.cochera && <span title="Cochera" style={{ fontSize: 10, fontWeight: 700, color: C.orange, border: `1px solid ${C.orange}88`, borderRadius: 4, padding: "0 4px" }}>COCHERA</span>}<span style={{ color: C.text }}>{x.nombre}</span></span>;
                 return (
                   <tr key={r.clave}>
                     <td style={td}>{pinta(r.a)}</td>
@@ -141,8 +141,8 @@ export function VaciosRed({ red, cfg, cocheras, onGuardar }) {
                     <td style={{ ...td, fontSize: 11, color: v?.[2] === "m" ? C.amber : v ? C.green : C.dim }}>{v?.[2] === "m" ? "a mano" : v ? "por carretera" : "estimado"}</td>
                     <td style={{ ...td, textAlign: "right" }}>
                       {ed
-                        ? <><button onClick={() => guardarFila(r)} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer", marginRight: 4 }}>✓</button><button onClick={() => setEditando(null)} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}><X size={12} /></button></>
-                        : <button onClick={() => setEditando({ clave: r.clave, km: String((v || est)[0]).replace(".", ","), min: String((v || est)[1]) })} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.blueText, borderRadius: 4, padding: "2px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Cambiar</button>}
+                        ? <><button onClick={() => guardarFila(r)} className="op-btn op-primario" style={{ marginRight: 4 }}>✓</button><button onClick={() => setEditando(null)} className="op-btn"><X size={12} /></button></>
+                        : <button onClick={() => setEditando({ clave: r.clave, km: String((v || est)[0]).replace(".", ","), min: String((v || est)[1]) })} className="op-btn">Cambiar</button>}
                     </td>
                   </tr>
                 );

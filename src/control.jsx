@@ -182,13 +182,13 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Control</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Rutas del día, flota en el mapa y fichajes, en directo</div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Rutas del día, flota en el mapa y fichajes, en directo</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
               {[["planes", t("planes", lang)], ["flota", t("mapaFlota", lang)], ["fichajes", t("fichajes", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
-                  padding: "5px 11px", borderRadius: 5, border: "none", cursor: "pointer",
+                  padding: "5px 11px", borderRadius: 4, border: "none", cursor: "pointer",
                   background: vista === k ? alfa(0.1) : "none",
                   color: vista === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vista === k ? 600 : 400, fontFamily: font,
@@ -202,7 +202,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
               onChange={e => { setMesFilter(e.target.value); setSelectedId(null); setVisibleCount(PAGE_SIZE); }}
               style={{
                 background: C.surface2, border: `1px solid ${C.border2}`,
-                color: C.text, borderRadius: 7, padding: "5px 10px",
+                color: C.text, borderRadius: 8, padding: "5px 10px",
                 fontSize: 12, fontFamily: font, cursor: "pointer", outline: "none",
               }}
             >
@@ -216,7 +216,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 background: "rgba(63,207,142,0.08)", border: "1px solid rgba(63,207,142,0.25)",
-                color: C.green, borderRadius: 7, padding: "5px 12px",
+                color: C.green, borderRadius: 8, padding: "5px 12px",
                 fontSize: 12, fontWeight: 600, cursor: activityEvents.length === 0 ? "not-allowed" : "pointer",
                 opacity: activityEvents.length === 0 ? 0.4 : 1, fontFamily: font, transition: "all .15s",
               }}
@@ -242,8 +242,8 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
             { l: "Progreso global",  v: `${stats.pct}%`, c: pctColor },
           ].map(s => (
             <div key={s.l} className="op-tarjeta" style={{ padding: "12px 18px", flex: 1 }}>
-              <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{s.l}</div>
-              <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 3 }}>{s.v}</div>
+              <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>{s.l}</div>
+              <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 3 }}>{s.v}</div>
             </div>
           ))}
         </div>
@@ -266,7 +266,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
             {filteredPlanes.length}{planesCapped ? `+` : ""} planes
           </div>
           {planesCapped && (
-            <div style={{ fontSize: 10, color: C.orange, background: "rgba(245,158,91,0.08)", border: "1px solid rgba(245,158,91,0.25)", borderRadius: 6, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 10, color: C.orange, background: "rgba(245,158,91,0.08)", border: "1px solid rgba(245,158,91,0.25)", borderRadius: 8, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
               Hay más de {PLANES_QUERY_LIMIT} planes este mes — se muestran los primeros {PLANES_QUERY_LIMIT}. Progreso global también es solo de estos.
             </div>
           )}
@@ -286,12 +286,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
           {filteredPlanes.length > visibleCount && (
             <button
               onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
-              style={{
-                width: "100%", padding: "9px", marginTop: 4, background: "none",
-                border: `1px solid ${C.border}`, color: C.muted,
-                borderRadius: 8, fontSize: 12, cursor: "pointer",
-                fontFamily: font, transition: "all .15s",
-              }}
+              className="op-btn" style={{ width: "100%", marginTop: 4 }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.text; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
             >

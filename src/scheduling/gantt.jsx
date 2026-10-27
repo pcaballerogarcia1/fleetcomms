@@ -442,10 +442,10 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                       ? (prev.dir === (col.k === "nombre" || col.k === "turno" ? 1 : -1) ? { key: col.k, dir: -prev.dir } : null)
                       : { key: col.k, dir: col.k === "nombre" || col.k === "turno" ? 1 : -1 });
                   }}
-                  style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", cursor: "pointer", fontSize: 9, letterSpacing: .6, textTransform: "uppercase", fontWeight: 700, color: colSort?.key === col.k ? C.blueText : C.dim, whiteSpace: "nowrap", userSelect: "none" }}>
+                  style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", cursor: "pointer", fontSize: 10, letterSpacing: .6, textTransform: "uppercase", fontWeight: 700, color: colSort?.key === col.k ? C.blueText : C.dim, whiteSpace: "nowrap", userSelect: "none" }}>
                   {col.k === "avisos" ? "!" : col.l}{colSort?.key === col.k ? (colSort.dir === 1 ? " ▲" : " ▼") : ""}
                 </div>
-              )) : <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>}
+              )) : <span style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Recurso</span>}
               {/* Asa de redimensión — arrastrar para ensanchar la columna */}
               {vista !== "tabla" && <div
                 onMouseDown={startResizeLabel}
@@ -647,7 +647,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                     <div key={`b${ti}`} title={`Pausa · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
                       background: "repeating-linear-gradient(45deg,rgba(245,158,91,0.15) 0,rgba(245,158,91,0.15) 4px,transparent 4px,transparent 8px)",
-                      border: "1px dashed rgba(245,158,91,0.4)", borderRadius: 3,
+                      border: "1px dashed rgba(245,158,91,0.4)", borderRadius: 4,
                     }} />
                   );
 
@@ -657,14 +657,14 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                   if (task._descarga) return (
                     <div key={`d${ti}`} title={`Descarga en ${task.planta || "planta"} · ${task.carga ?? "?"} m³ · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.25, width: w, height: ROW_H * 0.5, zIndex: 3,
-                      background: "rgba(63,207,142,0.18)", border: "1px solid rgba(63,207,142,0.55)", borderRadius: 3,
+                      background: "rgba(63,207,142,0.18)", border: "1px solid rgba(63,207,142,0.55)", borderRadius: 4,
                     }} />
                   );
                   if (task._wait) return (
                     <div key={`w${ti}`} title={`Espera franja horaria · ${dur} min`} style={{
                       position: "absolute", left, top: ROW_H * 0.3, width: w, height: ROW_H * 0.4, zIndex: 3,
                       background: "repeating-linear-gradient(45deg,rgba(34,211,238,0.15) 0,rgba(34,211,238,0.15) 4px,transparent 4px,transparent 8px)",
-                      border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 3,
+                      border: "1px dashed rgba(34,211,238,0.4)", borderRadius: 4,
                     }} />
                   );
 
@@ -689,7 +689,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                         }}
                       >
                         {ww > 16 && (isDepotMove ? <Home size={9} strokeWidth={2.6} /> : <ArrowRight size={9} strokeWidth={2.8} />)}
-                        {ww > 44 && kmLabel && <span style={{ fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>{kmLabel}</span>}
+                        {ww > 44 && kmLabel && <span style={{ fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>{kmLabel}</span>}
                       </div>
                     );
                   }
@@ -732,7 +732,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                       {/* las paradas estrechas (lo normal con el día entero a la vista) van sin nada dentro */}
                       {w >= 14 && (
                         <div style={{ position: "absolute", inset: 0, borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", gap: 3, padding: "0 4px" }}>
-                          <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
+                          <div style={{ width: 3, height: "60%", borderRadius: 4, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
                           {w >= 22 && (
                             <span style={{ fontSize: Math.min(10, w / 5), color: "#fff", fontWeight: 600, overflow: "hidden", textOverflow: w >= 60 ? "ellipsis" : "clip", whiteSpace: "nowrap", lineHeight: 1.2 }}>
                               {w >= 60 ? label : label.slice(0, Math.max(2, Math.floor(w / 7)))}
@@ -749,7 +749,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
                 {movePreview && movePreview.dayOffset === selectedDay * 1440 && movePreview.slotsByRowId.get(row._id || row.id)?.map((slot, si) => {
                   const left = (slot.arrival - selectedDay * 1440) * pxPerMin;
                   const w    = Math.max((slot.taskEnd - slot.arrival) * pxPerMin - 2, 6);
-                  const color = slot.wait > 0 ? "#f59e0b" : C.green;
+                  const color = slot.wait > 0 ? C.amber : C.green;
                   return (
                     <div key={`slot${si}`}
                       title={`Colocar aquí a las ${minToTime(slot.arrival % 1440)} · ${slot.kmDelta >= 0 ? "+" : ""}${slot.kmDelta.toFixed(2)} km${slot.wait > 0 ? ` · espera ${slot.wait} min` : ""}`}
@@ -776,7 +776,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
             <div style={{ display: "flex", height: 30, position: "sticky", bottom: 0, zIndex: 9, background: C.surface2, borderTop: `1px solid ${C.border2}` }}>
               <div style={{ width: leftW, flexShrink: 0, position: "sticky", left: 0, zIndex: 11, background: C.surface2, borderRight: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 4px" }}>
                 {TABLE_COLS.map(col => (
-                  <div key={col.k} style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: col.k === "avisos" ? C.red : C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
+                  <div key={col.k} style={{ width: col.w, flexShrink: 0, textAlign: col.align || "right", padding: "0 5px", fontFamily: mono, fontSize: 11, fontWeight: 700, color: col.k === "avisos" ? C.red : C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
                     {footerCell(col.k)}
                   </div>
                 ))}

@@ -651,7 +651,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: C.dim }}>
         <ClipboardList size={32} color={C.dim} />
-        <div style={{ fontSize: 14, color: C.muted, fontWeight: 600 }}>Ningún proyecto activo</div>
+        <div style={{ fontSize: 15, color: C.muted, fontWeight: 600 }}>Ningún proyecto activo</div>
         <div style={{ fontSize: 12, color: C.dim }}>Abre o crea un proyecto desde la pestaña Proyectos</div>
       </div>
     );
@@ -746,8 +746,8 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             display: "flex", alignItems: "center", gap: 4,
             background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
           }}>
-            <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
-            <span style={{ fontSize: 9, color: C.dim, fontFamily: mono }}>({activeDays})</span>
+            <span style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Reparto por día</span>
+            <span style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>({activeDays})</span>
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
               style={{ transform: showDayStrip ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .2s", flexShrink: 0 }}>
               <polyline points="6 9 12 15 18 9"/>
@@ -757,10 +757,10 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
             <div key={d} style={{
               display: "flex", alignItems: "center", gap: 4,
               background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 5, padding: "2px 8px", flexShrink: 0,
+              borderRadius: 4, padding: "2px 8px", flexShrink: 0,
             }}>
-              <span style={{ fontSize: 9, color: C.blue, fontWeight: 700, fontFamily: mono }}>{nombreDiaEscenario(constraints, d)}</span>
-              <span style={{ fontSize: 9, color: C.muted }}>{stopsPerDay[d] || 0}p</span>
+              <span style={{ fontSize: 10, color: C.blue, fontWeight: 700, fontFamily: mono }}>{nombreDiaEscenario(constraints, d)}</span>
+              <span style={{ fontSize: 10, color: C.muted }}>{stopsPerDay[d] || 0}p</span>
             </div>
           ))}
         </div>

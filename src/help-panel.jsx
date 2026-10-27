@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { TITULO, buscarAyuda } from "./help-content.js";
 import { C } from "./tema.js";
 
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 const font = "var(--font)";
 const RUTAS = { "/planning": "planning", "/scheduling": "scheduling", "/rostering": "rostering", "/control": "control", "/analytics": "analytics" };
@@ -18,9 +19,9 @@ export function HelpButton({ sesion, path, tipo }) {
   return (
     <>
       <button onClick={() => setOpen(o => !o)} title={`Ayuda de ${TITULO[modulo]}`} style={{
-        height: 30, padding: "0 10px", borderRadius: 7, background: open ? `${C.blue}22` : C.surface2,
+        height: 30, padding: "0 10px", borderRadius: 8, background: open ? `${C.blue}22` : C.surface2,
         border: `1px solid ${open ? C.blue : C.border}`, color: open ? C.blue : C.muted, cursor: "pointer",
-        display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontFamily: font, fontWeight: 600,
+        display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontFamily: font, fontWeight: 600,
       }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
         onMouseLeave={e => { if (!open) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; } }}
@@ -58,7 +59,7 @@ function HelpPanel({ modulo, onClose }) {
       <div style={{ padding: "12px 14px 10px", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>Ayuda · {TITULO[modulo]}</div>
-          <button onClick={onClose} title="Cerrar (Esc)" style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 2 }}>×</button>
+          <BotonCerrar onClick={onClose} title="Cerrar (Esc)" />
         </div>
         <div style={{ position: "relative" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2" style={{ position: "absolute", left: 10, top: 10 }}>
@@ -71,7 +72,7 @@ function HelpPanel({ modulo, onClose }) {
             placeholder="Busca: importar, sin asignar, fichajes…"
             style={{
               width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
-              borderRadius: 8, padding: "8px 10px 8px 30px", fontSize: 12.5, fontFamily: font, outline: "none",
+              borderRadius: 8, padding: "8px 10px 8px 30px", fontSize: 13, fontFamily: font, outline: "none",
             }}
           />
         </div>
@@ -79,7 +80,7 @@ function HelpPanel({ modulo, onClose }) {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 14px" }}>
         {resultados.length === 0 && (
-          <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, padding: "14px 6px" }}>
+          <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, padding: "14px 6px" }}>
             No hay nada en la ayuda sobre «{texto.trim()}». Prueba con otras palabras (por ejemplo, el nombre del botón).
           </div>
         )}
@@ -96,13 +97,13 @@ function HelpPanel({ modulo, onClose }) {
                 padding: "10px 6px", display: "flex", gap: 8, alignItems: "flex-start", fontFamily: font,
               }}>
                 <span style={{ color: C.blue, fontSize: 10, marginTop: 3, transform: open ? "rotate(90deg)" : "none", transition: "transform .12s" }}>▶</span>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: open ? C.text : "#c9d8f0", lineHeight: 1.4 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: open ? C.text : "#c9d8f0", lineHeight: 1.4 }}>
                   {item.q}
                   {m !== modulo && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: C.dim }}>· {TITULO[m]}</span>}
                 </span>
               </button>
               {open && (
-                <div style={{ padding: "0 8px 12px 24px", fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>
+                <div style={{ padding: "0 8px 12px 24px", fontSize: 13, color: C.muted, lineHeight: 1.55 }}>
                   <div>{item.a}</div>
                   {item.pasos?.length > 0 && (
                     <ol style={{ margin: "8px 0 0", paddingLeft: 18 }}>

@@ -9,6 +9,7 @@ import { C, barrioColor, font } from "./estilo.js";
 import { SECTORES, sectorDe } from "../sector.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 // ── TAB PROYECTOS ─────────────────────────────────────────────────
 const PROJECT_STATUS = {
@@ -139,7 +140,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isSuperAdmin ? 12 : 24 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Proyectos</div>
+          <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Proyectos</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
             Cada proyecto tiene sus puntos o líneas, su escenario y sus turnos.
           </div>
@@ -170,8 +171,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
         <div style={{ textAlign: "center", padding: 60, color: C.dim }}>Cargando…</div>
       ) : projects.length === 0 ? (
         <div style={{ textAlign: "center", padding: 80, color: C.dim }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: C.surface2, border: `1px solid ${C.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14, color: C.muted }}><FolderOpen size={24} /></div>
-          <div style={{ fontSize: 14, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Sin proyectos todavía</div>
+          <div style={{ width: 52, height: 52, borderRadius: 12, background: C.surface2, border: `1px solid ${C.border}`, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14, color: C.muted }}><FolderOpen size={24} /></div>
+          <div style={{ fontSize: 15, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Sin proyectos todavía</div>
           <div style={{ fontSize: 12 }}>Crea tu primer proyecto para empezar.</div>
         </div>
       ) : (
@@ -191,7 +192,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 3, background: p.color || C.dim, flexShrink: 0 }} />
+                      <span style={{ width: 9, height: 9, borderRadius: 4, background: p.color || C.dim, flexShrink: 0 }} />
                       <span style={{ fontSize: 15, fontWeight: 650, color: C.text, letterSpacing: "-0.01em" }}>{p.nombre}</span>
                       {isActive && <span className="op-pastilla" style={{ background: "rgba(91,124,250,0.14)", color: C.blueText }}>Abierto</span>}
                       {p.tipo !== "lineas" && p.sector && p.sector !== "residuos" && <span className="op-pastilla" title="Sector del proyecto" style={{ background: "rgba(91,124,250,0.1)", color: C.blueText }}>{sectorDe(p).nombre}</span>}
@@ -211,7 +212,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                         cursor: "pointer", padding: 0,
                       }}
                     />
-                    <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "22", borderRadius: 5, padding: "3px 8px", border: `1px solid ${st.color}44` }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "22", borderRadius: 4, padding: "3px 8px", border: `1px solid ${st.color}44` }}>
                       {st.label}
                     </span>
                   </div>
@@ -226,8 +227,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       }}
                     >
                       {p.color && (
-                        <button onClick={() => setProjectColor(p._id, null)} title="Quitar color"
-                          style={{ width: 18, height: 18, borderRadius: "50%", background: "none", border: `1px solid ${C.dim}`, color: C.dim, fontSize: 10, lineHeight: 1, cursor: "pointer", padding: 0 }}>×</button>
+                        <BotonCerrar onClick={() => setProjectColor(p._id, null)} title="Quitar color" />
                       )}
                       {PROJECT_COLORS.map(c => (
                         <button key={c} onClick={() => setProjectColor(p._id, c)} title={c}
@@ -242,15 +242,15 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 </div>
 
                 {/* Planning section */}
-                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planificación</div>
+                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px" }}>
+                  <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Planificación</div>
                   {p.tipo === "lineas" ? (
                     p.redResumen ? (
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
                           {p.redResumen.lineas.toLocaleString("es-ES")} línea{p.redResumen.lineas === 1 ? "" : "s"} · {p.redResumen.paradas.toLocaleString("es-ES")} paradas
                         </div>
-                        <div style={{ fontSize: 10.5, color: C.muted }}>
+                        <div style={{ fontSize: 11, color: C.muted }}>
                           {p.redResumen.calendarios ? `${p.redResumen.calendarios} calendario${p.redResumen.calendarios === 1 ? "" : "s"} · ` : ""}{p.redResumen.archivo || "GTFS"}
                         </div>
                       </div>
@@ -264,7 +264,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       </div>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         {(p.planning.uniqueBarrios || []).slice(0, 8).map(b => (
-                          <span key={b} style={{ fontSize: 9, background: barrioColor(b) + "28", border: `1px solid ${barrioColor(b)}55`, color: barrioColor(b), borderRadius: 4, padding: "1px 6px" }}>{b}</span>
+                          <span key={b} style={{ fontSize: 10, background: barrioColor(b) + "28", border: `1px solid ${barrioColor(b)}55`, color: barrioColor(b), borderRadius: 4, padding: "1px 6px" }}>{b}</span>
                         ))}
                       </div>
                     </div>
@@ -274,8 +274,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 </div>
 
                 {/* Scheduling section */}
-                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Rutas</div>
+                <div style={{ background: alfa(0.025), border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px" }}>
+                  <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Rutas</div>
                   {p.scheduling ? (
                     <div>
                       <div style={{ display: "flex", gap: 20 }}>
@@ -287,29 +287,29 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                         ].map(([v, l]) => (
                           <div key={l}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{v}</div>
-                            <div style={{ fontSize: 9, color: C.dim }}>{l}</div>
+                            <div style={{ fontSize: 10, color: C.dim }}>{l}</div>
                           </div>
                         ))}
                       </div>
                       {!!p.scheduling.turnos?.length && (
                         <div style={{ marginTop: 10 }}>
-                          <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Turnos</div>
+                          <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Turnos</div>
                           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                             {p.scheduling.turnos.map(tu => (
-                              <span key={tu} style={{ fontSize: 9, background: C.blueDim, border: `1px solid ${C.border2}`, color: C.blueText, borderRadius: 4, padding: "1px 6px" }}>{tu}</span>
+                              <span key={tu} style={{ fontSize: 10, background: C.blueDim, border: `1px solid ${C.border2}`, color: C.blueText, borderRadius: 4, padding: "1px 6px" }}>{tu}</span>
                             ))}
                           </div>
                         </div>
                       )}
                       {!!p.scheduling.vehicles?.length && (
                         <div style={{ marginTop: 10 }}>
-                          <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Vehículos</div>
+                          <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Vehículos</div>
                           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                             {p.scheduling.vehicles.slice(0, 8).map((v, i) => (
-                              <span key={v.nombre + i} title={v.turno || ""} style={{ fontSize: 9, background: alfa(0.05), border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 6px" }}>{v.nombre}</span>
+                              <span key={v.nombre + i} title={v.turno || ""} style={{ fontSize: 10, background: alfa(0.05), border: `1px solid ${C.border2}`, color: C.muted, borderRadius: 4, padding: "1px 6px" }}>{v.nombre}</span>
                             ))}
                             {p.scheduling.vehicles.length > 8 && (
-                              <span style={{ fontSize: 9, color: C.dim, padding: "1px 6px" }}>+{p.scheduling.vehicles.length - 8} más</span>
+                              <span style={{ fontSize: 10, color: C.dim, padding: "1px 6px" }}>+{p.scheduling.vehicles.length - 8} más</span>
                             )}
                           </div>
                         </div>
@@ -337,9 +337,9 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
       {newModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
           onClick={() => setNewModal(null)}>
-          <div style={{ background: C.card, borderRadius: 14, padding: "28px 28px 22px", width: 400, boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: `1px solid ${C.border}` }}
+          <div style={{ background: C.card, borderRadius: 12, padding: "28px 28px 22px", width: 400, boxShadow: "0 24px 64px rgba(0,0,0,0.5)", border: `1px solid ${C.border}` }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 18 }}>Nuevo proyecto</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 18 }}>Nuevo proyecto</div>
             {isSuperAdmin && (
               <div style={{ marginBottom: 10 }}>
                 <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Organización *</label>
@@ -363,8 +363,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                       flex: 1, textAlign: "left", padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontFamily: font,
                       background: on ? C.blueDim : C.surface2, border: `1px solid ${on ? C.blue : C.border}`,
                     }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: on ? C.blueText : C.text }}>{t.nombre}</div>
-                      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2, lineHeight: 1.35 }}>{t.detalle}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: on ? C.blueText : C.text }}>{t.nombre}</div>
+                      <div style={{ fontSize: 11, color: C.dim, marginTop: 2, lineHeight: 1.35 }}>{t.detalle}</div>
                     </button>
                   );
                 })}
@@ -392,12 +392,8 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
                 style={{ ...inpStyle, marginBottom: 0, width: "auto", colorScheme: tono("dark", "light") }} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button onClick={() => setNewModal(null)} style={{ flex: 1, padding: "9px 0", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
-              <button onClick={createProject} disabled={creating || !newModal.nombre.trim() || (isSuperAdmin && !newModal.orgId && !effectiveOrgId)} style={{
-                flex: 2, padding: "9px 0", background: C.blue, border: "none", color: "#fff",
-                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: creating ? "wait" : "pointer",
-                fontFamily: font, opacity: !newModal.nombre.trim() ? .5 : 1,
-              }}>{creating ? "Creando…" : "Crear proyecto"}</button>
+              <button onClick={() => setNewModal(null)} className="op-btn" style={{ flex: 1 }}>Cancelar</button>
+              <button onClick={createProject} disabled={creating || !newModal.nombre.trim() || (isSuperAdmin && !newModal.orgId && !effectiveOrgId)} className="op-btn op-primario" style={{ flex: 2, opacity: !newModal.nombre.trim() ? .5 : 1 }}>{creating ? "Creando…" : "Crear proyecto"}</button>
             </div>
           </div>
         </div>

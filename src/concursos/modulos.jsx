@@ -31,11 +31,11 @@ export function ResumenConcurso({ concursoId, irA }) {
   const tarjeta = (l, v, sub, color) => (
     <div key={l} className="op-tarjeta" style={{ padding: "12px 16px" }}>
       <div style={{ fontSize: 12, color: C.muted }}>{l}</div>
-      <div style={{ fontSize: 16, fontWeight: 650, color: color || C.text, marginTop: 3 }}>{v}</div>
-      {sub ? <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }}>{sub}</div> : null}
+      <div style={{ fontSize: 15, fontWeight: 650, color: color || C.text, marginTop: 3 }}>{v}</div>
+      {sub ? <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{sub}</div> : null}
     </div>
   );
-  const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
+  const titulo = t => <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
   const rejilla = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 };
 
   // ── comprobaciones: [bien, texto, módulo, solo aviso] ──
@@ -74,9 +74,9 @@ export function ResumenConcurso({ concursoId, irA }) {
   return (
     <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><ClipboardList size={19} /></div>
+        <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><ClipboardList size={19} /></div>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Resumen</div>
+          <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Resumen</div>
           <div style={{ fontSize: 13, color: C.muted }}>{c?.nombre || "…"}</div>
         </div>
       </div>
@@ -109,7 +109,7 @@ export function ResumenConcurso({ concursoId, irA }) {
       </>}
 
       {comprobaciones.length > 0 && <>
-        {titulo(<>Comprobaciones <span style={{ fontSize: 12.5, fontWeight: 500, color: malas ? C.amber : C.green, marginLeft: 6 }}>{malas ? `${malas} por resolver` : "todo en orden"}</span></>)}
+        {titulo(<>Comprobaciones <span style={{ fontSize: 13, fontWeight: 500, color: malas ? C.amber : C.green, marginLeft: 6 }}>{malas ? `${malas} por resolver` : "todo en orden"}</span></>)}
         <div className="op-tarjeta" style={{ padding: 0, overflow: "hidden", maxWidth: 860 }}>
           {comprobaciones.map(([ok, texto, ruta, aviso], i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderTop: i ? `1px solid ${C.border}` : "none" }}>

@@ -20,21 +20,21 @@ function CampoNumero({ valor, defecto, min = 0, decimal = false, vacioEsNulo = f
     <input type="number" min={min} step={step} value={texto ?? (valor ?? "")} placeholder={vacioEsNulo ? textoVacio : defecto != null ? String(defecto) : ""}
       onFocus={() => setTexto(valor == null ? "" : String(valor))} onChange={e => setTexto(e.target.value)} onBlur={guardar}
       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTexto(null); e.currentTarget.blur(); } }}
-      style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
+      style={{ width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: mono, outline: "none" }} />
   );
 }
 
 function TiposTurno({ tipos, onChange }) {
   const lista = tipos || [];
   const cambiar = (i, cambio) => onChange(lista.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
-  const estiloCampo = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") };
+  const estiloCampo = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 4, padding: "3px 5px", fontSize: 12, fontFamily: mono, outline: "none", colorScheme: tono("dark", "light") };
   // vacio = true: se puede dejar en blanco (null = sin límite)
   const hora = (i, k, vacio = false, deshabilitado = false) => (
     <input type="time" disabled={deshabilitado} value={vacio && !(lista[i][k] > 0) ? "" : aHHMM(lista[i][k])}
       onChange={e => cambiar(i, { [k]: vacio && !e.target.value ? null : deHHMM(e.target.value) })}
       style={{ ...estiloCampo, width: 84, opacity: deshabilitado ? 0.35 : 1 }} />
   );
-  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
+  const th = { fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "4px 6px", whiteSpace: "nowrap" };
   const td = { padding: "4px 6px", borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   return (
     <div style={{ marginBottom: 14 }}>
@@ -53,7 +53,7 @@ function TiposTurno({ tipos, onChange }) {
             {lista.map((x, i) => (
               <tr key={x.id || i} style={{ opacity: x.activo === false ? 0.5 : 1 }}>
                 <td style={td}><input type="checkbox" checked={x.activo !== false} onChange={e => cambiar(i, { activo: e.target.checked })} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer" }} /></td>
-                <td style={td}><input value={x.nombre} onChange={e => cambiar(i, { nombre: e.target.value })} style={{ width: 110, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" }} /></td>
+                <td style={td}><input value={x.nombre} onChange={e => cambiar(i, { nombre: e.target.value })} style={{ width: 110, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 4, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" }} /></td>
                 <td style={td}>{hora(i, "desde")} <span style={{ color: C.dim, fontSize: 11 }}>y</span> {hora(i, "hasta")}</td>
                 <td style={td}>{hora(i, "trabajoMin")}</td>
                 <td style={td}>{hora(i, "trabajoMax")}</td>
@@ -71,7 +71,7 @@ function TiposTurno({ tipos, onChange }) {
                     {x.cambiosBus !== 0 ? "permite" : "no"}
                   </label>
                 </td>
-                <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
+                <td style={td}><button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este tipo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15 }}><X size={13} /></button></td>
               </tr>
             ))}
           </tbody>
@@ -79,9 +79,9 @@ function TiposTurno({ tipos, onChange }) {
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
         <button onClick={() => onChange([...lista, { id: `t${lista.length + 1}-${lista.length}`, nombre: `Tipo ${lista.length + 1}`, activo: true, desde: 360, hasta: 600, trabajoMin: 360, trabajoMax: 480, amplitudMax: 540, partido: false }])}
-          style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font }}>+ Añadir tipo</button>
+          className="op-btn">+ Añadir tipo</button>
         <button onClick={() => onChange(TIPOS_TURNO_DEFECTO)} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Volver a los de por defecto</button>
-        <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
+        <span style={{ fontSize: 11, color: C.dim, lineHeight: 1.5 }}>
           Cada turno tiene que encajar en uno de los marcados: es del primero de la lista en el que encaja y aún tiene sitio («Máximo al día»). Si «empieza entre» va de una hora a otra más temprana, cruza la medianoche (p. ej. 17:00 y 04:00). «Split máximo»: el hueco sin pagar más largo que se permite en el partido. «Cambio de bus» sin marcar: el conductor hace todo el turno en el mismo autobús. Split máximo y máximo al día en blanco: sin límite. Los que no encajan en ninguno salen con aviso. Sin ningún tipo marcado se usan la amplitud, la jornada y los partidos generales.
         </span>
       </div>
@@ -110,17 +110,17 @@ function GruposLineas({ red, grupos, onChange }) {
           <div key={g.id} style={{ border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 8, padding: "10px 12px", marginBottom: 10, background: C.bg }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <input value={g.nombre} onChange={e => cambiar(i, { nombre: e.target.value })} placeholder="Nombre del grupo"
-                style={{ width: 200, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontWeight: 600, fontFamily: font, outline: "none" }} />
+                style={{ width: 200, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 13, fontWeight: 600, fontFamily: font, outline: "none" }} />
               <span style={{ fontSize: 11, color: C.dim }}>{(g.lineas || []).length} línea{(g.lineas || []).length === 1 ? "" : "s"} · pulsa una línea para meterla o sacarla</span>
               <span style={{ flex: 1 }} />
-              <button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este grupo (las líneas quedan sin grupo)" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button>
+              <button onClick={() => onChange(lista.filter((_, k) => k !== i))} title="Quitar este grupo (las líneas quedan sin grupo)" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15 }}><X size={13} /></button>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               {nombres.map(n => {
                 const aqui = deLinea.get(n) === i, otro = deLinea.has(n) && !aqui;
                 return (
                   <button key={n} onClick={() => alternar(i, n)} title={otro ? `Está en «${lista[deLinea.get(n)].nombre}»: pulsa para pasarla aquí` : aqui ? "Sacar del grupo" : "Meter en el grupo"}
-                    style={{ minWidth: 38, padding: "3px 8px", borderRadius: 5, fontSize: 11.5, fontWeight: 700, fontFamily: mono, cursor: "pointer",
+                    style={{ minWidth: 38, padding: "3px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700, fontFamily: mono, cursor: "pointer",
                       border: `1px solid ${aqui ? color : C.border}`, background: aqui ? `${color}33` : "transparent", color: aqui ? C.text : otro ? C.dim : C.muted, opacity: otro ? 0.45 : 1 }}>{n}</button>
                 );
               })}
@@ -130,8 +130,8 @@ function GruposLineas({ red, grupos, onChange }) {
       })}
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => onChange([...lista, { id: `g${Date.now().toString(36)}`, nombre: `Grupo ${lista.length + 1}`, lineas: [] }])}
-          style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontFamily: font }}>+ Nuevo grupo</button>
-        <span style={{ fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>
+          className="op-btn">+ Nuevo grupo</button>
+        <span style={{ fontSize: 11, color: C.dim, lineHeight: 1.5 }}>
           {sinGrupo.length ? `Sin grupo: ${sinGrupo.join(", ")}. Cada línea sin grupo cuenta como un grupo propio.` : "Todas las líneas están en algún grupo."} Lo que se puede mezclar dentro de un grupo se elige en «Mezclas».
         </span>
       </div>
@@ -179,14 +179,14 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
   const sino = (k, invertido = false) => <Interruptor on={invertido ? !p[k] : !!p[k]} onCambiar={v => set(k, invertido ? !v : v)} />;
   const lista = (k, opciones) => (
     <select value={String(p[k])} onChange={e => { const o = opciones.find(x => String(x[0]) === e.target.value); set(k, o[0]); }}
-      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
       {opciones.map(([v, l]) => <option key={v} value={String(v)}>{l}</option>)}
     </select>
   );
 
   const lista2 = (valor, alCambiar, opciones) => (
     <select value={valor} onChange={e => alCambiar(e.target.value)}
-      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
+      style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", maxWidth: 360 }}>
       {opciones.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>
   );
@@ -301,8 +301,8 @@ export function Restricciones({ p, onChange, red, onCambiarDia, onCerrar }) {
       cabecera={<SelectorCalendario red={red} valor={p.dia} onCambiar={onCambiarDia} ancho={280} />}
       avisos={revision.length > 0 && (
         <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${revision.some(x => x.grave) ? "rgba(242,109,109,0.5)" : "rgba(245,184,74,0.45)"}`, background: revision.some(x => x.grave) ? "rgba(242,109,109,0.08)" : "rgba(245,184,74,0.07)" }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
-          {revision.map((x, i) => <div key={i} style={{ fontSize: 11.5, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? <OctagonX size={12} style={{ verticalAlign: "-2px" }} /> : <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} />} {x.texto}</div>)}
+          <div style={{ fontSize: 12, fontWeight: 700, color: revision.some(x => x.grave) ? C.red : C.amber, marginBottom: 4 }}>Revisa estas restricciones</div>
+          {revision.map((x, i) => <div key={i} style={{ fontSize: 12, color: x.grave ? "#fecaca" : C.muted, lineHeight: 1.5 }}>{x.grave ? <OctagonX size={12} style={{ verticalAlign: "-2px" }} /> : <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} />} {x.texto}</div>)}
         </div>
       )} />
   );

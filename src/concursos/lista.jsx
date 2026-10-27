@@ -68,7 +68,7 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 24px", fontFamily: font }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Concursos</div>
+          <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Concursos</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3, maxWidth: 560 }}>Estudios de licitación: flota, plantilla y coste de cada oferta. Cada concurso trabaja con sus propios datos, aparte de la operativa.</div>
         </div>
         <button className="op-btn op-primario" onClick={() => setNuevo({ nombre: "", organismo: "", tipo: "puntos", duracionAnios: 8, fechaLimite: "" })}><Plus size={15} /> Nuevo concurso</button>
@@ -101,12 +101,12 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
               const est = ESTADOS.find(e => e.id === c.estado) || ESTADOS[0];
               return (
                 <div key={c._id} className="op-tarjeta" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", cursor: "pointer" }} onClick={() => abrir(c)}>
-                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue, flexShrink: 0 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue, flexShrink: 0 }}>
                     {c.tipo === "lineas" ? <Bus size={19} /> : <FileSearch size={19} />}
                   </div>
                   <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 600, color: C.text }}>{c.nombre}</div>
-                    <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{c.nombre}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
                       {[c.organismo, c.duracionAnios ? `${c.duracionAnios} años` : null, c.fechaLimite ? `presentar antes del ${fechaTxt(c.fechaLimite)}` : null].filter(Boolean).join(" · ") || TIPOS_CONCURSO.find(t => t.id === c.tipo)?.nombre}
                     </div>
                   </div>
@@ -123,9 +123,9 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
 
       {nuevo && (
         <div onClick={() => !nuevo.guardando && setNuevo(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 480, maxWidth: "100%", background: C.card, border: `1px solid ${C.border2}`, borderRadius: 16, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 480, maxWidth: "100%", background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 20 }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ fontSize: 16, fontWeight: 650, color: C.text, flex: 1 }}>Nuevo concurso</div>
+              <div style={{ fontSize: 15, fontWeight: 650, color: C.text, flex: 1 }}>Nuevo concurso</div>
               <button className="op-btn op-fantasma op-icono" onClick={() => setNuevo(null)}><X size={16} /></button>
             </div>
             <label className="op-label">Enlace de la licitación en la Plataforma de Contratación (opcional)</label>
@@ -133,9 +133,9 @@ export function ConcursosPage({ orgId: orgPropia, isSuperAdmin, orgSugerida, onA
               <input className="op-input" value={nuevo.enlace || ""} onChange={e => setNuevo(n => ({ ...n, enlace: e.target.value, licitacion: null }))} placeholder="https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=…" aria-label="Enlace de la Plataforma" />
               <button className="op-btn" disabled={!nuevo.enlace?.trim() || nuevo.trayendo || nuevo.guardando} onClick={traer}>{nuevo.trayendo ? <Loader2 size={14} className="op-girando" /> : null} Traer datos</button>
             </div>
-            {nuevo.errorEnlace && <div style={{ fontSize: 12.5, color: C.red, marginBottom: 8 }}>{nuevo.errorEnlace}</div>}
+            {nuevo.errorEnlace && <div style={{ fontSize: 13, color: C.red, marginBottom: 8 }}>{nuevo.errorEnlace}</div>}
             {nuevo.licitacion && (
-              <div style={{ background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+              <div style={{ background: C.surface2, borderRadius: 12, padding: "8px 12px", fontSize: 13, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
                 <b style={{ color: C.green }}>Datos oficiales:</b> presupuesto {nuevo.licitacion.presupuesto?.sinIva != null ? `${Math.round(nuevo.licitacion.presupuesto.sinIva).toLocaleString("es-ES")} € sin IVA` : "—"} · valor estimado {nuevo.licitacion.valorEstimado != null ? `${Math.round(nuevo.licitacion.valorEstimado).toLocaleString("es-ES")} €` : "—"} · {nuevo.licitacion.duracion?.meses ? `${nuevo.licitacion.duracion.meses} meses` : "duración sin dato"} · {nuevo.licitacion.criterios?.length || 0} criterios · CPV {(nuevo.licitacion.cpvs || []).join(", ")}
                 <br />Se bajarán y leerán {documentosUtiles(nuevo.licitacion).length} documentos (pliegos y anexos útiles).{nuevo.licitacion.lotes > 1 ? ` Ojo: va por ${nuevo.licitacion.lotes} lotes y las cifras son del total.` : ""}
               </div>

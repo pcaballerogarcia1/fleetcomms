@@ -43,7 +43,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
       onVerMapa?.();
     } catch (e) { setProgreso(null); setOcupado(null); setError(`No se pudo pasar al mapa: ${e.message || e}`); }
   }
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
 
   async function subir(archivo) {
     if (!archivo) return;
@@ -97,7 +97,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
             {revisar.hojas.map((h, i) => <option key={i} value={i}>Hoja: {h.nombre}</option>)}
           </select>
         )}
-        <div style={{ overflow: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
+        <div style={{ overflow: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
           <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr>{e.nombres.map((n, i) => (
@@ -128,8 +128,8 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
     <div style={{ ...tarjeta, padding: "14px 16px", marginBottom: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 260 }}>
-          <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Inventario de contenedores</div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+          <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>Inventario de contenedores</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
             {inventario && resumen ? <>{inventario.nombre} · {FMT.format(resumen.total)} contenedores en {FMT.format(resumen.puntos)} puntos de aportación</> : "Sube el listado de contenedores (Excel, CSV…), aunque no tenga coordenadas: con sus puntos de aportación el rendimiento se estima mucho mejor."}
           </div>
         </div>
@@ -137,31 +137,31 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
         {inventario && <button className="op-btn op-fantasma op-icono" title="Quitar el listado" onClick={() => window.confirm("¿Quitar el listado de contenedores?") && borrarInventario(concursoId, inventario.capa).catch(e => setError(e.message))}><Trash2 size={14} /></button>}
         <input ref={ref} type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; e.target.value = ""; subir(f); }} />
       </div>
-      {ocupado && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>{ocupado}</div>}
-      {error && <div style={{ fontSize: 12.5, color: C.red, marginTop: 8 }}>{error}</div>}
+      {ocupado && <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>{ocupado}</div>}
+      {error && <div style={{ fontSize: 13, color: C.red, marginTop: 8 }}>{error}</div>}
       {vista}
 
       {!revisar && inventario && resumen && <>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
           {resumen.porUbicacion.map(u => (
-            <div key={u.ubicacion} style={{ background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: C.muted }}>
+            <div key={u.ubicacion} style={{ background: C.surface2, borderRadius: 12, padding: "8px 12px", fontSize: 13, color: C.muted }}>
               <b style={{ color: C.text }}>{u.ubicacion}</b>: {FMT.format(u.contenedores)} contenedores · {FMT.format(u.puntos)} puntos · <b style={{ color: C.text }}>{FMT.format(u.porPunto)}</b> por punto
             </div>
           ))}
-          {resumen.porDistrito.length > 0 && <div style={{ background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: C.muted }}>{resumen.porDistrito.map(([d, n]) => `${d} ${n}`).join(" · ")}</div>}
+          {resumen.porDistrito.length > 0 && <div style={{ background: C.surface2, borderRadius: 12, padding: "8px 12px", fontSize: 13, color: C.muted }}>{resumen.porDistrito.map(([d, n]) => `${d} ${n}`).join(" · ")}</div>}
         </div>
 
         {/* ── en el mapa del Planning ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, padding: "10px 12px", background: C.surface2, borderRadius: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, padding: "10px 12px", background: C.surface2, borderRadius: 12 }}>
           <MapPin size={16} color={C.blue} />
-          <div style={{ flex: "1 1 260px", fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+          <div style={{ flex: "1 1 260px", fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
             {inventario.capa
               ? <>En el mapa del Planning{inventario.geocodificado ? <>: <b style={{ color: C.text }}>{inventario.geocodificado.portal}</b> direcciones en su portal{inventario.geocodificado.calle ? <>, <b style={{ color: C.amber }}>{inventario.geocodificado.calle}</b> en el centro de su calle (aproximado)</> : null}{inventario.geocodificado.nada ? <>, <b style={{ color: C.red }}>{inventario.geocodificado.nada}</b> sin encontrar</> : null}.</> : "."}</>
               : yaConCoordenadas === inventario.contenedores.length ? "El listado trae coordenadas: pásalo al mapa para hacer rutas, turnos y cuadrantes como en Proyectos."
               : "Sitúa cada dirección en el mapa (buscador oficial de direcciones, CartoCiudad) y pásalo a Planificación para hacer rutas, turnos y cuadrantes como en Proyectos."}
           </div>
           {yaConCoordenadas < inventario.contenedores.length && (
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.muted }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.muted }}>
               Municipio <input className="op-input" value={muni} onChange={e => setMunicipio(e.target.value)} placeholder="p. ej. Palma" style={{ width: 150, height: 30 }} aria-label="Municipio" />
             </label>
           )}
@@ -170,7 +170,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
           </button>
           {inventario.capa && onVerMapa && <button className="op-btn" onClick={onVerMapa}>Ver en el mapa</button>}
           {inventario.geocodificado?.sin?.length > 0 && (
-            <div style={{ flexBasis: "100%", fontSize: 11.5, color: C.dim }}>Sin encontrar (añádelos a mano en el mapa si hacen falta): {inventario.geocodificado.sin.join(" · ")}</div>
+            <div style={{ flexBasis: "100%", fontSize: 12, color: C.dim }}>Sin encontrar (añádelos a mano en el mapa si hacen falta): {inventario.geocodificado.sin.join(" · ")}</div>
           )}
         </div>
 
@@ -179,7 +179,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
             Comparado con el parque del pliego {descuadres.length ? <span style={{ color: C.amber, fontWeight: 500 }}><TriangleAlert size={13} style={{ verticalAlign: "-2px" }} /> {descuadres.length} no cuadran</span> : <span style={{ color: C.green, fontWeight: 500 }}>✓ cuadra</span>}
           </div>
           <div style={{ overflow: "auto" }}>
-            <table style={{ borderCollapse: "collapse", fontSize: 12.5 }}>
+            <table style={{ borderCollapse: "collapse", fontSize: 13 }}>
               <thead><tr>{["Ubicación", "Fracción", "Pliego", "Listado", "Diferencia"].map(h => <th key={h} style={{ textAlign: ["Pliego", "Listado", "Diferencia"].includes(h) ? "right" : "left", padding: "4px 12px", color: C.dim, fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
               <tbody>
                 {comparacion.map((f, i) => (
@@ -194,7 +194,7 @@ export function PanelInventario({ concursoId, inventario, resumen, parque, munic
               </tbody>
             </table>
           </div>
-          {descuadres.length > 0 && <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Las cantidades de servicio de la ficha son las del pliego. Si el listado es el bueno, pregúntalo en las aclaraciones o corrige la ficha.</div>}
+          {descuadres.length > 0 && <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Las cantidades de servicio de la ficha son las del pliego. Si el listado es el bueno, pregúntalo en las aclaraciones o corrige la ficha.</div>}
         </>}
       </>}
     </div>

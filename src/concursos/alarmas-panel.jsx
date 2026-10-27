@@ -11,7 +11,7 @@ export function PanelAlarmas({ alarmas = [], irA, titulo }) {
         {titulo || (bloquea ? "Antes de fiarte de estos números, hay que resolver esto" : "Revisa esto")}
       </div>
       {alarmas.map((a, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "4px 0", fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>
+        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "4px 0", fontSize: 13, color: C.text, lineHeight: 1.45 }}>
           {a.nivel === "bloquea" ? <CircleAlert size={15} color={C.red} style={{ flexShrink: 0, marginTop: 1 }} /> : <TriangleAlert size={15} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />}
           <span style={{ flex: 1 }}>{a.texto}</span>
           {a.ruta && irA && <button className="op-btn op-fantasma" style={{ height: 24, fontSize: 12 }} onClick={() => irA(a.ruta)}>Ir</button>}

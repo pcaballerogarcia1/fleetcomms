@@ -67,10 +67,10 @@ export function LoginScheduling({ onLogin }) {
       <div style={{ width: 380, maxWidth: "100%", animation: "sched-fadein .3s ease both" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 26 }}>
           <Logo size={44} />
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, marginTop: 16, letterSpacing: "-0.02em" }}>Entra en Operanzia</div>
+          <div style={{ fontSize: 20, fontWeight: 650, color: C.text, marginTop: 16, letterSpacing: "-0.02em" }}>Entra en Operanzia</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Planificación y operaciones de flota</div>
         </div>
-        <div style={{ background: tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"), border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, boxShadow: `0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`, backdropFilter: "blur(8px)" }}>
+        <div style={{ background: tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"), border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, boxShadow: `0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`, backdropFilter: "blur(8px)" }}>
           <div style={{ marginBottom: 14 }}>
             <label className="op-label" htmlFor="login-email">Email o usuario</label>
             <input id="login-email" className="op-input" value={email} onChange={e => setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={onEnter} />
@@ -80,16 +80,16 @@ export function LoginScheduling({ onLogin }) {
             <input id="login-clave" className="op-input" value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="••••••••" autoComplete="current-password" onKeyDown={onEnter} />
           </div>
           {err && (
-            <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 9, padding: "9px 12px", fontSize: 12.5, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 8, padding: "9px 12px", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
               <CircleAlert size={15} style={{ flexShrink: 0 }} /> {err}
             </div>
           )}
-          <button onClick={login} disabled={loading} className="op-btn op-primario" style={{ width: "100%", height: 40, fontSize: 13.5 }}>
+          <button onClick={login} disabled={loading} className="op-btn op-primario" style={{ width: "100%", height: 40, fontSize: 13 }}>
             {loading ? <><Loader2 size={15} className="op-girando" /> Accediendo…</> : "Acceder"}
           </button>
           <OlvideClave texto={email} color={C.muted} />
         </div>
-        <div style={{ textAlign: "center", fontSize: 11.5, color: C.dim, marginTop: 18 }}>Acceso para la oficina · los conductores entran por la app de conductores</div>
+        <div style={{ textAlign: "center", fontSize: 12, color: C.dim, marginTop: 18 }}>Acceso para la oficina · los conductores entran por la app de conductores</div>
       </div>
     </div>
   );

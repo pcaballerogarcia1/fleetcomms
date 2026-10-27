@@ -134,7 +134,7 @@ export function ModuloInventario({sesion,usuarios}){
                 )}
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:22,fontWeight:800,color:stockColor(p),lineHeight:1}}>{p.stock}</div>
+                <div style={{fontSize:20,fontWeight:800,color:stockColor(p),lineHeight:1}}>{p.stock}</div>
                 <div style={{fontSize:10,color:C.dim}}>{p.unidad}</div>
               </div>
             </div>
@@ -158,7 +158,7 @@ export function ModuloInventario({sesion,usuarios}){
         <div style={{...S.card}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div style={{flex:1}}>
-              <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{prodActual.nombre}</div>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>{prodActual.nombre}</div>
               <div style={{fontSize:11,color:C.muted,marginBottom:2}}>Ref: <span style={{color:C.blueText}}>{prodActual.referencia}</span></div>
               <div style={{fontSize:11,color:C.muted,marginBottom:2}}>{prodActual.categoria} · {prodActual.ubicacion}</div>
               {prodActual.stock<=prodActual.stockMin&&(
@@ -173,8 +173,8 @@ export function ModuloInventario({sesion,usuarios}){
             </div>
           </div>
           {/* Barra stock */}
-          <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden"}}>
-            <div style={{height:"100%",background:stockColor(prodActual),borderRadius:3,width:`${Math.min(100,prodActual.stockMin>0?(prodActual.stock/Math.max(prodActual.stock,prodActual.stockMin*2))*100:prodActual.stock>0?100:0)}%`,transition:"width 0.4s"}}/>
+          <div style={{height:6,background:C.bg,borderRadius:4,overflow:"hidden"}}>
+            <div style={{height:"100%",background:stockColor(prodActual),borderRadius:4,width:`${Math.min(100,prodActual.stockMin>0?(prodActual.stock/Math.max(prodActual.stock,prodActual.stockMin*2))*100:prodActual.stock>0?100:0)}%`,transition:"width 0.4s"}}/>
           </div>
           <div style={{fontSize:10,color:C.dim,marginTop:4}}>Stock mínimo: {prodActual.stockMin} {prodActual.unidad}</div>
         </div>
@@ -200,7 +200,7 @@ export function ModuloInventario({sesion,usuarios}){
             <div key={m.id} style={{...S.card}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:16}}>{m.tipo==="entrada"?<ArrowUp size={16} />:<ArrowDown size={16} />}</span>
+                  <span style={{fontSize:15}}>{m.tipo==="entrada"?<ArrowUp size={16} />:<ArrowDown size={16} />}</span>
                   <div>
                     <span style={{fontSize:13,fontWeight:700,color:m.tipo==="entrada"?C.green:C.orange}}>{m.tipo==="entrada"?"+":"-"}{m.cantidad} {prodActual.unidad}</span>
                     {m.vehiculo&&<span style={{fontSize:11,color:C.muted,marginLeft:8}}><Truck size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.vehiculo.split("·")[0].trim()}</span>}
@@ -212,9 +212,9 @@ export function ModuloInventario({sesion,usuarios}){
                 </div>
               </div>
               {m.motivo&&<div style={{fontSize:11,color:C.muted,marginBottom:2}}>{m.motivo}</div>}
-              {m.nota&&<div style={{fontSize:11.5,color:C.violet}}><StickyNote size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.nota}</div>}
+              {m.nota&&<div style={{fontSize:12,color:C.violet}}><StickyNote size={12} style={{verticalAlign:"-2px",marginRight:4}}/>{m.nota}</div>}
               <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div>
+                <div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div>
                 <span style={{fontSize:10,color:C.dim}}>{u.nombre}</span>
               </div>
             </div>
@@ -253,9 +253,9 @@ export function ModuloInventario({sesion,usuarios}){
         <div style={{marginBottom:14}}>
           <label style={S.label}>Cantidad ({prodActual.unidad})</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>setFormMov({...formMov,cantidad:Math.max(1,(parseInt(formMov.cantidad)||1)-1)})} style={{...S.btnGhost,padding:"10px 16px",fontSize:18,fontWeight:700}}>−</button>
+            <button onClick={()=>setFormMov({...formMov,cantidad:Math.max(1,(parseInt(formMov.cantidad)||1)-1)})} style={{...S.btnGhost,padding:"10px 16px",fontSize:20,fontWeight:700}}>−</button>
             <input type="number" min="1" value={formMov.cantidad} onChange={e=>setFormMov({...formMov,cantidad:e.target.value})} style={{...S.input,textAlign:"center",fontSize:20,fontWeight:800,flex:1}}/>
-            <button onClick={()=>setFormMov({...formMov,cantidad:(parseInt(formMov.cantidad)||0)+1})} style={{...S.btnSm,padding:"10px 16px",fontSize:18,fontWeight:700}}>+</button>
+            <button onClick={()=>setFormMov({...formMov,cantidad:(parseInt(formMov.cantidad)||0)+1})} style={{...S.btnSm,padding:"10px 16px",fontSize:20,fontWeight:700}}>+</button>
           </div>
         </div>
 
@@ -283,7 +283,7 @@ export function ModuloInventario({sesion,usuarios}){
         </div>
 
         {errForm&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
-        <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:14,background:formMov.tipo==="entrada"?C.greenDim:tono("#2a1500", "#f8eee4"),borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
+        <button onClick={registrarMovimiento} style={{...S.btn,width:"100%",padding:13,fontSize:15,background:formMov.tipo==="entrada"?C.greenDim:tono("#2a1500", "#f8eee4"),borderColor:formMov.tipo==="entrada"?C.green:C.orange,color:formMov.tipo==="entrada"?C.green:C.orange}}>
           {formMov.tipo==="entrada"?"REGISTRAR ENTRADA":"REGISTRAR SALIDA"}
         </button>
       </div>
@@ -312,7 +312,7 @@ export function ModuloInventario({sesion,usuarios}){
           <div><label style={S.label}>Stock mínimo</label><input type="number" min="0" value={formProd.stockMin} onChange={e=>setFormProd({...formProd,stockMin:e.target.value})} style={S.input}/></div>
         </div>
         {errForm&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{errForm}</div>}
-        <button onClick={guardarProducto} style={{...S.btn,width:"100%",padding:13,fontSize:14}}>AÑADIR PRODUCTO</button>
+        <button onClick={guardarProducto} style={{...S.btn,width:"100%",padding:13,fontSize:15}}>AÑADIR PRODUCTO</button>
       </div>
     </div>
   );

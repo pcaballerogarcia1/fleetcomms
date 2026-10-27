@@ -90,17 +90,17 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
               onChange={e => { setMesFilter(e.target.value); setDiaSeleccionado(null); }}
               style={{
                 background: C.surface2, border: `1px solid ${C.border2}`,
-                color: C.text, borderRadius: 7, padding: "5px 10px",
+                color: C.text, borderRadius: 8, padding: "5px 10px",
                 fontSize: 12, fontFamily: font, cursor: "pointer", outline: "none",
               }}
             >
               {!meses.includes(mesFilter) && <option value={mesFilter}>{fmtMes(mesFilter)}</option>}
               {meses.map(m => <option key={m} value={m}>{fmtMes(m)}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+            <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
               {[["calendario", "Calendario"], ["tabla", "Tabla"]].map(([k, l]) => (
                 <button key={k} onClick={() => setVistaFichajes(k)} style={{
-                  padding: "4px 10px", borderRadius: 5, border: "none", cursor: "pointer",
+                  padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer",
                   background: vistaFichajes === k ? alfa(0.1) : "none",
                   color: vistaFichajes === k ? C.text : C.muted,
                   fontSize: 11, fontWeight: vistaFichajes === k ? 600 : 400, fontFamily: font,
@@ -115,7 +115,7 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
             style={{
               display: "flex", alignItems: "center", gap: 6,
               background: "rgba(63,207,142,0.08)", border: "1px solid rgba(63,207,142,0.25)",
-              color: C.green, borderRadius: 7, padding: "5px 12px",
+              color: C.green, borderRadius: 8, padding: "5px 12px",
               fontSize: 12, fontWeight: 600, cursor: delMes.length === 0 ? "not-allowed" : "pointer",
               opacity: delMes.length === 0 ? 0.4 : 1, fontFamily: font,
             }}
@@ -129,7 +129,7 @@ export function PanelFichajes({ orgId, isSuperAdmin, usuarios }) {
             { l: "Km del mes", v: stats.km, c: C.orange },
           ].map(s => (
             <div key={s.l} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", flex: 1 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: s.c, fontFamily: mono, lineHeight: 1 }}>{s.v}</div>
               <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>{s.l}</div>
             </div>
           ))}
@@ -251,7 +251,7 @@ function CalendarioFichajes({ mesFilter, porDia, diaSeleccionado, onSelectDia })
               <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400 }}>{dayNum}</span>
               {info && (
                 <span style={{
-                  fontSize: 9, fontFamily: mono, fontWeight: 700,
+                  fontSize: 10, fontFamily: mono, fontWeight: 700,
                   color: info.abierto ? C.green : (isSelected ? C.blueText : C.muted),
                 }}>
                   {info.abierto ? "● en curso" : `${info.count} fich.`}

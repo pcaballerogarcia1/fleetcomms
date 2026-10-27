@@ -69,7 +69,7 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button onClick={abrir} title="Opciones del proyecto" aria-expanded={open} style={{
-        display: "flex", alignItems: "center", gap: 5, maxWidth: 220, padding: "3px 6px", borderRadius: 5,
+        display: "flex", alignItems: "center", gap: 5, maxWidth: 220, padding: "3px 6px", borderRadius: 4,
         background: open ? C.surface2 : "none", border: `1px solid ${open ? C.border : "transparent"}`,
         color: C.muted, fontSize: 13, fontWeight: 500, fontFamily: font, cursor: "pointer",
       }}
@@ -83,7 +83,7 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
       {open && (
         <div role="menu" style={{
           position: "fixed", top: sitio.top, left: sitio.left, zIndex: 2100, width: 300,
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 14px 40px rgba(0,0,0,0.45)",
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 14px 40px rgba(0,0,0,0.45)",
           padding: 8, fontFamily: font,
         }}>
           {modo === "menu" ? (<>
@@ -94,17 +94,17 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
                   const s = sectorDe(e.target.value);
                   onProjectUpdate({ sector: s.id }).catch(err => setError(err.message || String(err)));
                   logAudit({ modulo: "Proyectos", accion: "Cambió el sector", detalle: `${activeProject.nombre} → ${s.nombre}`, projectId: activeProject._id, proyecto: activeProject.nombre, orgId: activeProject.org_id });
-                }} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }}>
+                }} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 8px", fontSize: 13, fontFamily: font, colorScheme: tono("dark", "light") }}>
                   {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 4, lineHeight: 1.4 }}>Cambia las palabras de las pantallas ({sectorDe(activeProject).t.elementos}…) y oculta lo que no aplica.</div>
-                {error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 4 }}>{error}</div>}
+                {error && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{error}</div>}
               </div>
             )}
             {onProjectUpdate && (
               <button role="menuitem" onClick={() => { setNombre(activeProject.nombre || ""); setError(null); setModo("renombrar"); }} style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 7,
-                background: "none", border: "none", color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer", textAlign: "left",
+                width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 8,
+                background: "none", border: "none", color: C.text, fontSize: 13, fontFamily: font, cursor: "pointer", textAlign: "left",
               }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.surface2; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
@@ -114,8 +114,8 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
               </button>
             )}
             <button role="menuitem" onClick={() => { setNombre(nombreCopia(activeProject.nombre)); setModo("duplicar"); }} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 7,
-              background: "none", border: "none", color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer", textAlign: "left",
+              width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 8,
+              background: "none", border: "none", color: C.text, fontSize: 13, fontFamily: font, cursor: "pointer", textAlign: "left",
             }}
               onMouseEnter={e => { e.currentTarget.style.background = C.surface2; }}
               onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
@@ -130,37 +130,34 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
             </button>
           </>) : modo === "renombrar" ? (
             <form onSubmit={e => { e.preventDefault(); renombrar(); }} style={{ padding: 6 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>Renombrar proyecto</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Renombrar proyecto</div>
               <input autoFocus aria-label="Nombre del proyecto" value={nombre} onChange={e => setNombre(e.target.value)} onFocus={e => e.target.select()} style={{
                 width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
-                borderRadius: 7, padding: "7px 9px", fontSize: 12.5, fontFamily: font, outline: "none",
+                borderRadius: 8, padding: "7px 9px", fontSize: 13, fontFamily: font, outline: "none",
               }} />
-              {error && <div style={{ fontSize: 11.5, color: C.red, lineHeight: 1.4, marginTop: 8 }}>{error}</div>}
+              {error && <div style={{ fontSize: 12, color: C.red, lineHeight: 1.4, marginTop: 8 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
-                <button type="button" onClick={() => setModo("menu")} style={{ padding: "6px 12px", borderRadius: 7, background: "none", border: `1px solid ${C.border}`, color: C.muted, fontSize: 12, fontFamily: font, cursor: "pointer" }}>Cancelar</button>
-                <button type="submit" disabled={!nombre.trim()} style={{ padding: "6px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, fontFamily: font, background: nombre.trim() ? C.blue : C.surface2, color: nombre.trim() ? "#fff" : C.dim, cursor: nombre.trim() ? "pointer" : "default" }}>Guardar</button>
+                <button type="button" onClick={() => setModo("menu")} className="op-btn">Cancelar</button>
+                <button type="submit" disabled={!nombre.trim()} style={{ padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 700, fontFamily: font, background: nombre.trim() ? C.blue : C.surface2, color: nombre.trim() ? "#fff" : C.dim, cursor: nombre.trim() ? "pointer" : "default" }}>Guardar</button>
               </div>
             </form>
           ) : (
             <form onSubmit={e => { e.preventDefault(); duplicar(); }} style={{ padding: 6 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>Duplicar «{activeProject.nombre}»</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Duplicar «{activeProject.nombre}»</div>
               <label style={{ fontSize: 11, color: C.muted }}>Nombre de la copia</label>
               <input autoFocus value={nombre} disabled={copiando} onChange={e => setNombre(e.target.value)} style={{
                 width: "100%", boxSizing: "border-box", marginTop: 4, background: C.bg, border: `1px solid ${C.border}`, color: C.text,
-                borderRadius: 7, padding: "7px 9px", fontSize: 12.5, fontFamily: font, outline: "none",
+                borderRadius: 8, padding: "7px 9px", fontSize: 13, fontFamily: font, outline: "none",
               }} />
               <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.45, margin: "8px 0 10px" }}>
                 No se copian las rutas enviadas a los conductores, los fichajes ni el historial de generaciones. Vehículos, trabajadores y cuadrantes son de toda la organización y la copia los usa igual.
               </div>
-              {copiando && <div style={{ fontSize: 11.5, color: C.blue, marginBottom: 8 }}>{paso}</div>}
-              {error && <div style={{ fontSize: 11.5, color: C.red, lineHeight: 1.4, marginBottom: 8 }}>{error}</div>}
+              {copiando && <div style={{ fontSize: 12, color: C.blue, marginBottom: 8 }}>{paso}</div>}
+              {error && <div style={{ fontSize: 12, color: C.red, lineHeight: 1.4, marginBottom: 8 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" disabled={copiando} onClick={() => setModo("menu")} style={{
-                  padding: "6px 12px", borderRadius: 7, background: "none", border: `1px solid ${C.border}`, color: C.muted,
-                  fontSize: 12, fontFamily: font, cursor: copiando ? "default" : "pointer",
-                }}>Cancelar</button>
+                <button type="button" disabled={copiando} onClick={() => setModo("menu")} className="op-btn">Cancelar</button>
                 <button type="submit" disabled={copiando || !nombre.trim()} style={{
-                  padding: "6px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, fontFamily: font,
+                  padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 700, fontFamily: font,
                   background: copiando || !nombre.trim() ? C.surface2 : C.blue, color: copiando || !nombre.trim() ? C.dim : "#fff",
                   cursor: copiando || !nombre.trim() ? "default" : "pointer",
                 }}>{copiando ? "Duplicando…" : "Duplicar"}</button>

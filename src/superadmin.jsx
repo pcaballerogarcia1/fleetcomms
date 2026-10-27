@@ -18,7 +18,7 @@ const S = {
   input: {
     width: "100%", background: alfa(0.04),
     border: `1px solid ${C.border}`, color: C.text,
-    padding: "10px 13px", borderRadius: 7, fontSize: 13,
+    padding: "10px 13px", borderRadius: 8, fontSize: 13,
     boxSizing: "border-box", fontFamily: font, outline: "none",
   },
   label: {
@@ -28,17 +28,17 @@ const S = {
   },
   btn: {
     background: C.blueDim, border: `1px solid ${C.blue}44`,
-    color: C.blueText, padding: "10px 18px", borderRadius: 7,
+    color: C.blueText, padding: "10px 18px", borderRadius: 8,
     fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font,
   },
   btnGhost: {
     background: "none", border: `1px solid ${C.border}`,
-    color: C.muted, padding: "7px 14px", borderRadius: 7,
+    color: C.muted, padding: "7px 14px", borderRadius: 8,
     fontSize: 12, cursor: "pointer", fontFamily: font,
   },
   card: {
     background: C.card, border: `1px solid ${C.border}`,
-    borderRadius: 10, padding: "16px", marginBottom: 10,
+    borderRadius: 12, padding: "16px", marginBottom: 10,
   },
 };
 
@@ -54,7 +54,7 @@ function PlanBadge({ plan }) {
   const color = colors[plan] ?? C.dim;
   return (
     <span style={{
-      fontSize: 9, padding: "2px 8px", borderRadius: 10,
+      fontSize: 10, padding: "2px 8px", borderRadius: 12,
       background: `${color}22`, color,
       border: `1px solid ${color}44`,
       textTransform: "uppercase", letterSpacing: 0.5,
@@ -92,7 +92,7 @@ function LoginSA({ onLogin }) {
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ marginBottom: 32 }}>
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 }}>Operanzia</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>Panel de Control</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: C.text }}>Panel de Control</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Acceso restringido — superadmin</div>
         </div>
         <div style={S.card}>
@@ -107,7 +107,7 @@ function LoginSA({ onLogin }) {
               onKeyDown={e => e.key === "Enter" && go()} style={S.input} autoComplete="current-password" />
           </div>
           {err && (
-            <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 7, padding: "9px 13px", fontSize: 12, marginBottom: 16 }}>
+            <div style={{ background: "rgba(242,109,109,0.08)", border: "1px solid rgba(242,109,109,0.25)", color: C.red, borderRadius: 8, padding: "9px 13px", fontSize: 12, marginBottom: 16 }}>
               {err}
             </div>
           )}
@@ -230,7 +230,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
       <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "12px 24px", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={onBack} style={{ ...S.btnGhost, padding: "5px 12px" }}>← Volver</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{org.nombre}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{org.nombre}</div>
           <div style={{ fontSize: 11, color: C.muted, fontFamily: mono }}>{org.org_id}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -239,7 +239,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
           </span>
           <PlanBadge plan={org.plan} />
           <span style={{
-            fontSize: 10, padding: "2px 8px", borderRadius: 10,
+            fontSize: 10, padding: "2px 8px", borderRadius: 12,
             background: org.activo ? `${C.green}22` : `${C.red}22`,
             color: org.activo ? C.green : C.red,
             border: `1px solid ${org.activo ? C.green : C.red}44`,
@@ -291,7 +291,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
                 <div style={{ display: "flex", gap: 8 }}>
                   {[true, false].map(v => (
                     <button key={String(v)} onClick={() => setForm({ ...form, activo: v })} style={{
-                      flex: 1, padding: 10, borderRadius: 7, cursor: "pointer", fontSize: 12, fontFamily: font,
+                      flex: 1, padding: 10, borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: font,
                       background: form.activo === v ? (v ? `${C.green}22` : `${C.red}22`) : "none",
                       border: `1px solid ${form.activo === v ? (v ? C.green : C.red) : C.border}`,
                       color: form.activo === v ? (v ? C.green : C.red) : C.muted,
@@ -338,7 +338,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
                   border: `1px solid ${C.border2}`, padding: "28px 24px",
                   boxShadow: "0 24px 64px rgba(0,0,0,.6)",
                 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 20 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20 }}>
                     Nuevo usuario — {org.nombre}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -535,7 +535,7 @@ function SuperAdminPanel({ sesion }) {
             { l: "Usuarios activos",  v: totalUsuarios,  c: C.amber },
           ].map(s => (
             <div key={s.l} style={{ ...S.card, textAlign: "center", marginBottom: 0 }}>
-              <div style={{ fontSize: 30, fontWeight: 800, color: s.c }}>{s.v}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: s.c }}>{s.v}</div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{s.l}</div>
             </div>
           ))}
@@ -608,7 +608,7 @@ function SuperAdminPanel({ sesion }) {
         {orgs.length === 0 && !showCrear && (
           <div style={{ textAlign: "center", padding: "60px 0", color: C.dim }}>
             <Building2 size={36} color={C.dim} style={{ marginBottom: 12 }} />
-            <div style={{ fontSize: 14 }}>Sin organizaciones — crea la primera</div>
+            <div style={{ fontSize: 15 }}>Sin organizaciones — crea la primera</div>
           </div>
         )}
 
@@ -635,7 +635,7 @@ function SuperAdminPanel({ sesion }) {
                       <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{org.nombre}</div>
                       <PlanBadge plan={org.plan} />
                       {!org.activo && (
-                        <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 10, background: `${C.red}22`, color: C.red, border: `1px solid ${C.red}44` }}>
+                        <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 12, background: `${C.red}22`, color: C.red, border: `1px solid ${C.red}44` }}>
                           Suspendida
                         </span>
                       )}
@@ -645,8 +645,8 @@ function SuperAdminPanel({ sesion }) {
                     </div>
                     {/* Barra de uso */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ flex: 1, height: 4, background: C.surface2, borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: usageColor, borderRadius: 2, transition: "width .3s" }} />
+                      <div style={{ flex: 1, height: 4, background: C.surface2, borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: usageColor, borderRadius: 4, transition: "width .3s" }} />
                       </div>
                       <div style={{ fontSize: 11, color: usageColor, whiteSpace: "nowrap", minWidth: 80, textAlign: "right" }}>
                         {activos}/{org.max_usuarios} usuarios

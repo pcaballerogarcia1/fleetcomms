@@ -35,7 +35,7 @@ function RailBtn({ navKey, icon, label, tab, goToTab }) {
   return (
     <div style={{ position: "relative", display: "flex", justifyContent: "center" }} className="rail-item">
       <button onClick={() => goToTab(navKey)} title={label} style={{
-        width: 44, height: 44, borderRadius: 10,
+        width: 44, height: 44, borderRadius: 12,
         background: active ? `${C.blue}22` : "none",
         border: `1px solid ${active ? `${C.blue}55` : "transparent"}`,
         color: active ? C.blue : C.dim,
@@ -141,12 +141,12 @@ function SchedulingPage({ sesion, onLogout }) {
               Operanzia
             </a>
             <div style={{ width: 1, height: 16, background: C.border2 }} />
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Proyectos</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Proyectos</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <a href="/planning" style={{
               fontSize: 12, color: C.muted, fontFamily: font, textDecoration: "none",
-              padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.border}`,
+              padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
               transition: "all .15s", display: "flex", alignItems: "center", gap: 6,
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}

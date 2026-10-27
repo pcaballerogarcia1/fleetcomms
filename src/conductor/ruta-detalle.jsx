@@ -62,11 +62,11 @@ function LectorRfid({ubicaciones,onLeido,codigo="código"}){
     }catch(e){setAviso({ok:false,t:`NFC: ${e.message||e}`});}
   }
   return(
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px",marginBottom:10}}>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 10px",marginBottom:10}}>
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <input value={texto} onChange={e=>setTexto(e.target.value)} placeholder={`Leer RFID / ${codigo}`}
           onKeyDown={e=>{if(e.key==="Enter"&&texto.trim()){leer(texto.trim());setTexto("");}}}
-          style={{flex:1,minWidth:0,background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none"}}/>
+          style={{flex:1,minWidth:0,background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"8px 10px",fontSize:13,outline:"none"}}/>
         {hayNfc()&&<button onClick={activarNfc} style={{...(nfc?S.btnOk:S.btnGhost),fontSize:11,padding:"7px 10px",flexShrink:0}}>{nfc?"NFC activo":"NFC"}</button>}
       </div>
       {aviso&&<div style={{fontSize:11,marginTop:6,color:aviso.ok?C.green:C.red}}>{aviso.t}</div>}
@@ -88,10 +88,10 @@ function ApuntarPesada({plan,sesion}){
       setF({kg:"",planta:f.planta,fraccion:f.fraccion,ticket:""});setAviso({ok:true,t:`✓ ${kg.toLocaleString("es-ES")} kg apuntados`});
     }catch(e){setAviso({ok:false,t:e.message||String(e)});}
   }
-  const inp={background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:7,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
+  const inp={background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"8px 10px",fontSize:13,outline:"none",minWidth:0};
   if(!abierto) return <button onClick={()=>setAbierto(true)} style={{...S.btnGhost,width:"100%",marginBottom:8}}><Scale size={15} style={{verticalAlign:"-3px",marginRight:6}}/>Apuntar pesada de báscula</button>;
   return(
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",marginBottom:10}}>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px",marginBottom:10}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <input inputMode="decimal" value={f.kg} onChange={e=>setF({...f,kg:e.target.value})} placeholder="Kg netos" style={inp}/>
         <input value={f.ticket} onChange={e=>setF({...f,ticket:e.target.value})} placeholder="Nº ticket" style={inp}/>
@@ -129,10 +129,10 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           {onParte&&(
             <div style={{marginTop:4}}>
               {parteFirmado
-                ? <span style={{fontSize:9,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardCheck size={11} style={{verticalAlign:"-2px"}}/> Parte firmado</span>
+                ? <span style={{fontSize:10,color:C.green,background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:12,padding:"2px 7px"}}><ClipboardCheck size={11} style={{verticalAlign:"-2px"}}/> Parte firmado</span>
                 : tieneParteIniciado
-                  ? <span style={{fontSize:9,color:C.orange,background:tono("#2a1500", "#f8eee4"),border:`1px solid ${C.orange}44`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Parte en curso</span>
-                  : <span style={{fontSize:9,color:C.dim,background:C.input,border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Sin parte</span>
+                  ? <span style={{fontSize:10,color:C.orange,background:tono("#2a1500", "#f8eee4"),border:`1px solid ${C.orange}44`,borderRadius:12,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Parte en curso</span>
+                  : <span style={{fontSize:10,color:C.dim,background:C.input,border:`1px solid ${C.border}`,borderRadius:12,padding:"2px 7px"}}><ClipboardList size={11} style={{verticalAlign:"-2px"}}/> Sin parte</span>
               }
             </div>
           )}
@@ -144,7 +144,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           </div>
           <div style={{display:"flex",gap:4}}>
             {onParte&&<button onClick={onParte} style={{...S.btnGhost,fontSize:10,padding:"4px 6px",flex:1,borderColor:parteFirmado?C.green:tieneParteIniciado?C.orange:C.border,color:parteFirmado?C.green:tieneParteIniciado?C.orange:C.muted}}><ClipboardList size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Parte</button>}
-            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?"#8b5cf6":C.border,color:ub.nota?C.violet:C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Nota"><StickyNote size={14}/></button>
+            <button onClick={onNota} style={{...S.btnGhost,fontSize:10,padding:"4px 8px",borderColor:ub.nota?C.violet:C.border,color:ub.nota?C.violet:C.muted,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Nota"><StickyNote size={14}/></button>
           </div>
         </div>
       </div>
@@ -156,7 +156,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           {isExp&&(
             <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
               {ub.elementos.map(el=>(
-                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:C.input,border:`1px solid ${el.realizado?C.green+"44":tono("#1c2d45", "#e7edf5")}`,borderRadius:6,padding:"7px 10px"}}>
+                <div key={el.codiQR} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:el.realizado?C.greenDim:C.input,border:`1px solid ${el.realizado?C.green+"44":tono("#1c2d45", "#e7edf5")}`,borderRadius:8,padding:"7px 10px"}}>
                   <div><span style={{fontSize:12,color:el.realizado?C.green:C.blueText,fontWeight:700}}>{el.codiQR}</span><span style={{fontSize:10,color:C.dim,marginLeft:8}}>{el.model}</span></div>
                   <button onClick={()=>onMarcarQR(el.codiQR,!el.realizado)} style={{...(el.realizado?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{el.realizado?<Check size={15}/>:"Marcar"}</button>
                 </div>
@@ -260,7 +260,7 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
               <div style={S.label}>QRs del P.A.</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {ub.elementos.map(e=>(
-                  <span key={e.codiQR} style={{fontSize:11,background:C.blueDim,color:C.blueText,border:`1px solid ${C.blue}44`,borderRadius:6,padding:"2px 8px"}}>{e.codiQR}</span>
+                  <span key={e.codiQR} style={{fontSize:11,background:C.blueDim,color:C.blueText,border:`1px solid ${C.blue}44`,borderRadius:8,padding:"2px 8px"}}>{e.codiQR}</span>
                 ))}
               </div>
             </div>
@@ -268,8 +268,8 @@ function ParteInspeccion({ub, sesion, onSave, onClose}){
         </div>
 
         {/* Barra progreso */}
-        <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:14}}>
-          <div style={{height:"100%",background:pct===100?C.green:pct>50?C.orange:C.red,borderRadius:3,width:`${pct}%`,transition:"width 0.3s"}}/>
+        <div style={{height:6,background:C.bg,borderRadius:4,overflow:"hidden",marginBottom:14}}>
+          <div style={{height:"100%",background:pct===100?C.green:pct>50?C.orange:C.red,borderRadius:4,width:`${pct}%`,transition:"width 0.3s"}}/>
         </div>
 
         {/* Tabla puntos de inspección */}
@@ -414,9 +414,9 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
         <button onClick={onBack} style={{...S.btnGhost,fontSize:12,padding:"5px 10px 5px 6px",display:"inline-flex",alignItems:"center",gap:2}}><ChevronLeft size={16}/> Volver</button>
         <div style={{flex:1,minWidth:0,padding:"0 10px"}}>
           <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
-          <div style={{fontSize:12.5,color:C.muted}}>{[plan.turno,plan.diaServicio,`${realizadas}/${ubicaciones.length}`].filter(Boolean).join(" · ")}</div>
+          <div style={{fontSize:13,color:C.muted}}>{[plan.turno,plan.diaServicio,`${realizadas}/${ubicaciones.length}`].filter(Boolean).join(" · ")}</div>
         </div>
-        <div style={{fontSize:18,fontWeight:800,color:tasaColor}}>{tasa}%</div>
+        <div style={{fontSize:20,fontWeight:800,color:tasaColor}}>{tasa}%</div>
       </div>
       <div style={{padding:"10px 14px 0"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
@@ -427,11 +427,11 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             </div>
           ))}
         </div>
-        <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:10}}>
-          <div style={{height:"100%",background:tasaColor,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/>
+        <div style={{height:6,background:C.bg,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+          <div style={{height:"100%",background:tasaColor,borderRadius:4,width:`${tasa}%`,transition:"width 0.4s"}}/>
         </div>
         {proxima&&(
-          <div style={{background:tono("#151a26", "#eaecf3"),border:`1px solid ${C.blue}33`,borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:tono("#151a26", "#eaecf3"),border:`1px solid ${C.blue}33`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:C.blueDim,border:`2px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.blueText,flexShrink:0}}>{proxima.orden}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,color:C.muted,marginBottom:1}}>Próxima parada</div>
@@ -441,7 +441,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"stretch",flexShrink:0}}>
               <button onClick={()=>abrirNavegacion(proxima.lat,proxima.lng)} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}><Navigation size={15}/> Ir</button>
               <select value={nav} onChange={e=>{elegirNavegador(e.target.value);setNav(e.target.value);}} title="Con qué app navegar (se recuerda en este móvil)"
-                style={{background:C.input,border:`1px solid ${C.border}`,color:C.muted,borderRadius:6,fontSize:10,padding:"3px 4px"}}>
+                style={{background:C.input,border:`1px solid ${C.border}`,color:C.muted,borderRadius:8,fontSize:10,padding:"3px 4px"}}>
                 {NAVEGADORES.map(n=><option key={n.id} value={n.id}>{n.nombre}</option>)}
               </select>
             </div>

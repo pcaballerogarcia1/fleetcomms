@@ -13,13 +13,14 @@ import { logAudit } from "./audit.js";
 import { C, alfa } from "./tema.js";
 import { tono } from "./tema.js";
 
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 const font = "var(--font)";
 const mono = "var(--mono)";
 const SEMANA = [[1, "L"], [2, "M"], [3, "X"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
 const fechaCorta = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "2-digit" });
-const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", boxSizing: "border-box" };
-const btn = (fuerte = false) => ({ padding: "5px 10px", borderRadius: 6, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? tono("#222c58", "#e7eaf6") : "none", color: fuerte ? "#d6deff" : C.muted, fontSize: 11.5, fontWeight: fuerte ? 600 : 500, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" });
+const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font, outline: "none", boxSizing: "border-box" };
+const btn = (fuerte = false) => ({ padding: "5px 10px", borderRadius: 8, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? tono("#222c58", "#e7eaf6") : "none", color: fuerte ? "#d6deff" : C.muted, fontSize: 12, fontWeight: fuerte ? 600 : 500, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" });
 const titulo = { fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, margin: "14px 0 6px" };
 
 // Campo de hora (hh:mm) que solo guarda al terminar de escribir
@@ -129,11 +130,11 @@ function EditorHorarios({ d, s, onCambiar }) {
               <span style={{ fontSize: 11, color: n ? C.green : C.dim }}>{n} salidas</span>
             </div>
             {tramos.map((t, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 11.5, color: C.muted }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 12, color: C.muted }}>
                 de <CampoHora valor={t.desde} onCambiar={m => poner(tramos.map((x, j) => (j === i ? { ...x, desde: m } : x)))} />
                 a <CampoHora valor={t.hasta} onCambiar={m => poner(tramos.map((x, j) => (j === i ? { ...x, hasta: m } : x)))} />
                 cada <CampoNum valor={t.cada} ancho={44} onCambiar={v => poner(tramos.map((x, j) => (j === i ? { ...x, cada: v || 1 } : x)))} /> min
-                <button onClick={() => poner(tramos.filter((_, j) => j !== i))} title="Quitar este tramo" style={{ ...btn(), padding: "2px 7px", marginLeft: "auto" }}>×</button>
+                <BotonCerrar style={{ marginLeft: "auto" }} onClick={() => poner(tramos.filter((_, j) => j !== i))} title="Quitar este tramo" />
               </div>
             ))}
             <button onClick={() => { const ult = tramos.at(-1); poner([...tramos, ult ? { desde: ult.hasta, hasta: Math.min(ult.hasta + 240, 1439), cada: ult.cada } : { desde: 360, hasta: 1320, cada: 20 }]); }} style={{ ...btn(), marginTop: 6, fontSize: 11 }}>+ Tramo de frecuencia</button>
@@ -171,10 +172,10 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
         <input value={linea.nombre} onChange={e => cambiarLinea({ nombre: e.target.value })} placeholder="Nº" style={{ ...inp, width: 60, fontWeight: 700 }} />
         <input value={linea.largo || ""} onChange={e => cambiarLinea({ largo: e.target.value })} placeholder="Nombre (p. ej. Centro – Hospital)" style={{ ...inp, flex: 1, minWidth: 0 }} />
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 10, background: C.surface2, borderRadius: 7, padding: 3 }}>
+      <div style={{ display: "flex", gap: 4, marginTop: 10, background: C.surface2, borderRadius: 8, padding: 3 }}>
         {[0, 1].map(k => {
           const existe = linea.sentidos.some(x => x.dir === k);
-          return <button key={k} onClick={() => setDir(k)} style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", background: dir === k ? alfa(0.1) : "none", color: dir === k ? "#fff" : existe ? C.muted : C.dim, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{k === 0 ? "Ida" : "Vuelta"}{!existe ? " (no hay)" : ""}</button>;
+          return <button key={k} onClick={() => setDir(k)} style={{ flex: 1, padding: "5px 0", borderRadius: 4, border: "none", background: dir === k ? alfa(0.1) : "none", color: dir === k ? "#fff" : existe ? C.muted : C.dim, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{k === 0 ? "Ida" : "Vuelta"}{!existe ? " (no hay)" : ""}</button>;
         })}
       </div>
       {!s ? (
@@ -189,17 +190,17 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
         <>
           <div style={titulo}>Paradas en orden ({s.paradas.length})</div>
           <button onClick={() => setAnadiendo(!anadiendo)} style={{ ...btn(anadiendo), width: "100%", padding: "7px 10px" }}>{anadiendo ? "✓ Pinchando en el mapa: cada clic añade una parada (pulsa para terminar)" : "+ Añadir paradas pinchando en el mapa"}</button>
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>Pinchar encima de una parada que ya existe la reutiliza. Arrastra una parada para moverla.</div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>Pinchar encima de una parada que ya existe la reutiliza. Arrastra una parada para moverla.</div>
           <div style={{ marginTop: 6 }}>
             {s.paradas.map((id, i) => {
               const p = paradaPorId.get(id);
               return (
                 <div key="${id}-${i}" style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 0" }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 10, background: linea.color, color: C.input, fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ width: 20, height: 20, borderRadius: 12, background: linea.color, color: C.input, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nombre || id}</span>
                   <button disabled={i === 0} onClick={() => mover(i, -1)} title="Subir" style={{ ...btn(), padding: "1px 6px", opacity: i === 0 ? 0.3 : 1 }}>↑</button>
                   <button disabled={i === s.paradas.length - 1} onClick={() => mover(i, 1)} title="Bajar" style={{ ...btn(), padding: "1px 6px", opacity: i === s.paradas.length - 1 ? 0.3 : 1 }}>↓</button>
-                  <button onClick={() => cambiarSentido({ paradas: s.paradas.filter((_, j) => j !== i), trazado: null })} title="Quitar del recorrido (la parada sigue existiendo)" style={{ ...btn(), padding: "1px 6px" }}>×</button>
+                  <BotonCerrar onClick={() => cambiarSentido({ paradas: s.paradas.filter((_, j) => j !== i), trazado: null })} title="Quitar del recorrido (la parada sigue existiendo)" />
                 </div>
               );
             })}
@@ -217,7 +218,7 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
             {!s.tiempo && <span style={{ fontSize: 11, color: C.dim }}>(sin poner: {tiempoPropuesto(km)} min, a 18 km/h)</span>}
           </div>
           <details style={{ marginTop: 6 }}>
-            <summary style={{ fontSize: 11.5, color: C.muted, cursor: "pointer" }}>Distinto según la hora (horas punta…)</summary>
+            <summary style={{ fontSize: 12, color: C.muted, cursor: "pointer" }}>Distinto según la hora (horas punta…)</summary>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginTop: 6 }}>
               {FRANJAS.map(f => (
                 <label key={f.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted }}>
@@ -230,7 +231,7 @@ function EditorLinea({ d, linea, dir, setDir, anadiendo, setAnadiendo, cambiarLi
           <div style={titulo}>Horarios de salida</div>
           {dir === 1 && linea.sentidos.some(x => x.dir === 0) && <button onClick={() => cambiarSentido({ horarios: JSON.parse(JSON.stringify(linea.sentidos.find(x => x.dir === 0).horarios || {})) })} style={{ ...btn(), marginBottom: 6, fontSize: 11 }}>Copiar los de la ida</button>}
           <EditorHorarios d={d} s={s} onCambiar={h => cambiarSentido({ horarios: h })} />
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>Las horas sueltas se retocan luego en «Horarios de salida».</div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>Las horas sueltas se retocan luego en «Horarios de salida».</div>
           {dir === 1 && <button onClick={() => { if (window.confirm("¿Quitar la vuelta de esta línea?")) cambiarLinea({ sentidos: linea.sentidos.filter(x => x.dir !== 1) }); }} style={{ ...btn(), marginTop: 12, color: C.red }}>Quitar la vuelta</button>}
         </>
       )}
@@ -246,7 +247,7 @@ function EditorCalendarios({ d, cambiar }) {
   const cambiarCal = (id, cambios) => cambiar({ ...d, calendarios: d.calendarios.map(c => (c.id === id ? { ...c, ...cambios } : c)) });
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>Cada calendario es un horario distinto (laborables, sábados, verano…). Los horarios de cada línea se ponen por calendario.</div>
+      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>Cada calendario es un horario distinto (laborables, sábados, verano…). Los horarios de cada línea se ponen por calendario.</div>
       {d.calendarios.map(c => {
         const fechas = fechasCalendario(c);
         return (
@@ -255,17 +256,17 @@ function EditorCalendarios({ d, cambiar }) {
             <div style={{ display: "flex", gap: 3, marginTop: 8 }}>
               {SEMANA.map(([w, t]) => {
                 const on = c.dias.includes(w);
-                return <button key={w} onClick={() => cambiarCal(c.id, { dias: on ? c.dias.filter(x => x !== w) : [...c.dias, w] })} style={{ flex: 1, padding: "4px 0", borderRadius: 5, border: `1px solid ${on ? C.blue : C.border}`, background: on ? C.blueDim : "none", color: on ? C.blueText : C.dim, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font }}>{t}</button>;
+                return <button key={w} onClick={() => cambiarCal(c.id, { dias: on ? c.dias.filter(x => x !== w) : [...c.dias, w] })} style={{ flex: 1, padding: "4px 0", borderRadius: 4, border: `1px solid ${on ? C.blue : C.border}`, background: on ? C.blueDim : "none", color: on ? C.blueText : C.dim, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font }}>{t}</button>;
               })}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11.5, color: C.muted }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: C.muted }}>
               del <input type="date" value={c.desde} onChange={e => e.target.value && cambiarCal(c.id, { desde: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
               al <input type="date" value={c.hasta} onChange={e => e.target.value && cambiarCal(c.id, { hasta: e.target.value })} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
             </div>
             <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Días sin servicio (festivos…) y días que se añaden:</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-              {(c.sin || []).map(f => <span key="s${f}" style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(242,109,109,.12)", color: C.red, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { sin: c.sin.filter(x => x !== f) })}>sin {fechaCorta(f)} ×</span>)}
-              {(c.con || []).map(f => <span key="c${f}" style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 9, background: "rgba(63,207,142,.12)", color: C.green, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { con: c.con.filter(x => x !== f) })}>+ {fechaCorta(f)} ×</span>)}
+              {(c.sin || []).map(f => <span key="s${f}" style={{ fontSize: 11, padding: "2px 6px", borderRadius: 8, background: "rgba(242,109,109,.12)", color: C.red, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { sin: c.sin.filter(x => x !== f) })}>sin {fechaCorta(f)} ×</span>)}
+              {(c.con || []).map(f => <span key="c${f}" style={{ fontSize: 11, padding: "2px 6px", borderRadius: 8, background: "rgba(63,207,142,.12)", color: C.green, cursor: "pointer" }} title="Quitar" onClick={() => cambiarCal(c.id, { con: c.con.filter(x => x !== f) })}>+ {fechaCorta(f)} ×</span>)}
             </div>
             <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
               <input type="date" value={nuevaFecha[c.id] || ""} onChange={e => setNuevaFecha(n => ({ ...n, [c.id]: e.target.value }))} style={{ ...inp, colorScheme: tono("dark", "light"), flex: 1 }} />
@@ -299,8 +300,8 @@ function EditorParadas({ d, cambiar, elegida }) {
       {vis.map(p => (
         <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: `1px solid ${C.border}`, background: elegida === p.id ? C.blueDim : "none" }}>
           <input value={p.nombre} onChange={e => cambiar({ ...d, paradas: d.paradas.map(x => (x.id === p.id ? { ...x, nombre: e.target.value } : x)) })} style={{ ...inp, flex: 1, minWidth: 0 }} />
-          <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: "nowrap" }}>{usos.get(p.id)?.size ? `líneas ${[...usos.get(p.id)].join(", ")}` : "sin usar"}</span>
-          <button onClick={() => { if (!usos.get(p.id)?.size || window.confirm(`«${p.nombre}» la usan las líneas ${[...usos.get(p.id)].join(", ")}. ¿Borrarla de todas?`)) cambiar(quitarParada(d, p.id)); }} title="Borrar parada" style={{ ...btn(), padding: "1px 7px" }}>×</button>
+          <span style={{ fontSize: 11, color: C.dim, whiteSpace: "nowrap" }}>{usos.get(p.id)?.size ? `líneas ${[...usos.get(p.id)].join(", ")}` : "sin usar"}</span>
+          <BotonCerrar onClick={() => { if (!usos.get(p.id)?.size || window.confirm(`«${p.nombre}» la usan las líneas ${[...usos.get(p.id)].join(", ")}. ¿Borrarla de todas?`)) cambiar(quitarParada(d, p.id)); }} title="Borrar parada" />
         </div>
       ))}
     </div>
@@ -402,7 +403,7 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
       <div style={{ width: 380, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.card, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "12px 14px 8px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, flex: 1 }}>Diseñar la red</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, flex: 1 }}>Diseñar la red</div>
             <span style={{ fontSize: 11, color: guardado.estado === "error" ? C.red : guardado.estado === "ok" ? C.green : C.amber }}>{estadoTxt}</span>
             {onCerrar && <button onClick={onCerrar} style={btn()}>Ver la red</button>}
           </div>
@@ -416,13 +417,13 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
             <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
                 {d.lineas.map(l => (
-                  <button key={l.id} onClick={() => { setSelLinea(l.id); setDir(0); setAnadiendo(false); }} style={{ minWidth: 34, padding: "3px 8px", borderRadius: 6, background: l.color, color: C.input, fontSize: 12, fontWeight: 800, border: `2px solid ${l.id === selLinea ? "#fff" : "transparent"}`, cursor: "pointer", fontFamily: font }}>{l.nombre || "?"}</button>
+                  <button key={l.id} onClick={() => { setSelLinea(l.id); setDir(0); setAnadiendo(false); }} style={{ minWidth: 34, padding: "3px 8px", borderRadius: 8, background: l.color, color: C.input, fontSize: 12, fontWeight: 800, border: `2px solid ${l.id === selLinea ? "#fff" : "transparent"}`, cursor: "pointer", fontFamily: font }}>{l.nombre || "?"}</button>
                 ))}
                 <button onClick={nuevaLinea} style={btn(true)}>+ Nueva línea</button>
               </div>
               {linea ? <EditorLinea d={d} linea={linea} dir={dir} setDir={k => { setDir(k); setAnadiendo(false); }} anadiendo={anadiendo} setAnadiendo={setAnadiendo} cambiarLinea={cambiarLinea} cambiarSentido={cambiarSentido} paradaPorId={paradaPorId}
                 onBorrar={() => { if (window.confirm(`¿Borrar la línea ${linea.nombre}?`)) { setD(x => ({ ...x, lineas: x.lineas.filter(l => l.id !== linea.id) })); setSelLinea(null); setAnadiendo(false); } }} />
-                : <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+                : <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
                     Empieza con <b style={{ color: C.text }}>+ Nueva línea</b> y pincha en el mapa, en orden, las paradas de la ida. Luego crea la vuelta (la ida al revés), pon el tiempo de recorrido y los horarios. Los calendarios (laborables, sábados, domingos…) se cambian en su pestaña.
                   </div>}
             </>
@@ -439,7 +440,7 @@ export function DisenoRed({ projectId, orgId, red, ficha, onCerrar }) {
       <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
         <MapaDiseno d={d} linea={linea} dir={dir} anadiendo={anadiendo && !!linea} onPinchar={pinchar} onMoverParada={moverParada} onElegirParada={id => { setParadaElegida(id); if (!(anadiendo && linea)) setPestana("paradas"); else pinchar([paradaPorId.get(id).lat, paradaPorId.get(id).lng]); }} />
         {!d.paradas.length && (
-          <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 600, background: tono("rgba(15,22,35,0.94)", "rgba(255,255,255,0.94)"), border: `1px solid ${C.border2}`, borderRadius: 9, padding: "8px 10px", display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 600, background: tono("rgba(15,22,35,0.94)", "rgba(255,255,255,0.94)"), border: `1px solid ${C.border2}`, borderRadius: 8, padding: "8px 10px", display: "flex", gap: 6, alignItems: "center" }}>
             <input value={sitio} onChange={e => setSitio(e.target.value)} onKeyDown={e => e.key === "Enter" && irASitio()} placeholder="¿Dónde? (ciudad o dirección)" style={{ ...inp, width: 240 }} />
             <button onClick={irASitio} style={btn(true)}>Ir</button>
             {error && <span style={{ fontSize: 11, color: C.amber }}>{error}</span>}

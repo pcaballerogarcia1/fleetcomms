@@ -43,7 +43,7 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       {/* Estado */}
       <div style={{display:"flex",gap:5,marginBottom:8}}>
         {["pendiente","en curso","cerrada"].map(est=>(
-          <button key={est} onClick={()=>cambiarEstado(est)} style={{flex:1,padding:"5px 4px",borderRadius:6,cursor:"pointer",fontSize:9,fontFamily:mono,textTransform:"capitalize",letterSpacing:0.5,background:tarea.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${tarea.estado===est?C.blue:C.border}`,color:tarea.estado===est?C.blueText:C.muted}}>{est}</button>
+          <button key={est} onClick={()=>cambiarEstado(est)} style={{flex:1,padding:"5px 4px",borderRadius:8,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",letterSpacing:0.5,background:tarea.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${tarea.estado===est?C.blue:C.border}`,color:tarea.estado===est?C.blueText:C.muted}}>{est}</button>
         ))}
       </div>
       {/* Expandir comentarios */}
@@ -53,19 +53,19 @@ function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
       {expandida&&(
         <div style={{marginTop:8}}>
           {(tarea.comentarios||[]).map((c,i)=>{const u=getUser(c.usuarioId);return(
-            <div key={i} style={{background:C.input,borderRadius:6,padding:"7px 10px",marginBottom:5}}>
+            <div key={i} style={{background:C.input,borderRadius:8,padding:"7px 10px",marginBottom:5}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div><span style={{fontSize:11,color:C.muted}}>{u.nombre}</span></div>
-                <span style={{fontSize:9,color:C.dim}}>{timeAgo(c.fecha)}</span>
+                <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:18,height:18,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.blueText,fontWeight:700}}>{avatarOf(u)}</div><span style={{fontSize:11,color:C.muted}}>{u.nombre}</span></div>
+                <span style={{fontSize:10,color:C.dim}}>{timeAgo(c.fecha)}</span>
               </div>
-              <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.5}}>{c.texto}</div>
+              <div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{c.texto}</div>
             </div>
           );})}
           <div style={{display:"flex",gap:6,marginTop:6}}>
             <input value={comentario} onChange={e=>setCom(e.target.value)} onKeyDown={e=>e.key==="Enter"&&agregarCom()} placeholder="Añadir comentario..." style={{...S.input,flex:1,fontSize:12,padding:"7px 10px"}}/>
             <button onClick={agregarCom} style={{...S.btnSm}}>↑</button>
           </div>
-          {puedeGestionarRutasRol(sesion.rol)&&<button onClick={onDelete} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,width:"100%",padding:"7px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
+          {puedeGestionarRutasRol(sesion.rol)&&<button onClick={onDelete} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,width:"100%",padding:"7px",borderRadius:8,fontSize:11,cursor:"pointer",fontFamily:mono,marginTop:6}}>Eliminar tarea</button>}
         </div>
       )}
     </div>
@@ -193,7 +193,7 @@ function FichajeWidget({ sesion }){
         </Btn>
       </div>
       {err && <div style={{fontSize:11,color:C.red,marginTop:6}}>{err}</div>}
-      {lugares.length > 0 && !err && <div style={{fontSize:10.5,color:C.dim,marginTop:6}}>Solo se puede fichar a menos de {RADIO_FICHAJE_M / 1000} km de un depot.</div>}
+      {lugares.length > 0 && !err && <div style={{fontSize:11,color:C.dim,marginTop:6}}>Solo se puede fichar a menos de {RADIO_FICHAJE_M / 1000} km de un depot.</div>}
 
       {expanded && recientes.length>0 && (
         <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
@@ -450,10 +450,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
         {/* Sub-header tipo */}
         <div style={{borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>{setTipoActivo(null);setShowUpload(false);setErrorMsg("");setDebugInfo([]);setMesFilter(null);}} style={{...S.btnGhost,padding:"7px 10px",flexShrink:0}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
-          <div style={{width:36,height:36,borderRadius:10,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
+          <div style={{width:36,height:36,borderRadius:12,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
-            <div style={{fontSize:12.5,color:C.muted}}>{planesT.length} {planesT.length===1?"plan":"planes"}</div>
+            <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
+            <div style={{fontSize:13,color:C.muted}}>{planesT.length} {planesT.length===1?"plan":"planes"}</div>
           </div>
         </div>
 
@@ -476,11 +476,11 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Fecha de servicio</div>
                     <input type="date" value={fechaKml} onChange={e=>setFechaKml(e.target.value)} style={{width:"100%",boxSizing:"border-box",background:C.input,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"9px 10px",fontSize:13,colorScheme:tono("dark","light")}}/>
-                    <div style={{fontSize:10.5,color:C.dim,marginTop:4}}>{fechaKml?"Los KML se guardan en esta fecha (y su mes en Control).":"Vacía: la fecha que diga el KML o, si no dice ninguna, este mes."}</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:4}}>{fechaKml?"Los KML se guardan en esta fecha (y su mes en Control).":"Vacía: la fecha que diga el KML o, si no dice ninguna, este mes."}</div>
                   </div>
                   {errorMsg&&<div style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,borderRadius:8,padding:"10px 12px",fontSize:12,marginBottom:10}}><TriangleAlert size={14} style={{verticalAlign:"-2px",marginRight:6}}/>{errorMsg}</div>}
                   {debugInfo.length>0&&<div style={{background:tono("#080f1a", "#e6ecf7"),border:`1px solid ${C.blueDim}`,borderRadius:8,padding:"10px 12px",fontSize:11,marginBottom:10}}><div style={{color:C.blueText,fontWeight:700,marginBottom:6}}>Detalle de la lectura:</div>{debugInfo.map((l,i)=><div key={i} style={{color:l.startsWith("ERROR")?C.red:l.includes("Ubicaciones")?C.green:C.muted,marginBottom:2}}>{l}</div>)}</div>}
-                  <div onClick={()=>fileRef.current.click()} style={{background:tono("#080f1a", "#e6ecf7"),border:`2px dashed ${tipo.color}44`,borderRadius:10,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
+                  <div onClick={()=>fileRef.current.click()} style={{background:tono("#080f1a", "#e6ecf7"),border:`2px dashed ${tipo.color}44`,borderRadius:12,padding:"28px 20px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=tipo.color} onMouseLeave={e=>e.currentTarget.style.borderColor=tipo.color+"44"}>
                     <div style={{marginBottom:8,color:tipo.color}}><tipo.Icono size={30} strokeWidth={1.6}/></div>
                     <div style={{fontSize:13,color:tipo.color,fontWeight:600,marginBottom:4}}>{subiendo?"Procesando…":"Seleccionar KML"}</div>
                     <div style={{fontSize:10,color:C.dim}}>Formato: 02-02-2026.kml</div>
@@ -491,7 +491,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             </>
           )}
           {meses.length>0&&<div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}><button onClick={()=>setMesFilter(null)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:!mesFilter?tipo.color:C.border,color:!mesFilter?tipo.color:C.muted,background:!mesFilter?tipo.color+"18":"none"}}>Todos</button>{meses.map(m=><button key={m} onClick={()=>setMesFilter(m)} style={{...S.btnGhost,fontSize:10,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",borderColor:mesFilter===m?tipo.color:C.border,color:mesFilter===m?tipo.color:C.muted,background:mesFilter===m?tipo.color+"18":"none"}}>{fmtMes(m)}</button>)}</div>}
-          {filtrados.length===0&&<div style={{textAlign:"center",padding:"50px 0"}}><div style={{marginBottom:12,color:C.dim}}><tipo.Icono size={36} strokeWidth={1.5}/></div><div style={{fontSize:14,color:C.dim}}>Sin planes de {tipo.label.toLowerCase()}</div>{esAdmin&&<div style={{fontSize:11,color:"#374151",marginTop:6}}>Sube un KML para empezar</div>}</div>}
+          {filtrados.length===0&&<div style={{textAlign:"center",padding:"50px 0"}}><div style={{marginBottom:12,color:C.dim}}><tipo.Icono size={36} strokeWidth={1.5}/></div><div style={{fontSize:15,color:C.dim}}>Sin planes de {tipo.label.toLowerCase()}</div>{esAdmin&&<div style={{fontSize:11,color:"#374151",marginTop:6}}>Sube un KML para empezar</div>}</div>}
           {filtrados.map(plan=>{
             const real=plan.ubicaciones.filter(u=>u.realizado).length,tot=plan.ubicaciones.length;
             const tasa=tot?Math.round(real/tot*100):0,col=tasa===100?C.green:tasa>0?C.orange:C.dim;
@@ -505,12 +505,12 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
                       <span style={{fontSize:11,color:C.dim}}>{plan.diaServicio}</span>
                       {tasa===100&&<span style={{fontSize:11,color:C.green}}>✓</span>}
                     </div>
-                    <div style={{fontSize:14,fontWeight:700,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
+                    <div style={{fontSize:15,fontWeight:700,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{plan.nombre}</div>
                     <div style={{fontSize:11,color:C.muted,marginBottom:8}}>{tot} paradas · {totalQR} elementos QR</div>
-                    <div style={{height:5,background:C.bg,borderRadius:3,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:3,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
+                    <div style={{height:5,background:C.bg,borderRadius:4,overflow:"hidden",marginBottom:4}}><div style={{height:"100%",background:col,borderRadius:4,width:`${tasa}%`,transition:"width 0.4s"}}/></div>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim}}><span>{real} de {tot} realizadas</span><span style={{color:col,fontWeight:700}}>{tasa}%</span></div>
                   </div>
-                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}`,color:C.red,padding:"5px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}><X size={14} /></button>}
+                  {esAdmin&&<button onClick={e=>{e.stopPropagation();deletePlan(plan._id);}} style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}`,color:C.red,padding:"5px 8px",borderRadius:8,fontSize:11,cursor:"pointer",fontFamily:mono,flexShrink:0}}><X size={14} /></button>}
                 </div>
               </div>
             );
@@ -534,10 +534,10 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
     <div style={{paddingBottom:80}}>
       <div style={{borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
         <button onClick={()=>setTipoActivo(null)} style={{...S.btnGhost,padding:"7px 10px",flexShrink:0}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
-        <div style={{width:36,height:36,borderRadius:10,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
+        <div style={{width:36,height:36,borderRadius:12,background:`${tipo.color}1a`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><tipo.Icono size={18} color={tipo.color}/></div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
-          <div style={{fontSize:12.5,color:C.muted}}>{tareasT.length} tareas · {tareasT.filter(t=>t.estado==="cerrada").length} cerradas</div>
+          <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{tipo.label}</div>
+          <div style={{fontSize:13,color:C.muted}}>{tareasT.length} tareas · {tareasT.filter(t=>t.estado==="cerrada").length} cerradas</div>
         </div>
       </div>
       <div style={{padding:"12px 14px 0"}}>
@@ -547,11 +547,11 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             {l:"Pendientes",v:tareasT.filter(t=>t.estado==="pendiente").length,c:C.red},
             {l:"En curso",v:tareasT.filter(t=>t.estado==="en curso").length,c:C.orange},
             {l:"Cerradas",v:tareasT.filter(t=>t.estado==="cerrada").length,c:C.green},
-          ].map(s=><div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div><div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div></div>)}
+          ].map(s=><div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div><div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div></div>)}
         </div>
 
         {/* Nueva tarea */}
-        <button onClick={()=>setShowNT(v=>!v)} className={showNuevaTarea?undefined:"op-btn op-primario"} style={showNuevaTarea?{...S.btnGhost,width:"100%",marginBottom:10,padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}:{width:"100%",height:44,marginBottom:12,fontSize:14,borderRadius:12}}>
+        <button onClick={()=>setShowNT(v=>!v)} className={showNuevaTarea?undefined:"op-btn op-primario"} style={showNuevaTarea?{...S.btnGhost,width:"100%",marginBottom:10,padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}:{width:"100%",height:44,marginBottom:12,fontSize:15,borderRadius:12}}>
           {showNuevaTarea?<><X size={16}/> Cancelar</>:<><Plus size={17}/> Nueva tarea correctiva</>}
         </button>
         {showNuevaTarea&&(
@@ -563,7 +563,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
           </div>
         )}
 
-        {tareasT.length===0&&!showNuevaTarea&&<div style={{textAlign:"center",padding:"40px 0"}}><div style={{marginBottom:12,color:C.dim}}><tipo.Icono size={36} strokeWidth={1.5}/></div><div style={{fontSize:14,color:C.dim}}>Sin tareas correctivas</div></div>}
+        {tareasT.length===0&&!showNuevaTarea&&<div style={{textAlign:"center",padding:"40px 0"}}><div style={{marginBottom:12,color:C.dim}}><tipo.Icono size={36} strokeWidth={1.5}/></div><div style={{fontSize:15,color:C.dim}}>Sin tareas correctivas</div></div>}
         {/* Pendientes y en curso primero */}
         {tareasT.filter(t=>t.estado!=="cerrada").map(t=>(
           <TarjetaCorrectivo key={t._id||t.id} tarea={t} sesion={sesion} usuarios={usuarios}
@@ -604,10 +604,10 @@ function MiCuadrante({sesion,onBack}){
   const header=(
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
       <button onClick={onBack} style={{...S.btnGhost,padding:"7px 10px"}} title="Volver"><ChevronLeft size={18} style={{verticalAlign:"-4px"}}/></button>
-      <div style={{fontSize:16,fontWeight:650,letterSpacing:"-0.01em"}}>Mi cuadrante</div>
+      <div style={{fontSize:15,fontWeight:650,letterSpacing:"-0.01em"}}>Mi cuadrante</div>
       {docs?.length>1&&(
         <select value={actual?.mes||""} onChange={e=>{setSel(e.target.value);setDiaSel(null);}}
-          style={{marginLeft:"auto",background:C.surface2,border:`1px solid ${C.border}`,color:C.text,borderRadius:6,padding:"4px 8px",fontSize:12,fontFamily:font}}>
+          style={{marginLeft:"auto",background:C.surface2,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"4px 8px",fontSize:12,fontFamily:font}}>
           {docs.map(d=><option key={d.mes} value={d.mes}>{MESES_ES[d.month-1]} {d.year}</option>)}
         </select>
       )}
@@ -647,7 +647,7 @@ function MiCuadrante({sesion,onBack}){
                 border:`${esHoy(d)?2:1}px solid ${diaSel===d?"#fff":esHoy(d)?C.blue:C.border}`,
               }}>
                 <div style={{fontSize:10,color:C.dim}}>{d}</div>
-                <div style={{fontSize:14,fontWeight:700,color:m?m.text:C.dim}}>{v?.c||"·"}</div>
+                <div style={{fontSize:15,fontWeight:700,color:m?m.text:C.dim}}>{v?.c||"·"}</div>
               </div>
             );
           })}

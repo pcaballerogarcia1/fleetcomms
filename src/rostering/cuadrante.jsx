@@ -8,6 +8,7 @@ import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnSt
 import { ModeTabs } from "./vehiculos.jsx";
 import { tono } from "../tema.js";
 
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, setShowVersiones, workers, year }) {
   return (
@@ -23,7 +24,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ModeTabs mode={mode} setMode={setMode} conSalida={conSalida} />
           <button onClick={prevMonth} style={navBtnStyle}>‹</button>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
             {MONTH_NAMES[month - 1]} {year}
           </div>
           <button onClick={nextMonth} style={navBtnStyle}>›</button>
@@ -63,7 +64,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
             <div style={{ display: "flex", alignItems: "center", gap: 8, borderLeft: `1px solid ${C.border}`, paddingLeft: 10, flexWrap: "wrap" }} title="Calendarios de la red de líneas que circulan este mes">
               {calsLineas.map(c => (
                 <span key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 2, background: c.color }} />
+                  <span style={{ width: 9, height: 9, borderRadius: 4, background: c.color }} />
                   {c.nombre} <span style={{ color: C.dim }}>· {c.turnos} turnos/día · {c.dias} día{c.dias === 1 ? "" : "s"}</span>
                 </span>
               ))}
@@ -73,7 +74,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
           {libreShifts && (
             <span title="Turnos del escenario (modo libre) con trabajador asignado"
               style={{
-                fontSize: 11, fontWeight: 600, borderRadius: 6, padding: "3px 8px",
+                fontSize: 11, fontWeight: 600, borderRadius: 8, padding: "3px 8px",
                 color: coveredCount === libreShifts.length ? C.green : C.amber,
                 background: coveredCount === libreShifts.length ? `${C.green}18` : `${C.amber}18`,
               }}>
@@ -154,7 +155,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
                       <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? `${C.orange}88` : C.muted }}>
@@ -166,7 +167,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                         const cubiertos = deDia.filter(sh => coveredIds.has(sh.id)).length;
                         return (
                           <div title={cal ? `${cal.nombre}: ${deDia.length} turnos · ${cubiertos} cubiertos` : "Sin servicio"}
-                            style={{ margin: "2px auto 0", width: CELL_W - 6, height: 5, borderRadius: 2, background: cal ? cal.color : "transparent", border: cal ? "none" : `1px dashed ${C.border}`, opacity: cal && cubiertos < deDia.length ? 0.55 : 1 }} />
+                            style={{ margin: "2px auto 0", width: CELL_W - 6, height: 5, borderRadius: 4, background: cal ? cal.color : "transparent", border: cal ? "none" : `1px dashed ${C.border}`, opacity: cal && cubiertos < deDia.length ? 0.55 : 1 }} />
                         );
                       })()}
                     </th>
@@ -222,11 +223,11 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {shiftMeta && (
                           <div style={{
-                            width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                            width: 16, height: 16, borderRadius: 4, flexShrink: 0,
                             background: shiftMeta.bg,
                             border: `1px solid ${shiftMeta.text}44`,
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            color: shiftMeta.text, fontWeight: 700, fontSize: 9,
+                            color: shiftMeta.text, fontWeight: 700, fontSize: 10,
                           }}>{w.turno}</div>
                         )}
                         <span style={{
@@ -244,9 +245,9 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                             <button key={s} onClick={() => fillRow(w._id, s)}
                               title={`Rellenar mes con ${SHIFT_META[s].label}`}
                               style={{
-                                width: 14, height: 14, borderRadius: 2, border: "none",
+                                width: 14, height: 14, borderRadius: 4, border: "none",
                                 background: SHIFT_META[s].bg, color: SHIFT_META[s].text,
-                                fontSize: 8, fontWeight: 700, cursor: "pointer",
+                                fontSize: 10, fontWeight: 700, cursor: "pointer",
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 padding: 0, lineHeight: 1,
                               }}
@@ -306,7 +307,7 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                           {asign[w._id]?.[String(d)] && (
                             <div title="Asignado por Optimizar" style={{
                               position: "absolute", top: 3, right: 3, width: 4, height: 4,
-                              borderRadius: 2, background: C.blue, pointerEvents: "none",
+                              borderRadius: 4, background: C.blue, pointerEvents: "none",
                             }} />
                           )}
                           {selected && (
@@ -368,13 +369,12 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                             <span title={`Publicado ${new Date(publicados[w.uid]).toLocaleString()}`}
                               style={{ fontSize: 10, color: C.green }}>✓</span>
                           )}
-                          <button onClick={() => { if (confirm("¿Desvincular este trabajador de su usuario de la app?")) linkWorker(w._id, null); }}
-                            title="Desvincular usuario" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 11, padding: 0 }}>×</button>
+                          <BotonCerrar onClick={() => { if (confirm("¿Desvincular este trabajador de su usuario de la app?")) linkWorker(w._id, null); }} title="Desvincular usuario" />
                         </div>
                       ) : (
                         <select value="" onChange={e => e.target.value && linkWorker(w._id, e.target.value)}
                           title="Vincula el trabajador con su usuario de la app para poder publicarle sus rutas"
-                          style={{ width: "100%", background: C.surface2, border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 5, fontSize: 10.5, padding: "3px 4px", fontFamily: font, cursor: "pointer" }}>
+                          style={{ width: "100%", background: C.surface2, border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 4, fontSize: 11, padding: "3px 4px", fontFamily: font, cursor: "pointer" }}>
                           <option value="">Vincular usuario…</option>
                           {(() => {
                             const sug = suggestUser(w);
@@ -418,8 +418,8 @@ export function TablaCuadrante({ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia
                     }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                         {SHIFTS.filter(s => totals[s]).map(s => (
-                          <div key={s} style={{ fontSize: 9, fontWeight: 700, color: SHIFT_META[s].text, lineHeight: 1.2 }}>
-                            {s}{totals[s] > 1 ? <span style={{ fontSize: 8, fontWeight: 400 }}>×{totals[s]}</span> : ""}
+                          <div key={s} style={{ fontSize: 10, fontWeight: 700, color: SHIFT_META[s].text, lineHeight: 1.2 }}>
+                            {s}{totals[s] > 1 ? <span style={{ fontSize: 10, fontWeight: 400 }}>×{totals[s]}</span> : ""}
                           </div>
                         ))}
                       </div>
@@ -498,16 +498,14 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
               style={{ position: "fixed", inset: 0, zIndex: 998 }} />
             <div style={{
               position: "fixed", left, top, zIndex: 999, width: PW,
-              background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+              background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12,
               boxShadow: "0 12px 36px rgba(0,0,0,.5)", padding: 14, fontFamily: font,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
                   {[w.nombre, w.apellidos].filter(Boolean).join(" ") || "Trabajador"}
                 </div>
-                <button onClick={() => setSummaryCell(null)} style={{
-                  background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14, lineHeight: 1,
-                }}>×</button>
+                <BotonCerrar onClick={() => setSummaryCell(null)} />
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
                 {dow} {day} de {MONTH_NAMES[month - 1]} {year}
@@ -516,7 +514,7 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
               {meta ? (
                 <div style={{
                   display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
-                  background: meta.bg, border: `1px solid ${meta.text}44`, borderRadius: 6,
+                  background: meta.bg, border: `1px solid ${meta.text}44`, borderRadius: 8,
                   padding: "3px 9px",
                 }}>
                   <span style={{ color: meta.text, fontWeight: 700, fontSize: 12 }}>{code}</span>

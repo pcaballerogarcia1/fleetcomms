@@ -177,13 +177,13 @@ export { C };
 
 export const S = {
   page:   {fontFamily:font, background:C.bg, minHeight:"100vh", width:"100%", maxWidth:520, margin:"0 auto", color:C.text},
-  input:  {width:"100%", background:C.input, border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"10px 13px", borderRadius:10, fontSize:14, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
-  label:  {fontSize:12.5, color:C.text, display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
-  btn:    {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"10px 18px", borderRadius:7, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnGhost:{background:alfa(0.03), border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnSm:  {background:"rgba(91,124,250,0.16)", border:"1px solid rgba(91,124,250,0.4)", color:"#d6deff", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  btnOk:  {background:"rgba(63,207,142,0.12)", border:"1px solid rgba(63,207,142,0.35)", color:C.green, padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
-  card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 2px rgba(0,0,0,.3)"},
+  input:  {width:"100%", background:C.input, border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"10px 13px", borderRadius:12, fontSize:15, boxSizing:"border-box", fontFamily:font, outline:"none", transition:"border-color .15s"},
+  label:  {fontSize:13, color:C.text, display:"block", marginBottom:6, fontFamily:font, fontWeight:500},
+  btn:    {background:C.blueDim, border:`1px solid ${C.blue}44`, color:C.blueText, padding:"10px 18px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnGhost:{background:alfa(0.03), border:`1px solid ${alfa(0.1)}`, color:C.text, padding:"8px 14px", borderRadius:12, fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnSm:  {background:"rgba(91,124,250,0.16)", border:"1px solid rgba(91,124,250,0.4)", color:"#d6deff", padding:"8px 14px", borderRadius:12, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  btnOk:  {background:"rgba(63,207,142,0.12)", border:"1px solid rgba(63,207,142,0.35)", color:C.green, padding:"8px 14px", borderRadius:12, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font, transition:"all .15s"},
+  card:   {background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 2px rgba(0,0,0,.3)"},
   header: {background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"), borderBottom:`1px solid ${C.border}`, padding:"12px 20px", position:"sticky", top:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"space-between", backdropFilter:"blur(16px)"},
 };
 
@@ -401,7 +401,7 @@ export const CUADRANTE_META={
   M:{label:"Mañana",bg:tono("#0d2248", "#e4ecf8"),text:C.blue},
   T:{label:"Tarde",bg:tono("#3d1a00", "#f8ede4"),text:C.orange},
   N:{label:"Noche",bg:tono("#1a0d3d", "#eae4f8"),text:C.violet},
-  L:{label:"Libre",bg:tono("#1a1f2a", "#ebedf2"),text:"#64748b"},
+  L:{label:"Libre",bg:tono("#1a1f2a", "#ebedf2"),text:C.dim},
   G:{label:"Guardia",bg:tono("#2d2200", "#f8f4e4"),text:C.amber},
   B:{label:"Baja",bg:tono("#3d0d0d", "#f8e4e4"),text:C.red},
   D:{label:"Disponible",bg:C.greenDim,text:C.green},

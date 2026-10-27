@@ -20,6 +20,7 @@ import { logAudit } from "./audit.js";
 import { C } from "./tema.js";
 import { tono } from "./tema.js";
 
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 const font = "var(--font)";
 const mono = "var(--mono)";
@@ -126,7 +127,7 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
 function Insignia({ linea, grande }) {
   return (
     <span style={{
-      minWidth: grande ? 44 : 34, padding: grande ? "4px 8px" : "2px 5px", borderRadius: 6, background: linea.color, color: C.input,
+      minWidth: grande ? 44 : 34, padding: grande ? "4px 8px" : "2px 5px", borderRadius: 8, background: linea.color, color: C.input,
       fontSize: grande ? 15 : 11, fontWeight: 800, textAlign: "center", flexShrink: 0, display: "inline-block",
     }}>{linea.nombre}</span>
   );
@@ -145,9 +146,9 @@ function NumeroEditable({ valor, placeholder, onGuardar, sufijo = "min", ancho =
         onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
         style={{
           width: ancho, background: C.bg, border: `1px solid ${valor != null ? C.amber : C.border}`, color: C.text,
-          borderRadius: 6, padding: "4px 6px", fontSize: 12, fontFamily: mono, textAlign: "right", outline: "none",
+          borderRadius: 8, padding: "4px 6px", fontSize: 12, fontFamily: mono, textAlign: "right", outline: "none",
         }} />
-      <span style={{ fontSize: 10.5, color: C.dim }}>{sufijo}</span>
+      <span style={{ fontSize: 11, color: C.dim }}>{sufijo}</span>
     </span>
   );
 }
@@ -159,16 +160,16 @@ function ElegirColor({ color, elegido, onColor }) {
   const [abierto, setAbierto] = useState(false);
   return (
     <div style={{ position: "relative" }}>
-      <button onClick={() => setAbierto(a => !a)} title="Cambiar el color de la línea" style={{ width: 26, height: 26, borderRadius: 13, background: color, border: `2px solid ${C.border2}`, cursor: "pointer", padding: 0 }} />
+      <button onClick={() => setAbierto(a => !a)} title="Cambiar el color de la línea" style={{ width: 26, height: 26, borderRadius: 12, background: color, border: `2px solid ${C.border2}`, cursor: "pointer", padding: 0 }} />
       {abierto && (
         <div style={{ position: "absolute", right: 0, top: 32, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: 10, width: 176, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Color de la línea (en todas las pantallas)</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
             {COLORES_RAPIDOS.map(c => (
-              <button key={c} onClick={() => { onColor(c); setAbierto(false); }} style={{ width: 22, height: 22, borderRadius: 11, background: c, cursor: "pointer", padding: 0, border: `2px solid ${c === color ? "#fff" : "transparent"}` }} />
+              <button key={c} onClick={() => { onColor(c); setAbierto(false); }} style={{ width: 22, height: 22, borderRadius: 12, background: c, cursor: "pointer", padding: 0, border: `2px solid ${c === color ? "#fff" : "transparent"}` }} />
             ))}
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 11.5, color: C.text, cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: C.text, cursor: "pointer" }}>
             <input type="color" value={color} onChange={e => onColor(e.target.value)} style={{ width: 28, height: 24, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
             Otro color…
           </label>
@@ -201,7 +202,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
             <div style={{ fontSize: 11, color: C.dim }}>{linea.tipo}{linea.agencia ? ` · ${linea.agencia}` : ""}</div>
           </div>
           <ElegirColor color={linea.color} elegido={colorElegido} onColor={onColor} />
-          <button onClick={onCerrar} title="Cerrar" style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer" }}>×</button>
+          <BotonCerrar onClick={onCerrar} title="Cerrar" />
         </div>
       </div>
       <div style={{ display: "flex", borderBottom: `1px solid ${C.border}` }}>
@@ -210,10 +211,10 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
 
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
         {tab === "sentidos" && linea.sentidos.map(s => (
-          <div key={s.dir} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+          <div key={s.dir} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: s.dir === 0 ? C.green : C.amber }}>{s.dir === 0 ? "IDA (OUTBOUND)" : "VUELTA (INBOUND)"}</span>
-              <span style={{ fontSize: 10.5, color: C.dim }}>{s.dir === 0 ? "línea continua" : "línea discontinua"} en el mapa</span>
+              <span style={{ fontSize: 11, color: C.dim }}>{s.dir === 0 ? "línea continua" : "línea discontinua"} en el mapa</span>
             </div>
             <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginBottom: 6 }}>→ {s.cabecera || "—"}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
@@ -223,19 +224,19 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {TIPOS_DIA.map(t => (
-                <span key={t.id} title={dias?.[t.id] ? `Día de referencia: ${fmtFecha(dias[t.id])}` : "Sin servicio ese tipo de día"} style={{ fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 7px" }}>
+                <span key={t.id} title={dias?.[t.id] ? `Día de referencia: ${fmtFecha(dias[t.id])}` : "Sin servicio ese tipo de día"} style={{ fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "2px 7px" }}>
                   {t.nombre}: <b style={{ color: C.text }}>{s.viajes[t.id] ?? 0}</b> viajes
                 </span>
               ))}
             </div>
-            <button onClick={() => setAbierto(abierto === s.dir ? null : s.dir)} style={{ background: "none", border: "none", color: C.blue, fontSize: 11.5, cursor: "pointer", padding: 0, fontFamily: font }}>
+            <button onClick={() => setAbierto(abierto === s.dir ? null : s.dir)} style={{ background: "none", border: "none", color: C.blue, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: font }}>
               {abierto === s.dir ? "Ocultar paradas" : `Ver las ${s.paradas.length} paradas en orden`}
             </button>
             {abierto === s.dir && (
               <ol style={{ margin: "8px 0 0", paddingLeft: 22, maxHeight: 260, overflowY: "auto" }}>
                 {s.paradas.map((id, k) => {
                   const p = paradasPorId.get(id);
-                  return <li key={`${id}-${k}`} style={{ fontSize: 11.5, color: k === 0 || k === s.paradas.length - 1 ? C.text : C.muted, padding: "2px 0" }}>
+                  return <li key={`${id}-${k}`} style={{ fontSize: 12, color: k === 0 || k === s.paradas.length - 1 ? C.text : C.muted, padding: "2px 0" }}>
                     {p?.nombre || id} <span style={{ color: C.dim, fontFamily: mono, fontSize: 10 }}>{p?.codigo}</span>
                   </li>;
                 })}
@@ -246,7 +247,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
 
         {tab === "tiempos" && (
           <div>
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
               Minutos de cabecera a cabecera por franja horaria, calculados con la mediana de los viajes de un laborable ({fmtFecha(dias?.laborable)}). Escribe un valor para corregirlo; vacío vuelve al calculado.
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -266,7 +267,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
                           <NumeroEditable valor={cfg?.tiempos?.[`${s.dir}|${f.id}`] ?? null}
                             placeholder={calc?.min != null ? String(calc.min) : "—"}
                             onGuardar={n => onCfg({ tiempos: { [`${s.dir}|${f.id}`]: n } })} />
-                          <div style={{ fontSize: 9.5, color: t.manual ? C.amber : C.dim }}>{t.manual ? "corregido" : calc ? `${calc.viajes} viajes` : "sin viajes"}</div>
+                          <div style={{ fontSize: 10, color: t.manual ? C.amber : C.dim }}>{t.manual ? "corregido" : calc ? `${calc.viajes} viajes` : "sin viajes"}</div>
                         </td>
                       );
                     })}
@@ -277,7 +278,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
             <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: C.surface2, borderRadius: 8, padding: 10 }}>
               <div>
                 <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>Regulación en cabecera</div>
-                <div style={{ fontSize: 10.5, color: C.dim }}>Margen mínimo entre la llegada de un viaje y la salida del siguiente</div>
+                <div style={{ fontSize: 11, color: C.dim }}>Margen mínimo entre la llegada de un viaje y la salida del siguiente</div>
               </div>
               <NumeroEditable valor={cfg?.regulacion ?? null} placeholder="5" onGuardar={n => onCfg({ regulacion: n })} />
             </div>
@@ -287,7 +288,7 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
         {tab === "vehiculos" && (
           <div>
             <SelectorCocheraLinea linea={linea} cfg={cfg} cocheras={cocheras} paradasPorId={paradasPorId} onCfg={onCfg} />
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
               Tipos de vehículo que pueden hacer esta línea. Al planificar, solo se asignarán vehículos de estos tipos (sin marcar ninguno, vale cualquiera).
             </div>
             {TIPOS_VEHICULO.map(t => {
@@ -299,12 +300,12 @@ function FichaLinea({ linea, cfg, paradasPorId, dias, onCfg, onCerrar, cocheras 
                     onCfg({ tipos: nuevos, ...(on && cfg?.preferente === t.id ? { preferente: null } : {}) });
                   }} />
                   <span style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12.5, color: C.text }}>{t.nombre}</div>
-                    <div style={{ fontSize: 10.5, color: C.dim }}>{t.detalle}</div>
+                    <div style={{ fontSize: 13, color: C.text }}>{t.nombre}</div>
+                    <div style={{ fontSize: 11, color: C.dim }}>{t.detalle}</div>
                   </span>
                   {on && (
                     <button onClick={e => { e.preventDefault(); onCfg({ preferente: cfg?.preferente === t.id ? null : t.id }); }} style={{
-                      fontSize: 10.5, padding: "2px 7px", borderRadius: 5, cursor: "pointer", fontFamily: font,
+                      fontSize: 11, padding: "2px 7px", borderRadius: 4, cursor: "pointer", fontFamily: font,
                       background: cfg?.preferente === t.id ? C.green : "none", color: cfg?.preferente === t.id ? C.input : C.muted,
                       border: `1px solid ${cfg?.preferente === t.id ? C.green : C.border2}`, fontWeight: 700,
                     }}>{cfg?.preferente === t.id ? "Preferente" : "Marcar preferente"}</button>
@@ -328,16 +329,16 @@ function SelectorCocheraLinea({ linea, cfg, cocheras, paradasPorId, onCfg }) {
   const km = c => (dist(c) != null ? ` · ${dist(c).toFixed(1).replace(".", ",")} km` : "");
   return (
     <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 6 }}>Cochera de la línea</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Cochera de la línea</div>
       {cocheras.length ? (
-        <select value={fija ? String(fija.id) : ""} onChange={e => onCfg({ cochera: e.target.value || null })} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "7px 9px", fontSize: 12, fontFamily: font, outline: "none" }}>
+        <select value={fija ? String(fija.id) : ""} onChange={e => onCfg({ cochera: e.target.value || null })} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "7px 9px", fontSize: 12, fontFamily: font, outline: "none" }}>
           <option value="">La más cercana ({cercana?.nombre || "—"}{cercana ? km(cercana) : ""})</option>
           {cocheras.map(c => <option key={c.id} value={String(c.id)}>{c.nombre || "Cochera"}{km(c)}</option>)}
         </select>
       ) : (
         <div style={{ fontSize: 11, color: C.amber, lineHeight: 1.5 }}>Aún no hay cocheras. Añádelas en la lista de la izquierda («Cocheras») para que Rutas calcule las salidas y vueltas a cochera.</div>
       )}
-      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Los autobuses de esta línea salen de esta cochera y vuelven a ella; los km en vacío se calculan en Rutas.</div>
+      <div style={{ fontSize: 11, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Los autobuses de esta línea salen de esta cochera y vuelven a ella; los km en vacío se calculan en Rutas.</div>
     </div>
   );
 }
@@ -362,9 +363,9 @@ function PanelCocheras({ cocheras, poniendo, setPoniendo, onCambiar, cfg }) {
               <span style={{ width: 14, height: 14, borderRadius: 4, background: C.orange, flexShrink: 0 }} />
               <input defaultValue={c.nombre || ""} placeholder="Nombre de la cochera" onBlur={e => { const n = e.target.value.trim(); if (n && n !== c.nombre) onCambiar(l => l.map(x => (x.id === c.id ? { ...x, nombre: n } : x))); }}
                 onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "4px 7px", fontSize: 11.5, fontFamily: font, outline: "none" }} />
+                style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" }} />
               <span title="Líneas que la tienen fijada (el resto usa la más cercana)" style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{usos(c) ? `${usos(c)} lín.` : ""}</span>
-              <button title="Quitar cochera" onClick={() => { if (window.confirm(`¿Quitar la cochera «${c.nombre || "sin nombre"}»?`)) onCambiar(l => l.filter(x => x.id !== c.id)); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15, padding: "0 2px" }}>×</button>
+              <BotonCerrar title="Quitar cochera" onClick={() => { if (window.confirm(`¿Quitar la cochera «${c.nombre || "sin nombre"}»?`)) onCambiar(l => l.filter(x => x.id !== c.id)); }} />
             </div>
           ))}
           {cocheras.length > 0 && <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>Arrastra la cochera en el mapa para moverla.</div>}
@@ -388,7 +389,7 @@ function PuntosRelevo({ red, cfg, onGuardar }) {
     onGuardar([...n]);
   };
   const conRelevo = cabs.filter(permitido).length;
-  const btn = { background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 6, padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: font };
+  const btn = { background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontFamily: font };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
       <div style={{ maxWidth: 900 }}>
@@ -397,20 +398,20 @@ function PuntosRelevo({ red, cfg, onGuardar }) {
           Marca las cabeceras donde se puede cambiar de conductor. El Scheduling solo corta las piezas (relevos) en las marcadas; si una pieza tiene que cortarse a la fuerza (pieza máxima o conducción) donde no se puede, se corta en el último punto de relevo anterior. Al principio y al final del autobús (cochera) siempre hay relevo.
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 10px", flexWrap: "wrap" }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cabecera o línea…" style={{ width: 280, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cabecera o línea…" style={{ width: 280, background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
           <button onClick={() => poner(vis, true)} style={btn}>{q ? "Permitir en las encontradas" : "Permitir en todas"}</button>
           <button onClick={() => poner(vis, false)} style={btn}>{q ? "Quitar en las encontradas" : "Quitar en todas"}</button>
           <span style={{ fontSize: 12, color: conRelevo === cabs.length ? C.muted : C.amber, marginLeft: "auto" }}>
             Se puede relevar en {conRelevo} de {cabs.length} cabeceras
           </span>
         </div>
-        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card }}>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", background: C.card }}>
           {vis.map(c => (
             <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 14px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: permitido(c) ? 1 : 0.6 }}>
               <input type="checkbox" checked={permitido(c)} onChange={e => poner([c], e.target.checked)} style={{ width: 16, height: 16, accentColor: C.green, cursor: "pointer" }} />
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 12.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
-                <span style={{ display: "block", fontSize: 10.5, color: C.dim, marginTop: 2 }}>Líneas {c.lineas.join(", ")}</span>
+                <span style={{ display: "block", fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
+                <span style={{ display: "block", fontSize: 11, color: C.dim, marginTop: 2 }}>Líneas {c.lineas.join(", ")}</span>
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, color: permitido(c) ? C.green : C.red, whiteSpace: "nowrap" }}>{permitido(c) ? "Se puede relevar" : "Sin relevo"}</span>
             </label>
@@ -445,23 +446,23 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
   const puede = lineas.size > 0 && (!hayCals || cals.size > 0);
   const casilla = (marcada, onClick) => <input type="checkbox" checked={marcada} onChange={onClick} style={{ width: 15, height: 15, accentColor: C.blue, cursor: "pointer", flexShrink: 0 }} />;
   const boton = (txt, onClick, fuerte = false, deshabilitado = false) => (
-    <button onClick={onClick} disabled={deshabilitado} style={{ padding: fuerte ? "9px 18px" : "5px 10px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border}`, background: fuerte ? (deshabilitado ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: fuerte ? 12.5 : 11, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font }}>{txt}</button>
+    <button onClick={onClick} disabled={deshabilitado} style={{ padding: fuerte ? "9px 18px" : "5px 10px", borderRadius: 8, border: `1px solid ${fuerte ? C.blue : C.border}`, background: fuerte ? (deshabilitado ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: fuerte ? 13 : 11, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font }}>{txt}</button>
   );
-  const columna = { display: "flex", flexDirection: "column", minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 10, background: C.card };
+  const columna = { display: "flex", flexDirection: "column", minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 12, background: C.card };
   const cabeza = { display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" };
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ width: "min(1100px, 100%)", height: "min(760px, 100%)", background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 12, display: "flex", flexDirection: "column", fontFamily: font, boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
         <div style={{ padding: "16px 20px 10px" }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Qué quieres importar de «{archivo}»</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>Marca las líneas y los calendarios que quieres en este proyecto. Lo que no marques no se guarda (se puede volver a importar cuando quieras).</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Qué quieres importar de «{archivo}»</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Marca las líneas y los calendarios que quieres en este proyecto. Lo que no marques no se guarda (se puede volver a importar cuando quieras).</div>
         </div>
         <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: hayCals ? "3fr 2fr" : "1fr", gap: 14, padding: "4px 20px 12px" }}>
           <div style={columna}>
             <div style={cabeza}>
               <b style={{ fontSize: 12, color: C.text }}>Líneas</b>
               <span style={{ fontSize: 11, color: C.dim }}>{lineas.size} de {red.lineas.length}{nGrupos < red.lineas.length ? ` variantes · ${nGrupos} líneas` : ""}</span>
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{ flex: 1, minWidth: 160, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{ flex: 1, minWidth: 160, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
               {boton(q ? "Marcar las encontradas" : "Todas", () => marcarVisibles(true))}
               {boton(q ? "Quitar las encontradas" : "Ninguna", () => marcarVisibles(false))}
               {hayCals && sinViajes.length > 0 && boton(`Quitar las ${sinViajes.length} sin viajes`, () => ponerVarias(sinViajes.map(l => l.id), false))}
@@ -472,7 +473,7 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
                   <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: variante ? "5px 12px 5px 44px" : "7px 12px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: lineas.has(l.id) ? 1 : 0.55, background: variante ? C.bg : "none" }}>
                     {casilla(lineas.has(l.id), () => alternar(setLineas, l.id))}
                     {!variante && <Insignia linea={l} />}
-                    <span style={{ flex: 1, fontSize: variante ? 11.5 : 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{variante ? textoVariante(l) : l.largo || l.sentidos.map(s => s.cabecera).filter(Boolean).join(" – ") || "—"}</span>
+                    <span style={{ flex: 1, fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{variante ? textoVariante(l) : l.largo || l.sentidos.map(s => s.cabecera).filter(Boolean).join(" – ") || "—"}</span>
                     <span style={{ fontSize: 11, color: viajes.get(l.id) ? C.dim : C.amber, fontFamily: mono, whiteSpace: "nowrap" }}>{viajes.get(l.id).toLocaleString("es-ES")} viajes</span>
                   </label>
                 );
@@ -488,7 +489,7 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
                       <Insignia linea={g.lineas[0]} />
                       <button onClick={() => alternar(setAbiertos, g.clave)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: font, textAlign: "left" }}>
                         <span style={{ fontSize: 12, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.lineas[0].largo || g.lineas[0].sentidos.map(s => s.cabecera).filter(Boolean).join(" – ")}</span>
-                        <span style={{ fontSize: 10.5, color: C.blueText || C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>{abierto ? "▾" : "▸"} {marcadas < ids.length ? `${marcadas} de ` : ""}{ids.length} variantes</span>
+                        <span style={{ fontSize: 11, color: C.blueText || C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>{abierto ? "▾" : "▸"} {marcadas < ids.length ? `${marcadas} de ` : ""}{ids.length} variantes</span>
                       </button>
                       <span style={{ fontSize: 11, color: C.dim, fontFamily: mono, whiteSpace: "nowrap" }}>{ids.reduce((n, id) => n + (lineas.has(id) ? viajes.get(id) : 0), 0).toLocaleString("es-ES")} viajes</span>
                     </div>
@@ -514,7 +515,7 @@ function ElegirImportacion({ archivo, red, onImportar, onCancelar }) {
                     {casilla(cals.has(c.id), () => alternar(setCals, c.id))}
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 12, color: C.text }}>{c.nombre}</span>
-                      <span style={{ display: "block", fontSize: 10.5, color: C.dim, marginTop: 2 }}>{c.fechas.length} día{c.fechas.length === 1 ? "" : "s"} · {c.viajes.toLocaleString("es-ES")} viajes{c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}</span>
+                      <span style={{ display: "block", fontSize: 11, color: C.dim, marginTop: 2 }}>{c.fechas.length} día{c.fechas.length === 1 ? "" : "s"} · {c.viajes.toLocaleString("es-ES")} viajes{c.codigos?.length ? ` · ${c.codigos.join(", ")}` : ""}</span>
                     </span>
                   </label>
                 ))}
@@ -663,7 +664,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
       .catch(e => alert("No se pudo guardar: " + (e.message || e)));
   };
   const pestana = (id, txt) => (
-    <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 20, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 12.5, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>
+    <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 20, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 13, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: C.bg, fontFamily: font, minHeight: 0 }}>
@@ -698,7 +699,7 @@ export function PlanningLineasPage({ projectId, orgId }) {
           )}
           {error && <div style={{ fontSize: 11, color: C.red, marginTop: 8 }}>{error}</div>}
           {estado.ficha && (
-            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 8, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 8, lineHeight: 1.6 }}>
               <div>{estado.ficha.archivo || "Red importada"} · {(estado.ficha.totalLineas || 0).toLocaleString("es-ES")} líneas · {(estado.ficha.totalMarkers || 0).toLocaleString("es-ES")} paradas</div>
               {estado.ficha.agencias?.length > 0 && <div>Operadores: {estado.ficha.agencias.join(", ")}</div>}
               <div>Días de referencia: {TIPOS_DIA.map(t => `${t.nombre.split(" ")[0].toLowerCase()} ${fmtFecha(estado.ficha.dias?.[t.id])}`).join(" · ")}</div>
@@ -712,9 +713,9 @@ export function PlanningLineasPage({ projectId, orgId }) {
           <div style={{ padding: "10px 14px 6px" }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea, cabecera, operador…" style={{
               width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
-              borderRadius: 7, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none",
+              borderRadius: 8, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none",
             }} />
-            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 6 }}>{grupos.length.toLocaleString("es-ES")} líneas{grupos.length < lista.length ? ` · ${lista.length.toLocaleString("es-ES")} variantes (pincha una línea para verlas)` : ""}</div>
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>{grupos.length.toLocaleString("es-ES")} líneas{grupos.length < lista.length ? ` · ${lista.length.toLocaleString("es-ES")} variantes (pincha una línea para verlas)` : ""}</div>
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 10px" }}>
@@ -734,12 +735,12 @@ export function PlanningLineasPage({ projectId, orgId }) {
             const c = cfg[l.id];
             return (
               <button key={l.id} onClick={() => setSel(activa ? null : l.id)} style={{
-                display: "flex", alignItems: "center", gap: 9, width: variante ? "calc(100% - 22px)" : "100%", marginLeft: variante ? 22 : 0, textAlign: "left", padding: variante ? "5px 8px" : "7px 8px", borderRadius: 7, marginBottom: 2,
+                display: "flex", alignItems: "center", gap: 9, width: variante ? "calc(100% - 22px)" : "100%", marginLeft: variante ? 22 : 0, textAlign: "left", padding: variante ? "5px 8px" : "7px 8px", borderRadius: 8, marginBottom: 2,
                 background: activa ? `${l.color}22` : "none", border: `1px solid ${activa ? l.color : "transparent"}`, cursor: "pointer", fontFamily: font,
               }}>
                 {!variante && <Insignia linea={l} />}
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {variante ? textoVariante(l) : l.sentidos.map(s => s.cabecera).filter(Boolean).join(" ↔ ") || l.largo || l.tipo}
                   </div>
                   <div style={{ fontSize: 10, color: C.dim }}>
@@ -756,12 +757,12 @@ export function PlanningLineasPage({ projectId, orgId }) {
             return (
               <div key={g.clave}>
                 <button onClick={() => alternarGrupo(g.clave)} style={{
-                  display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px", borderRadius: 7, marginBottom: 2,
+                  display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px", borderRadius: 8, marginBottom: 2,
                   background: dentro && !abierto ? `${g.lineas[0].color}22` : "none", border: "1px solid transparent", cursor: "pointer", fontFamily: font,
                 }}>
                   <Insignia linea={g.lineas[0]} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {g.lineas[0].sentidos.map(s => s.cabecera).filter(Boolean).join(" ↔ ") || g.lineas[0].largo || g.lineas[0].tipo}
                     </div>
                     <div style={{ fontSize: 10, color: C.dim }}>{abierto ? "▾" : "▸"} {g.lineas.length} variantes · {lab.toLocaleString("es-ES")} viajes laborable</div>

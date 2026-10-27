@@ -29,18 +29,18 @@ function ListaTurnos({ servicio, sesion, onError }) {
   }
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>¿Qué turno haces hoy?</div>
-      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>{servicio.proyecto ? `${servicio.proyecto} · ` : ""}{fechaTxt(servicio.fecha)} · {servicio.lista?.length || 0} turnos</div>
-      <input value={q} onChange={e => setQ(e.target.value)} inputMode="search" placeholder="Número de turno, bus o línea…" style={{ width: "100%", boxSizing: "border-box", marginTop: 12, background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 10, padding: "12px 14px", fontSize: 15, fontFamily: font, outline: "none" }} />
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>¿Qué turno haces hoy?</div>
+      <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{servicio.proyecto ? `${servicio.proyecto} · ` : ""}{fechaTxt(servicio.fecha)} · {servicio.lista?.length || 0} turnos</div>
+      <input value={q} onChange={e => setQ(e.target.value)} inputMode="search" placeholder="Número de turno, bus o línea…" style={{ width: "100%", boxSizing: "border-box", marginTop: 12, background: C.surface2, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 12, padding: "12px 14px", fontSize: 15, fontFamily: font, outline: "none" }} />
       <div style={{ marginTop: 10 }}>
         {lista.slice(0, 80).map(t => (
           <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 4px", borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ width: 52, fontSize: 17, fontWeight: 800, color: C.text }}>{t.id}</div>
+            <div style={{ width: 52, fontSize: 20, fontWeight: 800, color: C.text }}>{t.id}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: C.text, fontFamily: mono }}>{hhmm(t.inicio)} – {hhmm(t.fin)}</div>
+              <div style={{ fontSize: 15, color: C.text, fontFamily: mono }}>{hhmm(t.inicio)} – {hhmm(t.fin)}</div>
               <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.tipo ? `${t.tipo} · ` : ""}Bus {(t.buses || []).join(" + ")} · líneas {(t.lineas || []).join(", ")}</div>
             </div>
-            <button onClick={() => coger(t)} disabled={!!cogiendo} style={{ padding: "10px 14px", borderRadius: 9, border: "none", background: C.blue, color: C.input, fontWeight: 700, fontSize: 13.5, fontFamily: font, cursor: "pointer", opacity: cogiendo && cogiendo !== t.id ? 0.5 : 1 }}>{cogiendo === t.id ? "…" : "Coger"}</button>
+            <button onClick={() => coger(t)} disabled={!!cogiendo} style={{ padding: "10px 14px", borderRadius: 8, border: "none", background: C.blue, color: C.input, fontWeight: 700, fontSize: 13, fontFamily: font, cursor: "pointer", opacity: cogiendo && cogiendo !== t.id ? 0.5 : 1 }}>{cogiendo === t.id ? "…" : "Coger"}</button>
           </div>
         ))}
         {!lista.length && <div style={{ padding: 20, fontSize: 13, color: C.muted, textAlign: "center" }}>Ningún turno con «{q}».</div>}
@@ -118,21 +118,21 @@ function HojaTurno({ servicio, turno, sesion }) {
   const est = estadoPuntualidad(retraso);
   const salt = new Set(real.saltados || []);
   const primero = turno.viajes[0];
-  const btnGrande = color => ({ width: "100%", padding: "16px", borderRadius: 12, border: "none", background: color, color: C.input, fontSize: 17, fontWeight: 800, fontFamily: font, cursor: "pointer" });
+  const btnGrande = color => ({ width: "100%", padding: "16px", borderRadius: 12, border: "none", background: color, color: C.input, fontSize: 20, fontWeight: 800, fontFamily: font, cursor: "pointer" });
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.text }}>{turno.id}</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: C.text }}>{turno.id}</div>
         <div style={{ fontSize: 13, color: C.muted }}>{turno.tipo ? `${turno.tipo} · ` : ""}{hhmm(turno.inicio)} – {hhmm(turno.fin)}</div>
       </div>
       <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{servicio.proyecto ? `${servicio.proyecto} · ` : ""}{fechaTxt(servicio.fecha)}</div>
 
       {!empezado && (
         <div style={{ marginTop: 14, padding: 16, borderRadius: 12, background: C.card, border: `1px solid ${C.border2}` }}>
-          <div style={{ fontSize: 14, color: C.text, lineHeight: 1.5 }}>Empiezas a las <b>{hhmm(turno.inicio)}</b> en <b>{primero?.on || "cabecera"}</b> con el <b>Bus {primero?.bus}</b>.</div>
+          <div style={{ fontSize: 15, color: C.text, lineHeight: 1.5 }}>Empiezas a las <b>{hhmm(turno.inicio)}</b> en <b>{primero?.on || "cabecera"}</b> con el <b>Bus {primero?.bus}</b>.</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Al empezar, el móvil manda tu posición y marca solo cada expedición. Deja la pantalla encendida (en el soporte) y el GPS activado.</div>
           <button onClick={empezar} style={{ ...btnGrande(C.green), marginTop: 14 }}>Empezar turno</button>
-          <button onClick={dejar} style={{ marginTop: 10, width: "100%", padding: 10, background: "none", border: `1px solid ${C.border2}`, borderRadius: 10, color: C.muted, fontSize: 13, fontFamily: font, cursor: "pointer" }}>No es mi turno: dejarlo</button>
+          <button onClick={dejar} className="op-btn" style={{ marginTop: 10, width: "100%" }}>No es mi turno: dejarlo</button>
         </div>
       )}
 
@@ -141,11 +141,11 @@ function HojaTurno({ servicio, turno, sesion }) {
           {v ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {!v.v && <span style={{ padding: "3px 9px", borderRadius: 7, background: v.color, color: C.input, fontWeight: 800, fontSize: 16 }}>{v.l}</span>}
+                {!v.v && <span style={{ padding: "3px 9px", borderRadius: 8, background: v.color, color: C.input, fontWeight: 800, fontSize: 15 }}>{v.l}</span>}
                 <span style={{ fontSize: 13, color: C.muted }}>Bus {v.bus}</span>
-                <span style={{ marginLeft: "auto", fontSize: 22, fontWeight: 800, color: COLOR_PUNTUALIDAD[est], fontFamily: mono }}>{retraso == null ? "…" : textoRetraso(retraso)}</span>
+                <span style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800, color: COLOR_PUNTUALIDAD[est], fontFamily: mono }}>{retraso == null ? "…" : textoRetraso(retraso)}</span>
               </div>
-              <div style={{ fontSize: 16, color: C.text, fontWeight: 600, marginTop: 10 }}>{v.on} → {v.dn}</div>
+              <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginTop: 10 }}>{v.on} → {v.dn}</div>
               <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
                 {real.salidas?.[v.k] != null ? `Salió ${hhmm(real.salidas[v.k])} · llega a las ${hhmm(v.arr)}` : `Sale a las ${hhmm(v.dep)}`}
               </div>
@@ -160,10 +160,10 @@ function HojaTurno({ servicio, turno, sesion }) {
           <div style={{ fontSize: 11, color: vivo.error ? C.red : C.dim, marginTop: 10 }}>
             {(typeof navigator !== "undefined" && !navigator.geolocation ? "Este móvil no tiene GPS disponible en el navegador." : null) || vivo.error || (vivo.gps ? `GPS ±${vivo.gps.precision} m · ${new Date(vivo.gps.en).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}${vivo.fuera ? " · fuera del recorrido" : ""}` : "Buscando GPS…")}
           </div>
-          <button onClick={terminar} style={{ ...btnGrande(C.surface2), color: C.text, border: `1px solid ${C.border2}`, marginTop: 14, fontSize: 14, padding: 12 }}>Terminar turno</button>
+          <button onClick={terminar} style={{ ...btnGrande(C.surface2), color: C.text, border: `1px solid ${C.border2}`, marginTop: 14, fontSize: 15, padding: 12 }}>Terminar turno</button>
         </div>
       )}
-      {terminado && <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: C.card, border: `1px solid ${C.border2}`, fontSize: 14, color: C.green }}>✓ Turno terminado a las {hhmm(turno.finReal)}.</div>}
+      {terminado && <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: C.card, border: `1px solid ${C.border2}`, fontSize: 15, color: C.green }}>✓ Turno terminado a las {hhmm(turno.finReal)}.</div>}
 
       <div style={{ marginTop: 18, fontSize: 11, color: C.dim, letterSpacing:0, textTransform:"none", fontWeight: 700 }}>Hoja del turno</div>
       <div style={{ marginTop: 6 }}>
@@ -177,8 +177,8 @@ function HojaTurno({ servicio, turno, sesion }) {
               {prev && prev.bus !== x.bus && <div style={{ padding: "6px 8px", fontSize: 12, color: C.amber }}>↔ Relevo en {x.on}: pasas al Bus {x.bus}</div>}
               {hueco >= 15 && <div style={{ padding: "6px 8px", fontSize: 12, color: C.muted }}><Coffee size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />Pausa de {hueco >= 60 ? `${Math.floor(hueco / 60)} h ${hueco % 60 ? `${hueco % 60} min` : ""}` : `${hueco} min`} ({hhmm(prev.arr)}–{hhmm(x.dep)})</div>}
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderRadius: 8, background: esActual ? C.blueDim : "none", opacity: l != null || salt.has(x.k) ? 0.5 : x.v ? 0.65 : 1 }}>
-                <span style={{ width: 46, fontFamily: mono, fontSize: 14, color: C.text }}>{hhmm(x.dep)}</span>
-                {!x.v ? <span style={{ minWidth: 26, padding: "2px 6px", borderRadius: 6, background: x.color, color: C.input, fontWeight: 800, fontSize: 12, textAlign: "center" }}>{x.l}</span> : <span style={{ minWidth: 26, fontSize: 11, color: C.dim }}>vacío</span>}
+                <span style={{ width: 46, fontFamily: mono, fontSize: 15, color: C.text }}>{hhmm(x.dep)}</span>
+                {!x.v ? <span style={{ minWidth: 26, padding: "2px 6px", borderRadius: 8, background: x.color, color: C.input, fontWeight: 800, fontSize: 12, textAlign: "center" }}>{x.l}</span> : <span style={{ minWidth: 26, fontSize: 11, color: C.dim }}>vacío</span>}
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.on} → {x.dn}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: salt.has(x.k) ? C.red : l != null ? C.green : C.dim }}>{x.v ? "" : salt.has(x.k) ? "no hecha" : l != null ? "✓" : s != null ? "en curso" : ""}</span>
               </div>
@@ -210,7 +210,7 @@ function ProximosDias({ cuadrantes, desdeManana }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               {x.t ? <>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{x.t}<span style={{ fontFamily: mono, fontWeight: 500, color: C.muted, marginLeft: 8 }}>{x.s != null ? `${hhmm(x.s)} – ${hhmm(x.e)}` : ""}</span></div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{x.t}<span style={{ fontFamily: mono, fontWeight: 500, color: C.muted, marginLeft: 8 }}>{x.s != null ? `${hhmm(x.s)} – ${hhmm(x.e)}` : ""}</span></div>
                 <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(x.v || "").replace(/^T\d+\s*/, "")}</div>
               </> : <div style={{ fontSize: 13, color: C.muted }}>{x.c ? NOMBRE_CODIGO[x.c] || x.c : "Sin turno"}</div>}
             </div>
@@ -234,7 +234,7 @@ export function MiTurno({ sesion, servicios, cuadrantes = [] }) {
 
   if (!servicio) return (
     <div style={{ fontFamily: font, paddingBottom: 90 }}>
-      <div style={{ padding: 24, fontSize: 14, color: C.muted, textAlign: "center" }}>Hoy no hay ningún servicio de autobús publicado. Cuando la oficina lo publique, aquí tendrás tu turno.</div>
+      <div style={{ padding: 24, fontSize: 15, color: C.muted, textAlign: "center" }}>Hoy no hay ningún servicio de autobús publicado. Cuando la oficina lo publique, aquí tendrás tu turno.</div>
       <ProximosDias cuadrantes={cuadrantes} />
     </div>
   );
@@ -243,15 +243,15 @@ export function MiTurno({ sesion, servicios, cuadrantes = [] }) {
     <div style={{ fontFamily: font, paddingBottom: 90 }}>
       {vigentes.length > 1 && (
         <div style={{ display: "flex", gap: 6, padding: "12px 16px 0", overflowX: "auto" }}>
-          {vigentes.map(s => <button key={s._id} onClick={() => setElegido(s._id)} style={{ padding: "6px 12px", borderRadius: 16, border: `1px solid ${s._id === sid ? C.blue : C.border2}`, background: s._id === sid ? C.blueDim : "none", color: s._id === sid ? C.blueText : C.muted, fontSize: 12.5, fontFamily: font, whiteSpace: "nowrap" }}>{s.proyecto || "Servicio"} · {new Date(s.fecha + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric" })}</button>)}
+          {vigentes.map(s => <button key={s._id} onClick={() => setElegido(s._id)} style={{ padding: "6px 12px", borderRadius: 12, border: `1px solid ${s._id === sid ? C.blue : C.border2}`, background: s._id === sid ? C.blueDim : "none", color: s._id === sid ? C.blueText : C.muted, fontSize: 13, fontFamily: font, whiteSpace: "nowrap" }}>{s.proyecto || "Servicio"} · {new Date(s.fecha + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric" })}</button>)}
         </div>
       )}
       {misTurnos && misTurnos.length > 1 && (
         <div style={{ display: "flex", gap: 6, padding: "12px 16px 0" }}>
-          {misTurnos.map(t => <button key={t.id} onClick={() => setVerTurno(t.id)} style={{ padding: "6px 12px", borderRadius: 16, border: `1px solid ${t.id === turno?.id ? C.blue : C.border2}`, background: t.id === turno?.id ? C.blueDim : "none", color: t.id === turno?.id ? C.blueText : C.muted, fontSize: 12.5, fontFamily: font }}>{t.id}</button>)}
+          {misTurnos.map(t => <button key={t.id} onClick={() => setVerTurno(t.id)} style={{ padding: "6px 12px", borderRadius: 12, border: `1px solid ${t.id === turno?.id ? C.blue : C.border2}`, background: t.id === turno?.id ? C.blueDim : "none", color: t.id === turno?.id ? C.blueText : C.muted, fontSize: 13, fontFamily: font }}>{t.id}</button>)}
         </div>
       )}
-      {error && <div style={{ margin: "12px 16px 0", padding: 12, borderRadius: 10, background: "rgba(248,81,73,.1)", border: `1px solid ${C.red}55`, color: C.red, fontSize: 13 }}>{error}</div>}
+      {error && <div style={{ margin: "12px 16px 0", padding: 12, borderRadius: 12, background: "rgba(248,81,73,.1)", border: `1px solid ${C.red}55`, color: C.red, fontSize: 13 }}>{error}</div>}
       {misTurnos === null ? <div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Cargando…</div>
         : turno ? <HojaTurno key={turno.id} servicio={servicio} turno={turno} sesion={sesion} />
         : <ListaTurnos servicio={servicio} sesion={sesion} onError={setError} />}

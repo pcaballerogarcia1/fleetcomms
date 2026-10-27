@@ -15,11 +15,11 @@ export const Btn = ({children, onClick, style={}, variant="primary", size="md", 
     opacity: disabled ? .45 : 1,
   };
   const sizes = {
-    xs: {padding:"4px 10px", fontSize:10, borderRadius:5},
-    sm: {padding:"6px 12px", fontSize:11, borderRadius:6},
-    md: {padding:"10px 18px", fontSize:13, borderRadius:7},
-    lg: {padding:"12px 22px", fontSize:14, borderRadius:8},
-    xl: {padding:"14px 30px", fontSize:15, borderRadius:9},
+    xs: {padding:"4px 10px", fontSize:10, borderRadius:4},
+    sm: {padding:"6px 12px", fontSize:11, borderRadius:8},
+    md: {padding:"10px 18px", fontSize:13, borderRadius:8},
+    lg: {padding:"12px 22px", fontSize:15, borderRadius:8},
+    xl: {padding:"14px 30px", fontSize:15, borderRadius:8},
   };
   const variants = {
     primary:  { background: hov?tono("#263166", "#e7e9f6"):C.blueDim, color:C.blueText, border:`1px solid ${C.blue}44` },
@@ -164,7 +164,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   },[selId, ubicacionesRef]);
 
   return (
-    <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>
+    <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
       <div ref={divRef} style={{height,background:tono("#151a26", "#eaecf3")}}/>
       <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",gap:12}}>

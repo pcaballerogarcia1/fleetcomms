@@ -72,10 +72,10 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
     setReglas(l => [...l, { trabajoId: trabajos[0]?.id || "", accion: "quitar", campo: c?.campo || "*", valor: c?.valores[0]?.[0] || "" }]);
   }
 
-  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 8px", fontSize: 12.5, fontFamily: font, outline: "none", boxSizing: "border-box" };
-  const th = { textAlign: "left", padding: "8px 8px", fontSize: 10.5, color: C.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
-  const td = { padding: "5px 8px", borderTop: `1px solid ${C.border}`, fontSize: 12.5, color: C.text, verticalAlign: "middle" };
-  const btn = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer" };
+  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 8px", fontSize: 13, fontFamily: font, outline: "none", boxSizing: "border-box" };
+  const th = { textAlign: "left", padding: "8px 8px", fontSize: 11, color: C.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
+  const td = { padding: "5px 8px", borderTop: `1px solid ${C.border}`, fontSize: 13, color: C.text, verticalAlign: "middle" };
+  const btn = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 13, fontFamily: font, cursor: "pointer" };
 
   if (!activeProject) return <div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Abre un proyecto para ver sus trabajos.</div>;
   return (
@@ -84,14 +84,14 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
       <datalist id="tipos-vehiculo">{tiposVehiculo.map(v => <option key={v} value={v} />)}</datalist>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Trabajos</div>
-        {estado && <span style={{ fontSize: 11.5, color: estado === "guardado" ? C.green : estado === "guardando" ? C.dim : C.red }}>{estado === "guardado" ? "Guardado" : estado === "guardando" ? "Guardando…" : estado}</span>}
+        {estado && <span style={{ fontSize: 12, color: estado === "guardado" ? C.green : estado === "guardando" ? C.dim : C.red }}>{estado === "guardado" ? "Guardado" : estado === "guardando" ? "Guardando…" : estado}</span>}
       </div>
       <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.55, maxWidth: 920 }}>
         Lo que se hace en los puntos de este proyecto. Cada trabajo tiene su frecuencia, su duración por punto y el tipo de vehículo que lo hace. Por defecto se hace en todos los puntos; con las reglas de abajo se quita o se cambia en grupos de puntos (por fracción, tipo, barrio…).
       </div>
 
       {!trabajos.length ? (
-        <div style={{ marginTop: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, maxWidth: 640 }}>
+        <div style={{ marginTop: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, maxWidth: 640 }}>
           <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Este proyecto aún no tiene trabajos</div>
           <div style={{ fontSize: 12, color: C.muted, margin: "6px 0 12px", lineHeight: 1.5 }}>
             Empieza con los habituales de <b style={{ color: C.text }}>{sector.nombre}</b> ({plantillaDe(sector.id).map(t => t.nombre.toLowerCase()).join(", ")}) y cámbialos a tu medida.
@@ -110,7 +110,7 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
                 const r = resumen[t.id] || {};
                 return (
                   <tr key={t.id}>
-                    <td style={td}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: t.color || C.blue, marginRight: 7 }} /><input value={t.nombre} onChange={e => cambiarTrabajo(t.id, { nombre: e.target.value })} style={{ ...inp, width: 190 }} /></td>
+                    <td style={td}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 4, background: t.color || C.blue, marginRight: 7 }} /><input value={t.nombre} onChange={e => cambiarTrabajo(t.id, { nombre: e.target.value })} style={{ ...inp, width: 190 }} /></td>
                     <td style={td}><input list="frecuencias-trabajo" value={t.frecuencia || ""} onChange={e => cambiarTrabajo(t.id, { frecuencia: e.target.value })} placeholder="mensual" style={{ ...inp, width: 120 }} /></td>
                     <td style={td}><input type="number" min={1} value={t.duracion ?? ""} onChange={e => cambiarTrabajo(t.id, { duracion: Number(e.target.value) || "" })} style={{ ...inp, width: 64, textAlign: "right" }} /></td>
                     <td style={td}><input list="tipos-vehiculo" value={t.vehiculo || ""} onChange={e => cambiarTrabajo(t.id, { vehiculo: e.target.value })} placeholder="Tipo de vehículo" style={{ ...inp, width: 180 }} /></td>
@@ -143,10 +143,10 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
         {errorPrecio && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{errorPrecio}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
           <button onClick={anadirTrabajo} style={btn}><Plus size={14} /> Añadir trabajo</button>
-          {!puntos.length && <span style={{ fontSize: 11.5, color: C.dim }}>Sube los puntos en Mapa para ver cuántos lleva cada trabajo.</span>}
+          {!puntos.length && <span style={{ fontSize: 12, color: C.dim }}>Sube los puntos en Mapa para ver cuántos lleva cada trabajo.</span>}
         </div>
 
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, margin: "26px 0 4px" }}>Reglas en bloque</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, margin: "26px 0 4px" }}>Reglas en bloque</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.5, maxWidth: 920 }}>
           Se aplican en orden. «Quitar» deja sin ese trabajo a los puntos que cumplen la condición; «Poner» se lo pone (o le cambia la frecuencia o la duración). Para un punto suelto, usa su fila del Timetable.
         </div>

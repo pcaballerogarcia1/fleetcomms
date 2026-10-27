@@ -56,7 +56,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
 
   return(
     <div style={S.page}>
-      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Admin</div><div style={{fontSize:17,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
+      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Admin</div><div style={{fontSize:20,fontWeight:700}}>Gestión de usuarios</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{display:"flex",gap:8,padding:"12px 16px 0"}}>{[["lista","Usuarios"],["nuevo","+ Nuevo"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...S.btnGhost,borderColor:tab===k?C.blue:C.border,color:tab===k?C.blueText:C.muted,background:tab===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
         {tab==="lista"&&usuariosVisibles.map(u=>(
@@ -64,7 +64,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:38,height:38,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.blueText}}>{u?.foto?<img src={u.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(u)}</div>
-                <div><div style={{fontSize:14,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{roleLabel(u.rol)}</span></div></div>
+                <div><div style={{fontSize:15,fontWeight:600}}>{u.nombre} {u.apellidos}</div><div style={{fontSize:11,color:C.muted}}>{u.email} · <span style={{color:C.blueText}}>{roleLabel(u.rol)}</span></div></div>
               </div>
               <button onClick={()=>toggleActivo(u)} style={{...S.btnGhost,fontSize:10,padding:"5px 9px",color:u.activo?C.green:C.muted,borderColor:u.activo?C.green+"44":C.border}}>{u.activo?"Activo":"Inactivo"}</button>
             </div>
@@ -75,7 +75,7 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
             {[["Nombre *","nombre","text"],["Apellidos","apellidos","text"],["Email *","email","email"],["Contraseña *","password","password"]].map(([lbl,key,type])=>(
               <div key={key} style={{marginBottom:12}}><label style={S.label}>{lbl}</label><input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} type={type} style={S.input} autoComplete={type==="password"?"new-password":"off"}/></div>
             ))}
-            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{rolesCreables.map(v=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:7,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{roleLabel(v)}</button>)}</div></div>
+            <div style={{marginBottom:18}}><label style={S.label}>Rol</label><div style={{display:"flex",gap:8}}>{rolesCreables.map(v=><button key={v} onClick={()=>setForm({...form,rol:v})} style={{flex:1,padding:"9px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:font,background:form.rol===v?C.blueDim:"none",border:`1px solid ${form.rol===v?C.blue:C.border}`,color:form.rol===v?C.blueText:C.muted}}>{roleLabel(v)}</button>)}</div></div>
             {err&&<div style={{background:tono("#2d1515", "#f4e8e8"),color:C.red,borderRadius:8,padding:"10px",fontSize:12,marginBottom:12}}>{err}</div>}
             <button onClick={crear} disabled={saving} style={{...S.btn,width:"100%",opacity:saving?0.6:1}}>{saving?"Creando…":"CREAR USUARIO"}</button>
           </div>
@@ -143,15 +143,15 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
             {l:"Global",    v:tasaGlobal+"%",      c:tasaGlobal===100?C.green:tasaGlobal>50?C.orange:C.red},
           ].map(s=>(
             <div key={s.l} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
+              <div style={{fontSize:20,fontWeight:800,color:s.c}}>{s.v}</div>
               <div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
 
         {/* Barra progreso global */}
-        <div style={{height:5,background:C.surface2,borderRadius:3,overflow:"hidden",marginBottom:14}}>
-          <div style={{height:"100%",borderRadius:3,width:`${tasaGlobal}%`,transition:"width .4s",
+        <div style={{height:5,background:C.surface2,borderRadius:4,overflow:"hidden",marginBottom:14}}>
+          <div style={{height:"100%",borderRadius:4,width:`${tasaGlobal}%`,transition:"width .4s",
             background:`linear-gradient(90deg,${C.cyan},${C.green})`}}/>
         </div>
 
@@ -198,7 +198,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                 <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setExpandId(isExp?null:plan._id)}>
                   <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
                     {tipo?.Icono?<tipo.Icono size={15} color={tipo.color}/>:<Folder size={15} color={C.muted}/>}
-                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:(tipo?.color||C.cyan)+"18",color:tipo?.color||C.cyan,border:`1px solid ${(tipo?.color||C.cyan)}33`}}>
+                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:(tipo?.color||C.cyan)+"18",color:tipo?.color||C.cyan,border:`1px solid ${(tipo?.color||C.cyan)}33`}}>
                       {plan.trabajo||tipo?.label||plan.tipo}
                     </span>
                     {plan.turno&&<span style={{fontSize:10,color:C.muted}}>{plan.turno}</span>}
@@ -209,8 +209,8 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                     {plan.nombre}
                   </div>
                   {/* Barra progreso */}
-                  <div style={{height:3,background:C.surface2,borderRadius:2,overflow:"hidden",marginBottom:4}}>
-                    <div style={{height:"100%",background:col,borderRadius:2,width:`${tasa}%`,transition:"width .4s"}}/>
+                  <div style={{height:3,background:C.surface2,borderRadius:4,overflow:"hidden",marginBottom:4}}>
+                    <div style={{height:"100%",background:col,borderRadius:4,width:`${tasa}%`,transition:"width .4s"}}/>
                   </div>
                   <div style={{display:"flex",gap:16,fontSize:10,color:C.dim}}>
                     <span>{real}/{tot} paradas <span style={{color:col,fontWeight:700}}>({tasa}%)</span></span>
@@ -223,7 +223,7 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                     {isExp?"▲":"▼"}
                   </button>
                   <button onClick={()=>{if(window.confirm("¿Eliminar este plan?"))deletePlan(plan._id);}}
-                    style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,padding:"4px 8px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:font}}>
+                    style={{background:tono("#2d1515", "#f4e8e8"),border:`1px solid ${C.red}44`,color:C.red,padding:"4px 8px",borderRadius:8,fontSize:11,cursor:"pointer",fontFamily:font}}>
                     <X size={15}/>
                   </button>
                 </div>
@@ -241,20 +241,20 @@ export function PanelAdminRutas({planes, usuarios, deletePlan, sesion}){
                         display:"flex",alignItems:"center",gap:10,
                         background:u.realizado?C.greenDim:C.surface2,
                         border:`1px solid ${u.realizado?C.green+"33":C.border}`,
-                        borderRadius:7,padding:"7px 10px",
+                        borderRadius:8,padding:"7px 10px",
                       }}>
                         <div style={{width:22,height:22,borderRadius:"50%",flexShrink:0,
                           background:u.realizado?C.greenDim:C.blueDim,
                           border:`1px solid ${u.realizado?C.green:C.blue}44`,
                           display:"flex",alignItems:"center",justifyContent:"center",
-                          fontSize:9,fontWeight:700,color:u.realizado?C.green:C.blueText}}>
+                          fontSize:10,fontWeight:700,color:u.realizado?C.green:C.blueText}}>
                           {u.orden}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:600,color:u.realizado?C.green:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             {u.calle} {u.num}
                           </div>
-                          <div style={{fontSize:9,color:C.muted}}>{u.barri} · {u.pa} · {u.elementos?.length||0} QRs</div>
+                          <div style={{fontSize:10,color:C.muted}}>{u.barri} · {u.pa} · {u.elementos?.length||0} QRs</div>
                         </div>
                         <div style={{fontSize:10,color:u.realizado?C.green:C.dim,flexShrink:0}}>
                           {u.realizado

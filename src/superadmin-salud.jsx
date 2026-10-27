@@ -69,18 +69,18 @@ export function PanelSalud({ sesion, orgs }) {
   return (
     <div>
       <div style={{ ...card, display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ fontSize: 22 }}>{avisos === "activos" ? <Bell size={22} /> : <BellOff size={22} />}</div>
+        <div style={{ fontSize: 20 }}>{avisos === "activos" ? <Bell size={22} /> : <BellOff size={22} />}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Avisos de errores en este dispositivo</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
             {avisos === "activos" ? "Cuando a un usuario le salte un error nuevo, te llega un aviso (el mismo error, como mucho cada 6 h)."
               : avisos === "bloqueados" ? "Bloqueados en este navegador: actívalos en los permisos del sitio."
               : avisos === "no-soportado" ? "Este navegador no admite avisos (en iPhone, abre Operanzia desde la pantalla de inicio)."
               : "Actívalos aquí y en tu móvil (entra en app.operanzia.com/superadmin desde el móvil) para enterarte al momento."}
           </div>
-          {msgAvisos && <div style={{ fontSize: 11.5, color: C.blueText, marginTop: 4 }}>{msgAvisos}</div>}
+          {msgAvisos && <div style={{ fontSize: 12, color: C.blueText, marginTop: 4 }}>{msgAvisos}</div>}
         </div>
-        {avisos === "sin-activar" && <button onClick={activar} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontWeight: 600, cursor: "pointer" }}>Activar</button>}
+        {avisos === "sin-activar" && <button onClick={activar} className="op-btn op-primario">Activar</button>}
       </div>
 
       <div style={card}>
@@ -104,7 +104,7 @@ export function PanelSalud({ sesion, orgs }) {
             {[["Últimas 24 h", res.h24, res.h24 ? C.red : C.green], ["Últimos 7 días", res.d7, res.d7 ? C.amber : C.green], ["Pantallas lentas (7 d)", res.lentos7, res.lentos7 ? C.amber : C.green], ["Versión publicada", VERSION, C.blueText]].map(([l, v, col]) => (
               <div key={l} style={{ background: C.surface2, borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: col }}>{v}</div>
-                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{l}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{l}</div>
               </div>
             ))}
           </div>
@@ -120,10 +120,10 @@ export function PanelSalud({ sesion, orgs }) {
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <span style={{ fontSize: 11, color: C.red, fontWeight: 700, minWidth: 34 }}>×{g.veces}</span>
                 <span style={{ fontSize: 12, color: C.text, flex: 1, wordBreak: "break-word" }}>{String(g.mensaje).slice(0, 160)}</span>
-                <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: "nowrap" }}>{hace(g.ultimo)}</span>
+                <span style={{ fontSize: 11, color: C.dim, whiteSpace: "nowrap" }}>{hace(g.ultimo)}</span>
               </div>
-              <div style={{ fontSize: 10.5, color: C.muted, marginLeft: 42 }}>{[...g.usuarios].slice(0, 4).join(", ")}{g.usuarios.size > 4 ? "…" : ""} · {[...g.paginas].join(", ")} · {nombreOrg(g.ejemplo.org_id)} · v{g.ejemplo.version}</div>
-              {abierto === g.key && <pre style={{ fontSize: 10, color: C.muted, background: C.bg, borderRadius: 6, padding: 8, marginTop: 6, whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{g.ejemplo.mensaje}{"\n\n"}{g.ejemplo.stack}{"\n\n"}{g.ejemplo.navegador}</pre>}
+              <div style={{ fontSize: 11, color: C.muted, marginLeft: 42 }}>{[...g.usuarios].slice(0, 4).join(", ")}{g.usuarios.size > 4 ? "…" : ""} · {[...g.paginas].join(", ")} · {nombreOrg(g.ejemplo.org_id)} · v{g.ejemplo.version}</div>
+              {abierto === g.key && <pre style={{ fontSize: 10, color: C.muted, background: C.bg, borderRadius: 8, padding: 8, marginTop: 6, whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{g.ejemplo.mensaje}{"\n\n"}{g.ejemplo.stack}{"\n\n"}{g.ejemplo.navegador}</pre>}
             </div>
           ))}
         </>}
@@ -136,7 +136,7 @@ export function PanelSalud({ sesion, orgs }) {
             <div key={g.key} style={{ borderTop: `1px solid ${C.border}`, padding: "7px 0", fontSize: 12, color: C.text, display: "flex", gap: 8 }}>
               <span style={{ color: C.amber, fontWeight: 700, minWidth: 34 }}>×{g.veces}</span>
               <span style={{ flex: 1 }}>{g.ejemplo.mensaje} <span style={{ color: C.dim }}>· {[...g.usuarios].slice(0, 3).join(", ")} · {nombreOrg(g.ejemplo.org_id)}</span></span>
-              <span style={{ fontSize: 10.5, color: C.dim }}>{hace(g.ultimo)}</span>
+              <span style={{ fontSize: 11, color: C.dim }}>{hace(g.ultimo)}</span>
             </div>
           ))}
         </div>

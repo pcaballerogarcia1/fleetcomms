@@ -30,9 +30,9 @@ export class ErrorBoundary extends Component {
     return (
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font }}>
         <div style={{ maxWidth: 420, textAlign: "center", padding: 24 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Algo ha fallado en esta pantalla</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 8 }}>Algo ha fallado en esta pantalla</div>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>El error ya se ha registrado para revisarlo. Tus datos guardados no se han perdido.</div>
-          <button onClick={() => window.location.reload()} style={{ padding: "8px 18px", borderRadius: 8, background: C.blue, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Recargar</button>
+          <button onClick={() => window.location.reload()} className="op-btn op-primario">Recargar</button>
         </div>
       </div>
     );
@@ -76,18 +76,14 @@ export function UpdatePrompt() {
     <div style={{
       position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)",
       zIndex: 99999, display: "flex", alignItems: "center", gap: 12,
-      background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+      background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12,
       padding: "10px 12px 10px 16px", boxShadow: "0 8px 28px rgba(0,0,0,.5)",
       fontFamily: font,
     }}>
       <span style={{ fontSize: 13, color: C.text }}>Hay una versión nueva de Operanzia disponible</span>
       <button
         onClick={() => updateServiceWorker(true)}
-        style={{
-          background: C.blue, border: "none", color: "#fff", fontWeight: 600,
-          fontSize: 12, borderRadius: 7, padding: "7px 14px", cursor: "pointer",
-          fontFamily: font, whiteSpace: "nowrap",
-        }}
+        className="op-btn op-primario" style={{ whiteSpace: "nowrap" }}
       >
         Actualizar
       </button>

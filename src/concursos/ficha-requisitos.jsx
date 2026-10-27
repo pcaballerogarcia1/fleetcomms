@@ -71,8 +71,8 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
   }
   const cambiarServicio = ({ id, ...s }, campo, valor) => fijarServicio(concursoId, id, { ...s, [campo]: valor }).catch(e => onError(e.message));
 
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
-  const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "22px 0 10px" }}>{t}</div>;
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
+  const titulo = t => <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "22px 0 10px" }}>{t}</div>;
   const btn = { padding: "4px 9px", height: 28 };
 
   return (
@@ -107,18 +107,18 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
                 const valor = d ? d.valor : p?.valor;
                 return (
                   <div key={k} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", borderTop: i ? `1px solid ${C.border}` : "none", flexWrap: "wrap", opacity: d?.estado === "descartado" ? 0.5 : 1 }}>
-                    <div style={{ width: 190, fontSize: 12.5, color: C.muted }}>{p?.nombre || d?.nombre || k}</div>
+                    <div style={{ width: 190, fontSize: 13, color: C.muted }}>{p?.nombre || d?.nombre || k}</div>
                     <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                       {editando?.clave === k ? (
                         <input className="op-input" autoFocus value={editando.texto} onChange={e => setEditando({ clave: k, texto: e.target.value })}
                           onKeyDown={e => { if (e.key === "Enter") { decidir(k, "corregido", aValor(k, editando.texto)); setEditando(null); } if (e.key === "Escape") setEditando(null); }} />
                       ) : (
-                        <div style={{ fontSize: 13.5, color: C.text, fontWeight: 550, textDecoration: d?.estado === "descartado" ? "line-through" : "none" }}>{txt(k, valor)}</div>
+                        <div style={{ fontSize: 13, color: C.text, fontWeight: 550, textDecoration: d?.estado === "descartado" ? "line-through" : "none" }}>{txt(k, valor)}</div>
                       )}
-                      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }} title={p?.frase || ""}>
+                      <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }} title={p?.frase || ""}>
                         {d?.doc === "plataforma" ? <span style={{ color: C.green }}>dato oficial de la Plataforma de Contratación</span> : d?.estado === "corregido" ? `Corregido (el pliego decía ${txt(k, d.propuesto)})` : p ? `pág. ${p.pagina} · ${p.docNombre}` : "añadido a mano"}
                         {d && d.estado === "confirmado" && p && JSON.stringify(p.valor) !== JSON.stringify(d.valor) && (
-                          <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> la lectura nueva dice {txt(k, p.valor)} <button className="op-btn op-fantasma" style={{ height: 22, fontSize: 11.5, padding: "0 6px" }} onClick={() => decidir(k, "confirmado", p.valor)}>Usar</button></span>
+                          <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> la lectura nueva dice {txt(k, p.valor)} <button className="op-btn op-fantasma" style={{ height: 22, fontSize: 12, padding: "0 6px" }} onClick={() => decidir(k, "confirmado", p.valor)}>Usar</button></span>
                         )}
                         {distintos && <span style={{ color: C.amber, marginLeft: 6 }}><TriangleAlert size={11} style={{ verticalAlign: "-1px" }} /> otro documento dice {ps.slice(1).map(x => `${txt(k, x.valor)} (pág. ${x.pagina})`).join(", ")}</span>}
                       </div>
@@ -173,12 +173,12 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
                   ))}
                   <td style={{ padding: "4px 6px", textAlign: "right" }}>
                     <input className="op-input" defaultValue={FMT.format(s.cantidadAnual || 0)} onBlur={e => { const n = aValor("x", e.target.value); if (typeof n === "number" && n !== s.cantidadAnual) cambiarServicio(s, "cantidadAnual", n); }} style={{ width: 90, height: 30, textAlign: "right" }} />
-                    {s.cuenta && <div style={{ fontSize: 10.5, color: s.cuadra === false ? C.red : C.green, marginTop: 2, whiteSpace: "nowrap" }} title="Comprobación con las unidades y la frecuencia del pliego">{s.cuadra === false ? "✗" : "✓"} {s.cuenta}</div>}
+                    {s.cuenta && <div style={{ fontSize: 11, color: s.cuadra === false ? C.red : C.green, marginTop: 2, whiteSpace: "nowrap" }} title="Comprobación con las unidades y la frecuencia del pliego">{s.cuadra === false ? "✗" : "✓"} {s.cuenta}</div>}
                   </td>
                   <td style={{ padding: "4px 6px", textAlign: "right" }}><input className="op-input" defaultValue={s.precioUnitario != null ? FMT.format(s.precioUnitario) : ""} placeholder="—" title={s.precioPagina ? `Precio del pliego (pág. ${s.precioPagina})` : "Sin precio en el pliego"} onBlur={e => { const n = e.target.value.trim() === "" ? null : aValor("x", e.target.value); if (n !== s.precioUnitario && (n === null || typeof n === "number")) cambiarServicio(s, "precioUnitario", n); }} style={{ width: 80, height: 30, textAlign: "right" }} /></td>
                   <td style={{ padding: "4px 6px" }}><input className="op-input" defaultValue={s.vehiculo || ""} placeholder="el pliego no lo dice" title={s.equipoPagina ? `Lo exige el pliego (pág. ${s.equipoPagina})` : ""} onBlur={e => e.target.value !== (s.vehiculo || "") && cambiarServicio(s, "vehiculo", e.target.value || null)} style={{ width: 210, height: 30 }} /></td>
                   <td style={{ padding: "4px 6px", textAlign: "right" }}><input className="op-input" type="number" min={0} defaultValue={s.personas ?? ""} placeholder="—" onBlur={e => { const n = e.target.value === "" ? null : Number(e.target.value); if (n !== s.personas) cambiarServicio(s, "personas", n); }} style={{ width: 60, height: 30, textAlign: "right" }} /></td>
-                  <td style={{ padding: "4px 10px", fontSize: 11.5, color: C.dim, whiteSpace: "nowrap" }}>{s.pagina ? `pág. ${s.pagina}` : "a mano"}{s.temporada ? ` · ${s.temporada}` : ""}</td>
+                  <td style={{ padding: "4px 10px", fontSize: 12, color: C.dim, whiteSpace: "nowrap" }}>{s.pagina ? `pág. ${s.pagina}` : "a mano"}{s.temporada ? ` · ${s.temporada}` : ""}</td>
                   <td style={{ padding: "4px 8px" }}><button className="op-btn op-fantasma op-icono" title="Quitar" onClick={() => fijarServicio(concursoId, s.id, null).catch(e => onError(e.message))}><Trash2 size={14} /></button></td>
                 </tr>
               ))}
@@ -207,22 +207,22 @@ export function FichaRequisitos({ concursoId, docs, ficha, onError, onNota, conc
               <Truck size={16} color={C.blue} />
               <div style={{ flex: "1 1 240px", fontSize: 13, color: C.text }}>{e.apartado || "Servicio"}</div>
               <div style={{ flex: "1 1 240px", fontSize: 13, color: C.text, fontWeight: 600 }}>{e.vehiculo || "—"}{e.personas ? ` + ${e.quien || `${e.personas} personas`}` : ""}</div>
-              <div style={{ fontSize: 11.5, color: C.dim }}>pág. {e.pagina} · {e.docNombre}</div>
+              <div style={{ fontSize: 12, color: C.dim }}>pág. {e.pagina} · {e.docNombre}</div>
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Cada servicio de la ficha lleva el equipo de su apartado; Planificación cuenta un vehículo de cada tipo y las personas de cada equipo. Lo que el pliego no fija (p. ej. el mantenimiento) lo eliges tú.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Cada servicio de la ficha lleva el equipo de su apartado; Planificación cuenta un vehículo de cada tipo y las personas de cada equipo. Lo que el pliego no fija (p. ej. el mantenimiento) lo eliges tú.</div>
       </>}
 
       {propuestas.length > 0 && <>
         {titulo("Propuestas de las tablas del pliego")}
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>Marca las tablas que son cantidades al año y añádelas. Las que repiten un servicio o no son anuales vienen sin marcar: decide tú.</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Marca las tablas que son cantidades al año y añádelas. Las que repiten un servicio o no son anuales vienen sin marcar: decide tú.</div>
         <div style={{ display: "grid", gap: 8 }}>
           {propuestas.map(t => (
             <label key={t.clave} style={{ ...tarjeta, padding: "10px 14px", display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", borderColor: marcadas.has(t.clave) ? C.blue : C.border }}>
               <input type="checkbox" checked={marcadas.has(t.clave)} onChange={e => { const n = new Set(marcadas); if (e.target.checked) n.add(t.clave); else n.delete(t.clave); setElegidas(n); }} style={{ marginTop: 3, accentColor: C.blue }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.servicio || t.lineas[0].nombre} <span style={{ color: C.dim, fontWeight: 400, fontSize: 11.5 }}>· {t.titulo} · pág. {t.pagina} · {t.docNombre}</span></div>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.servicio || t.lineas[0].nombre} <span style={{ color: C.dim, fontWeight: 400, fontSize: 12 }}>· {t.titulo} · pág. {t.pagina} · {t.docNombre}</span></div>
                 {t.motivo && <div style={{ fontSize: 12, color: C.amber, marginTop: 2 }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> {t.motivo}</div>}
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.6 }}>
                   {t.lineas.map((l, i) => <span key={i}>{i ? " · " : ""}{[t.indice === "frecuencias" || t.indice === "mediciones" ? l.nombre : null, l.temporada || l.fraccion, l.ubicacion].filter(Boolean).join(" ")}: <b style={{ color: C.text }}>{FMT.format(l.cantidadAnual)}{l.unidad ? ` ${l.unidad}` : ""}</b>{l.cuenta ? <span style={{ color: l.cuadra === false ? C.red : C.green }}> ({l.cuenta} {l.cuadra === false ? "✗" : "✓"})</span> : null}</span>)}
@@ -253,7 +253,7 @@ function EstudioFicha({ concursoId, docs, ficha, onError, titulo, tarjeta }) {
     <div>
       {e && <>
         {titulo("Estudio de costes del Ayuntamiento")}
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
           Cómo ha calculado el Ayuntamiento el presupuesto (pág. {e.pagina}{conEstudio ? ` · ${conEstudio.nombre}` : ""}). Es la mejor referencia del coste: Cálculo parte de aquí y tú ajustas.
           {" "}{e.cuadra ? <span style={{ color: C.green }}>✓ las partidas cuadran con el total</span> : <span style={{ color: C.amber }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> las partidas no cuadran con el total: revísalo</span>}
         </div>
@@ -280,10 +280,10 @@ function EstudioFicha({ concursoId, docs, ficha, onError, titulo, tarjeta }) {
       </>}
       {medios.length > 0 && <>
         {titulo(`Medios mínimos que exige el pliego (${medios.length})`)}
-        <div style={{ ...tarjeta, padding: "10px 14px", columns: "2 300px", fontSize: 12.5, color: C.muted, lineHeight: 1.7 }}>
+        <div style={{ ...tarjeta, padding: "10px 14px", columns: "2 300px", fontSize: 13, color: C.muted, lineHeight: 1.7 }}>
           {medios.map((m, i) => <div key={i} style={{ breakInside: "avoid" }}><b style={{ color: C.text }}>{m.uds ?? "·"}</b> {m.concepto}</div>)}
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>pág. {medios[0].pagina} · {medios[0].docNombre}. Lo que se oferte no puede quedarse por debajo.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>pág. {medios[0].pagina} · {medios[0].docNombre}. Lo que se oferte no puede quedarse por debajo.</div>
       </>}
     </div>
   );

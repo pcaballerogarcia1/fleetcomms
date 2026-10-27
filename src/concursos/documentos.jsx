@@ -110,14 +110,14 @@ export function DocumentosConcurso({ concurso }) {
     try { const url = URL.createObjectURL(await pdfDocumento(id, sel)); window.open(url, "_blank"); setTimeout(() => URL.revokeObjectURL(url), 60000); }
     catch (e) { setError(`No se pudo abrir el PDF: ${e.message || e}`); }
   }
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 };
-  const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "20px 0 10px" }}>{t}</div>;
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 };
+  const titulo = t => <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "20px 0 10px" }}>{t}</div>;
 
   return (
     <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Documentos</div>
+          <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Documentos</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 3, maxWidth: 620 }}>Sube el pliego de prescripciones técnicas (y, si quieres, el de cláusulas administrativas o el anuncio). Operanzia lo lee y te enseña lo importante con la página de donde sale.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -156,7 +156,7 @@ export function DocumentosConcurso({ concurso }) {
                     <FileText size={16} color={sel?._id === d._id ? C.blue : C.muted} style={{ flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: C.text, fontWeight: 550, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.nombre}>{d.nombre}</div>
-                      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{CLASE[d.clase] || "Documento"} · {d.paginas} pág.</div>
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{CLASE[d.clase] || "Documento"} · {d.paginas} pág.</div>
                     </div>
                     <button className="op-btn op-fantasma op-icono" title="Quitar este documento" onClick={async e => { e.stopPropagation(); if (window.confirm(`¿Quitar «${d.nombre}» del concurso?`)) await borrarDocumento(id, d).catch(err => setError(err.message)); }}><Trash2 size={14} /></button>
                   </div>
@@ -171,8 +171,8 @@ export function DocumentosConcurso({ concurso }) {
               <div style={{ flex: "1 1 520px", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontSize: 16, fontWeight: 650, color: C.text }}>{CLASE[lectura.clase] || sel.nombre}</div>
-                    <div style={{ fontSize: 12.5, color: C.muted }}>{sel.nombre} · {sel.paginas} páginas{lectura.tipo ? ` · servicio de ${TIPO[lectura.tipo].toLowerCase()}` : ""}</div>
+                    <div style={{ fontSize: 15, fontWeight: 650, color: C.text }}>{CLASE[lectura.clase] || sel.nombre}</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>{sel.nombre} · {sel.paginas} páginas{lectura.tipo ? ` · servicio de ${TIPO[lectura.tipo].toLowerCase()}` : ""}</div>
                   </div>
                   <button className="op-btn" onClick={abrirPdf}><ExternalLink size={14} /> Abrir PDF</button>
                 </div>
@@ -188,25 +188,25 @@ export function DocumentosConcurso({ concurso }) {
                           <span style={{ fontSize: 12, color: C.muted }}>{d.nombre}</span>
                           <span style={{ fontSize: 11, color: C.dim, whiteSpace: "nowrap" }}>pág. {d.pagina}</span>
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 3, lineHeight: 1.4 }}>{valorTxt(d)}</div>
-                        {abierta === d.id + i && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${C.border2}`, paddingLeft: 10 }}>«{d.frase}»</div>}
+                        <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 3, lineHeight: 1.4 }}>{valorTxt(d)}</div>
+                        {abierta === d.id + i && <div style={{ fontSize: 13, color: C.muted, marginTop: 8, fontStyle: "italic", lineHeight: 1.5, borderLeft: `2px solid ${C.border2}`, paddingLeft: 10 }}>«{d.frase}»</div>}
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Pulsa un dato para ver la frase del pliego de donde sale.</div>
+                  <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Pulsa un dato para ver la frase del pliego de donde sale.</div>
                 </>}
 
                 {(lectura.listas.fracciones.length > 0 || lectura.listas.limpieza.length > 0 || lectura.listas.ambiental.length > 0 || lectura.listas.frecuencias?.length > 0) && <>
                   {titulo("El servicio")}
                   {[["Fracciones", lectura.listas.fracciones], ["Limpieza", lectura.listas.limpieza], ["Exigencias ambientales", lectura.listas.ambiental]].filter(([, l]) => l.length).map(([t, l]) => (
                     <div key={t} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-                      <span style={{ fontSize: 12.5, color: C.muted, width: 160 }}>{t}</span>
+                      <span style={{ fontSize: 13, color: C.muted, width: 160 }}>{t}</span>
                       {l.map(x => <span key={x.nombre} className="op-pastilla" title={`pág. ${x.pagina}`} style={{ background: "rgba(91,124,250,0.12)", color: C.blueText || C.blue }}>{x.nombre}</span>)}
                     </div>
                   ))}
                   {lectura.listas.frecuencias?.length > 0 && (
                     <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap", marginTop: 4 }}>
-                      <span style={{ fontSize: 12.5, color: C.muted, width: 160 }}>Frecuencias</span>
+                      <span style={{ fontSize: 13, color: C.muted, width: 160 }}>Frecuencias</span>
                       <div style={{ flex: 1, minWidth: 240, display: "grid", gap: 4 }}>
                         {lectura.listas.frecuencias.map((f, i) => <div key={i} style={{ fontSize: 13, color: C.text, lineHeight: 1.45 }}>{f.texto} <span style={{ fontSize: 11, color: C.dim }}>· pág. {f.pagina}</span></div>)}
                       </div>
@@ -220,11 +220,11 @@ export function DocumentosConcurso({ concurso }) {
                     {lectura.tablas.map((t, k) => (
                       <div key={k} style={{ ...tarjeta, padding: 0, overflow: "auto" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "9px 14px", borderBottom: `1px solid ${C.border}` }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{t.titulo}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{t.titulo}</span>
                           <span style={{ fontSize: 11, color: C.dim, whiteSpace: "nowrap" }}>pág. {t.pagina}</span>
                         </div>
                         {t.cabecera && <div style={{ fontSize: 11, color: C.dim, padding: "6px 14px 0" }}>{t.cabecera}</div>}
-                        <table style={{ borderCollapse: "collapse", fontSize: 12.5, margin: "4px 0 6px", minWidth: "100%" }}>
+                        <table style={{ borderCollapse: "collapse", fontSize: 13, margin: "4px 0 6px", minWidth: "100%" }}>
                           <tbody>
                             {t.filas.map((f, i) => (
                               <tr key={i}>
@@ -257,16 +257,16 @@ export function DocumentosConcurso({ concurso }) {
                 </div>
                 {q.trim().length >= 3 && (
                   <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                    {texto.id === sel._id && !texto.paginas ? <div style={{ fontSize: 12.5, color: C.muted }}>Cargando el texto…</div>
-                      : !resultados.length ? <div style={{ fontSize: 12.5, color: C.muted }}>No aparece «{q}».</div>
-                      : resultados.map((r, i) => <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}><span style={{ color: C.dim, marginRight: 8 }}>pág. {r.pagina}</span>{r.frase}</div>)}
+                    {texto.id === sel._id && !texto.paginas ? <div style={{ fontSize: 13, color: C.muted }}>Cargando el texto…</div>
+                      : !resultados.length ? <div style={{ fontSize: 13, color: C.muted }}>No aparece «{q}».</div>
+                      : resultados.map((r, i) => <div key={i} style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}><span style={{ color: C.dim, marginRight: 8 }}>pág. {r.pagina}</span>{r.frase}</div>)}
                   </div>
                 )}
 
                 {lectura.indice.length > 0 && <>
                   {titulo("Índice")}
                   <div style={{ ...tarjeta, padding: "8px 14px" }}>
-                    {lectura.indice.map((x, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12.5, color: C.muted, padding: "4px 0" }}><span>{x.titulo}</span><span style={{ color: C.dim }}>{x.pagina}</span></div>)}
+                    {lectura.indice.map((x, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, color: C.muted, padding: "4px 0" }}><span>{x.titulo}</span><span style={{ color: C.dim }}>{x.pagina}</span></div>)}
                   </div>
                 </>}
               </div>

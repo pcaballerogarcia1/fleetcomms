@@ -29,17 +29,17 @@ export function CalculoConcurso({ concursoId, irA }) {
   const [calc, cambiar] = useGuardadoDiferido(concursoId, "calculo", datos.calc);
   const r = useMemo(() => (datos.listo ? calcularConcurso({ ficha: datos.ficha, dim: datos.dim, calc, concurso: datos.concurso }) : null), [datos.listo, datos.ficha, datos.dim, datos.concurso, calc]);
 
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
   const th = { textAlign: "right", padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   const td = { padding: "6px 10px", fontSize: 13, color: C.text, textAlign: "right", whiteSpace: "nowrap" };
-  const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
+  const titulo = t => <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
   const numInput = (valor, onCambio, w = 90, ph) => <input className="op-input" type="number" value={valor ?? ""} placeholder={ph} onChange={e => onCambio(e.target.value === "" ? null : Number(e.target.value))} style={{ width: w, height: 30, textAlign: "right" }} />;
 
   const cabeceraTitulo = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-      <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><Calculator size={19} /></div>
+      <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><Calculator size={19} /></div>
       <div>
-        <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Cálculo</div>
+        <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Cálculo</div>
         <div style={{ fontSize: 13, color: C.muted }}>{datos.concurso?.nombre || "…"} · cuenta de explotación del contrato, sin IVA</div>
       </div>
     </div>
@@ -51,7 +51,7 @@ export function CalculoConcurso({ concursoId, irA }) {
       <div style={{ flex: 1, overflow: "auto", background: C.bg, fontFamily: font, padding: "24px 28px" }}>
         {cabecera}
         <div style={{ ...tarjeta, padding: 20, marginTop: 18, maxWidth: 680 }}>
-          <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>Aún no hay nada que calcular</div>
+          <div style={{ fontSize: 15, color: C.text, fontWeight: 600 }}>Aún no hay nada que calcular</div>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>El cálculo parte del <b style={{ color: C.text }}>estudio de costes del Ayuntamiento</b> (si el pliego lo trae: úsalo desde la Ficha de requisitos) o de los servicios de la ficha con lo que rinde cada equipo en Planificación.</div>
           <button className="op-btn op-primario" style={{ marginTop: 12 }} onClick={() => irA?.("/documentos")}><FileText size={14} /> Ir a Documentos</button>
         </div>
@@ -84,7 +84,7 @@ export function CalculoConcurso({ concursoId, irA }) {
       {cabecera}
 
       {r.estudio && (
-        <div className="op-segmentado" style={{ display: "inline-flex", gap: 4, marginTop: 14, padding: 3, background: C.surface2, borderRadius: 10 }}>
+        <div className="op-segmentado" style={{ display: "inline-flex", gap: 4, marginTop: 14, padding: 3, background: C.surface2, borderRadius: 12 }}>
           {[["estudio", "Desde el estudio del Ayuntamiento"], ["rendimientos", "Por rendimientos (Planificación)"]].map(([m, n]) => (
             <button key={m} className={`op-btn ${r.modo === m ? "op-primario" : "op-fantasma"}`} style={{ height: 30 }} onClick={() => cambiar({ base: m })}>{n}</button>
           ))}
@@ -98,11 +98,11 @@ export function CalculoConcurso({ concursoId, irA }) {
           <div key={l} className="op-tarjeta" style={{ padding: "12px 16px" }}>
             <div style={{ fontSize: 12, color: C.muted }}>{l}</div>
             <div style={{ fontSize: 20, fontWeight: 650, color: C.text, marginTop: 3, letterSpacing: "-0.01em" }}>{v}</div>
-            <div style={{ fontSize: 11.5, color: typeof color === "string" ? color : C.dim, marginTop: 2 }}>{sub}</div>
+            <div style={{ fontSize: 12, color: typeof color === "string" ? color : C.dim, marginTop: 2 }}>{sub}</div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>Presupuesto del primer año, sin IVA, escrito a mano (si el de arriba no es el bueno): {numInput(calc.presupuestoAnual, v => cambiar({ presupuestoAnual: v }), 130, "€")}</div>
+      <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>Presupuesto del primer año, sin IVA, escrito a mano (si el de arriba no es el bueno): {numInput(calc.presupuestoAnual, v => cambiar({ presupuestoAnual: v }), 130, "€")}</div>
 
       {r.modo === "estudio" && <>
         {titulo("Partidas: las del Ayuntamiento y las tuyas")}
@@ -120,7 +120,7 @@ export function CalculoConcurso({ concursoId, irA }) {
                     <td style={td}>{numInput(aj.pct ?? null, x => cambiar({ ajustes: { [pa.id]: { pct: x } } }), 70, "0")}</td>
                     <td style={td}>{numInput(aj.importe ?? null, x => cambiar({ ajustes: { [pa.id]: { importe: x } } }), 110, "—")}</td>
                     <td style={{ ...td, fontWeight: 600, color: Math.abs(tuyo - pa.total) > 1 ? C.amber : C.text }}>{eur(tuyo)}</td>
-                    <td style={{ ...td, textAlign: "left" }}>{pa.lineas?.length ? <details><summary style={{ cursor: "pointer", fontSize: 12, color: C.muted }}>{pa.lineas.length} líneas</summary><div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "normal", maxWidth: 520, lineHeight: 1.5, marginTop: 4 }}>{pa.lineas.map((l, i) => <div key={i}>{F1.format(l.uds)} × {l.concepto}: <b style={{ color: C.text }}>{eur(l.total)}</b></div>)}</div></details> : null}</td>
+                    <td style={{ ...td, textAlign: "left" }}>{pa.lineas?.length ? <details><summary style={{ cursor: "pointer", fontSize: 12, color: C.muted }}>{pa.lineas.length} líneas</summary><div style={{ fontSize: 12, color: C.muted, whiteSpace: "normal", maxWidth: 520, lineHeight: 1.5, marginTop: 4 }}>{pa.lineas.map((l, i) => <div key={i}>{F1.format(l.uds)} × {l.concepto}: <b style={{ color: C.text }}>{eur(l.total)}</b></div>)}</div></details> : null}</td>
                   </tr>
                 );
               })}
@@ -132,7 +132,7 @@ export function CalculoConcurso({ concursoId, irA }) {
             </tbody>
           </table>
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada ajuste tiene que tener su porqué (mejor ruta, otra flota, otra plantilla…). Si tu coste baja mucho del suyo, la oferta puede quedar como anormalmente baja y habrá que justificarla.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada ajuste tiene que tener su porqué (mejor ruta, otra flota, otra plantilla…). Si tu coste baja mucho del suyo, la oferta puede quedar como anormalmente baja y habrá que justificarla.</div>
         <PlantillaSubrogar calc={calc} cambiar={cambiar} personalEstudio={r.estudio.partidas.find(x => x.id === "personal")?.total} tarjeta={tarjeta} titulo={titulo} />
       </>}
 
@@ -171,7 +171,7 @@ export function CalculoConcurso({ concursoId, irA }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>{c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? "Se oferta el precio del primer año; la baja se aplica igual a los siguientes, que suben como dice el pliego." : "El precio de la oferta es el mismo todos los años."} El coste sube con {r.modo === "estudio" && r.estudio.incrementos?.manoObra?.length ? "las subidas del pliego (mano de obra y resto)" : "el convenio y el IPC"}. Precio objetivo = lo que cuesta el contrato ÷ (1 − margen), repartido como los ingresos.</div>
+      <div style={{ fontSize: 12, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>{c.ingresosBase.length > 1 && c.ingresosBase[1] !== c.ingresosBase[0] ? "Se oferta el precio del primer año; la baja se aplica igual a los siguientes, que suben como dice el pliego." : "El precio de la oferta es el mismo todos los años."} El coste sube con {r.modo === "estudio" && r.estudio.incrementos?.manoObra?.length ? "las subidas del pliego (mano de obra y resto)" : "el convenio y el IPC"}. Precio objetivo = lo que cuesta el contrato ÷ (1 − margen), repartido como los ingresos.</div>
 
       {c.preciosUnitarios?.length > 0 && <>
         {titulo("Precio por unidad para la oferta")}
@@ -192,12 +192,12 @@ export function CalculoConcurso({ concursoId, irA }) {
             </tbody>
           </table>
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada servicio se lleva la parte del coste que le toca por el tiempo de equipo que ocupa (en los transportes, por sus viajes y kilómetros). Una baja muy grande puede ser anormalmente baja: mira en Alternativas dónde empieza.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Cada servicio se lleva la parte del coste que le toca por el tiempo de equipo que ocupa (en los transportes, por sus viajes y kilómetros). Una baja muy grande puede ser anormalmente baja: mira en Alternativas dónde empieza.</div>
       </>}
 
       {r.modo === "rendimientos" && <>
       {titulo("Plantilla")}
-      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: C.text, marginBottom: 8 }} title="Se pide cuando hace falta y se paga por unidad: se cuentan solo las horas de personas y vehículos que se usan">
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text, marginBottom: 8 }} title="Se pide cuando hace falta y se paga por unidad: se cuentan solo las horas de personas y vehículos que se usan">
         <input type="checkbox" checked={!!c.aDemanda} onChange={e => cambiar({ aDemanda: e.target.checked })} style={{ accentColor: C.blue }} /> Contrato a demanda (sin equipo fijo: solo las horas que se usan)
       </label>
       <div style={{ ...tarjeta, overflow: "auto" }}>
@@ -214,7 +214,7 @@ export function CalculoConcurso({ concursoId, irA }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Las horas, las personas de cada equipo y el absentismo se cambian en Planificación; los salarios, abajo.</div>
+      <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Las horas, las personas de cada equipo y el absentismo se cambian en Planificación; los salarios, abajo.</div>
 
       {titulo("Vehículos")}
       <div style={{ ...tarjeta, overflow: "auto" }}>
@@ -241,7 +241,7 @@ export function CalculoConcurso({ concursoId, irA }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>En gris, valores orientativos: escribe encima los tuyos. La amortización incluye la financiación ({c.amortizacionCorta ? `contrato corto: el vehículo sigue en la empresa, se reparte en ${F1.format(c.amortizacionCorta)} años de vida útil, a ${F1.format(p.interesPct)} %` : `cuota de un préstamo a ${F1.format(p.interesPct)} % en ${F1.format(p.aniosAmortizacion || anios)} años, quedando un ${F1.format(p.residualPct)} % de valor`}).</div>
+      <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>En gris, valores orientativos: escribe encima los tuyos. La amortización incluye la financiación ({c.amortizacionCorta ? `contrato corto: el vehículo sigue en la empresa, se reparte en ${F1.format(c.amortizacionCorta)} años de vida útil, a ${F1.format(p.interesPct)} %` : `cuota de un préstamo a ${F1.format(p.interesPct)} % en ${F1.format(p.aniosAmortizacion || anios)} años, quedando un ${F1.format(p.residualPct)} % de valor`}).</div>
 
       </>}
 
@@ -249,12 +249,12 @@ export function CalculoConcurso({ concursoId, irA }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 12 }}>
         {GRUPOS_PARAM.map(([g, ps]) => (
           <div key={g} style={{ ...tarjeta, padding: "10px 14px" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>{g}</div>
+            <div style={{ fontSize: 13, fontWeight: 650, color: C.text, marginBottom: 6 }}>{g}</div>
             {ps.map(([k, l, u]) => (
-              <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 12.5, color: C.muted }}>
+              <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 13, color: C.muted }}>
                 <span style={{ flex: 1 }}>{l}</span>
                 {numInput(calc.parametros?.[k] ?? null, x => cambiar({ parametros: { [k]: x } }), 90, PARAMETROS_CALCULO[k] == null ? "—" : String(PARAMETROS_CALCULO[k]))}
-                <span style={{ width: 52, fontSize: 11.5, color: C.dim }}>{u}</span>
+                <span style={{ width: 52, fontSize: 12, color: C.dim }}>{u}</span>
               </label>
             ))}
           </div>

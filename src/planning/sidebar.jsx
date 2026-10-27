@@ -10,6 +10,7 @@ import { barrioColor, cambiarDepots, coordQuality, getBarrio, getContenedor, get
 import { C, font, mono } from "./estilo.js";
 import { useSector } from "../sector.js";
 import { alfa } from "../tema.js";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 // Flecha y cabecera plegable de cada sección del panel
 const Chevron = ({ open }) => (
@@ -26,7 +27,7 @@ const SecBtn = ({ label, badge, open, onToggle, extra }) => (
   }}>
     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <Chevron open={open} />
-      <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
+      <span style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
         {label}{badge != null ? ` (${badge})` : ""}
       </span>
     </span>
@@ -105,23 +106,14 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               width: "100%", boxSizing: "border-box",
               background: searchQuery ? `${C.blue}14` : C.surface2,
               border: `1px solid ${searchQuery ? C.blue + "55" : C.border}`,
-              color: C.text, borderRadius: 7, padding: "7px 28px 7px 28px",
+              color: C.text, borderRadius: 8, padding: "7px 28px 7px 28px",
               fontSize: 12, fontFamily: font, outline: "none", transition: "all .15s",
             }}
             onFocus={e => { e.currentTarget.style.borderColor = C.blue + "88"; }}
             onBlur={e => { e.currentTarget.style.borderColor = searchQuery ? C.blue + "55" : C.border; }}
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              style={{
-                position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)",
-                background: "none", border: "none", color: C.dim, cursor: "pointer",
-                fontSize: 15, lineHeight: 1, padding: 2, transition: "color .12s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.dim}
-            >×</button>
+            <BotonCerrar style={{ position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)" }} onClick={() => setSearchQuery("")} onMouseEnter={e => e.currentTarget.style.color = C.text} onMouseLeave={e => e.currentTarget.style.color = C.dim} />
           )}
         </div>
         {searchQuery && (
@@ -144,7 +136,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               style={{
                 background: showManual ? "rgba(245,158,91,0.15)" : "none",
                 border: `1px solid ${showManual ? "rgba(245,158,91,0.5)" : C.border}`,
-                borderRadius: 5,
+                borderRadius: 4,
                 color: showManual ? C.orange : C.dim, cursor: "pointer", fontSize: 15, lineHeight: 1,
                 width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "all .12s",
@@ -166,7 +158,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 onChange={e => setManualLat(e.target.value)}
                 style={{
                   flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
-                  color: C.text, borderRadius: 5, padding: "6px 8px", fontSize: 11,
+                  color: C.text, borderRadius: 4, padding: "6px 8px", fontSize: 11,
                   fontFamily: mono, outline: "none", boxSizing: "border-box",
                 }}
               />
@@ -176,7 +168,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 onChange={e => setManualLng(e.target.value)}
                 style={{
                   flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
-                  color: C.text, borderRadius: 5, padding: "6px 8px", fontSize: 11,
+                  color: C.text, borderRadius: 4, padding: "6px 8px", fontSize: 11,
                   fontFamily: mono, outline: "none", boxSizing: "border-box",
                 }}
               />
@@ -187,7 +179,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               onChange={e => setManualName(e.target.value)}
               style={{
                 width: "100%", background: C.surface2, border: `1px solid ${C.border}`,
-                color: C.text, borderRadius: 5, padding: "6px 8px", fontSize: 11,
+                color: C.text, borderRadius: 4, padding: "6px 8px", fontSize: 11,
                 fontFamily: font, outline: "none", marginBottom: 7, boxSizing: "border-box",
               }}
             />
@@ -229,7 +221,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 style={{
                   flex: 1, padding: "6px", background: "rgba(245,158,91,0.12)",
                   border: "1px solid rgba(245,158,91,0.35)", color: C.orange,
-                  borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: savingManualDepot ? "wait" : "pointer",
+                  borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: savingManualDepot ? "wait" : "pointer",
                   fontFamily: font, transition: "all .12s", opacity: savingManualDepot ? 0.6 : 1,
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,91,0.22)"}
@@ -238,11 +230,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               <button
                 disabled={savingManualDepot}
                 onClick={() => { setShowManual(false); setManualLat(""); setManualLng(""); setManualName(""); }}
-                style={{
-                  padding: "6px 10px", background: "none", border: `1px solid ${C.border}`,
-                  color: C.dim, borderRadius: 5, fontSize: 11, cursor: "pointer",
-                  fontFamily: font, transition: "all .12s",
-                }}
+                className="op-btn"
               >Cancelar</button>
             </div>
           </div>
@@ -278,9 +266,9 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 display: "flex", alignItems: "center", gap: 8,
                 background: C.surface2, border: "1px solid rgba(245,158,91,0.2)",
                 borderLeft: `3px solid ${C.orange}`,
-                borderRadius: 7, padding: "7px 10px", marginBottom: 4,
+                borderRadius: 8, padding: "7px 10px", marginBottom: 4,
               }}>
-                <span style={{ fontSize: 9, color: C.orange, fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ fontSize: 10, color: C.orange, fontWeight: 700, fontFamily: mono, width: 14, flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
                   <div style={{ fontSize: 10, color: C.dim, fontFamily: mono }}>{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
@@ -293,22 +281,17 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                     if (projectId) cambiarDepots(projectId, orgId, cambio).catch(e => window.alert("No se ha podido cambiar: " + (e.message || "error desconocido")));
                     else setDepots(cambio);
                   }}
-                  style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? C.green : C.dim, borderRadius: 5, fontSize: 9.5, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  style={{ background: d.planta ? "rgba(63,207,142,0.15)" : "none", border: `1px solid ${d.planta ? "rgba(63,207,142,0.5)" : C.border}`, color: d.planta ? C.green : C.dim, borderRadius: 4, fontSize: 10, padding: "2px 6px", cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
                   {d.planta ? "Planta" : "Depósito"}
                 </button>}
-                <button
-                  onClick={() => {
+                <BotonCerrar style={{ flexShrink: 0 }} onClick={() => {
                     if (projectId) {
                       cambiarDepots(projectId, orgId, l => l.filter(x => x.id !== d.id))
                         .catch(e => { console.error("Error al borrar el depot:", e); window.alert("No se ha podido borrar el depot: " + (e.message || "error desconocido")); });
                     } else {
                       setDepots(prev => prev.filter(x => x.id !== d.id));
                     }
-                  }}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, fontSize: 14, padding: 0, lineHeight: 1, transition: "color .12s", flexShrink: 0 }}
-                  onMouseEnter={e => e.currentTarget.style.color = C.red}
-                  onMouseLeave={e => e.currentTarget.style.color = C.dim}
-                >×</button>
+                  }} onMouseEnter={e => e.currentTarget.style.color = C.red} onMouseLeave={e => e.currentTarget.style.color = C.dim} />
               </div>
             ))}
           </div>
@@ -353,7 +336,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 background: addPointMode ? "rgba(63,207,142,0.15)" : C.surface2,
                 border: `1px solid ${addPointMode ? C.green : C.border2}`,
                 color: addPointMode ? C.green : C.muted,
-                borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
+                borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s",
               }}
             >
@@ -367,20 +350,20 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
               placeholder="Nombre del punto"
               value={manualForm.nombre}
               onChange={e => setManualForm(f => ({ ...f, nombre: e.target.value }))}
-              style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 5, boxSizing: "border-box" }}
+              style={{ width: "100%", background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 5, boxSizing: "border-box" }}
             />
             <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
               <input
                 placeholder="Latitud"
                 value={manualForm.lat}
                 onChange={e => setManualForm(f => ({ ...f, lat: e.target.value }))}
-                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }}
+                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }}
               />
               <input
                 placeholder="Longitud"
                 value={manualForm.lng}
                 onChange={e => setManualForm(f => ({ ...f, lng: e.target.value }))}
-                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }}
+                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }}
               />
             </div>
             <button
@@ -391,7 +374,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 background: (!manualForm.lat || !manualForm.lng) ? C.surface2 : "rgba(91,124,250,0.15)",
                 border: `1px solid ${(!manualForm.lat || !manualForm.lng) ? C.border : C.blue}44`,
                 color: (!manualForm.lat || !manualForm.lng) ? C.dim : C.blueText,
-                borderRadius: 7, fontSize: 12, fontWeight: 600,
+                borderRadius: 8, fontSize: 12, fontWeight: 600,
                 cursor: (!manualForm.lat || !manualForm.lng) ? "default" : "pointer",
                 fontFamily: font, transition: "all .15s",
               }}
@@ -448,16 +431,10 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       <div style={{ flex: 1, fontSize: 12, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {layer.name}
                       </div>
-                      <button
-                        onClick={() => removeLayer(layer.id)}
-                        title="Eliminar capa"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, fontSize: 14, padding: 0, lineHeight: 1, transition: "color .15s" }}
-                        onMouseEnter={e => e.currentTarget.style.color = C.red}
-                        onMouseLeave={e => e.currentTarget.style.color = C.dim}
-                      >×</button>
+                      <BotonCerrar onClick={() => removeLayer(layer.id)} title="Eliminar capa" onMouseEnter={e => e.currentTarget.style.color = C.red} onMouseLeave={e => e.currentTarget.style.color = C.dim} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 24 }}>
-                      <span style={{ fontSize: 9, fontFamily: mono, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{layer.type}</span>
+                      <span style={{ fontSize: 10, fontFamily: mono, color: C.dim, textTransform: "uppercase", letterSpacing: .5 }}>{layer.type}</span>
                       <span style={{ fontSize: 11, color: C.dim }}>
                         {(layer.markers?.length ?? layer.totalMarkers ?? 0).toLocaleString()} pts
                       </span>
@@ -466,7 +443,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       const q = coordQuality(layer.markers);
                       if (!q.invalid && !q.far) return null;
                       return (
-                        <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
+                        <div style={{ paddingLeft: 24, fontSize: 11, color: C.amber, marginTop: 2 }}
                           title="Filas del archivo sin coordenadas (o en 0,0) no se pintan ni se importan en Rutas. Las que están muy lejos del resto sí se pintan, pero no cuentan para encuadrar el mapa. Corrígelas en el archivo y vuelve a subirlo.">
                           <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {[
                             q.invalid && `${q.invalid.toLocaleString()} sin coordenadas válidas`,
@@ -476,13 +453,13 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       );
                     })()}
                     {layer._missing && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.amber, marginTop: 2 }}
+                      <div style={{ paddingLeft: 24, fontSize: 11, color: C.amber, marginTop: 2 }}
                         title="Esta capa se subió antes de guardarse en la nube: sus puntos solo están en el navegador de quien la subió. En cuanto esa persona abra este proyecto en Planificación, se sube sola y aparece aquí.">
                         <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {(layer.totalMarkers || 0).toLocaleString()} pts solo en el navegador de quien la subió
                       </div>
                     )}
                     {layer._loadError && (
-                      <div style={{ paddingLeft: 24, fontSize: 10.5, color: C.red, marginTop: 2 }}>
+                      <div style={{ paddingLeft: 24, fontSize: 11, color: C.red, marginTop: 2 }}>
                         No se pudieron cargar los puntos: {layer._loadError}
                       </div>
                     )}
@@ -493,12 +470,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                     if (projectId) { for (const l of layers) deleteDoc(doc(db, "planning_layers", `${projectId}_${l.id}`)); }
                     else { setLayers([]); }
                   }}
-                  style={{
-                    width: "100%", padding: "6px", marginTop: 2, background: "none",
-                    border: `1px solid ${C.border}`, color: C.dim,
-                    borderRadius: 6, fontSize: 10, cursor: "pointer",
-                    fontFamily: font, transition: "all .15s",
-                  }}
+                  className="op-btn" style={{ width: "100%", marginTop: 2 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
                 >Limpiar todas las capas</button>
@@ -539,7 +511,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                     <div key={b} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
                       <label title={isCustom ? `Color: ${color} — clic para cambiar` : "Clic para personalizar"} style={{ position: "relative", flexShrink: 0, cursor: "pointer" }}>
                         <div style={{
-                          width: 16, height: 16, borderRadius: 3, background: color,
+                          width: 16, height: 16, borderRadius: 4, background: color,
                           border: isCustom ? `2px solid ${alfa(0.6)}` : `1px solid ${alfa(0.2)}`,
                           boxShadow: isCustom ? `0 0 0 1px ${color}` : "none", transition: "transform .12s",
                         }}
@@ -552,12 +524,7 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                       </label>
                       <span style={{ fontSize: 11, color: isCustom ? C.text : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{b}</span>
                       {isCustom && (
-                        <button
-                          onClick={() => { const nc = { ...barrioColors }; delete nc[b]; setBarrioColors(nc); saveBarrioColors(nc); }}
-                          style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0, transition: "color .12s" }}
-                          onMouseEnter={e => e.currentTarget.style.color = C.red}
-                          onMouseLeave={e => e.currentTarget.style.color = C.dim}
-                        >×</button>
+                        <BotonCerrar style={{ flexShrink: 0 }} onClick={() => { const nc = { ...barrioColors }; delete nc[b]; setBarrioColors(nc); saveBarrioColors(nc); }} onMouseEnter={e => e.currentTarget.style.color = C.red} onMouseLeave={e => e.currentTarget.style.color = C.dim} />
                       )}
                     </div>
                   );
@@ -615,7 +582,7 @@ function FilterChipsSection({ label, layers, getValue, active, onSelect }) {
             style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
             <polyline points="6 9 12 15 18 9"/>
           </svg>
-          <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
+          <span style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>
             {label} ({values.length})
           </span>
         </span>
@@ -639,7 +606,7 @@ function FilterChipsSection({ label, layers, getValue, active, onSelect }) {
                 key={v}
                 onClick={() => onSelect(isActive ? null : v)}
                 style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontFamily: font,
+                  padding: "4px 10px", borderRadius: 8, fontSize: 11, fontFamily: font,
                   cursor: "pointer", transition: "all .12s",
                   background: isActive ? C.blueDim : C.surface2,
                   border: `1px solid ${isActive ? C.blue : C.border}`,

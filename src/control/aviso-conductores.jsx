@@ -21,25 +21,25 @@ export function AvisoConductores({ orgId, usuarios }) {
       setEstado({ ok: true, t: resumenEnvio(r) }); setTexto("");
     } catch (e) { setEstado({ ok: false, t: e.message || String(e) }); }
   }
-  const inp = { background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none" };
+  const inp = { background: C.bg, border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "7px 10px", fontSize: 12, fontFamily: font, outline: "none" };
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAbierto(a => !a); setEstado(null); }} title="Mandar un aviso al móvil de los conductores"
-        style={{ background: "rgba(91,124,250,0.10)", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+        style={{ background: "rgba(91,124,250,0.10)", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
         <Megaphone size={14} style={{ verticalAlign: "-2px" }} /> Aviso al móvil
       </button>
       {abierto && (
-        <div style={{ position: "absolute", right: 0, top: 36, zIndex: 50, width: 340, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,.5)", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ position: "absolute", right: 0, top: 36, zIndex: 50, width: 340, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,.5)", display: "flex", flexDirection: "column", gap: 8 }}>
           <select value={para} onChange={e => setPara(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
             <option value="todos">A todos</option>
             {conductores.map(u => <option key={u._id} value={u._id}>{[u.nombre, u.apellidos].filter(Boolean).join(" ") || u.email}</option>)}
           </select>
           <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0, 300))} rows={3} placeholder="Escribe el mensaje…" style={{ ...inp, resize: "vertical" }} />
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={enviar} disabled={!texto.trim() || estado?.cargando} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{estado?.cargando ? "Enviando…" : "Enviar"}</button>
-            <span style={{ fontSize: 10.5, color: C.muted }}>Solo llega a quien haya activado los avisos en su móvil.</span>
+            <button onClick={enviar} disabled={!texto.trim() || estado?.cargando} className="op-btn op-primario">{estado?.cargando ? "Enviando…" : "Enviar"}</button>
+            <span style={{ fontSize: 11, color: C.muted }}>Solo llega a quien haya activado los avisos en su móvil.</span>
           </div>
-          {estado?.t && <div style={{ fontSize: 11.5, color: estado.ok ? C.green : C.red }}>{estado.t}</div>}
+          {estado?.t && <div style={{ fontSize: 12, color: estado.ok ? C.green : C.red }}>{estado.t}</div>}
         </div>
       )}
     </div>

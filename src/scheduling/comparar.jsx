@@ -19,9 +19,9 @@ export function ComparadorEscenarios({ nombreA, kpisA, nombreB, kpisB, cargando,
           <button onClick={onCerrar} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex" }}><X size={18} /></button>
         </div>
 
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16, fontSize: 12.5 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.text }}><i style={{ width: 10, height: 10, borderRadius: 3, background: C.blue }} />Actual: <b>{nombreA}</b></span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.text }}><i style={{ width: 10, height: 10, borderRadius: 3, background: C.dim }} />{nombreB}</span>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16, fontSize: 13 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.text }}><i style={{ width: 10, height: 10, borderRadius: 4, background: C.blue }} />Actual: <b>{nombreA}</b></span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.text }}><i style={{ width: 10, height: 10, borderRadius: 4, background: C.dim }} />{nombreB}</span>
         </div>
 
         {cargando && <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.muted, fontSize: 13, padding: "30px 0", justifyContent: "center" }}><Loader2 size={16} className="op-girando" />Cargando la versión…</div>}
@@ -42,14 +42,14 @@ export function ComparadorEscenarios({ nombreA, kpisA, nombreB, kpisB, cargando,
                     <div style={{ flex: 1, height: 8, background: C.surface2, borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ width: `${Math.max(0, (v || 0) / max) * 100}%`, height: "100%", background: color, borderRadius: 4 }} />
                     </div>
-                    <span style={{ fontFamily: mono, fontSize: 11.5, color: C.text, width: 82, textAlign: "right" }}>{fmt(v)}</span>
+                    <span style={{ fontFamily: mono, fontSize: 12, color: C.text, width: 82, textAlign: "right" }}>{fmt(v)}</span>
                   </div>
                 );
                 return [
-                  <div key={f.clave + "e"} style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{f.etiqueta}</div>,
+                  <div key={f.clave + "e"} style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{f.etiqueta}</div>,
                   <div key={f.clave + "b"} style={{ display: "flex", flexDirection: "column", gap: 4 }}>{barra(f.a, C.blue)}{barra(f.b, C.dim)}</div>,
                   <div key={f.clave + "d"} data-testid={`dif-${f.clave}`} style={{
-                    fontFamily: mono, fontSize: 11.5, fontWeight: 600, textAlign: "right",
+                    fontFamily: mono, fontSize: 12, fontWeight: 600, textAlign: "right",
                     color: f.mejor === true ? C.green : f.mejor === false ? C.red : C.dim,
                   }}>{f.mejor == null ? "igual" : `${f.dif > 0 ? "+" : "−"}${fmt(Math.abs(f.dif))}`}</div>,
                 ];

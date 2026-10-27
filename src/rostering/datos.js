@@ -18,7 +18,7 @@ export const SHIFT_META = {
   M: { label: "Mañana",     bg: tono("#0d2248", "#e4ecf8"), text: C.blue },
   T: { label: "Tarde",      bg: tono("#3d1a00", "#f8ede4"), text: C.orange },
   N: { label: "Noche",      bg: tono("#1a0d3d", "#eae4f8"), text: C.violet },
-  L: { label: "Libre",      bg: tono("#1a1f2a", "#ebedf2"), text: "#64748b" },
+  L: { label: "Libre",      bg: tono("#1a1f2a", "#ebedf2"), text: C.dim },
   G: { label: "Guardia",    bg: tono("#2d2200", "#f8f4e4"), text: C.amber },
   B: { label: "Baja",       bg: tono("#3d0d0d", "#f8e4e4"), text: C.red },
   D: { label: "Disponible", bg: C.greenDim, text: C.green },
@@ -173,36 +173,36 @@ export const TIPOS_RUTA = [
 
 export const inputStyle = {
   width: 72, background: C.surface2, border: `1px solid ${C.border}`, color: C.text,
-  borderRadius: 6, padding: "5px 8px", fontSize: 12, outline: "none", fontFamily: font,
+  borderRadius: 8, padding: "5px 8px", fontSize: 12, outline: "none", fontFamily: font,
 };
 
 export const primaryBtn = {
-  padding: "6px 14px", borderRadius: 6, background: C.blue, border: "none",
+  padding: "6px 14px", borderRadius: 8, background: C.blue, border: "none",
   color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
 };
 
 export const pubBtn = {
-  padding: "3px 10px", borderRadius: 5, background: `${C.blue}22`, border: `1px solid ${C.blue}55`,
+  padding: "3px 10px", borderRadius: 4, background: `${C.blue}22`, border: `1px solid ${C.blue}55`,
   color: C.blue, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font,
 };
 
 export const secondaryBtn = {
-  padding: "6px 14px", borderRadius: 6, background: "none", border: `1px solid ${C.border2}`,
+  padding: "6px 14px", borderRadius: 8, background: "none", border: `1px solid ${C.border2}`,
   color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font,
 };
 
 // ── STYLE CONSTANTS ────────────────────────────────────────────────
 export const navBtnStyle = {
-  width: 28, height: 28, borderRadius: 6,
+  width: 28, height: 28, borderRadius: 8,
   background: alfa(0.05),
   border: `1px solid ${alfa(0.1)}`,
-  color: "#94a3b8", fontSize: 18, lineHeight: 1,
+  color: C.muted, fontSize: 20, lineHeight: 1,
   cursor: "pointer", fontFamily: font,
   display: "flex", alignItems: "center", justifyContent: "center",
 };
 
 export const thStyle = {
-  fontSize: 10, color: "#64748b", fontWeight: 500,
+  fontSize: 10, color: C.dim, fontWeight: 500,
   letterSpacing: 1, textTransform: "uppercase",
   borderBottom: `1px solid ${alfa(0.13)}`,
   whiteSpace: "nowrap",

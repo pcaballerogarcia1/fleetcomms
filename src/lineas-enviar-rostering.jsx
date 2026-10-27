@@ -56,17 +56,17 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
     }
   }
 
-  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, off) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 8, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (off ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 13, fontWeight: fuerte ? 700 : 500, cursor: off ? "not-allowed" : "pointer", fontFamily: font });
   const trabajando = !!estado?.trabajando;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => !trabajando && onCerrar()}>
       <div onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", maxHeight: "100%", overflowY: "auto", background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 12, fontFamily: font, boxShadow: "0 20px 60px rgba(0,0,0,.5)", padding: "18px 20px" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Enviar al cuadrante</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Enviar al cuadrante</div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>
           Cada día del mes se cubre con los turnos del calendario que circula ese día (laborables, sábados, festivos…). En Rostering, <b style={{ color: C.text }}>Optimizar</b> reparte la plantilla con sus reglas, sin cambiar ningún turno de día.
         </div>
         {estado?.ok ? (
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 8, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Enviados {estado.n.toLocaleString("es-ES")} turnos de {estado.dias} días de {MESES[month - 1]}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>En Rostering, ve a {MESES[month - 1]} de {year} y pulsa «Optimizar».</div>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -76,25 +76,25 @@ export function EnviarRostering({ red, projectId, orgId, estadoDe, turnosDe, onC
           </div>
         ) : (
           <>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 12.5, color: C.text }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 13, color: C.text }}>
               Mes
-              <input type="month" value={mes} disabled={trabajando} onChange={e => e.target.value && setMes(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }} />
+              <input type="month" value={mes} disabled={trabajando} onChange={e => e.target.value && setMes(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 13, fontFamily: font, colorScheme: tono("dark", "light") }} />
             </label>
-            <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
+            <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
               {usados.map(([dia, n], i) => {
                 const e = estadoDe(dia);
                 return (
                   <div key={dia} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${C.border}` }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 5, background: COLORES_CAL[i % COLORES_CAL.length], flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDiaRoster(red, dia)}</span>
-                    <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{n} día{n > 1 ? "s" : ""}</span>
+                    <span style={{ width: 10, height: 10, borderRadius: 4, background: COLORES_CAL[i % COLORES_CAL.length], flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDiaRoster(red, dia)}</span>
+                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{n} día{n > 1 ? "s" : ""}</span>
                     <span style={{ fontSize: 11, whiteSpace: "nowrap", color: e === "nuevo" ? C.amber : C.green }} title={e === "nuevo" ? "Este calendario aún no se ha calculado en Rutas: se calcula ahora con las restricciones de siempre" : undefined}>
                       {e === "pantalla" ? "✓ el de pantalla" : e === "guardado" ? "✓ calculado" : "se calculará"}
                     </span>
                   </div>
                 );
               })}
-              {sinServicio > 0 && <div style={{ padding: "8px 12px", fontSize: 11.5, color: C.dim }}>{sinServicio} día{sinServicio > 1 ? "s" : ""} sin servicio (ningún calendario circula)</div>}
+              {sinServicio > 0 && <div style={{ padding: "8px 12px", fontSize: 12, color: C.dim }}>{sinServicio} día{sinServicio > 1 ? "s" : ""} sin servicio (ningún calendario circula)</div>}
               {!usados.length && <div style={{ padding: 12, fontSize: 12, color: C.amber }}>Ese mes no circula ningún calendario de la red.</div>}
             </div>
             <div style={{ fontSize: 11, color: C.dim, marginTop: 8 }}>Sustituye lo que hubiera en el cuadrante de este proyecto. Lo que ya se haya asignado a mano en el cuadrante se respeta.</div>

@@ -84,11 +84,11 @@ export function ModuloIncidencias({sesion,usuarios}){
                     <span style={{fontSize:12,padding:"2px 7px",borderRadius:20,background:tono("#1d222d", "#ebedf2"),color:C.muted,border:`1px solid ${C.border}`,textTransform:"capitalize"}}>{inc.estado}</span>
                   </div>
                 </div>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{inc.titulo}</div>
+                <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{inc.titulo}</div>
                 {inc.vehiculo&&<div style={{fontSize:11,color:C.muted,marginBottom:6}}><Truck size={13} style={{verticalAlign:"-2px",marginRight:5}}/>{inc.vehiculo}</div>}
                 <div style={{fontSize:12,color:C.muted,lineHeight:1.5,marginBottom:8,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{inc.descripcion}</div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:22,height:22,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:C.blueText,fontWeight:700}}>{autor?.foto?<img src={autor.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(autor)}</div><span style={{fontSize:11,color:C.muted}}>{autor.nombre}</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:22,height:22,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.blueText,fontWeight:700}}>{autor?.foto?<img src={autor.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(autor)}</div><span style={{fontSize:11,color:C.muted}}>{autor.nombre}</span></div>
                   <span style={{fontSize:11,color:C.dim}}>{timeAgo(inc.fecha)}</span>
                 </div>
               </div>
@@ -103,7 +103,7 @@ export function ModuloIncidencias({sesion,usuarios}){
           <div style={{marginBottom:14}}><label style={S.label}>Prioridad</label><div style={{display:"flex",gap:8}}>{["baja","media","alta"].map(p=><button key={p} onClick={()=>setForm({...form,prioridad:p})} style={{flex:1,padding:"8px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:mono,background:form.prioridad===p?`${PC[p]}22`:"none",border:`1px solid ${form.prioridad===p?PC[p]:C.border}`,color:form.prioridad===p?PC[p]:C.muted,textTransform:"capitalize"}}>{p}</button>)}</div></div>
           <div style={{marginBottom:14}}><label style={S.label}>Título *</label><input value={form.titulo} onChange={e=>setForm({...form,titulo:e.target.value})} placeholder="Resumen breve" style={S.input}/></div>
           <div style={{marginBottom:22}}><label style={S.label}>Descripción</label><textarea value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} placeholder="Describe la incidencia..." rows={4} style={{...S.input,resize:"vertical"}}/></div>
-          <button onClick={crearInc} style={{...S.btn,width:"100%",padding:13,fontSize:14}}>PUBLICAR INCIDENCIA</button>
+          <button onClick={crearInc} style={{...S.btn,width:"100%",padding:13,fontSize:15}}>PUBLICAR INCIDENCIA</button>
         </div>
       )}
       {vista==="detalle"&&incActual&&(()=>{
@@ -112,25 +112,25 @@ export function ModuloIncidencias({sesion,usuarios}){
           <div style={{padding:"0 0 20px"}}>
             <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"14px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><cat.Icono size={14} color={cat.color}/><span style={{fontSize:12,color:cat.color,letterSpacing:0,textTransform:"none"}}>{cat.label}</span></div>
-              <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>{incActual.titulo}</div>
+              <div style={{fontSize:20,fontWeight:700,marginBottom:6}}>{incActual.titulo}</div>
               {incActual.vehiculo&&<div style={{fontSize:12,color:C.muted,marginBottom:8}}><Truck size={14} style={{verticalAlign:"-2px",marginRight:5}}/>{incActual.vehiculo}</div>}
-              <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.6,marginBottom:14}}>{incActual.descripcion}</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6,marginBottom:14}}>{incActual.descripcion}</div>
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:esAdmin?14:0}}>
                 <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:`${PC[incActual.prioridad]}22`,color:PC[incActual.prioridad],border:`1px solid ${PC[incActual.prioridad]}44`,textTransform:"none"}}>Prioridad {incActual.prioridad}</span>
                 <span style={{fontSize:11,color:C.muted}}>{autor.nombre} · {timeAgo(incActual.fecha)}</span>
               </div>
-              {esAdmin&&<div><label style={{...S.label,marginBottom:8}}>Estado</label><div style={{display:"flex",gap:6}}>{["abierta","en revisión","cerrada"].map(est=><button key={est} onClick={()=>cambiarEstado(incActual,est)} style={{flex:1,padding:"7px 4px",borderRadius:6,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",background:incActual.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${incActual.estado===est?C.blue:C.border}`,color:incActual.estado===est?C.blueText:C.muted}}>{est}</button>)}</div></div>}
+              {esAdmin&&<div><label style={{...S.label,marginBottom:8}}>Estado</label><div style={{display:"flex",gap:6}}>{["abierta","en revisión","cerrada"].map(est=><button key={est} onClick={()=>cambiarEstado(incActual,est)} style={{flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontSize:10,fontFamily:mono,textTransform:"capitalize",background:incActual.estado===est?tono("#1d222d", "#ebedf2"):"none",border:`1px solid ${incActual.estado===est?C.blue:C.border}`,color:incActual.estado===est?C.blueText:C.muted}}>{est}</button>)}</div></div>}
             </div>
             <div style={{padding:"14px 16px"}}>
               <label style={{...S.label,marginBottom:10}}>Comentarios ({incActual.comentarios?.length||0})</label>
-              {(incActual.comentarios||[]).map((c,i)=>{const cu=getUser(c.usuarioId);return(<div key={i} style={S.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:22,height:22,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:C.blueText,fontWeight:700}}>{cu?.foto?<img src={cu.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(cu)}</div><span style={{fontSize:12,color:"#94a3b8",fontWeight:600}}>{cu.nombre}</span></div><span style={{fontSize:10,color:C.dim}}>{timeAgo(c.fecha)}</span></div><div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.5}}>{c.texto}</div></div>);})}
+              {(incActual.comentarios||[]).map((c,i)=>{const cu=getUser(c.usuarioId);return(<div key={i} style={S.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:22,height:22,borderRadius:"50%",background:C.blueDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.blueText,fontWeight:700}}>{cu?.foto?<img src={cu.foto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%",display:"block"}}/>:avatarOf(cu)}</div><span style={{fontSize:12,color:"#94a3b8",fontWeight:600}}>{cu.nombre}</span></div><span style={{fontSize:10,color:C.dim}}>{timeAgo(c.fecha)}</span></div><div style={{fontSize:13,color:C.muted,lineHeight:1.5}}>{c.texto}</div></div>);})}
               <div style={{display:"flex",gap:8,marginTop:10}}><input value={comentario} onChange={e=>setCom(e.target.value)} placeholder="Añadir comentario..." onKeyDown={e=>e.key==="Enter"&&agregarCom(incActual)} style={{...S.input,flex:1}}/><button onClick={()=>agregarCom(incActual)} style={{...S.btn,padding:"10px 14px"}}>↑</button></div>
             </div>
           </div>
         );
       })()}
       {vista==="feed"&&(
-        <button onClick={()=>setVista("nueva")} className="op-btn op-primario" style={{position:"fixed",bottom:"calc(78px + env(safe-area-inset-bottom))",left:"50%",transform:"translateX(-50%)",height:46,padding:"0 22px",borderRadius:999,fontSize:14,zIndex:100,boxShadow:"0 10px 30px rgba(91,124,250,0.35)"}}>
+        <button onClick={()=>setVista("nueva")} className="op-btn op-primario" style={{position:"fixed",bottom:"calc(78px + env(safe-area-inset-bottom))",left:"50%",transform:"translateX(-50%)",height:46,padding:"0 22px",borderRadius:999,fontSize:15,zIndex:100,boxShadow:"0 10px 30px rgba(91,124,250,0.35)"}}>
           <Plus size={17}/> Nueva incidencia
         </button>
       )}
@@ -147,10 +147,10 @@ function PanelStats({incidencias,onClose}){
   const pie=[{name:"Abiertas",value:ab,color:C.red},{name:"En revisión",value:rev,color:C.orange},{name:"Cerradas",value:cer,color:C.green}].filter(x=>x.value>0);
   return(
     <div style={S.page}>
-      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Estadísticas</div><div style={{fontSize:17,fontWeight:700}}>Incidencias</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
+      <div style={S.header}><div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none"}}>Estadísticas</div><div style={{fontSize:20,fontWeight:700}}>Incidencias</div></div><button onClick={onClose} style={S.btnGhost}><ChevronLeft size={16} style={{verticalAlign:"-3px",marginLeft:-3}}/> Volver</button></div>
       <div style={{padding:"12px 16px 0",display:"flex",gap:8}}>{[["7d","7d"],["30d","30d"],["todo","Todo"]].map(([k,l])=><button key={k} onClick={()=>setPeriodo(k)} style={{...S.btnGhost,fontSize:11,padding:"5px 12px",borderColor:periodo===k?C.blue:C.border,color:periodo===k?C.blueText:C.muted,background:periodo===k?C.blueDim:"none"}}>{l}</button>)}</div>
       <div style={{padding:"14px 16px 80px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>{[{l:"Total",v:f.length,c:C.blueText},{l:"Abiertas",v:ab,c:C.red},{l:"Revisión",v:rev,c:C.orange},{l:"Urgentes",v:urg,c:"#f59e0b"}].map(k=><div key={k.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginTop:2}}>{k.l}</div></div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>{[{l:"Total",v:f.length,c:C.blueText},{l:"Abiertas",v:ab,c:C.red},{l:"Revisión",v:rev,c:C.orange},{l:"Urgentes",v:urg,c:C.amber}].map(k=><div key={k.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginTop:2}}>{k.l}</div></div>)}</div>
         <div style={{...S.card,marginBottom:12}}><label style={S.label}>Últimos 7 días</label><ResponsiveContainer width="100%" height={130}><BarChart data={evol} barGap={2}><XAxis dataKey="dia" tick={{fontSize:10,fill:C.dim}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:10,fill:C.dim}} axisLine={false} tickLine={false} allowDecimals={false} width={18}/><Tooltip content={<CTip/>} cursor={{fill:"#ffffff08"}}/><Bar dataKey="total" name="Total" fill={C.blue} radius={[4,4,0,0]}/><Bar dataKey="cerradas" name="Cerradas" fill={C.green} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>
         <div style={S.card}><label style={S.label}>Por estado</label><ResponsiveContainer width="100%" height={120}><PieChart><Pie data={pie} cx="50%" cy="50%" innerRadius={30} outerRadius={48} paddingAngle={3} dataKey="value">{pie.map((e,i)=><Cell key={i} fill={e.color}/>)}</Pie><Tooltip content={<CTip/>}/></PieChart></ResponsiveContainer>{pie.map(d=><div key={d.name} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><div style={{width:8,height:8,borderRadius:"50%",background:d.color}}/><span style={{fontSize:11,color:C.muted}}>{d.name}</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:"auto"}}>{d.value}</span></div>)}</div>
       </div>

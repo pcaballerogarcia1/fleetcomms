@@ -6,6 +6,7 @@ import { watchAudit } from "./audit.js";
 import { watchErrors, groupErrors } from "./error-report.js";
 import { C, alfa } from "./tema.js";
 
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 const font = "var(--font)";
 // Se abren las 100 últimas y se piden más a mano (antes 300 en cada apertura:
@@ -33,11 +34,7 @@ export function AuditButton({ sesion, activeProject }) {
   if (!sesion?.uid) return null;
   return (
     <>
-      <button onClick={() => setOpen(true)} title="Historial de cambios: quién hizo qué y cuándo" style={{
-        height: 30, padding: "0 10px", borderRadius: 7, background: C.surface2,
-        border: `1px solid ${C.border}`, color: C.muted, cursor: "pointer",
-        display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontFamily: font, fontWeight: 600,
-      }}
+      <button onClick={() => setOpen(true)} title="Historial de cambios: quién hizo qué y cuándo" className="op-btn"
         onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
       >
@@ -80,7 +77,7 @@ function AuditPanel({ sesion, activeProject, onClose }) {
       (!q || `${r.nombre} ${r.accion} ${r.detalle} ${r.proyecto || ""}`.toLowerCase().includes(q)));
   }, [rows, modulo, soloProyecto, texto, activeProject?._id]);
 
-  const input = { background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" };
+  const input = { background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" };
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.45)" }}>
@@ -94,14 +91,14 @@ function AuditPanel({ sesion, activeProject, onClose }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{tab === "errores" ? "Errores registrados" : "Historial de cambios"}</div>
               {isSA && (
-                <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 7, padding: 2 }}>
+                <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
                   {[["cambios", "Cambios"], ["errores", "Errores"]].map(([k, l]) => (
-                    <button key={k} onClick={() => setTab(k)} style={{ padding: "3px 10px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font, background: tab === k ? alfa(0.1) : "transparent", color: tab === k ? C.text : C.muted }}>{l}</button>
+                    <button key={k} onClick={() => setTab(k)} style={{ padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font, background: tab === k ? alfa(0.1) : "transparent", color: tab === k ? C.text : C.muted }}>{l}</button>
                   ))}
                 </div>
               )}
             </div>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
+            <BotonCerrar onClick={onClose} />
           </div>
           {tab === "errores" ? <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 2px" }}>Errores que han ocurrido en los navegadores de los usuarios (oficina y Rutas), agrupados. Últimos 300.</div> : <>
           <div style={{ fontSize: 11, color: C.muted, margin: "4px 0 10px" }}>
@@ -114,7 +111,7 @@ function AuditPanel({ sesion, activeProject, onClose }) {
               {modulos.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
             {activeProject && (
-              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: C.muted, cursor: "pointer" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.muted, cursor: "pointer" }}>
                 <input type="checkbox" checked={soloProyecto} onChange={e => setSoloProyecto(e.target.checked)} />
                 Solo «{activeProject.nombre}»
               </label>
@@ -134,13 +131,13 @@ function AuditPanel({ sesion, activeProject, onClose }) {
             </div>
           ) : visibles.map(r => (
             <div key={r._id} style={{ display: "flex", gap: 10, padding: "9px 8px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ width: 4, borderRadius: 2, background: MOD_COLOR[r.modulo] || C.dim, flexShrink: 0 }} />
+              <div style={{ width: 4, borderRadius: 4, background: MOD_COLOR[r.modulo] || C.dim, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, color: C.text }}>
+                <div style={{ fontSize: 13, color: C.text }}>
                   <b style={{ fontWeight: 600 }}>{r.nombre}</b> <span style={{ color: C.muted }}>{r.accion?.charAt(0).toLowerCase() + r.accion?.slice(1)}</span>
                 </div>
-                {r.detalle && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2, wordBreak: "break-word" }}>{r.detalle}</div>}
-                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>
+                {r.detalle && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, wordBreak: "break-word" }}>{r.detalle}</div>}
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>
                   {[r.modulo, r.proyecto, cuando(r.atMs, now)].filter(Boolean).join(" · ")}
                 </div>
               </div>
@@ -148,7 +145,7 @@ function AuditPanel({ sesion, activeProject, onClose }) {
           ))}
           {rows && rows.length >= cuantas && (
             <button onClick={() => setCuantas(n => n + MAS)}
-              style={{ display: "block", margin: "10px auto", padding: "6px 14px", fontSize: 12, borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, cursor: "pointer", fontFamily: font }}>
+              className="op-btn" style={{ margin: "10px auto" }}>
               Ver {MAS} más antiguos
             </button>
           )}
@@ -176,11 +173,11 @@ function ErrorList({ now }) {
             <span style={{ fontSize: 11, fontWeight: 700, color: C.red, flexShrink: 0 }}>×{g.veces}</span>
             <span style={{ fontSize: 12, color: C.text, wordBreak: "break-word" }}>{g.mensaje?.slice(0, 220)}</span>
           </div>
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>
             {[g.ejemplo.tipo, `${g.usuarios.size} usuario(s)`, [...g.paginas].slice(0, 3).join(", "), g.ejemplo.version && `v ${g.ejemplo.version}`, cuando(g.ultimo, now)].filter(Boolean).join(" · ")}
           </div>
           {abierto === g.key && (
-            <pre style={{ fontSize: 10, color: C.muted, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg, padding: 8, borderRadius: 6, marginTop: 6, maxHeight: 240, overflow: "auto" }}>
+            <pre style={{ fontSize: 10, color: C.muted, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg, padding: 8, borderRadius: 8, marginTop: 6, maxHeight: 240, overflow: "auto" }}>
               {[...g.usuarios].join(", ")}{"\n"}{g.ejemplo.navegador}{"\n\n"}{g.ejemplo.stack}
             </pre>
           )}

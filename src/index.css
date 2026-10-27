@@ -123,7 +123,7 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 30px; padding: 0 11px; border-radius: 8px; flex-shrink: 0; white-space: nowrap;
   background: rgba(var(--veil), 0.035); border: 1px solid rgba(var(--veil), 0.09);
-  color: var(--etiqueta); font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em; cursor: pointer;
+  color: var(--etiqueta); font-size: 13px; font-weight: 500; letter-spacing: -0.005em; cursor: pointer;
 }
 .op-btn:hover:not(:disabled) { background: rgba(var(--veil), 0.07); border-color: rgba(var(--veil), 0.16); color: var(--fuerte); }
 .op-btn:active:not(:disabled) { background: rgba(var(--veil), 0.1); }
@@ -141,8 +141,8 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 .op-fantasma { background: transparent; border-color: transparent; color: var(--muted); }
 .op-fantasma:hover:not(:disabled) { background: rgba(var(--veil), 0.06); border-color: transparent; }
 .op-icono { width: 30px; padding: 0; }
-.op-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(var(--veil), 0.04); border: 1px solid rgba(var(--veil), 0.07); flex-shrink: 0; }
-.op-seg > button { height: 24px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; }
+.op-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: rgba(var(--veil), 0.04); border: 1px solid rgba(var(--veil), 0.07); flex-shrink: 0; }
+.op-seg > button { height: 24px; padding: 0 10px; border-radius: 6px; border: none; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; }
 .op-seg > button:hover { color: var(--text); }
 .op-seg > button.op-on { background: rgba(var(--veil), 0.1); color: var(--fuerte); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 .op-sep { width: 1px; height: 18px; background: rgba(var(--veil), 0.08); flex-shrink: 0; }
@@ -151,16 +151,16 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 
 /* ── Campos de texto ────────────────────────────────────────────────── */
 .op-input {
-  width: 100%; height: 38px; padding: 0 12px; border-radius: 9px;
+  width: 100%; height: 38px; padding: 0 12px; border-radius: 8px;
   background: var(--input); border: 1px solid rgba(var(--veil), 0.12); color: var(--text);
-  font-size: 13.5px; outline: none; transition: border-color .12s, box-shadow .12s;
+  font-size: 13px; outline: none; transition: border-color .12s, box-shadow .12s;
 }
 .op-input:hover { border-color: rgba(var(--veil), 0.16); }
 .op-input:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-.op-label { display: block; font-size: 12.5px; font-weight: 500; color: var(--etiqueta); margin-bottom: 6px; }
+.op-label { display: block; font-size: 13px; font-weight: 500; color: var(--etiqueta); margin-bottom: 6px; }
 
 /* ── Tarjetas ───────────────────────────────────────────────────────── */
-.op-tarjeta { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: border-color .15s, box-shadow .15s; }
+.op-tarjeta { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: border-color .15s, box-shadow .15s; }
 .op-tarjeta:hover { border-color: rgba(var(--veil), 0.14); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
 .op-tarjeta.op-activa { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 8px 28px rgba(0,0,0,.35); }
 .op-pastilla { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap; }
@@ -189,3 +189,7 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 /* Rutas: en pantallas normales, los botones secundarios solo con su icono (el nombre sale al pasar el ratón) para que la barra quepa en una línea */
 @media (max-width: 1640px) { .op-texto-ancho { display: none; } }
 @media (max-width: 1500px) { .op-texto-medio { display: none; } }
+/* Botón de cerrar de ventanas y paneles (ui/cerrar.jsx) */
+.op-cerrar { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; padding: 0; border: none; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s; }
+.op-cerrar:hover:not(:disabled) { background: rgba(var(--veil), 0.07); color: var(--fuerte); }
+.op-cerrar:disabled { opacity: .45; cursor: not-allowed; }

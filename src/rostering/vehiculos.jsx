@@ -17,7 +17,7 @@ export function ModeTabs({ mode, setMode, conSalida = false }) {
     <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
       {pestanas.map(([m, label]) => (
         <button key={m} onClick={() => setMode(m)} style={{
-          padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+          padding: "5px 12px", borderRadius: 8, border: "none", cursor: "pointer",
           fontFamily: font, fontSize: 12, fontWeight: 600,
           background: mode === m ? alfa(0.1) : "transparent",
           color: mode === m ? C.text : C.muted,
@@ -229,7 +229,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ModeTabs mode={mode} setMode={setMode} conSalida={conSalida} />
           <button onClick={prevMonth} style={navBtnStyle}>‹</button>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
             {MONTH_NAMES[month - 1]} {year}
           </div>
           <button onClick={nextMonth} style={navBtnStyle}>›</button>
@@ -291,7 +291,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                       borderRight: `1px solid ${C.border}`,
                       padding: "3px 0", textAlign: "center",
                     }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: today ? C.blue : weekend ? C.orange : C.dim }}>
                         {DAY_NAMES[dow]}
                       </div>
                       <div style={{ fontSize: 11, fontWeight: today ? 700 : 500, color: today ? C.blue : weekend ? `${C.orange}88` : C.muted }}>
@@ -336,9 +336,9 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                         <button onClick={() => fillRow(v._id, "D")}
                           title="Rellenar mes con Disponible"
                           style={{
-                            marginLeft: "auto", width: 14, height: 14, borderRadius: 2, border: "none",
+                            marginLeft: "auto", width: 14, height: 14, borderRadius: 4, border: "none",
                             background: VEHICLE_STATUS_META.D.bg, color: VEHICLE_STATUS_META.D.text,
-                            fontSize: 8, fontWeight: 700, cursor: "pointer",
+                            fontSize: 10, fontWeight: 700, cursor: "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             padding: 0, lineHeight: 1, flexShrink: 0,
                           }}
@@ -429,8 +429,8 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
                     }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                         {VEHICLE_STATUSES.filter(s => totals[s]).map(s => (
-                          <div key={s} style={{ fontSize: 9, fontWeight: 700, color: VEHICLE_STATUS_META[s].text, lineHeight: 1.2 }}>
-                            {s}{totals[s] > 1 ? <span style={{ fontSize: 8, fontWeight: 400 }}>×{totals[s]}</span> : ""}
+                          <div key={s} style={{ fontSize: 10, fontWeight: 700, color: VEHICLE_STATUS_META[s].text, lineHeight: 1.2 }}>
+                            {s}{totals[s] > 1 ? <span style={{ fontSize: 10, fontWeight: 400 }}>×{totals[s]}</span> : ""}
                           </div>
                         ))}
                       </div>

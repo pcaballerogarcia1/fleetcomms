@@ -15,6 +15,7 @@ import {
 import { C } from "./tema.js";
 import { tono } from "./tema.js";
 
+import { BotonCerrar } from "./ui/cerrar.jsx";
 
 const font = "var(--font)";
 const mono = "var(--mono)";
@@ -113,10 +114,10 @@ function DetalleTurno({ t, u, ahora, onCerrar }) {
       <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{t.id}{t.tipo ? <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}> · {t.tipo}</span> : null}</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{t.conductorNombre || "Sin trabajador"}{t.trabajadorId ? " (Cuadrante)" : ""}{t.trabajadorId && !t.conductorUid ? " · sin usuario de la app" : ""} · {hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {t.buses.join(" + ")}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{t.conductorNombre || "Sin trabajador"}{t.trabajadorId ? " (Cuadrante)" : ""}{t.trabajadorId && !t.conductorUid ? " · sin usuario de la app" : ""} · {hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {t.buses.join(" + ")}</div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>{t.inicioReal != null ? `Empezó ${hhmm(t.inicioReal)}` : "No ha empezado"}{t.finReal != null ? ` · terminó ${hhmm(t.finReal)}` : ""}{u?.updatedAt ? ` · última posición ${new Date(u.updatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}</div>
         </div>
-        <button onClick={onCerrar} style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer" }}>×</button>
+        <BotonCerrar onClick={onCerrar} />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {t.viajes.map((v, i) => {
@@ -127,11 +128,11 @@ function DetalleTurno({ t, u, ahora, onCerrar }) {
           const cambioBus = i > 0 && t.viajes[i - 1].bus !== v.bus;
           return (
             <div key={v.k}>
-              {cambioBus && <div style={{ padding: "3px 14px", fontSize: 10.5, color: C.amber, background: "rgba(245,184,74,.06)" }}>↔ Relevo: pasa al Bus {v.bus} en {v.on || "cabecera"}</div>}
+              {cambioBus && <div style={{ padding: "3px 14px", fontSize: 11, color: C.amber, background: "rgba(245,184,74,.06)" }}>↔ Relevo: pasa al Bus {v.bus} en {v.on || "cabecera"}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", gap: 8, alignItems: "center", padding: "6px 14px", borderBottom: `1px solid ${C.border}`, opacity: v.v ? 0.55 : 1, background: enCurso ? "rgba(91,124,250,.08)" : "none" }}>
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.text }}>{hhmm(v.dep)}</span>
+                <span style={{ fontFamily: mono, fontSize: 12, color: C.text }}>{hhmm(v.dep)}</span>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ display: "block", fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {!v.v && <span style={{ display: "inline-block", minWidth: 22, padding: "0 4px", marginRight: 6, borderRadius: 4, background: v.color, color: C.input, fontSize: 10, fontWeight: 800, textAlign: "center" }}>{v.l}</span>}
                     {v.v ? v.s || "Vacío" : `${v.on} → ${v.dn}`}
                   </span>
@@ -166,11 +167,11 @@ function Informe({ c, servicio, turnos }) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exp), "Expediciones");
     XLSX.writeFile(wb, `servicio_${servicio.fecha}_${String(servicio.proyecto || "").replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 40)}.xlsx`);
   }
-  const th = { padding: "8px 10px", fontSize: 10.5, color: C.dim, fontWeight: 700, textAlign: "right", letterSpacing: 0.4, textTransform: "uppercase", borderBottom: `1px solid ${C.border2}`, position: "sticky", top: 0, background: C.card };
+  const th = { padding: "8px 10px", fontSize: 11, color: C.dim, fontWeight: 700, textAlign: "right", letterSpacing: 0.4, textTransform: "uppercase", borderBottom: `1px solid ${C.border2}`, position: "sticky", top: 0, background: C.card };
   const td = { padding: "7px 10px", fontSize: 12, color: C.text, textAlign: "right", borderBottom: `1px solid ${C.border}`, fontFamily: mono };
   const filaTabla = (x, total) => (
     <tr key={total ? "_total" : x.linea} style={{ background: total ? C.surface2 : "none", fontWeight: total ? 700 : 400 }}>
-      <td style={{ ...td, textAlign: "left", fontFamily: font }}>{total ? "Total" : <span style={{ display: "inline-block", minWidth: 26, padding: "1px 5px", borderRadius: 5, background: x.color, color: C.input, fontSize: 11, fontWeight: 800, textAlign: "center" }}>{x.linea}</span>}</td>
+      <td style={{ ...td, textAlign: "left", fontFamily: font }}>{total ? "Total" : <span style={{ display: "inline-block", minWidth: 26, padding: "1px 5px", borderRadius: 4, background: x.color, color: C.input, fontSize: 11, fontWeight: 800, textAlign: "center" }}>{x.linea}</span>}</td>
       <td style={td}>{x.totalDia}</td><td style={td}>{x.programadas}</td>
       <td style={{ ...td, color: x.realizadas < x.programadas - x.enCurso ? C.amber : C.green }}>{x.realizadas}</td>
       <td style={td}>{x.enCurso || ""}</td><td style={{ ...td, color: x.sinHacer ? C.red : C.dim }}>{x.sinHacer || "—"}</td>
@@ -183,10 +184,10 @@ function Informe({ c, servicio, turnos }) {
     <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Informe del {fechaTxt(servicio.fecha)}</div>
-        <span style={{ fontSize: 11.5, color: C.muted }}>Programadas = las que ya tenían que haber salido. Puntual = sale entre {ADELANTO_OK} min antes y {RETRASO_OK} min después de su hora.</span>
-        <button onClick={excel} style={{ marginLeft: "auto", padding: "6px 12px", background: "rgba(63,207,142,.08)", border: "1px solid rgba(63,207,142,.3)", color: C.green, borderRadius: 6, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Descargar Excel</button>
+        <span style={{ fontSize: 12, color: C.muted }}>Programadas = las que ya tenían que haber salido. Puntual = sale entre {ADELANTO_OK} min antes y {RETRASO_OK} min después de su hora.</span>
+        <button onClick={excel} style={{ marginLeft: "auto", padding: "6px 12px", background: "rgba(63,207,142,.08)", border: "1px solid rgba(63,207,142,.3)", color: C.green, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Descargar Excel</button>
       </div>
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card }}>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", background: C.card }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>
             <th style={{ ...th, textAlign: "left" }}>Línea</th><th style={th}>Del día</th><th style={th}>Programadas</th><th style={th}>Realizadas</th><th style={th}>En curso</th><th style={th}>No hechas</th><th style={th}>Puntualidad</th><th style={th}>Retraso medio</th><th style={th}>Km prog.</th><th style={th}>Km real</th>
@@ -243,7 +244,7 @@ export function ControlLineasPage({ projectId, orgId }) {
   if (!publicados.length) return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: font, padding: 24 }}>
       <div style={{ maxWidth: 480, textAlign: "center" }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>Aún no hay ningún día publicado</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Aún no hay ningún día publicado</div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 10, lineHeight: 1.6 }}>
           En <b style={{ color: C.text }}>Rutas</b>, con los turnos hechos (paso 2), pulsa <b style={{ color: C.text }}>Publicar a Control</b> y elige el día. Los conductores cogerán su turno en el móvil («Mi turno») y aquí verás cada autobús en el mapa, si va a su hora y lo que se va haciendo.
         </div>
@@ -253,12 +254,12 @@ export function ControlLineasPage({ projectId, orgId }) {
 
   const kpi = (titulo, valor, sub, color) => (
     <div style={{ padding: "0 14px", borderLeft: `1px solid ${C.border}`, minWidth: 0 }}>
-      <div style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, whiteSpace: "nowrap" }}>{titulo}</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: color || C.text, fontFamily: mono, marginTop: 1, whiteSpace: "nowrap" }}>{valor}</div>
+      <div style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, whiteSpace: "nowrap" }}>{titulo}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: color || C.text, fontFamily: mono, marginTop: 1, whiteSpace: "nowrap" }}>{valor}</div>
       {sub && <div style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{sub}</div>}
     </div>
   );
-  const pestana = (id, txt) => <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 18, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 12.5, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>;
+  const pestana = (id, txt) => <button onClick={() => setVista(id)} style={{ padding: "10px 4px", marginRight: 18, background: "none", border: "none", borderBottom: `2px solid ${vista === id ? C.blue : "transparent"}`, color: vista === id ? C.text : C.muted, fontSize: 13, fontWeight: vista === id ? 600 : 400, cursor: "pointer", fontFamily: font }}>{txt}</button>;
   const chip = (id, txt) => <button key={id} onClick={() => setFiltro(id)} style={{ padding: "3px 9px", borderRadius: 12, border: `1px solid ${filtro === id ? C.blue : C.border}`, background: filtro === id ? C.blueDim : "none", color: filtro === id ? C.blueText : C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>{txt}</button>;
   const esHoy = servicio.fecha === hoy || (servicio.fecha < hoy && ahora < (servicio.resumen?.fin ?? 0));
 
@@ -266,10 +267,10 @@ export function ControlLineasPage({ projectId, orgId }) {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: C.bg, fontFamily: font, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderBottom: `1px solid ${C.border}`, background: C.card, gap: 6, flexShrink: 0, overflowX: "auto" }}>
         <div style={{ paddingRight: 8, flexShrink: 0 }}>
-          <select value={servicio.fecha} onChange={e => setFechaSel(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "5px 8px", fontSize: 12, fontFamily: font }}>
+          <select value={servicio.fecha} onChange={e => setFechaSel(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "5px 8px", fontSize: 12, fontFamily: font }}>
             {publicados.map(p => <option key={p._id} value={p.fecha}>{fechaTxt(p.fecha)}{p.fecha === hoy ? " (hoy)" : ""}</option>)}
           </select>
-          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{servicio.nombreDia} · {esHoy ? `ahora ${hhmm(ahora)}` : servicio.fecha > hoy ? "aún no ha llegado" : "día pasado"}</div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>{servicio.nombreDia} · {esHoy ? `ahora ${hhmm(ahora)}` : servicio.fecha > hoy ? "aún no ha llegado" : "día pasado"}</div>
         </div>
         {kpi("Turnos en marcha", `${cuenta("marcha")}/${turnos.length}`, `${cuenta("terminado")} terminados`)}
         {kpi("Autobuses en la calle", enCalle, `${servicio.resumen?.autobuses ?? "—"} en el servicio`)}
@@ -281,8 +282,8 @@ export function ControlLineasPage({ projectId, orgId }) {
         {pestana("vivo", "En vivo")}
         {pestana("informe", "Informe del día")}
         {pestana("gantt", "Programado frente a real")}
-        <span style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 10.5, color: C.dim }}>
-          {[["ok", `en hora (−${ADELANTO_OK}/+${RETRASO_OK})`], ["tarde", "tarde"], ["muy", "+10 min"], ["adelantado", "adelantado"]].map(([k, t]) => <span key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 5, background: COLOR_PUNTUALIDAD[k] }} />{t}</span>)}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 11, color: C.dim }}>
+          {[["ok", `en hora (−${ADELANTO_OK}/+${RETRASO_OK})`], ["tarde", "tarde"], ["muy", "+10 min"], ["adelantado", "adelantado"]].map(([k, t]) => <span key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 4, background: COLOR_PUNTUALIDAD[k] }} />{t}</span>)}
         </span>
       </div>
       {vista === "gantt" ? <GanttVivo turnos={ordenados} ahora={ahora} esHoy={esHoy} onElegirTurno={id => { if (id) { setFoco(id); setVista("vivo"); } }} />
@@ -290,7 +291,7 @@ export function ControlLineasPage({ projectId, orgId }) {
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
             <MapaFlota red={estadoRed.red} posiciones={posiciones} ahoraMs={ahoraMs} foco={foco} onElegir={setFoco} />
-            {!enCalle && <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 500, background: tono("rgba(15,22,35,0.9)", "rgba(255,255,255,0.9)"), border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 11.5, color: C.muted, maxWidth: 420 }}>Ningún autobús enviando posición ahora mismo. Aparecen cuando el conductor empieza su turno en el móvil («Mi turno»).</div>}
+            {!enCalle && <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 500, background: tono("rgba(15,22,35,0.9)", "rgba(255,255,255,0.9)"), border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, color: C.muted, maxWidth: 420 }}>Ningún autobús enviando posición ahora mismo. Aparecen cuando el conductor empieza su turno en el móvil («Mi turno»).</div>}
           </div>
           <div style={{ width: 400, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.card, display: "flex", flexDirection: "column", minHeight: 0 }}>
             {elegido ? <DetalleTurno t={elegido} u={ubic.get(elegido.id)} ahora={ahora} onCerrar={() => setFoco(null)} /> : (
@@ -301,13 +302,13 @@ export function ControlLineasPage({ projectId, orgId }) {
                     {avisos.slice(0, 60).map((a, i) => (
                       <button key={i} onClick={() => setFoco(a.turno)} style={{ display: "flex", gap: 8, alignItems: "flex-start", width: "100%", textAlign: "left", padding: "6px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: font }}>
                         <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 4, flexShrink: 0, background: a.grave ? C.red : a.tipo === "adelantado" ? C.violet : a.tipo === "sin_senal" ? C.muted : C.amber }} />
-                        <span style={{ fontSize: 11.5, color: C.text, lineHeight: 1.4 }}>{a.texto}</span>
+                        <span style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{a.texto}</span>
                       </button>
                     ))}
                   </div>
                 )}
                 <div style={{ padding: "10px 14px 8px", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-                  <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar turno, conductor, bus o línea…" style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
+                  <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar turno, conductor, bus o línea…" style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none" }} />
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {chip("marcha", `En marcha ${cuenta("marcha")}`)}{chip("sin", `Sin empezar ${cuenta("sin")}`)}{chip("pendiente", `Más tarde ${cuenta("pendiente")}`)}{chip("terminado", `Terminados ${cuenta("terminado")}`)}{chip("todos", `Todos ${turnos.length}`)}
                   </div>
@@ -319,8 +320,8 @@ export function ControlLineasPage({ projectId, orgId }) {
                       <button key={t.id} onClick={() => setFoco(t.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "7px 14px", background: "none", border: "none", borderBottom: `1px solid ${C.border}`, cursor: "pointer", fontFamily: font }}>
                         <span style={{ width: 42, fontSize: 12, fontWeight: 700, color: C.text }}>{t.id}</span>
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: "block", fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.conductorNombre || <span style={{ color: C.dim }}>sin trabajador</span>}{t.trabajadorId && !t.conductorUid && <span title="Asignado en el cuadrante, pero ese trabajador no tiene usuario de la app vinculado: no le aparece en «Mi turno»" style={{ color: C.amber }}> · sin app</span>}</span>
-                          <span style={{ display: "block", fontSize: 10.5, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {u?.bus ?? t.buses.join("+")} · {u?.linea ? `ahora línea ${u.linea}` : `líneas ${t.lineas.slice(0, 4).join(", ")}`}</span>
+                          <span style={{ display: "block", fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.conductorNombre || <span style={{ color: C.dim }}>sin trabajador</span>}{t.trabajadorId && !t.conductorUid && <span title="Asignado en el cuadrante, pero ese trabajador no tiene usuario de la app vinculado: no le aparece en «Mi turno»" style={{ color: C.amber }}> · sin app</span>}</span>
+                          <span style={{ display: "block", fontSize: 11, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hhmm(t.inicio)}–{hhmm(t.fin)} · Bus {u?.bus ?? t.buses.join("+")} · {u?.linea ? `ahora línea ${u.linea}` : `líneas ${t.lineas.slice(0, 4).join(", ")}`}</span>
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, color: e.color, whiteSpace: "nowrap" }}>{e.txt}</span>
                       </button>

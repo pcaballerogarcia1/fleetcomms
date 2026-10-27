@@ -7,6 +7,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { C, PDF_CHUNK, PDF_MAX_BYTES, RULE_FIELDS, TIPOS_RUTA, fmtClock, font, parseFestivos, primaryBtn, secondaryBtn, inputStyle } from "./datos.js";
 import { leerConvenio } from "./convenio-lector.js";
 import { textoDelPdf } from "./convenio-pdf.js";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 const META_CONVENIO = { nombre: "Nombre del convenio", codigo: "Código de convenio", vigencia: "Vigencia" };
 
@@ -139,8 +140,8 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
         {pdfUrl && (
           <div style={{ flex: "1 1 520px", minHeight: 520, display: "flex", flexDirection: "column" }}>
             <iframe title="Convenio" src={pdfUrl}
-              style={{ flex: 1, width: "100%", minHeight: 520, border: `1px solid ${C.border}`, borderRadius: 6, background: "#fff" }} />
-            <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>
+              style={{ flex: 1, width: "100%", minHeight: 520, border: `1px solid ${C.border}`, borderRadius: 8, background: "#fff" }} />
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>
               Ctrl+F dentro del documento para buscar lo que indica cada regla.
             </div>
           </div>
@@ -184,12 +185,12 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 6 }}>
                     Encontrado en el convenio · {Object.keys(lectura.reglas).length} de {RULE_FIELDS.length} reglas
                   </div>
                   <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Revisa cada una (la frase es la del convenio) y desmarca lo que no sea así.</div>
                   {Object.keys(lectura.reglas).length < 3 && (lectura.remite?.inferior || lectura.remite?.estatuto) && (
-                    <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, background: `${C.blue}14`, borderRadius: 6, padding: "8px 10px", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, background: `${C.blue}14`, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
                       Este convenio casi no fija cifras de jornada ni descansos: {lectura.remite.inferior ? "las deja a los convenios de ámbito inferior (provinciales o de empresa)" : ""}{lectura.remite.inferior && lectura.remite.estatuto ? " y " : ""}{lectura.remite.estatuto ? "se remite al Estatuto de los Trabajadores" : ""}.
                       Sube el convenio provincial que os aplica, o usa <b>Rellenar mínimos del Estatuto</b>.
                     </div>
@@ -205,7 +206,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
                         {it.x?.art && <span style={{ fontSize: 11, color: C.blue }}> · {it.x.art}</span>}
                         {it.x?.pagina && <span style={{ fontSize: 11, color: C.dim }}> · pág. {it.x.pagina}</span>}
                         {it.ahora && String(it.ahora) !== String(it.x ? it.x.valor : it.valor) && <span style={{ fontSize: 11, color: C.dim }}> · ahora: {it.ahora}</span>}
-                        {it.x?.frase && <span style={{ display: "block", fontSize: 10.5, color: C.muted, fontStyle: "italic", marginTop: 2 }}>«{it.x.frase.length > 220 ? it.x.frase.slice(0, 220) + "…" : it.x.frase}»</span>}
+                        {it.x?.frase && <span style={{ display: "block", fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 2 }}>«{it.x.frase.length > 220 ? it.x.frase.slice(0, 220) + "…" : it.x.frase}»</span>}
                       </span>
                     </label>
                   ))}
@@ -241,7 +242,7 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
                 <input type="number" min={0} value={r[f.key] ?? 0}
                   onChange={e => setR({ ...r, [f.key]: Math.max(0, parseFloat(e.target.value) || 0) })}
                   style={{ ...inputStyle, width: 64 }} />
-                <span style={{ fontSize: 10.5, color: C.dim }}>{f.suffix}</span>
+                <span style={{ fontSize: 11, color: C.dim }}>{f.suffix}</span>
               </div>
               <input value={cv.arts?.[f.key] || ""} placeholder="Artículo (p. ej. art. 23.2)"
                 onChange={e => setArt(f.key, e.target.value)}
@@ -263,12 +264,12 @@ export function RulesModal({ rules, horas, convenio, workers, orgId, onClose, on
           <textarea value={festText} onChange={e => setFestText(e.target.value)} rows={2}
             placeholder="12/10/2026, 01/11/2026, 2026-12-08…"
             style={{ ...inputStyle, width: "100%", resize: "vertical", fontFamily: font }} />
-          <div style={{ fontSize: 10.5, color: C.dim }}>
+          <div style={{ fontSize: 11, color: C.dim }}>
             {parseFestivos(festText).length} fecha(s) reconocida(s) — nacionales, autonómicos y locales del año.
           </div>
 
           {sectionTitle(`Horas/mes por trabajador (vacío = las de arriba${r.jornadaAnualH ? " y la jornada anual" : ""})`)}
-          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px" }}>
+          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 8px" }}>
             {workers.length === 0 && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>Sin trabajadores.</div>}
             {workers.map(w => (
               <div key={w._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 0" }}>
@@ -352,7 +353,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
             Movidos de día para cumplir las reglas ({result.moves.length})
           </div>
-          <div style={{ maxHeight: 140, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
+          <div style={{ maxHeight: 140, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 8px", marginBottom: 8 }}>
             {result.moves.map(m => (
               <div key={m.id} style={{ fontSize: 11, padding: "3px 0", color: C.muted }}>
                 <span style={{ color: C.text, fontWeight: 600 }}>Día {m.fromDay} → {m.toDay}</span>
@@ -371,12 +372,12 @@ export function OptResultModal({ result, workers, rules, onClose }) {
           <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
             Sin cubrir
           </div>
-          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", marginBottom: 14 }}>
+          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 8px", marginBottom: 14 }}>
             {result.uncovered.map(({ shift, reasons }) => (
               <div key={shift.id} style={{ fontSize: 11, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ color: C.text, fontWeight: 600 }}>Día {shift.day}</span>
                 <span style={{ color: C.muted }}> · {shift.vehicleName} · {fmtClock(shift.start)}–{fmtClock(shift.end)}</span>
-                <div style={{ color: C.dim, fontSize: 10.5 }}>Nadie puede: {describeReasons(reasons)}</div>
+                <div style={{ color: C.dim, fontSize: 11 }}>Nadie puede: {describeReasons(reasons)}</div>
               </div>
             ))}
           </div>
@@ -389,7 +390,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
       <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
         Carga por trabajador
       </div>
-      <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6 }}>
+      <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
           <thead>
             <tr style={{ color: C.dim, textAlign: "left" }}>
@@ -413,7 +414,7 @@ export function OptResultModal({ result, workers, rules, onClose }) {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10 }}>
+      <div style={{ fontSize: 11, color: C.dim, marginTop: 10 }}>
         Los días seguidos no tienen en cuenta el final del mes anterior.
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
@@ -435,7 +436,7 @@ function ModalShell({ title, onClose, width, children }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+          <BotonCerrar onClick={onClose} />
         </div>
         {children}
       </div>

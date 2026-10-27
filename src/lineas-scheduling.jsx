@@ -491,9 +491,9 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
               {paso("vehicles", 1, "Vehículos")}
               {paso("workers", 2, "Trabajadores", sinTurnos ? "Faltan los turnos de estos vehículos" : null)}
             </div>
-            <button onClick={() => setShowC(s => !s)} className={`op-btn${showC ? " op-activo" : ""}`}>
+            <button onClick={() => setShowC(s => !s)} className={`op-btn${showC ? " op-activo" : ""}`} title="Restricciones">
               <SlidersHorizontal size={14} />
-              Restricciones
+              <span className="op-texto-medio">Restricciones</span>
             </button>
             {res && <>
               {sep}
@@ -503,24 +503,24 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
                   <div onMouseLeave={() => setMenuExportar(false)} style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 50, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 6, minWidth: 260, boxShadow: "0 16px 48px rgba(0,0,0,.5)" }}>
                     {[["t", "Excel"], ["autobuses", "Autobuses (con los vacíos)"], ["turnos", "Turnos (viaje a viaje)", true], ["resumen", "Resumen de turnos", true], ["nomina", "Nómina (horas y €)", true], ["todo", "Todo en un libro"],
                       ["t", "PDF para imprimir"], ["pdf-turnos", "Hojas de servicio (una por turno)", true], ["pdf-autobuses", "Hojas de autobús (una por autobús)"]].map(([k, t, conTurnos]) => k === "t"
-                      ? <div key={t} style={{ fontSize: 11.5, color: C.dim, fontWeight: 600, padding: "8px 10px 4px" }}>{t}</div>
+                      ? <div key={t} style={{ fontSize: 12, color: C.dim, fontWeight: 600, padding: "8px 10px 4px" }}>{t}</div>
                       : <button key={k} onClick={() => exportar(k)} disabled={conTurnos && !res.turnos} title={conTurnos && !res.turnos ? "Primero hay que hacer los turnos (paso 2)" : undefined}
                         className="op-btn op-fantasma" style={{ display: "flex", justifyContent: "flex-start", width: "100%", height: 32, color: conTurnos && !res.turnos ? C.dim : C.text }}>{t}</button>)}
                   </div>
                 )}
               </div>
-              <button onClick={() => setPublicando(true)} disabled={!res.turnos || !orgId} title={res.turnos ? "Publicar los turnos de este calendario para un día: los conductores los ven en el móvil y Control los sigue en vivo" : "Primero hay que hacer los turnos (paso 2)"}
+              <button onClick={() => setPublicando(true)} disabled={!res.turnos || !orgId} aria-label="Publicar a Control" title={res.turnos ? "Publicar a Control: publicar los turnos de este calendario para un día: los conductores los ven en el móvil y Control los sigue en vivo" : "Primero hay que hacer los turnos (paso 2)"}
                 className="op-btn">
                 <Send size={14} />
-                Publicar a Control
+                <span className="op-texto-ancho">Publicar a Control</span>
               </button>
-              <button onClick={() => setARostering(true)} disabled={!orgId} title="Mandar los turnos de un mes al cuadrante: cada día, los del calendario que circula" className="op-btn op-fantasma">
+              <button onClick={() => setARostering(true)} disabled={!orgId} aria-label="Enviar al cuadrante" title="Enviar al cuadrante: mandar los turnos de un mes al cuadrante: cada día, los del calendario que circula" className="op-btn op-fantasma">
                 <CalendarRange size={14} />
-                Enviar al cuadrante
+                <span className="op-texto-ancho">Enviar al cuadrante</span>
               </button>
             </>}
             <div style={{ flex: 1 }} />
-            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" className="op-input" style={{ width: 150, height: 30, fontSize: 12.5 }} />
+            <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar por línea…" className="op-input" style={{ width: 130, height: 30, fontSize: 13 }} />
             <button onClick={() => setShowOpt(s => !s)} title={modo === "vehicles" ? "Buscar los mejores vehículos de este calendario" : "Buscar los mejores turnos sobre estos vehículos"} className={`op-btn${showOpt ? " op-activo" : ""}`}>
               <TrendingUp size={14} />
               {opt.estado === "corriendo" ? `Optimizando ${opt.progreso[1] ? Math.round((100 * opt.progreso[0]) / opt.progreso[1]) : 0}%` : modo === "vehicles" ? "Optimizar vehículos" : "Optimizar turnos"}
@@ -531,13 +531,13 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
           {avisoPlanning && (
             <div style={{ padding: "7px 16px", fontSize: 12, color: C.input, background: C.amber, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
               <span><AlertTriangle size={13} style={{ verticalAlign: "-2px" }} /> <b>Se ha modificado la planificación</b> desde la última vez que se trabajó este calendario: {avisoPlanning.detalle} · {new Date(avisoPlanning.atMs).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. El escenario ya se ha recalculado con los cambios; conviene volver a optimizar.</span>
-              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: C.input, border: "none", color: C.amber, borderRadius: 5, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
+              <button onClick={() => marcarPlanningVisto(dia)} style={{ marginLeft: "auto", background: C.input, border: "none", color: C.amber, borderRadius: 4, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font, flexShrink: 0 }}>Entendido</button>
             </div>
           )}
           {manualesActuales.length > 0 && (
-            <div style={{ padding: "5px 16px", fontSize: 11.5, color: C.blueText, background: "rgba(91,124,250,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ padding: "5px 16px", fontSize: 12, color: C.blueText, background: "rgba(91,124,250,0.08)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 12 }}>
               <span><Pencil size={12} style={{ verticalAlign: "-2px" }} /> {manualesActuales.length} cambio{manualesActuales.length > 1 ? "s" : ""} a mano en este calendario ({manualesActuales.filter(esCambioVehiculos).length} de vehículos, {manualesActuales.filter(esCambioTurnos).length} de turnos). Se guardan y se vuelven a aplicar al abrirlo.</span>
-              <button onClick={deshacer} disabled={calculando} style={{ background: "none", border: `1px solid ${C.border2}`, color: C.text, borderRadius: 5, padding: "2px 9px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Deshacer el último</button>
+              <button onClick={deshacer} disabled={calculando} className="op-btn">Deshacer el último</button>
               <button onClick={quitarManuales} disabled={calculando} style={{ background: "none", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: font, textDecoration: "underline" }}>Quitarlos todos</button>
             </div>
           )}
@@ -550,7 +550,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             optJunto={optJunto} onOptimizarJunto={optimizarJunto} onAplicarJunto={aplicarJunto}
             bloqueado={lote ? "Espera a que terminen los cálculos de la pestaña Calendarios" : null} />}
           {res && ((params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax) || (params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax)) && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.red, background: "rgba(242,109,109,0.08)", borderBottom: "1px solid rgba(242,109,109,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 12, color: C.red, background: "rgba(242,109,109,0.08)", borderBottom: "1px solid rgba(242,109,109,0.3)" }}>
               El escenario no cabe en los recursos disponibles:
               {params.flotaMax > 0 && res.kpis.autobuses > params.flotaMax && ` necesita ${num(res.kpis.autobuses)} autobuses y hay ${num(params.flotaMax)}.`}
               {params.conductoresMax > 0 && res.kpis.turnos > params.conductoresMax && ` Necesita ${num(res.kpis.turnos)} conductores y hay ${num(params.conductoresMax)}.`}
@@ -560,12 +560,12 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
           {res?.turnos && <PorQueSinTipo res={res} p={params} onRestricciones={() => setShowC(true)} />}
 
           {res && !res.conCocheras && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 12, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
               Sin cocheras: no se calculan las salidas ni las vueltas a cochera ni sus km en vacío. Añádelas en Planning («Cocheras»).
             </div>
           )}
           {res?.aproximado && (
-            <div style={{ padding: "6px 16px", fontSize: 11.5, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
+            <div style={{ padding: "6px 16px", fontSize: 12, color: C.amber, background: "rgba(245,184,74,0.08)", borderBottom: "1px solid rgba(245,184,74,0.3)" }}>
               Esta red se importó sin las horas de salida de cada viaje: se han repartido entre la primera y la última de cada sentido. Vuelve a importar el GTFS en Planning («Sustituir red») para usar los horarios exactos.
             </div>
           )}
@@ -575,12 +575,12 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center", maxWidth: 460 }}>
                 <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 6 }}>Paso 2 · Turnos de conductor</div>
-                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
                   Los vehículos de este calendario ({num(res.kpis.autobuses)} autobuses, {num(res.kpis.bloques)} bloques, {num(res.kpis.kmVacio || 0)} km en vacío) aún no tienen turnos. Se hacen sobre esos bloques sin cambiarlos.
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                  <button onClick={() => calcular(params, "turnos", { conservar: true })} disabled={calculando} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>{calculando ? "Generando…" : "Generar turnos"}</button>
-                  <button onClick={() => setShowOpt(true)} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${C.border2}`, background: "none", color: C.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Optimizar turnos…</button>
+                  <button onClick={() => calcular(params, "turnos", { conservar: true })} disabled={calculando} className="op-btn op-primario">{calculando ? "Generando…" : "Generar turnos"}</button>
+                  <button onClick={() => setShowOpt(true)} className="op-btn">Optimizar turnos…</button>
                 </div>
               </div>
             </div>
@@ -589,7 +589,7 @@ export function SchedulingLineasPage({ projectId, orgId, proyecto, sesion }) {
         </div>
       )}
       {nota && (
-        <div onClick={() => setNota(null)} style={{ position: "fixed", left: "50%", bottom: 22, transform: "translateX(-50%)", zIndex: 3000, maxWidth: "min(760px, calc(100vw - 32px))", padding: "9px 16px", borderRadius: 9, fontSize: 12.5, cursor: "pointer",
+        <div onClick={() => setNota(null)} style={{ position: "fixed", left: "50%", bottom: 22, transform: "translateX(-50%)", zIndex: 3000, maxWidth: "min(760px, calc(100vw - 32px))", padding: "9px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer",
           background: nota.error ? tono("#3a1620", "#f6e7eb") : tono("#0d2f22", "#e5f8f1"), border: `1px solid ${nota.error ? C.red : C.green}`, color: nota.error ? "#fecaca" : "#bbf7d0", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}>{nota.texto}</div>
       )}
     </div>

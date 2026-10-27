@@ -7,6 +7,7 @@ import { minToTime } from "../vrp-engine.js";
 import { C, barrioColor, fmtDurHM, mono } from "./estilo.js";
 import { ROW_H, UNASSIGNED_RENDER_CAP, ZOOM_STEPS } from "./gantt-comun.js";
 import { ClockBadge } from "./kpi-bar.jsx";
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 export function BarraGantt({ cambiarVista, compactDayNav, days, nombreDia = d => `Día ${d + 1}`, ganttSort, pxPerMin, selectedDay, setCompactDayNav, setGanttSort, setSelectedDay, setZoom, totals, vista, zoomIn, zoomLabel, zoomOut }) {
   const etiqueta = txt => <span style={{ fontSize: 12, color: C.dim, marginRight: 2 }}>{txt}</span>;
@@ -87,7 +88,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
           left: Math.min(tooltip.x + 14, window.innerWidth - 270),
           top: Math.max(tooltip.y - 70, 8),
           background: C.card, border: `1px solid ${C.border2}`,
-          borderRadius: 9, padding: "11px 14px", zIndex: 2000,
+          borderRadius: 8, padding: "11px 14px", zIndex: 2000,
           boxShadow: "0 8px 28px rgba(0,0,0,.6)",
           fontSize: 12, color: C.text, minWidth: 190, maxWidth: 270,
           pointerEvents: "none", animation: "sched-fadein .1s ease both",
@@ -108,7 +109,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
                   {t._depot_exit ? "Salida de cochera" : t._depot_return ? "Vuelta a cochera" : t._a_planta ? "Viaje a descargar" : "Vacío entre paradas"}
                 </div>
                 <div style={{ fontWeight: 650, color: C.text, fontSize: 13, marginBottom: 4 }}>{desde} → {hasta}</div>
-                <div style={{ color: C.muted, fontSize: 11.5 }}>
+                <div style={{ color: C.muted, fontSize: 12 }}>
                   {minToTime(t._start % 1440)} → {minToTime(t._end % 1440)} · {t.duracion || 0} min{t.km != null ? ` · ${t.km.toFixed(1).replace(".", ",")} km` : ""}
                 </div>
               </>
@@ -116,7 +117,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
           })() : <>
           {tooltip.task.barrio && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: barrioColor(tooltip.task.barrio), flexShrink: 0 }} />
+              <div style={{ width: 10, height: 10, borderRadius: 4, background: barrioColor(tooltip.task.barrio), flexShrink: 0 }} />
               <span style={{ fontSize: 10, color: C.muted }}>{tooltip.task.barrio}</span>
             </div>
           )}
@@ -160,7 +161,7 @@ export function TooltipGantt({ allVehicles, allWorkers, dragging, mode, stackPan
               if (!v) return null;
               return (
                 <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 5, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.blue, fontWeight: 700, flexShrink: 0 }}><Truck size={12} /></div>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.blue, fontWeight: 700, flexShrink: 0 }}><Truck size={12} /></div>
                   <div>
                     <div style={{ fontSize: 10, color: C.dim, marginBottom: 1 }}>Vehículo asignado</div>
                     <div style={{ fontSize: 11, color: C.blue, fontWeight: 600 }}>{v.nombre || v.matricula}{v.matricula && v.nombre ? ` · ${v.matricula}` : ""}</div>
@@ -193,7 +194,7 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
           {/* Header */}
           <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
             {stackPanel.task.barrio && (
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: barrioColor(stackPanel.task.barrio), flexShrink: 0, marginTop: 2 }} />
+              <div style={{ width: 12, height: 12, borderRadius: 4, background: barrioColor(stackPanel.task.barrio), flexShrink: 0, marginTop: 2 }} />
             )}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>
@@ -203,7 +204,7 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
               </div>
               {stackPanel.task.barrio && <div style={{ fontSize: 10, color: C.muted }}>{stackPanel.task.barrio}</div>}
             </div>
-            <button onClick={closePanel} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
+            <BotonCerrar onClick={closePanel} />
           </div>
 
           {/* Time + assigned resource */}
@@ -233,7 +234,7 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
           {onScheduleChange && rows.length > 1 && (
             <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Mover a</div>
-              <div style={{ fontSize: 9.5, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 10, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>
                 Los huecos válidos también se resaltan en el Gantt — haz clic ahí para elegir un momento concreto.
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -244,16 +245,11 @@ export function PanelDetalleGantt({ attemptMove, closePanel, movePreview, onSche
                     <button key={r._id || r.id} disabled={!best} onClick={() => {
                       if (!best) { rejectMove(); return; }
                       attemptMove(stackPanel.task, stackPanel.row, r, best, movePreview.dayOffset);
-                    }} style={{
-                      display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
-                      background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7,
-                      cursor: best ? "pointer" : "not-allowed", textAlign: "left", transition: "border-color .1s",
-                      opacity: best ? 1 : 0.45,
-                    }}
+                    }} className="op-btn" style={{ textAlign: "left", opacity: best ? 1 : 0.45 }}
                       onMouseEnter={e => best && (e.currentTarget.style.borderColor = C.blue)}
                       onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
                     >
-                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.surface2, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.surface2, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: C.muted, fontWeight: 700 }}>
                         {(r.nombre || "?")[0].toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -308,7 +304,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
           flexShrink: 0, background: C.card, borderTop: `1px solid ${C.border}`,
           padding: "8px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Jornada media</span>
+          <span style={{ fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Jornada media</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.blueText, fontFamily: mono }}>{fmtDurHM(jornadaStats.avg)}</span>
           <span style={{ fontSize: 11, color: C.dim, fontFamily: mono }}>
             mín {fmtDurHM(jornadaStats.min)} · máx {fmtDurHM(jornadaStats.max)}
@@ -317,7 +313,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
             {jornadaStats.count} turno{jornadaStats.count !== 1 ? "s" : ""} con paradas
           </span>
           {jornadaStats.max - jornadaStats.min > 120 && (
-            <span style={{ fontSize: 10.5, color: C.amber, display: "flex", alignItems: "center", gap: 4 }} title="Hay más de 2h de diferencia entre el turno más corto y el más largo del día">
+            <span style={{ fontSize: 11, color: C.amber, display: "flex", alignItems: "center", gap: 4 }} title="Hay más de 2h de diferencia entre el turno más corto y el más largo del día">
               <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> turnos descompensados
             </span>
           )}
@@ -331,8 +327,8 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
             width: "100%", display: "flex", alignItems: "center", gap: 8,
             padding: "6px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
           }}>
-            <span style={{ fontSize: 10.5, color: C.red, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
-            <span style={{ background: "rgba(242,109,109,0.12)", border: "1px solid rgba(242,109,109,0.3)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
+            <span style={{ fontSize: 11, color: C.red, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700 }}>Sin asignar</span>
+            <span style={{ background: "rgba(242,109,109,0.12)", border: "1px solid rgba(242,109,109,0.3)", color: C.red, borderRadius: 12, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
             <span style={{ fontSize: 10, color: C.dim }}>arrastra una parada a una fila para colocarla</span>
             {unassigned.some(t => t._fueraAutonomia) && <span style={{ fontSize: 10, color: C.amber }}>· {unassigned.filter(t => t._fueraAutonomia).length} no las alcanza ningún vehículo con su autonomía</span>}
             <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{unassignedOpen ? "▲" : "▼"}</span>
@@ -362,13 +358,13 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
                     }}
                   >
                     {hasWindow && <ClockBadge size={10} />}
-                    <div style={{ width: 3, height: "60%", borderRadius: 2, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
-                    <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{label}</span>
+                    <div style={{ width: 3, height: "60%", borderRadius: 4, background: "#fff", opacity: 0.5, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{label}</span>
                   </div>
                 );
               })}
               {unassigned.length > UNASSIGNED_RENDER_CAP && (
-                <div style={{ display: "flex", alignItems: "center", padding: "0 8px", fontSize: 10.5, color: C.dim }}>
+                <div style={{ display: "flex", alignItems: "center", padding: "0 8px", fontSize: 11, color: C.dim }}>
                   +{(unassigned.length - UNASSIGNED_RENDER_CAP).toLocaleString()} más — coloca o filtra estas para ver el resto
                 </div>
               )}

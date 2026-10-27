@@ -17,6 +17,7 @@ import { alfa } from "../tema.js";
 
 
 
+import { BotonCerrar } from "../ui/cerrar.jsx";
 
 export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
@@ -36,10 +37,10 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, // si no cabe, a una segunda línea (antes «Generar escenario» se salía)
       }}>
         {/* Qué se ve: el escenario de los vehículos o el de los trabajadores */}
-        <div role="tablist" aria-label="Ver el escenario de" style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, background: C.surface2, border: `1px solid ${C.border}` }}>
+        <div role="tablist" aria-label="Ver el escenario de" style={{ display: "flex", gap: 2, padding: 3, borderRadius: 8, background: C.surface2, border: `1px solid ${C.border}` }}>
           {[["vehicles", t("vehiculos", lang), Truck], ["workers", t("trabajadores", lang), Users]].map(([v, l, Icono]) => (
             <button key={v} role="tab" aria-selected={mode === v} onClick={() => setMode(v)} style={{
-              display: "inline-flex", alignItems: "center", gap: 7, height: 32, padding: "0 14px", borderRadius: 7, border: "none", cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 7, height: 32, padding: "0 14px", borderRadius: 8, border: "none", cursor: "pointer",
               fontFamily: font, fontSize: 13, fontWeight: 650,
               background: mode === v ? C.blue : "transparent", color: mode === v ? "#fff" : C.muted,
               transition: "background .12s, color .12s",
@@ -79,8 +80,8 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
                     [FileUp, "Importar escenario desde Excel", "importar"],
                   ].map(([Icono, txt, que]) => (
                     <button key={que} role="menuitem" onClick={() => elegirExcel(que)} className="op-menu-item" style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", borderRadius: 6, background: "transparent",
-                      color: C.text, fontFamily: font, fontSize: 12.5, cursor: "pointer", textAlign: "left", whiteSpace: "nowrap",
+                      display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", borderRadius: 8, background: "transparent",
+                      color: C.text, fontFamily: font, fontSize: 13, cursor: "pointer", textAlign: "left", whiteSpace: "nowrap",
                     }}><Icono size={14} color={C.muted} />{txt}</button>
                   ))}
                 </div>
@@ -140,7 +141,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: elapsedSec >= 60 ? "#f59e0b" : C.muted }}>
+              <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: elapsedSec >= 60 ? C.amber : C.muted }}>
                 {elapsedSec >= 60
                   ? `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`
                   : `${elapsedSec}s`}
@@ -151,12 +152,12 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
             </div>
           </div>
           {/* Track */}
-          <div style={{ height: 4, background: C.surface2, borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ height: 4, background: C.surface2, borderRadius: 4, overflow: "hidden" }}>
             <div style={{
               height: "100%",
               width: `${GEN_PHASES[genPhase]?.pct ?? 4}%`,
               background: `linear-gradient(90deg, ${C.blue}, #818cf8)`,
-              borderRadius: 3,
+              borderRadius: 4,
               transition: "width 0.5s ease",
               animation: "sched-shimmer 1.8s ease-in-out infinite",
             }} />
@@ -177,7 +178,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
                     transition: "all .3s",
                   }} />
                   <span style={{
-                    fontSize: 9, color: done ? C.green : active ? C.blueText : C.dim,
+                    fontSize: 10, color: done ? C.green : active ? C.blueText : C.dim,
                     letterSpacing: .3, fontWeight: active ? 600 : 400,
                     transition: "color .3s", whiteSpace: "nowrap",
                   }}>
@@ -197,7 +198,7 @@ export function ProgresoGeneracion({ GEN_PHASES, elapsedSec, genPhase, generatin
             <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{scaleProgress.texto}</div>
           )}
           {genPhase === "vrp" && scaleProgress && !scaleProgress.texto && (
-            <div style={{ marginTop: 8, fontSize: 10.5, color: C.dim, fontFamily: "monospace", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: C.dim, fontFamily: "monospace", display: "flex", gap: 10, flexWrap: "wrap" }}>
               <span style={{ color: C.blueText, fontWeight: 700 }}>
                 {scaleProgress.stage === "growth" ? `Ronda ${scaleProgress.round}` : `Afinando`}
               </span>
@@ -221,7 +222,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
       {genError && !focusMode && (
         <div style={{ padding: "7px 16px", background: "rgba(242,109,109,0.08)", borderBottom: `1px solid rgba(242,109,109,0.25)`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: C.red }}>Error al generar: {genError}</span>
-          <button onClick={() => setGenError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+          <BotonCerrar style={{ marginLeft: "auto" }} onClick={() => setGenError(null)} />
         </div>
       )}
 
@@ -249,10 +250,10 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
             {cloudConflict.meta?.savedBy?.nombre || "Otra persona"} ha guardado otra versión de este escenario mientras lo editabas. Tus cambios están a salvo en este navegador — elige con cuál te quedas.
           </span>
           <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <button onClick={takeTheirScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: C.surface2, border: `1px solid ${C.border}`, color: C.text }}>
+            <button onClick={takeTheirScenario} className="op-btn">
               Ver su versión (descarta la mía)
             </button>
-            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(245,184,74,0.15)", border: "1px solid rgba(245,184,74,0.45)", color: C.amber, fontWeight: 600 }}>
+            <button onClick={keepMyScenario} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(245,184,74,0.15)", border: "1px solid rgba(245,184,74,0.45)", color: C.amber, fontWeight: 600 }}>
               Guardar la mía encima
             </button>
           </div>
@@ -263,7 +264,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
           <span style={{ fontSize: 11, color: C.red }}>
             No se pudo sincronizar el escenario con la nube. Está guardado en este navegador y se volverá a subir con el próximo cambio o al recargar.
           </span>
-          <button onClick={() => setCloudSync(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+          <BotonCerrar style={{ marginLeft: "auto" }} onClick={() => setCloudSync(null)} />
         </div>
       )}
       {saveSummaryError && !focusMode && (
@@ -271,7 +272,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
           <span style={{ fontSize: 11, color: C.red }}>
             No se pudo guardar el resumen del proyecto ({saveSummaryError}) — el escenario generado sigue intacto, pero la tarjeta de Proyectos y Rostering pueden no reflejarlo. Prueba a recargar.
           </span>
-          <button onClick={() => setSaveSummaryError(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}>×</button>
+          <BotonCerrar style={{ marginLeft: "auto" }} onClick={() => setSaveSummaryError(null)} />
         </div>
       )}
 
@@ -319,7 +320,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
               <div style={{ display: "flex", gap: 6 }}>
                 {[["ruta","Ruta"],["prev","Mantenimiento"],["ext","Limp. Exterior"],["int","Limp. Interior"]].map(([k, label]) => (
                   <button key={k} onClick={() => setPublishModal(m => ({ ...m, tipo: k, trabajo: trabajoRecordado(k) }))} style={{
-                    flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${publishModal.tipo === k ? C.blue : C.border}`,
+                    flex: 1, padding: "7px 4px", borderRadius: 8, border: `1px solid ${publishModal.tipo === k ? C.blue : C.border}`,
                     background: publishModal.tipo === k ? C.blueDim : "none",
                     color: publishModal.tipo === k ? C.blueText : C.muted,
                     fontSize: 10, fontWeight: publishModal.tipo === k ? 700 : 400,
@@ -336,9 +337,9 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                 value={publishModal.trabajo ?? trabajoRecordado(publishModal.tipo)} maxLength={60}
                 onChange={e => setPublishModal(m => ({ ...m, trabajo: e.target.value }))}
                 placeholder={NOMBRE_TIPO[publishModal.tipo]}
-                style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 12, fontFamily: font }}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 12, fontFamily: font }}
               />
-              <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}>Así lo verán los conductores en la app (p. ej. «Recogida de vidrio»).</div>
+              <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>Así lo verán los conductores en la app (p. ej. «Recogida de vidrio»).</div>
             </div>
 
             {/* Mes */}
@@ -350,7 +351,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                 onChange={e => setPublishModal(m => ({ ...m, mes: e.target.value }))}
                 style={{
                   width: "100%", boxSizing: "border-box",
-                  padding: "8px 10px", borderRadius: 7,
+                  padding: "8px 10px", borderRadius: 8,
                   border: `1px solid ${C.border}`, background: C.surface2,
                   color: C.text, fontSize: 12, fontFamily: font,
                 }}
@@ -358,13 +359,9 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setPublishModal(null)} disabled={publishing} style={{
-                flex: 1, padding: "9px 0", borderRadius: 7, border: `1px solid ${C.border}`,
-                background: "none", color: C.muted, fontSize: 13, fontWeight: 500,
-                cursor: "pointer", fontFamily: font,
-              }}>Cancelar</button>
+              <button onClick={() => setPublishModal(null)} disabled={publishing} className="op-btn" style={{ flex: 1 }}>Cancelar</button>
               <button onClick={() => { const tr = publishModal.trabajo ?? trabajoRecordado(publishModal.tipo); recordarTrabajo(publishModal.tipo, tr); publishToRoutes(publishModal.tipo, publishModal.mes, tr); }} disabled={publishing} style={{
-                flex: 2, padding: "9px 0", borderRadius: 7, border: "none",
+                flex: 2, padding: "9px 0", borderRadius: 8, border: "none",
                 background: publishing ? C.blueDim : C.blue,
                 color: publishing ? C.blueText : "#fff",
                 fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer",
@@ -399,7 +396,7 @@ export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoi
           }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Historial de versiones</div>
-              <button onClick={() => setShowHistorial(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
+              <BotonCerrar onClick={() => setShowHistorial(false)} />
             </div>
             {/* Puntos de restauración (versiones completas guardadas en la nube) */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text, margin: "10px 0 4px" }}>Puntos de restauración</div>
@@ -420,19 +417,19 @@ export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoi
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDeVersion(p)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDeVersion(p)}</span>
                         <button title="Cambiar el nombre de esta versión" aria-label="Renombrar versión" onClick={() => { const n = window.prompt("Nombre de esta versión:", p.nombre || ""); if (n != null) renombrarPunto(projectId, p.v, n).catch(e => window.alert(`No se pudo renombrar: ${e.message || e}`)); }}
                           style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", padding: 0, display: "inline-flex" }}><Pencil size={11} /></button>
                       </div>
                       <div style={{ fontSize: 11, color: C.muted }}>{p.motivo}</div>
-                      <div style={{ fontSize: 10.5, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
+                      <div style={{ fontSize: 11, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
                     </div>
                     {compararCon && (
-                      <button onClick={() => compararCon(p)} title="Ver esta versión al lado del escenario actual" style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontWeight: 600, flexShrink: 0 }}>
+                      <button onClick={() => compararCon(p)} title="Ver esta versión al lado del escenario actual" className="op-btn" style={{ flexShrink: 0 }}>
                         Comparar
                       </button>
                     )}
-                    <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(91,124,250,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
+                    <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: font, background: "rgba(91,124,250,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
                       Restaurar
                     </button>
                   </div>
@@ -464,7 +461,7 @@ export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoi
                       const d = +(h[key] - prev[key]).toFixed(decimals);
                       if (d === 0) return null;
                       const up = d > 0;
-                      return <span style={{ fontSize: 9, marginLeft: 4, color: up ? C.orange : C.green }}>{up ? "▲" : "▼"}{Math.abs(d)}</span>;
+                      return <span style={{ fontSize: 10, marginLeft: 4, color: up ? C.orange : C.green }}>{up ? "▲" : "▼"}{Math.abs(d)}</span>;
                     };
                     const fecha = h.generatedAt?.toDate ? h.generatedAt.toDate() : (h.generatedAt?.toMillis ? new Date(h.generatedAt.toMillis()) : null);
                     return (
@@ -494,9 +491,9 @@ export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoi
 export function VentanaSimulador({ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, setSimTrab, showSimulador, simDelta, simError, simResult, simRunning, simTrab, totalKm, unassigned, vehicles, workers = [] }) {
   const contador = (valor, cambiar, min, etiqueta) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <button aria-label={`Quitar ${etiqueta}`} onClick={() => cambiar(d => Math.max(min, d - 1))} disabled={simRunning || valor <= min} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>−</button>
-      <span style={{ width: 46, textAlign: "center", fontFamily: mono, fontSize: 14, fontWeight: 700, color: valor > 0 ? C.green : valor < 0 ? C.red : C.muted }}>{valor > 0 ? `+${valor}` : valor}</span>
-      <button aria-label={`Añadir ${etiqueta}`} onClick={() => cambiar(d => d + 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>+</button>
+      <button aria-label={`Quitar ${etiqueta}`} onClick={() => cambiar(d => Math.max(min, d - 1))} disabled={simRunning || valor <= min} style={{ width: 26, height: 26, borderRadius: 8, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 15 }}>−</button>
+      <span style={{ width: 46, textAlign: "center", fontFamily: mono, fontSize: 15, fontWeight: 700, color: valor > 0 ? C.green : valor < 0 ? C.red : C.muted }}>{valor > 0 ? `+${valor}` : valor}</span>
+      <button aria-label={`Añadir ${etiqueta}`} onClick={() => cambiar(d => d + 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 8, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 15 }}>+</button>
     </div>
   );
   return (
@@ -513,7 +510,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
           }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Simulador "qué pasaría si"</div>
-              {!simRunning && <button onClick={() => setShowSimulador(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>}
+              {!simRunning && <BotonCerrar onClick={() => setShowSimulador(false)} />}
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
               Prueba a añadir o quitar vehículos, o a añadir trabajadores, y compara el resultado y el coste con el escenario actual. No se guarda nada.
@@ -528,12 +525,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
               <span style={{ fontSize: 10, color: C.dim }}>cada uno, un segundo turno en el vehículo con menos horas</span>
             </div>
 
-            <button onClick={runSimulation} disabled={simRunning || vehicles.length + simDelta <= 0} style={{
-              width: "100%", padding: "9px", background: C.blue, border: "none", color: "#fff",
-              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: simRunning ? "wait" : "pointer",
-              fontFamily: font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              opacity: vehicles.length + simDelta <= 0 ? 0.5 : 1, marginBottom: 16,
-            }}>
+            <button onClick={runSimulation} disabled={simRunning || vehicles.length + simDelta <= 0} className="op-btn op-primario" style={{ width: "100%", justifyContent: "center", opacity: vehicles.length + simDelta <= 0 ? 0.5 : 1, marginBottom: 16 }}>
               {simRunning
                 ? <><span style={{ display: "inline-block", width: 12, height: 12, border: `2px solid ${alfa(0.3)}`, borderTopColor: "#fff", borderRadius: "50%", animation: "sched-spin .6s linear infinite" }} /> Simulando…</>
                 : "Simular"
@@ -577,7 +569,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
                     })}
                   </div>
                   {difCoste != null && Math.abs(difCoste) >= 1 && (
-                    <div style={{ marginTop: 12, fontSize: 12.5, color: C.text }}>
+                    <div style={{ marginTop: 12, fontSize: 13, color: C.text }}>
                       El simulado cuesta <b style={{ color: difCoste > 0 ? C.orange : C.green }}>{eur(Math.abs(difCoste))} {difCoste > 0 ? "más" : "menos"}</b> en los días del escenario.
                     </div>
                   )}
@@ -585,7 +577,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
                     <div style={{ marginTop: 6, fontSize: 11, color: C.dim }}>Coste contado igual en los dos: horas de cada vehículo de la salida a la vuelta, más los turnos enteros de los trabajadores de más, y los km.</div>
                   )}
                   {simResult.coste == null && (
-                    <div style={{ marginTop: 12, fontSize: 11.5, color: C.muted }}>Para ver el coste, pon el coste por hora de conductor y por km en Restricciones.</div>
+                    <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>Para ver el coste, pon el coste por hora de conductor y por km en Restricciones.</div>
                   )}
                   {simResult.puestos?.length > 0 && (
                     <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
@@ -610,12 +602,12 @@ function AvisoCalculo({ mensajes, onCerrar }) {
   const orden = [...lista.filter(m => !/^Distancias y tiempos/.test(m)), ...lista.filter(m => /^Distancias y tiempos/.test(m))];
   if (!orden.length) return null;
   return (
-    <div style={{ padding: "6px 16px", background: `${C.amber}14`, borderBottom: `1px solid ${C.amber}40`, flexShrink: 0, fontSize: 11.5, color: C.text }}>
+    <div style={{ padding: "6px 16px", background: `${C.amber}14`, borderBottom: `1px solid ${C.amber}40`, flexShrink: 0, fontSize: 12, color: C.text }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Info size={13} color={C.amber} style={{ flexShrink: 0 }} />
         <span style={{ flex: 1, minWidth: 0, whiteSpace: abierto ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{orden[0]}</span>
         {orden.length > 1 || orden[0].length > 110
-          ? <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", color: C.blueText, cursor: "pointer", fontSize: 11.5, padding: 0, flexShrink: 0 }}>{abierto ? "Ver menos" : `Ver todo${orden.length > 1 ? ` (${orden.length})` : ""}`}</button>
+          ? <button onClick={() => setAbierto(a => !a)} style={{ background: "none", border: "none", color: C.blueText, cursor: "pointer", fontSize: 12, padding: 0, flexShrink: 0 }}>{abierto ? "Ver menos" : `Ver todo${orden.length > 1 ? ` (${orden.length})` : ""}`}</button>
           : null}
         <button onClick={onCerrar} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex", padding: 0, flexShrink: 0 }}><X size={14} /></button>
       </div>
@@ -642,7 +634,7 @@ function NombreEscenario({ projectId, meta }) {
   if (editando) return (
     <input autoFocus aria-label="Nombre del escenario" value={texto} placeholder="Nombre del escenario" onChange={e => setTexto(e.target.value)}
       onBlur={guardar} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTexto(meta.nombre || ""); setEditando(false); } }}
-      style={{ height: 30, width: 220, background: C.bg, border: `1px solid ${C.blue}`, color: C.text, borderRadius: 8, padding: "0 10px", fontSize: 12.5, fontFamily: font, outline: "none" }} />
+      style={{ height: 30, width: 220, background: C.bg, border: `1px solid ${C.blue}`, color: C.text, borderRadius: 8, padding: "0 10px", fontSize: 13, fontFamily: font, outline: "none" }} />
   );
   return (
     <button onClick={() => { setTexto(meta.nombre || ""); setEditando(true); }} className="op-btn op-fantasma" title={error ? `No se pudo renombrar: ${error}` : "Cambiar el nombre del escenario"}

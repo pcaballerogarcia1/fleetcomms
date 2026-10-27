@@ -68,8 +68,8 @@ export function FlotaLineas({ cfg, onGuardar }) {
 
   const vis = lista.filter(b => !q.trim() || norm(`${b.matricula} ${b.nota} ${TIPOS_VEHICULO.find(t => t.id === b.tipo)?.nombre || ""}`).includes(norm(q)));
   const conAut = lista.filter(b => Number(b.autonomiaKm) > 0).length;
-  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 5, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
-  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
+  const inp = { background: C.bg, border: `1px solid ${C.border}`, color: C.text, borderRadius: 4, padding: "4px 7px", fontSize: 12, fontFamily: font, outline: "none" };
+  const th = { fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "left", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1 };
   const td = { padding: "5px 10px", borderTop: `1px solid ${C.border}` };
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "16px 22px" }}>
@@ -81,11 +81,11 @@ export function FlotaLineas({ cfg, onGuardar }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 10px", flexWrap: "wrap" }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar matrícula, tipo o nota…" style={{ ...inp, width: 240, padding: "6px 9px" }} />
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
-          <button onClick={() => fileRef.current?.click()} style={{ padding: "7px 14px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Subir Excel / CSV</button>
-          <button onClick={() => guardar([...lista, { id: nuevoId(), matricula: `Nuevo ${lista.length + 1}`, tipo: null, autonomiaKm: null, nota: "" }])} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.border2}`, background: "none", color: C.text, fontSize: 12, cursor: "pointer", fontFamily: font }}>+ Añadir autobús</button>
-          <span style={{ fontSize: 11.5, color: C.muted }}>{lista.length} autobuses · {conAut} con autonomía</span>
+          <button onClick={() => fileRef.current?.click()} className="op-btn op-primario">Subir Excel / CSV</button>
+          <button onClick={() => guardar([...lista, { id: nuevoId(), matricula: `Nuevo ${lista.length + 1}`, tipo: null, autonomiaKm: null, nota: "" }])} className="op-btn">+ Añadir autobús</button>
+          <span style={{ fontSize: 12, color: C.muted }}>{lista.length} autobuses · {conAut} con autonomía</span>
         </div>
-        <div style={{ fontSize: 10.5, color: C.dim, marginBottom: 8 }}>El Excel: una fila por autobús, con columnas como «Matrícula», «Tipo» (eléctrico, articulado, estándar, midi, micro, interurbano) y «Autonomía» (km). Si la matrícula ya está, se actualiza.</div>
+        <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>El Excel: una fila por autobús, con columnas como «Matrícula», «Tipo» (eléctrico, articulado, estándar, midi, micro, interurbano) y «Autonomía» (km). Si la matrícula ya está, se actualiza.</div>
         {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
         {nota && <div style={{ fontSize: 12, color: C.green, marginBottom: 8 }}>{nota}</div>}
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "auto", maxHeight: "calc(100vh - 340px)", background: C.card }}>
@@ -108,7 +108,7 @@ export function FlotaLineas({ cfg, onGuardar }) {
                     </span>
                   </td>
                   <td style={td}><input defaultValue={b.nota || ""} onBlur={e => e.target.value !== (b.nota || "") && cambiar(b.id, { nota: e.target.value })} style={{ ...inp, width: 260 }} /></td>
-                  <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm(`¿Quitar el ${b.matricula} de la flota?`) && guardar(lista.filter(x => x.id !== b.id))} title="Quitar de la flota" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 14 }}><X size={13} /></button></td>
+                  <td style={{ ...td, textAlign: "right" }}><button onClick={() => window.confirm(`¿Quitar el ${b.matricula} de la flota?`) && guardar(lista.filter(x => x.id !== b.id))} title="Quitar de la flota" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 15 }}><X size={13} /></button></td>
                 </tr>
               ))}
             </tbody>

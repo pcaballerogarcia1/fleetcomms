@@ -79,20 +79,20 @@ export function OnlineUsers({ sesion }) {
       {open && (
         <div style={{
           position: "absolute", top: 36, right: 0, zIndex: 1000, width: 290, maxHeight: 380, overflowY: "auto",
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
           boxShadow: "0 12px 32px rgba(0,0,0,0.45)", fontFamily: font, padding: 6,
         }}>
           <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, padding: "6px 8px 8px" }}>
             Conectados ahora · {list.length}
           </div>
           {list.map(p => (
-            <div key={p.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", borderRadius: 7 }}>
+            <div key={p.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", borderRadius: 8 }}>
               <Avatar p={p} size={30} ring="transparent" />
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {nombreCompleto(p)}
                 </div>
-                <div style={{ fontSize: 10.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {[roleLabel(p.rol), donde(p), isSA ? orgs[p.org_id] : null].filter(Boolean).join(" · ")}
                 </div>
               </div>

@@ -38,9 +38,9 @@ function Login({aviso=""}){
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:26}}>
           <Logo size={48}/>
           <div style={{fontSize:24,fontWeight:650,color:C.text,letterSpacing:"-0.02em",marginTop:16}}>Operanzia</div>
-          <div style={{fontSize:13.5,color:C.muted,marginTop:6}}>Tus rutas, tu turno y tus avisos</div>
+          <div style={{fontSize:13,color:C.muted,marginTop:6}}>Tus rutas, tu turno y tus avisos</div>
         </div>
-        <div style={{background:tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"),border:`1px solid ${C.border}`,borderRadius:16,padding:22,boxShadow:`0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`}}>
+        <div style={{background:tono("rgba(18,21,28,0.85)", "rgba(255,255,255,0.85)"),border:`1px solid ${C.border}`,borderRadius:12,padding:22,boxShadow:`0 24px 64px rgba(0,0,0,.45), inset 0 1px 0 ${alfa(0.04)}`}}>
           <div style={{marginBottom:14}}>
             <label className="op-label">Email o usuario</label>
             <input className="op-input" style={{height:44,fontSize:15}} value={email} onChange={e=>setEmail(e.target.value)} type="text" placeholder="tu@empresa.com o tu usuario" autoComplete="username" autoCapitalize="none" onKeyDown={e=>e.key==="Enter"&&go()}/>
@@ -49,7 +49,7 @@ function Login({aviso=""}){
             <label className="op-label">Contraseña</label>
             <input className="op-input" style={{height:44,fontSize:15}} value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="••••••••" autoComplete="current-password" onKeyDown={e=>e.key==="Enter"&&go()}/>
           </div>
-          {err&&<div style={{background:"rgba(242,109,109,0.08)",border:"1px solid rgba(242,109,109,0.25)",color:C.red,borderRadius:10,padding:"10px 12px",fontSize:13,marginBottom:16}}>{err}</div>}
+          {err&&<div style={{background:"rgba(242,109,109,0.08)",border:"1px solid rgba(242,109,109,0.25)",color:C.red,borderRadius:12,padding:"10px 12px",fontSize:13,marginBottom:16}}>{err}</div>}
           <button onClick={go} disabled={loading} className="op-btn op-primario" style={{width:"100%",height:46,fontSize:15}}>
             {loading?<><Loader2 size={16} className="op-girando"/> Accediendo…</>:"Acceder"}
           </button>
@@ -214,7 +214,7 @@ export default function App(){
       <div style={{...S.header,background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"),borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <Logo size={26}/>
-          <div style={{fontSize:16,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[tab]||tab}</div>
+          <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[tab]||tab}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
@@ -236,7 +236,7 @@ export default function App(){
           const active=tab===t.key;
           return(
             <button key={t.key} onClick={()=>setTab(t.key)} style={{flex:1,padding:"10px 0 9px",background:"none",border:"none",cursor:"pointer",fontFamily:font,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",transition:"all .15s"}}>
-              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:2,background:"linear-gradient(90deg,#2563eb,#6d28d9)",borderRadius:2}}/>}
+              {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:2,background:"linear-gradient(90deg,#2563eb,#6d28d9)",borderRadius:4}}/>}
               <t.Icono size={21} strokeWidth={active?2.1:1.7} color={active?C.text:C.dim}/>
               <span style={{fontSize:11,fontWeight:active?600:500,color:active?C.text:C.dim,transition:"color .15s"}}>{t.label}</span>
             </button>

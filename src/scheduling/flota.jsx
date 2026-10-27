@@ -43,17 +43,14 @@ function DepotSection({ projectId, formObj, setFormObj }) {
     });
   }, [projectId]);
 
-  const inpStyle = { flex: 1, minWidth: 0, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
+  const inpStyle = { flex: 1, minWidth: 0, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
 
   return (
     <div style={{ marginTop: 10, padding: "10px 12px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: .5 }}>COCHERA / DEPOT (inicio/fin de turno)</span>
         {planningDepots.length > 0 && (
-          <button onClick={() => setShowPicker(v => !v)} style={{
-            fontSize: 10, padding: "3px 8px", background: "none", border: `1px solid ${C.border}`, borderRadius: 5,
-            color: C.blueText, cursor: "pointer", fontFamily: font,
-          }}>Elegir de Planificación</button>
+          <button onClick={() => setShowPicker(v => !v)} className="op-btn">Elegir de Planificación</button>
         )}
       </div>
       {showPicker && (
@@ -63,11 +60,7 @@ function DepotSection({ projectId, formObj, setFormObj }) {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {planningDepots.map(d => (
-                <button key={d.id} onClick={() => { setFormObj({ ...formObj, depotLat: String(d.lat), depotLng: String(d.lng) }); setShowPicker(false); }} style={{
-                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
-                  color: C.text, fontSize: 12, padding: "6px 10px", cursor: "pointer",
-                  fontFamily: font, textAlign: "left", transition: "border-color .12s",
-                }}
+                <button key={d.id} onClick={() => { setFormObj({ ...formObj, depotLat: String(d.lat), depotLng: String(d.lng) }); setShowPicker(false); }} className="op-btn" style={{ textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
                   onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
                 >
@@ -89,7 +82,7 @@ function DepotSection({ projectId, formObj, setFormObj }) {
           step="0.00001" style={inpStyle} />
         {(formObj.depotLat || formObj.depotLng) && (
           <button onClick={() => setFormObj({ ...formObj, depotLat: "", depotLng: "" })} title="Quitar depot"
-            style={{ padding: "0 10px", background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 7, cursor: "pointer", fontSize: 14, fontFamily: font }}><X size={14} /></button>
+            className="op-btn"><X size={14} /></button>
         )}
       </div>
     </div>
@@ -102,7 +95,7 @@ function FichaVehiculoCampos({ obj, setObj, selStyle }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 10 }}>
       {CAMPOS_FICHA_VEHICULO.map(c => (
-        <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: c.k === "autonomiaKm" ? C.blueText : C.muted, gridColumn: c.k === "notas" || c.k === "autonomiaKm" ? "1 / -1" : undefined }}>
+        <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: c.k === "autonomiaKm" ? C.blueText : C.muted, gridColumn: c.k === "notas" || c.k === "autonomiaKm" ? "1 / -1" : undefined }}>
           {c.l}
           {c.tipo === "opciones" ? (
             <select value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })} style={{ ...selStyle, flex: "none", color: obj[c.k] ? C.text : C.dim }}>
@@ -137,7 +130,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
+  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
   const inpStyle = { ...selStyle };
 
   async function create() {
@@ -209,18 +202,18 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
     <div style={{ flex: "1 1 520px", maxWidth: 720, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Vehículos</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Vehículos</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{vehicles.length} registrado{vehicles.length !== 1 ? "s" : ""}</div>
         </div>
         <button onClick={() => { setAdding(!adding); setEditId(null); }} style={{
           padding: "7px 14px", background: adding ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
-          color: adding ? C.muted : C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600,
+          color: adding ? C.muted : C.blueText, borderRadius: 8, fontSize: 12, fontWeight: 600,
           cursor: "pointer", fontFamily: font, transition: "all .12s",
         }}>{adding ? "Cancelar" : "+ Añadir vehículo"}</button>
       </div>
 
       {adding && (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 16, animation: "sched-fadein .15s ease both" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16, animation: "sched-fadein .15s ease both" }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
             {inp("nombre", "Nombre (p.ej. Vehículo 01)")}
             {inp("matricula", "Matrícula")}
@@ -233,11 +226,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
             <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })} style={selStyle}>
               {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
-            <button onClick={create} disabled={saving || !form.nombre.trim()} style={{
-              padding: "8px 18px", background: C.blue, border: "none", color: "#fff",
-              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer",
-              fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
-            }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={create} disabled={saving || !form.nombre.trim()} className="op-btn op-primario" style={{ opacity: !form.nombre.trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
           <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
@@ -250,7 +239,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {vehicles.map(v => editId === v._id ? (
-            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 14, animation: "sched-fadein .12s ease both" }}>
+            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 12, padding: 14, animation: "sched-fadein .12s ease both" }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                 {eInp("nombre", "Nombre")}
                 {eInp("matricula", "Matrícula")}
@@ -263,18 +252,18 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                 <select value={editForm.turno} onChange={e => setEditForm({ ...editForm, turno: e.target.value })} style={selStyle}>
                   {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
-                <button onClick={() => save(v._id)} disabled={saving} style={{ padding: "8px 16px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+                <button onClick={() => save(v._id)} disabled={saving} className="op-btn op-primario">
                   {saving ? "…" : "Guardar"}
                 </button>
-                <button onClick={() => setEditId(null)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+                <button onClick={() => setEditId(null)} className="op-btn">
                   Cancelar
                 </button>
               </div>
               <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
-            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.blueText, flexShrink: 0 }}>
+            <div key={v._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.blueDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.blueText, flexShrink: 0 }}>
                 {v.nombre[0].toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -296,10 +285,10 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   )}
                 </div>
               </div>
-              <button onClick={() => startEdit(v)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+              <button onClick={() => startEdit(v)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 8, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><Pencil size={13} /></button>
-              <button onClick={() => remove(v._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+              <button onClick={() => remove(v._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 8, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><X size={14} /></button>
             </div>
@@ -312,15 +301,15 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
       const nuevo = adding && !editId;
       const obj = nuevo ? form : editForm, setObj = nuevo ? setForm : setEditForm;
       return (
-        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 16, animation: "sched-fadein .15s ease both" }}>
+        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 12, padding: 16, animation: "sched-fadein .15s ease both" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del vehículo nuevo" : `de ${obj.nombre || obj.matricula || "…"}`}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del vehículo nuevo" : `de ${obj.nombre || obj.matricula || "…"}`}</div>
             <span style={{ fontSize: 11, color: C.dim }}>Se guarda con «Guardar»</span>
           </div>
           <FichaVehiculoCampos obj={obj} setObj={setObj} selStyle={selStyle} />
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} style={{ padding: "8px 18px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font, opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
-            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
+            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} className="op-btn op-primario" style={{ opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} className="op-btn">Cancelar</button>
           </div>
         </div>
       );
@@ -352,7 +341,7 @@ function FichaCampos({ obj, setObj, selStyle, siempre = false }) {
       {abierta && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
           {CAMPOS_FICHA.map(c => (
-            <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: C.muted, gridColumn: c.k === "direccion" || c.k === "notas" ? "1 / -1" : undefined }}>
+            <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: C.muted, gridColumn: c.k === "direccion" || c.k === "notas" ? "1 / -1" : undefined }}>
               {c.l}
               <input type={c.tipo === "fecha" ? "date" : c.tipo === "numero" ? "number" : c.tipo === "email" ? "email" : "text"}
                 value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
@@ -376,7 +365,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
   const [editId,   setEditId]   = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
+  const selStyle = { flex: 1, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "8px 11px", fontSize: 12, fontFamily: font, outline: "none" };
 
   async function create() {
     if (!form.nombre.trim()) return;
@@ -447,18 +436,18 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
     <div style={{ flex: "1 1 520px", maxWidth: 720, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Trabajadores</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Trabajadores</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{workers.length} registrado{workers.length !== 1 ? "s" : ""}</div>
         </div>
         <button onClick={() => { setAdding(!adding); setEditId(null); }} style={{
           padding: "7px 14px", background: adding ? C.surface2 : C.blueDim, border: `1px solid ${C.blue}44`,
-          color: adding ? C.muted : C.blueText, borderRadius: 7, fontSize: 12, fontWeight: 600,
+          color: adding ? C.muted : C.blueText, borderRadius: 8, fontSize: 12, fontWeight: 600,
           cursor: "pointer", fontFamily: font, transition: "all .12s",
         }}>{adding ? "Cancelar" : "+ Añadir trabajador"}</button>
       </div>
 
       {adding && (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 16, animation: "sched-fadein .15s ease both" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16, animation: "sched-fadein .15s ease both" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
             {inp("nombre", "Nombre")}
             {inp("apellidos", "Apellidos")}
@@ -467,7 +456,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
             <select value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })} style={selStyle}>
               {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 6, padding: 3 }}>
+            <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 8, padding: 3 }}>
               {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                 <button key={v} onClick={() => setForm({ ...form, rol: v })} style={{
                   padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
@@ -480,11 +469,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <VehicleSelect value={form.vehiculoId} onChange={v => setForm({ ...form, vehiculoId: v })} vehicles={vehicles} selStyle={selStyle} />
-            <button onClick={create} disabled={saving || !form.nombre.trim()} style={{
-              padding: "8px 18px", background: C.blue, border: "none", color: "#fff",
-              borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer",
-              fontFamily: font, opacity: !form.nombre.trim() ? .5 : 1,
-            }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={create} disabled={saving || !form.nombre.trim()} className="op-btn op-primario" style={{ opacity: !form.nombre.trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
           </div>
           <DepotSection projectId={activeProject?._id} formObj={form} setFormObj={setForm} />
         </div>
@@ -497,7 +482,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {workers.map(w => editId === w._id ? (
-            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 14, animation: "sched-fadein .12s ease both" }}>
+            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 12, padding: 14, animation: "sched-fadein .12s ease both" }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 {eInp("nombre", "Nombre")}
                 {eInp("apellidos", "Apellidos")}
@@ -506,7 +491,7 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                 <select value={editForm.turno} onChange={e => setEditForm({ ...editForm, turno: e.target.value })} style={selStyle}>
                   {TURNO_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
-                <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 6, padding: 3 }}>
+                <div style={{ display: "flex", gap: 4, background: C.surface2, borderRadius: 8, padding: 3 }}>
                   {[["conductor","Conductor"],["supervisor","Supervisor"]].map(([v, l]) => (
                     <button key={v} onClick={() => setEditForm({ ...editForm, rol: v })} style={{
                       padding: "5px 10px", borderRadius: 4, border: "none", cursor: "pointer",
@@ -519,18 +504,18 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <VehicleSelect value={editForm.vehiculoId} onChange={v => setEditForm({ ...editForm, vehiculoId: v })} vehicles={vehicles} selStyle={selStyle} />
-                <button onClick={() => save(w._id)} disabled={saving} style={{ padding: "8px 16px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+                <button onClick={() => save(w._id)} disabled={saving} className="op-btn op-primario">
                   {saving ? "…" : "Guardar"}
                 </button>
-                <button onClick={() => setEditId(null)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+                <button onClick={() => setEditId(null)} className="op-btn">
                   Cancelar
                 </button>
               </div>
               <DepotSection projectId={activeProject?._id} formObj={editForm} setFormObj={setEditForm} />
             </div>
           ) : (
-            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.greenDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.green, flexShrink: 0, fontWeight: 700 }}>
+            <div key={w._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "11px 16px", display: "flex", alignItems: "center", gap: 14, animation: "sched-fadein .15s ease both" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.greenDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.green, flexShrink: 0, fontWeight: 700 }}>
                 {w.nombre[0].toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
@@ -557,10 +542,10 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
                   )}
                 </div>
               </div>
-              <button onClick={() => startEdit(w)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+              <button onClick={() => startEdit(w)} title="Editar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 8, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blueText; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><Pencil size={13} /></button>
-              <button onClick={() => remove(w._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
+              <button onClick={() => remove(w._id)} title="Eliminar" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, width: 28, height: 28, borderRadius: 8, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .12s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}><X size={14} /></button>
             </div>
@@ -573,18 +558,18 @@ export function TabTrabajadores({ workers, vehicles, loading, activeProject, org
       const nuevo = adding && !editId;
       const obj = nuevo ? form : editForm, setObj = nuevo ? setForm : setEditForm;
       return (
-        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 10, padding: 16, animation: "sched-fadein .15s ease both" }}>
+        <div style={{ flex: "1 1 420px", maxWidth: 640, position: "sticky", top: 0, background: C.card, border: `1px solid ${C.blue}55`, borderRadius: 12, padding: 16, animation: "sched-fadein .15s ease both" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del trabajador nuevo" : `de ${[obj.nombre, obj.apellidos].filter(Boolean).join(" ") || "…"}`}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Ficha {nuevo ? "del trabajador nuevo" : `de ${[obj.nombre, obj.apellidos].filter(Boolean).join(" ") || "…"}`}</div>
             <span style={{ fontSize: 11, color: C.dim }}>Se guarda con «Guardar»</span>
           </div>
           <FichaCampos obj={obj} setObj={setObj} selStyle={selStyle} siempre />
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} style={{ padding: "8px 18px", background: C.blue, border: "none", color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font, opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
-            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} style={{ padding: "8px 12px", background: "none", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", fontFamily: font }}>Cancelar</button>
+            <button onClick={() => (nuevo ? create() : save(editId))} disabled={saving || !String(obj.nombre || "").trim()} className="op-btn op-primario" style={{ opacity: !String(obj.nombre || "").trim() ? .5 : 1 }}>{saving ? "Guardando…" : "Guardar"}</button>
+            <button onClick={() => (nuevo ? setAdding(false) : setEditId(null))} className="op-btn">Cancelar</button>
           </div>
           {nuevo
-            ? <div style={{ fontSize: 11.5, color: C.dim, marginTop: 14 }}>Cuando lo guardes, ábrelo para darle su usuario y contraseña de la app.</div>
+            ? <div style={{ fontSize: 12, color: C.dim, marginTop: 14 }}>Cuando lo guardes, ábrelo para darle su usuario y contraseña de la app.</div>
             : workers.find(w => w._id === editId) && <AccesoApp key={editId} worker={workers.find(w => w._id === editId)} orgId={orgId} selStyle={selStyle} />}
         </div>
       );

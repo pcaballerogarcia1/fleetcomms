@@ -16,7 +16,7 @@ export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
       style={{
         background: selected ? C.surface2 : C.card,
         border: `1px solid ${selected ? C.blue + "55" : C.border}`,
-        borderRadius: 10, padding: "12px 14px", cursor: "pointer",
+        borderRadius: 12, padding: "12px 14px", cursor: "pointer",
         transition: "all .15s", marginBottom: 8,
       }}
       onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = C.border2; }}
@@ -37,8 +37,8 @@ export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
       </div>
 
       {/* Progress bar */}
-      <div style={{ height: 4, background: C.surface2, borderRadius: 2, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2, transition: "width .5s" }} />
+      <div style={{ height: 4, background: C.surface2, borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width .5s" }} />
       </div>
 
       <div style={{ display: "flex", gap: 14, marginTop: 8 }}>

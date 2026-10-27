@@ -4,7 +4,7 @@
 
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import { C, font, mono } from "./estilo.js";
+import { C, mono } from "./estilo.js";
 import { KPI_AYUDA } from "./gantt-comun.js";
 
 // Barra de indicadores del escenario, con el cambio respecto a la generación anterior.
@@ -40,7 +40,7 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
     { l: "Paradas", v: num(k.paradas), d: delta(k.paradas, base?.totalStops, "up", num), sub: k.sinAsignar ? `${num(k.sinAsignar)} sin asignar` : "todas asignadas", subColor: k.sinAsignar ? C.red : C.green },
     k.coste != null
       ? { l: "Coste estimado", v: eur(k.coste), d: delta(k.coste, base?.coste, "down", eur), sub: "personal + km (Restricciones)" }
-      : { l: "Coste estimado", v: <button onClick={onConfigCostes} style={{ background: "none", border: `1px dashed ${C.border2}`, color: C.muted, borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer", fontFamily: font }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
+      : { l: "Coste estimado", v: <button onClick={onConfigCostes} className="op-btn">Configurar €/h y €/km</button>, sub: "en Restricciones" },
     { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
   ];
   const todos = items
@@ -57,17 +57,17 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
         <div key={it.l} title={it.ayuda} style={{ padding: "12px 20px", borderRight: `1px solid ${C.border}`, minWidth: 160, flex: "1 1 0", textAlign: "center", cursor: "help" }}>
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>{it.l}</div>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", marginTop: 3 }}>
-            <span style={{ fontSize: 22, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{it.v}</span>
+            <span style={{ fontSize: 20, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{it.v}</span>
             {it.d}
           </div>
-          <div style={{ fontSize: 11.5, color: it.subColor || C.dim, marginTop: 2, whiteSpace: "nowrap" }}>{it.sub}</div>
+          <div style={{ fontSize: 12, color: it.subColor || C.dim, marginTop: 2, whiteSpace: "nowrap" }}>{it.sub}</div>
         </div>
       ))}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
         {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
         <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`}>
           Todos los indicadores {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 10, padding: "1px 7px", fontSize: 10.5, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
+          {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 12, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
         </button>
       </div>
     </div>
@@ -77,7 +77,7 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
           {resto.map(it => (
             <div key={it.l} title={it.ayuda} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", cursor: it.ayuda ? "help" : "default" }}>
               <div style={{ display: "flex", alignItems: "baseline" }}>
-                <span style={{ fontSize: 19, fontWeight: 700, color: alerta(it.color) ? it.color : C.text, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: alerta(it.color) ? it.color : C.text, fontFamily: mono, lineHeight: 1.1 }}>{it.v}</span>
                 {it.d}
               </div>
               <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginTop: 4 }}>{it.l}</div>
@@ -91,13 +91,13 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 62 }}>
                   {g.barras.map(b => (
                     <div key={b.n} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", minWidth: 0 }}>
-                      <span style={{ fontSize: 9.5, color: C.muted, fontFamily: mono }}>{b.v}</span>
+                      <span style={{ fontSize: 10, color: C.muted, fontFamily: mono }}>{b.v}</span>
                       <div style={{ width: "100%", maxWidth: 34, height: `${Math.max(3, (b.v / max) * 44)}px`, background: C.blue, borderRadius: "3px 3px 0 0" }} />
                     </div>
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 3 }}>
-                  {g.barras.map(b => <span key={b.n} title={b.n} style={{ flex: 1, fontSize: 9, color: C.dim, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{b.n}</span>)}
+                  {g.barras.map(b => <span key={b.n} title={b.n} style={{ flex: 1, fontSize: 10, color: C.dim, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{b.n}</span>)}
                 </div>
                 <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginTop: 6 }}>{g.l}</div>
               </div>

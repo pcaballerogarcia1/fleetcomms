@@ -50,17 +50,17 @@ export function AlternativasConcurso({ concursoId, irA }) {
   const [oferta, cambiar] = useGuardadoDiferido(concursoId, "oferta", datos.oferta);
   const a = useMemo(() => (datos.listo ? analizarOferta({ ...datos, oferta }) : null), [datos, oferta]);
 
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
-  const titulo = t => <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
+  const titulo = t => <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "24px 0 10px" }}>{t}</div>;
   const th = { textAlign: "right", padding: "7px 10px", fontSize: 11, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
   const td = { padding: "5px 10px", fontSize: 13, color: C.text, textAlign: "right", whiteSpace: "nowrap" };
   const num = (valor, onCambio, w = 70, ph) => <input className="op-input" type="number" step="0.5" value={valor ?? ""} placeholder={ph} onChange={e => onCambio(e.target.value === "" ? null : Number(e.target.value))} style={{ width: w, height: 30, textAlign: "right" }} />;
 
   const cabecera = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-      <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><GitCompareArrows size={19} /></div>
+      <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(91,124,250,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: C.blue }}><GitCompareArrows size={19} /></div>
       <div>
-        <div style={{ fontSize: 22, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Alternativas</div>
+        <div style={{ fontSize: 20, fontWeight: 650, color: C.text, letterSpacing: "-0.02em" }}>Alternativas</div>
         <div style={{ fontSize: 13, color: C.muted }}>{datos.concurso?.nombre || "…"} · qué baja presentar</div>
       </div>
     </div>
@@ -69,7 +69,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
   if (!a) return pagina(<div style={{ color: C.muted, marginTop: 20 }}>Cargando…</div>);
   const falta = (t, d) => (
     <div style={{ ...tarjeta, padding: 20, marginTop: 18, maxWidth: 680 }}>
-      <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{t}</div>
+      <div style={{ fontSize: 15, color: C.text, fontWeight: 600 }}>{t}</div>
       <div style={{ fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>{d}</div>
       <button className="op-btn op-primario" style={{ marginTop: 12 }} onClick={() => irA?.("/documentos")}><FileText size={14} /> Ir a la Ficha de requisitos</button>
     </div>
@@ -98,17 +98,17 @@ export function AlternativasConcurso({ concursoId, irA }) {
     {titulo("Lo que se espera")}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 12 }}>
       <div style={{ ...tarjeta, padding: "10px 14px" }}>
-        <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>Nosotros</div>
+        <div style={{ fontSize: 13, fontWeight: 650, color: C.text, marginBottom: 6 }}>Nosotros</div>
         {[["tecnicaPct", `Lo que sacaremos de los ${juego.resto} puntos que no son precio`, "%", String(OFERTA_DEFECTO.tecnicaPct)],
           ["margenMinimoPct", "Margen mínimo que aceptamos", "%", String(OFERTA_DEFECTO.margenMinimoPct)]].map(([k, l, u, ph, w]) => (
-          <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 12.5, color: C.muted }}>
-            <span style={{ flex: 1 }}>{l}</span>{num(oferta?.[k] ?? null, v => cambiar({ [k]: v }), w || 70, ph)}<span style={{ width: 16, fontSize: 11.5, color: C.dim }}>{u}</span>
+          <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 13, color: C.muted }}>
+            <span style={{ flex: 1 }}>{l}</span>{num(oferta?.[k] ?? null, v => cambiar({ [k]: v }), w || 70, ph)}<span style={{ width: 16, fontSize: 12, color: C.dim }}>{u}</span>
           </label>
         ))}
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Del Cálculo: presupuesto del primer año <b style={{ color: C.text }}>{presupuesto ? eur(presupuesto) : "sin confirmar"}</b> sin IVA; el contrato cuesta <b style={{ color: C.text }}>{eur(r.cuenta.totalContrato)}</b> en {F1.format(r.anios)} años, que en precio del primer año son <b style={{ color: C.text }}>{eur(r.costeEquivalente)}</b>{a.mejorasAnio ? <> (con <b style={{ color: C.text }}>{eur(a.mejorasAnio)}</b> al año de mejoras)</> : null}.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6, lineHeight: 1.5 }}>Del Cálculo: presupuesto del primer año <b style={{ color: C.text }}>{presupuesto ? eur(presupuesto) : "sin confirmar"}</b> sin IVA; el contrato cuesta <b style={{ color: C.text }}>{eur(r.cuenta.totalContrato)}</b> en {F1.format(r.anios)} años, que en precio del primer año son <b style={{ color: C.text }}>{eur(r.costeEquivalente)}</b>{a.mejorasAnio ? <> (con <b style={{ color: C.text }}>{eur(a.mejorasAnio)}</b> al año de mejoras)</> : null}.</div>
       </div>
       <div style={{ ...tarjeta, padding: "10px 14px" }}>
-        <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>Competencia</div>
+        <div style={{ fontSize: 13, fontWeight: 650, color: C.text, marginBottom: 6 }}>Competencia</div>
         <div style={{ display: "flex", gap: 8, fontSize: 11, color: C.dim, padding: "0 0 2px" }}><span style={{ flex: 1 }}>Empresa</span><span style={{ width: 70, textAlign: "right" }}>Baja %</span><span style={{ width: 70, textAlign: "right" }}>Técnica %</span><span style={{ width: 30 }} /></div>
         {competidores.map((c, i) => (
           <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "2px 0" }}>
@@ -119,9 +119,9 @@ export function AlternativasConcurso({ concursoId, irA }) {
           </div>
         ))}
         <button className="op-btn op-fantasma" style={{ height: 28, marginTop: 4 }} onClick={() => ponerCompetidores(cs => [...cs, { nombre: `Competidor ${String.fromCharCode(65 + cs.length)}`, baja: 10, tecnicaPct: 70 }])}><Plus size={14} /> Añadir empresa</button>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 4 }}>Las bajas de concursos parecidos (adjudicaciones en la Plataforma) son la mejor pista. Técnica: el % de los {juego.resto} puntos de memoria que creemos que sacará.{juego.mejoras ? ` Se supone que ofrece todas las mejoras (${juego.mejoras} puntos).` : ""}</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 4 }}>Las bajas de concursos parecidos (adjudicaciones en la Plataforma) son la mejor pista. Técnica: el % de los {juego.resto} puntos de memoria que creemos que sacará.{juego.mejoras ? ` Se supone que ofrece todas las mejoras (${juego.mejoras} puntos).` : ""}</div>
         {referencia && (
-          <div style={{ marginTop: 8, background: C.surface2, borderRadius: 10, padding: "8px 12px", fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
+          <div style={{ marginTop: 8, background: C.surface2, borderRadius: 12, padding: "8px 12px", fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
             <b style={{ color: C.text }}>Según adjudicaciones reales</b> de «{referencia.nombre}»{referencia.tramo === "mas1M" ? ", contratos de más de 1 M€" : referencia.tramo === "mas200k" ? ", contratos de más de 200.000 €" : ""} ({referencia.n} entre el {new Date(`${referencia.periodo.desde}T12:00:00`).toLocaleDateString("es-ES")} y el {new Date(`${referencia.periodo.hasta}T12:00:00`).toLocaleDateString("es-ES")}): mediana de <b style={{ color: C.text }}>{F1.format(referencia.ofertas.mediana)}</b> ofertas; la ganadora bajó <b style={{ color: C.text }}>{F1.format(referencia.baja.mediana)} %</b> (la mitad, entre {F1.format(referencia.baja.p25)} % y {F1.format(referencia.baja.p75)} %).
             {referencia.unaSola != null && <> En el <b style={{ color: C.text }}>{referencia.unaSola} %</b> solo se presentó una empresa.</>}
             {referencia.ganadores.length > 0 && <div>Quién se lleva más importe (contratos de más de 200.000 €): {referencia.ganadores.slice(0, 5).map(g => `${g.nombre} ${g.cuotaPct} %`).join(" · ")}.</div>}
@@ -142,9 +142,9 @@ export function AlternativasConcurso({ concursoId, irA }) {
           const ponerMejora = cambio => cambiar({ mejoras: { [m.nombre]: { ...cfg, ...cambio } } });
           return (
             <div key={m.nombre} style={{ ...tarjeta, padding: "10px 14px" }}>
-              <div style={{ fontSize: 12.5, fontWeight: 650, color: C.text, marginBottom: 6 }}>{m.nombre}</div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.muted, marginBottom: 6 }}>
-                <span style={{ flex: 1 }}>Lo que cuesta cada una ({m.unidad}), al año</span>{num(cfg.costeUnidad ?? null, v => ponerMejora({ costeUnidad: v }), 90, String(m.costeUnidad))}<span style={{ fontSize: 11.5, color: C.dim }}>€</span>
+              <div style={{ fontSize: 13, fontWeight: 650, color: C.text, marginBottom: 6 }}>{m.nombre}</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 6 }}>
+                <span style={{ flex: 1 }}>Lo que cuesta cada una ({m.unidad}), al año</span>{num(cfg.costeUnidad ?? null, v => ponerMejora({ costeUnidad: v }), 90, String(m.costeUnidad))}<span style={{ fontSize: 12, color: C.dim }}>€</span>
               </label>
               <table style={{ borderCollapse: "collapse", width: "100%" }}>
                 <thead><tr>{["Ofrecer", "Puntos", "Coste al año", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
@@ -167,7 +167,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
           );
         })}
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Operanzia prueba todas las combinaciones ({a.combinaciones}) con su coste y se queda con la que gana con más margen.</div>
+      <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Operanzia prueba todas las combinaciones ({a.combinaciones}) con su coste y se queda con la que gana con más margen.</div>
     </>}
 
     <PanelAlarmas alarmas={alarmas} irA={irA} titulo={bloqueado ? "Sin recomendación hasta resolver esto" : undefined} />
@@ -184,11 +184,11 @@ export function AlternativasConcurso({ concursoId, irA }) {
           <div key={l} className="op-tarjeta" style={{ padding: "12px 16px" }}>
             <div style={{ fontSize: 12, color: C.muted }}>{l}</div>
             <div style={{ fontSize: 20, fontWeight: 650, color: C.text, marginTop: 3 }}>{v}</div>
-            <div style={{ fontSize: 11.5, color: col || C.dim, marginTop: 2 }}>{sub}</div>
+            <div style={{ fontSize: 12, color: col || C.dim, marginTop: 2 }}>{sub}</div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8, lineHeight: 1.55 }}>
+      <div style={{ fontSize: 13, color: C.muted, marginTop: 8, lineHeight: 1.55 }}>
         {sim.recomendada && sim.recomendada.puesto === 1 && !sim.recomendada.empate
           ? <>La menor baja que gana sin caer en baja anormal y dejando al menos un {F1.format(o.margenMinimoPct)} % de margen es <b style={{ color: C.text }}>{pct(sim.recomendada.baja)}</b>.</>
           : <span style={{ color: C.amber }}><TriangleAlert size={13} style={{ verticalAlign: "-2px" }} /> Con lo que se espera de la competencia no se gana sin bajar del margen mínimo o caer en anormal. Mejora la parte técnica, baja el coste en Cálculo o revisa lo que se espera.</span>}
@@ -198,7 +198,7 @@ export function AlternativasConcurso({ concursoId, irA }) {
       <div style={{ ...tarjeta, padding: "12px 14px", marginTop: 12 }}>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}><span style={{ color: C.blue }}>━</span> nuestros puntos · <span style={{ color: C.amber }}>━</span> margen · <span style={{ color: C.green }}>●</span> ganaríamos · <span style={{ background: "rgba(240,82,82,0.15)", padding: "0 6px" }}>zona</span> se pierde dinero o baja anormal</div>
         <Grafica sim={sim} elegida={elegida} />
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2 }}>Abajo, la baja sobre {eur(presupuesto)} al año.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>Abajo, la baja sobre {eur(presupuesto)} al año.</div>
       </div>
 
       {titulo("Cada baja")}
@@ -228,14 +228,14 @@ export function AlternativasConcurso({ concursoId, irA }) {
           {esc.map(e => (
             <div key={e.id} className="op-tarjeta" style={{ padding: "12px 16px", borderColor: e.resultado < 0 ? "rgba(240,82,82,0.5)" : undefined }}>
               <div style={{ fontSize: 13, fontWeight: 650, color: C.text }}>{e.nombre}</div>
-              <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2, minHeight: 30 }}>{e.que}</div>
+              <div style={{ fontSize: 12, color: C.dim, marginTop: 2, minHeight: 30 }}>{e.que}</div>
               <div style={{ fontSize: 20, fontWeight: 650, color: e.resultado < 0 ? C.red : C.green, marginTop: 6 }}>{eur(e.resultado)}<span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}> al año</span></div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>margen {pct(e.margen)} · coste {eur(e.coste)}</div>
               <div style={{ fontSize: 12, color: C.muted }}>{F1.format(e.personas)} personas · {e.vehiculos} vehículo{e.vehiculos === 1 ? "" : "s"} · caja {eur(e.caja)}</div>
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>Caja: lo que hay que adelantar (sueldos, combustible, cuotas) mientras se espera a cobrar las facturas.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>Caja: lo que hay que adelantar (sueldos, combustible, cuotas) mientras se espera a cobrar las facturas.</div>
       </>}
     </>}
   </>);

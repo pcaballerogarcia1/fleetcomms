@@ -54,33 +54,33 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
     logAudit({ modulo: "Analytics", accion: "Aplicó tiempos reales a Planning", detalle: `${n} franjas` });
   };
 
-  const th = { fontSize: 10.5, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "right", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
+  const th = { fontSize: 11, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700, textAlign: "right", padding: "7px 10px", position: "sticky", top: 0, background: C.card, zIndex: 1, whiteSpace: "nowrap" };
   const td = { padding: "6px 10px", fontSize: 12, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap", textAlign: "right", fontFamily: mono, color: C.text };
   const tarjeta = (v, l, sub, color) => (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", minWidth: 170 }}>
       <div style={{ fontSize: 20, fontWeight: 700, fontFamily: mono, color: color || C.blueText }}>{v}</div>
-      <div style={{ fontSize: 9.5, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 3 }}>{l}</div>
+      <div style={{ fontSize: 10, color: C.text, textTransform: "uppercase", letterSpacing: .8, fontWeight: 700, marginTop: 3 }}>{l}</div>
       {sub && <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{sub}</div>}
     </div>
   );
   return (
     <div style={{ padding: "18px 22px", overflow: "auto", height: "100%", boxSizing: "border-box", fontFamily: font }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Análisis de tiempos reales</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Análisis de tiempos reales</div>
       <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.55, maxWidth: 900 }}>
         Con lo que Control ha anotado de cada expedición publicada (salida y llegada reales): lo que tarda de verdad cada línea por franja frente a lo previsto, y si sale a su hora
         (puntual = entre {PUNTUAL.antes} min antes y {PUNTUAL.despues} min después). Puedes usar el tiempo real como tiempo de recorrido en Planning.
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11.5, color: C.muted }}>Periodo</span>
-        <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 6, padding: 2 }}>
-          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? alfa(0.1) : "none", color: periodo === d ? C.text : C.muted, fontSize: 11.5, fontFamily: font }}>últimos {d} días</button>)}
+        <span style={{ fontSize: 12, color: C.muted }}>Periodo</span>
+        <div style={{ display: "flex", gap: 2, background: C.bg, borderRadius: 8, padding: 2 }}>
+          {[7, 14, 30].map(d => <button key={d} onClick={() => setPeriodo(d)} style={{ padding: "4px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: periodo === d ? alfa(0.1) : "none", color: periodo === d ? C.text : C.muted, fontSize: 12, fontFamily: font }}>últimos {d} días</button>)}
         </div>
-        <button onClick={analizar} disabled={estado.cargando} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: C.blue, color: "#fff", fontSize: 12, fontWeight: 600, cursor: estado.cargando ? "wait" : "pointer", fontFamily: font }}>{estado.cargando ? "Leyendo los días publicados…" : "Analizar"}</button>
-        <span style={{ fontSize: 10.5, color: C.dim }}>Lee los turnos de los días publicados del periodo (una lectura por turno).</span>
+        <button onClick={analizar} disabled={estado.cargando} className="op-btn op-primario">{estado.cargando ? "Leyendo los días publicados…" : "Analizar"}</button>
+        <span style={{ fontSize: 11, color: C.dim }}>Lee los turnos de los días publicados del periodo (una lectura por turno).</span>
       </div>
       {estado.error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>No se pudo leer: {estado.error}</div>}
       {nota && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{nota}</div>}
-      {estado.dias && !estado.dias.length && <div style={{ fontSize: 12.5, color: C.muted }}>No hay días publicados en Control en este periodo.</div>}
+      {estado.dias && !estado.dias.length && <div style={{ fontSize: 13, color: C.muted }}>No hay días publicados en Control en este periodo.</div>}
       {analisis && estado.dias?.length > 0 && <>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
           {tarjeta(estado.dias.length, "Días publicados", `${estado.dias[0].fecha} a ${estado.dias.at(-1).fecha}`)}
@@ -90,9 +90,9 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
         </div>
         {!analisis.totales.viajesMedidos && <div style={{ fontSize: 12, color: C.amber, marginBottom: 10 }}>Aún no hay viajes con salida y llegada anotadas: las anota la app del conductor al hacer el turno (o Control).</div>}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><input type="checkbox" checked={soloDesvio} onChange={e => setSoloDesvio(e.target.checked)} style={{ accentColor: C.blue }} />Solo las que se desvían 2 min o más</label>
+          <label style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><input type="checkbox" checked={soloDesvio} onChange={e => setSoloDesvio(e.target.checked)} style={{ accentColor: C.blue }} />Solo las que se desvían 2 min o más</label>
           <button onClick={() => window.confirm(`¿Usar el tiempo real en ${aplicables.length} franjas (con ${MIN_VIAJES} viajes medidos o más)?`) && usar(aplicables)} disabled={!aplicables.length}
-            style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.green}88`, background: "rgba(63,207,142,.1)", color: C.green, fontSize: 11.5, fontWeight: 600, cursor: aplicables.length ? "pointer" : "not-allowed", opacity: aplicables.length ? 1 : 0.5, fontFamily: font }}>
+            style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.green}88`, background: "rgba(63,207,142,.1)", color: C.green, fontSize: 12, fontWeight: 600, cursor: aplicables.length ? "pointer" : "not-allowed", opacity: aplicables.length ? 1 : 0.5, fontFamily: font }}>
             Usar el tiempo real en todas ({aplicables.length})
           </button>
         </div>
@@ -120,7 +120,7 @@ export function AnalyticsLineasPage({ projectId, orgId }) {
                     <td style={{ ...td, color: C.muted }}>{plan ?? "—"}′</td>
                     <td style={{ ...td }}>
                       {f.real != null && plan !== f.real
-                        ? <button onClick={() => usar([f])} title={f.n < MIN_VIAJES ? `Solo ${f.n} viaje(s) medido(s): poco para fiarse` : "Poner este tiempo como tiempo de recorrido de esta franja en Planificación"} style={{ padding: "2px 9px", borderRadius: 5, border: `1px solid ${C.border2}`, background: "none", color: f.n < MIN_VIAJES ? C.dim : C.blueText, fontSize: 11, cursor: "pointer", fontFamily: font }}>Usar el real</button>
+                        ? <button onClick={() => usar([f])} title={f.n < MIN_VIAJES ? `Solo ${f.n} viaje(s) medido(s): poco para fiarse` : "Poner este tiempo como tiempo de recorrido de esta franja en Planificación"} className="op-btn">Usar el real</button>
                         : f.real != null && <span style={{ fontSize: 11, color: C.green, fontFamily: font }}>ya está</span>}
                     </td>
                   </tr>

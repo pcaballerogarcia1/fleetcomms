@@ -30,7 +30,7 @@ export function AvisosMovil({ sesion }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ width: 46, height: 46, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: activos ? "rgba(63,207,142,0.1)" : "rgba(245,158,91,0.1)", color: activos ? C.green : C.orange }}>{activos ? <Bell size={21} /> : <BellOff size={21} />}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>{activos ? "Avisos activados en este móvil" : "Avisos en el móvil"}</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{activos ? "Avisos activados en este móvil" : "Avisos en el móvil"}</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
             {estado === "no-soportado" ? (iphone ? "En iPhone: pulsa Compartir → «Añadir a pantalla de inicio», abre Operanzia desde ahí y actívalos." : "Este navegador no admite avisos. Prueba con Chrome.")
               : estado === "bloqueados" ? "Los has bloqueado: actívalos en los ajustes del navegador (permisos del sitio → Notificaciones)."

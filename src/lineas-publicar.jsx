@@ -56,18 +56,18 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
     } catch (e) { alert("No se pudo quitar: " + (e.message || e)); }
   }
 
-  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 7, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 12.5, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
+  const btn = (fuerte, deshabilitado) => ({ padding: fuerte ? "9px 18px" : "6px 12px", borderRadius: 8, border: `1px solid ${fuerte ? C.blue : C.border2}`, background: fuerte ? (deshabilitado ? C.surface2 : tono("#222c58", "#e7eaf6")) : "transparent", color: fuerte ? "#d6deff" : C.muted, fontSize: 13, fontWeight: fuerte ? 700 : 500, cursor: deshabilitado ? "not-allowed" : "pointer", fontFamily: font });
   const r = servicio.resumen;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onCerrar}>
       <div onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", maxHeight: "100%", overflowY: "auto", background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 12, fontFamily: font, boxShadow: "0 20px 60px rgba(0,0,0,.5)", padding: "18px 20px" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Publicar a Control</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Publicar a Control</div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.55 }}>
           Los turnos de <b style={{ color: C.text }}>{nombreDia(dia, red)}</b> tal y como están ahora ({r.turnos} turnos · {r.viajes.toLocaleString("es-ES")} expediciones · {r.autobuses} autobuses, de {hhmm(r.inicio)} a {hhmm(r.fin)}) pasan a ser el servicio de un día concreto. Cada conductor coge su turno en el móvil y Control sigue en vivo dónde va cada autobús y si va a su hora.
         </div>
-        {avisoManual && <div style={{ fontSize: 11.5, color: C.amber, marginTop: 8 }}>{avisoManual}</div>}
+        {avisoManual && <div style={{ fontSize: 12, color: C.amber, marginTop: 8 }}>{avisoManual}</div>}
         {estado?.ok ? (
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 9, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
+          <div style={{ marginTop: 16, padding: 14, borderRadius: 8, background: "rgba(63,207,142,.08)", border: `1px solid ${C.green}55` }}>
             <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Publicado el {fechaTxt(fecha)}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
               {estado.roster?.error ? <span style={{ color: C.amber }}>No se pudo leer el Rostering ({estado.roster.error}): los conductores cogerán su turno en el móvil.</span>
@@ -85,12 +85,12 @@ export function PublicarServicio({ red, res, dia, cocheras, projectId, orgId, pr
           </div>
         ) : (
           <>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 12.5, color: C.text }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, fontSize: 13, color: C.text }}>
               Día del servicio
-              <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 6, padding: "6px 9px", fontSize: 12.5, fontFamily: font, colorScheme: tono("dark", "light") }} />
+              <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, padding: "6px 9px", fontSize: 13, fontFamily: font, colorScheme: tono("dark", "light") }} />
               {fecha !== hoy && <button onClick={() => setFecha(hoy)} style={{ ...btn(false), padding: "4px 9px", fontSize: 11 }}>Hoy</button>}
             </label>
-            <div style={{ fontSize: 11.5, marginTop: 6, color: vale ? C.dim : C.amber }}>
+            <div style={{ fontSize: 12, marginTop: 6, color: vale ? C.dim : C.amber }}>
               {fechaTxt(fecha)}{vale ? "" : ` · ojo: «${nombreDia(dia, red)}» no circula ese día según el GTFS (se puede publicar igual, por ejemplo para una prueba)`}
               {yaHay ? " · ya publicado: se sustituye" : ""}
             </div>

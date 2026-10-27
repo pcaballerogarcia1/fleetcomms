@@ -37,8 +37,8 @@ export function CriteriosFicha({ concursoId, docs, ficha, onError }) {
   });
   const aMano = () => setBorrador({ criterios: [{ nombre: "Oferta económica", puntos: 50, tipo: "precio" }, { nombre: "Memoria técnica", puntos: 50, tipo: "juicio" }], formula: "lineal", saciedad: 15, baja: { id: "art85", valor: null }, origen: "mano" });
 
-  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
-  const titulo = <div style={{ fontSize: 14, fontWeight: 650, color: C.text, margin: "22px 0 10px", display: "flex", alignItems: "center", gap: 8 }}><Award size={16} color={C.blue} /> Criterios de adjudicación</div>;
+  const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 };
+  const titulo = <div style={{ fontSize: 15, fontWeight: 650, color: C.text, margin: "22px 0 10px", display: "flex", alignItems: "center", gap: 8 }}><Award size={16} color={C.blue} /> Criterios de adjudicación</div>;
 
   if (!adj) {
     return (
@@ -49,12 +49,12 @@ export function CriteriosFicha({ concursoId, docs, ficha, onError }) {
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>He encontrado estos criterios. Revísalos y úsalos: Alternativas calcula los puntos con ellos.</div>
             {prop.criterios.map((c, i) => (
               <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, padding: "4px 0", color: C.text }} title={c.frase}>
-                <span style={{ flex: 1 }}>{c.nombre}{c.subcriterios ? <span style={{ color: C.dim }}> · {c.subcriterios.length} apartados</span> : null}{c.escalones ? <span style={{ color: C.dim }}> · escalones {c.escalones.map(e => `${e.desde}${e.hasta ? `–${e.hasta}` : "+"}: ${e.puntos}`).join(", ")}</span> : null}</span><b>{c.puntos} puntos</b><span style={{ width: 120, color: C.muted }}>{TIPOS.find(t => t[0] === c.tipo)?.[1]}</span><span style={{ color: C.dim, fontSize: 11.5 }}>pág. {c.pagina} · {c.docNombre}</span>
+                <span style={{ flex: 1 }}>{c.nombre}{c.subcriterios ? <span style={{ color: C.dim }}> · {c.subcriterios.length} apartados</span> : null}{c.escalones ? <span style={{ color: C.dim }}> · escalones {c.escalones.map(e => `${e.desde}${e.hasta ? `–${e.hasta}` : "+"}: ${e.puntos}`).join(", ")}</span> : null}</span><b>{c.puntos} puntos</b><span style={{ width: 120, color: C.muted }}>{TIPOS.find(t => t[0] === c.tipo)?.[1]}</span><span style={{ color: C.dim, fontSize: 12 }}>pág. {c.pagina} · {c.docNombre}</span>
               </div>
             ))}
-            {!prop.formula && <div style={{ fontSize: 12.5, color: C.amber, marginTop: 6 }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> El pliego no dice con qué fórmula se puntúa el precio: tendrás que elegir una (suposición).</div>}
-            {prop.formula && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>Fórmula del precio: <b style={{ color: C.text }}>{FORMULAS_PRECIO.find(f => f.id === prop.formula.id)?.nombre}</b> (pág. {prop.formula.pagina})</div>}
-            {prop.baja && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Baja anormal: <b style={{ color: C.text }}>{BAJA_ANORMAL.find(f => f.id === prop.baja.id)?.nombre}{prop.baja.valor != null ? ` (${prop.baja.valor} puntos)` : ""}</b> (pág. {prop.baja.pagina})</div>}
+            {!prop.formula && <div style={{ fontSize: 13, color: C.amber, marginTop: 6 }}><TriangleAlert size={12} style={{ verticalAlign: "-2px" }} /> El pliego no dice con qué fórmula se puntúa el precio: tendrás que elegir una (suposición).</div>}
+            {prop.formula && <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Fórmula del precio: <b style={{ color: C.text }}>{FORMULAS_PRECIO.find(f => f.id === prop.formula.id)?.nombre}</b> (pág. {prop.formula.pagina})</div>}
+            {prop.baja && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Baja anormal: <b style={{ color: C.text }}>{BAJA_ANORMAL.find(f => f.id === prop.baja.id)?.nombre}{prop.baja.valor != null ? ` (${prop.baja.valor} puntos)` : ""}</b> (pág. {prop.baja.pagina})</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button className="op-btn op-primario" onClick={usarPropuesta}>Usar estos criterios</button>
               <button className="op-btn op-fantasma" onClick={aMano}>Ponerlos a mano</button>
@@ -84,10 +84,10 @@ export function CriteriosFicha({ concursoId, docs, ficha, onError }) {
             <select className="op-input" value={c.tipo} onChange={e => cambiarCriterio(i, "tipo", e.target.value)} style={{ width: 150, height: 30 }} aria-label="Tipo">
               {TIPOS.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
             </select>
-            <span style={{ fontSize: 11.5, color: C.dim, width: 120 }}>{c.pagina ? `pág. ${c.pagina}` : "a mano"}</span>
+            <span style={{ fontSize: 12, color: C.dim, width: 120 }}>{c.pagina ? `pág. ${c.pagina}` : "a mano"}</span>
             <button className="op-btn op-fantasma op-icono" title="Quitar" onClick={() => cambiar(a => ({ ...a, criterios: a.criterios.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
             {(c.subcriterios?.length > 0 || c.escalones?.length > 0) && (
-              <div style={{ flexBasis: "100%", fontSize: 11.5, color: C.dim, paddingLeft: 4 }}>
+              <div style={{ flexBasis: "100%", fontSize: 12, color: C.dim, paddingLeft: 4 }}>
                 {c.subcriterios?.length > 0 && <>Apartados: {c.subcriterios.map(x => `${x.nombre} (${x.puntos})`).join(" · ")}</>}
                 {c.escalones?.length > 0 && <>Escalones{c.unidad ? ` (${c.unidad})` : ""}: {c.escalones.map(e => `${e.desde}${e.hasta ? `–${e.hasta}` : " o más"} → ${e.puntos} p.`).join(" · ")}. Alternativas calcula qué nivel compensa con su coste.</>}
               </div>
@@ -101,24 +101,24 @@ export function CriteriosFicha({ concursoId, docs, ficha, onError }) {
           </div>
         </div>
         <div style={{ ...fila, background: C.surface2 }}>
-          <span style={{ fontSize: 12.5, color: C.muted, width: 150 }}>Fórmula del precio</span>
+          <span style={{ fontSize: 13, color: C.muted, width: 150 }}>Fórmula del precio</span>
           <select className="op-input" value={adj.formula} onChange={e => cambiar(a => ({ ...a, formula: e.target.value, formulaSupuesta: false }))} style={{ width: 260, height: 30 }} aria-label="Fórmula del precio">
             {FORMULAS_PRECIO.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
           </select>
-          {adj.formula === "saciedad" && <><span style={{ fontSize: 12.5, color: C.muted }}>umbral</span><input className="op-input" type="number" min={1} value={adj.saciedad ?? 15} onChange={e => cambiar(a => ({ ...a, saciedad: Number(e.target.value) || 15 }))} style={{ width: 70, height: 30, textAlign: "right" }} /><span style={{ fontSize: 12, color: C.dim }}>% de baja</span></>}
-          <span style={{ fontSize: 11.5, color: adj.formulaSupuesta ? C.amber : C.dim, flex: "1 1 260px" }}>{adj.formulaSupuesta ? "El pliego no la dice: es una suposición. " : ""}{FORMULAS_PRECIO.find(f => f.id === adj.formula)?.texto}{adj.formulaPagina ? ` · pág. ${adj.formulaPagina}` : ""}</span>
+          {adj.formula === "saciedad" && <><span style={{ fontSize: 13, color: C.muted }}>umbral</span><input className="op-input" type="number" min={1} value={adj.saciedad ?? 15} onChange={e => cambiar(a => ({ ...a, saciedad: Number(e.target.value) || 15 }))} style={{ width: 70, height: 30, textAlign: "right" }} /><span style={{ fontSize: 12, color: C.dim }}>% de baja</span></>}
+          <span style={{ fontSize: 12, color: adj.formulaSupuesta ? C.amber : C.dim, flex: "1 1 260px" }}>{adj.formulaSupuesta ? "El pliego no la dice: es una suposición. " : ""}{FORMULAS_PRECIO.find(f => f.id === adj.formula)?.texto}{adj.formulaPagina ? ` · pág. ${adj.formulaPagina}` : ""}</span>
         </div>
         <div style={{ ...fila, background: C.surface2 }}>
-          <span style={{ fontSize: 12.5, color: C.muted, width: 150 }}>Baja anormal</span>
+          <span style={{ fontSize: 13, color: C.muted, width: 150 }}>Baja anormal</span>
           <select className="op-input" value={adj.baja?.id || "art85"} onChange={e => cambiar(a => ({ ...a, baja: { id: e.target.value, valor: a.baja?.valor ?? (e.target.value === "media" ? 10 : null) } }))} style={{ width: 260, height: 30 }} aria-label="Baja anormal">
             {BAJA_ANORMAL.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
           </select>
           {adj.baja?.id === "media" && <><input className="op-input" type="number" min={1} value={adj.baja.valor ?? 10} onChange={e => cambiar(a => ({ ...a, baja: { ...a.baja, valor: Number(e.target.value) || 10 } }))} style={{ width: 70, height: 30, textAlign: "right" }} /><span style={{ fontSize: 12, color: C.dim }}>puntos</span></>}
-          <span style={{ fontSize: 11.5, color: C.dim, flex: "1 1 260px" }}>{BAJA_ANORMAL.find(f => f.id === (adj.baja?.id || "art85"))?.texto}{adj.bajaPagina ? ` · pág. ${adj.bajaPagina}` : ""}</span>
+          <span style={{ fontSize: 12, color: C.dim, flex: "1 1 260px" }}>{BAJA_ANORMAL.find(f => f.id === (adj.baja?.id || "art85"))?.texto}{adj.bajaPagina ? ` · pág. ${adj.bajaPagina}` : ""}</span>
         </div>
       </div>
-      <div style={{ fontSize: 11.5, color: C.dim, marginTop: 6 }}>
-        Se guardan solos. {prop?.criterios?.length ? <button className="op-btn op-fantasma" style={{ height: 24, fontSize: 11.5, padding: "0 6px" }} onClick={() => window.confirm("¿Volver a lo que dice el pliego? Se pierden los cambios.") && usarPropuesta()}>Volver a lo del pliego</button> : null}
+      <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>
+        Se guardan solos. {prop?.criterios?.length ? <button className="op-btn op-fantasma" style={{ height: 24, fontSize: 12, padding: "0 6px" }} onClick={() => window.confirm("¿Volver a lo que dice el pliego? Se pierden los cambios.") && usarPropuesta()}>Volver a lo del pliego</button> : null}
       </div>
     </div>
   );

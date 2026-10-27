@@ -30,7 +30,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             style={{ transition: "transform .2s", transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}><polyline points="6 9 12 15 18 9" /></svg>
-          <span style={{ fontSize: 10.5, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Líneas GTFS ({total})</span>
+          <span style={{ fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>Líneas GTFS ({total})</span>
         </span>
         {sel && <span onClick={e => { e.stopPropagation(); onSel(null); }} style={{ fontSize: 10, color: C.blue }}>quitar filtro</span>}
       </button>
@@ -38,7 +38,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
         <div style={{ padding: "0 12px 10px" }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar línea: 64, Termini, tranvía…" style={{
             width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
-            borderRadius: 7, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 6,
+            borderRadius: 8, padding: "6px 9px", fontSize: 12, fontFamily: font, outline: "none", marginBottom: 6,
           }} />
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, marginBottom: 6, cursor: "pointer" }}>
             <input type="checkbox" checked={verTodas} onChange={e => setVerTodas(e.target.checked)} />
@@ -49,16 +49,16 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
               const activa = sel?.docId === l.docId && sel?.id === l.id;
               return (
                 <button key={`${l.docId}|${l.id}`} onClick={() => onSel(activa ? null : { docId: l.docId, id: l.id })} title={l.largo || l.nombre} style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "5px 6px", borderRadius: 6,
+                  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "5px 6px", borderRadius: 8,
                   background: activa ? `${l.color}26` : "none", border: `1px solid ${activa ? l.color : "transparent"}`,
                   cursor: "pointer", fontFamily: font,
                 }}>
                   <span style={{
-                    minWidth: 34, padding: "2px 5px", borderRadius: 5, background: l.color, color: C.input,
+                    minWidth: 34, padding: "2px 5px", borderRadius: 4, background: l.color, color: C.input,
                     fontSize: 11, fontWeight: 800, textAlign: "center", flexShrink: 0,
                   }}>{l.nombre}</span>
                   <span style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {l.largo || `${l.tipo}${l.agencia ? " · " + l.agencia : ""}`}
                     </div>
                     <div style={{ fontSize: 10, color: C.dim }}>
@@ -69,7 +69,7 @@ export function LineasPanel({ grupos, sel, onSel, verTodas, setVerTodas }) {
               );
             })}
             {lista.length === 0 && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>Ninguna línea coincide</div>}
-            {lista.length > MAX_LISTA && <div style={{ fontSize: 10.5, color: C.dim, padding: 6 }}>…y {lista.length - MAX_LISTA} más: escribe para buscar</div>}
+            {lista.length > MAX_LISTA && <div style={{ fontSize: 11, color: C.dim, padding: 6 }}>…y {lista.length - MAX_LISTA} más: escribe para buscar</div>}
           </div>
         </div>
       )}

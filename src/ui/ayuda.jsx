@@ -25,7 +25,7 @@ export function Ayuda({ texto, ancho = 300 }) {
         <span role="tooltip" style={{
           position: "absolute", top: 20, left: -8, zIndex: 50, width: ancho, padding: "9px 11px",
           background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: SOMBRA.m,
-          fontSize: 11.5, lineHeight: 1.5, color: C.muted, fontWeight: 400, whiteSpace: "normal", textTransform: "none", letterSpacing: 0,
+          fontSize: 12, lineHeight: 1.5, color: C.muted, fontWeight: 400, whiteSpace: "normal", textTransform: "none", letterSpacing: 0,
         }}>{texto}</span>
       )}
     </span>
