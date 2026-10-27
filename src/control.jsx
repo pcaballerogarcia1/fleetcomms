@@ -252,7 +252,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
       {/* ── Body ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {vista === "flota" ? (
-        <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} planes={planes} />
+        <MapaFlota orgId={orgId} isSuperAdmin={isSuperAdmin} planes={planes} sesion={sesion} />
         ) : vista === "fichajes" ? (
         <PanelFichajes orgId={orgId} isSuperAdmin={isSuperAdmin} usuarios={usuarios} />
         ) : (

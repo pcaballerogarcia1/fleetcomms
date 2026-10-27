@@ -282,6 +282,16 @@ service cloud.firestore {
       }
     }
 
+    // ── CONEXIÓN CON EL GPS DE LA EMPRESA (Control → GPS de la flota) ──
+    // Proveedor y claves de acceso. La lee la oficina (Control pide las
+    // posiciones con ellas a /api/gps); solo un administrador la cambia.
+    match /gps_conexiones/{orgId} {
+      // por el id (la empresa): así se puede escuchar aunque aún no exista
+      allow read: if puedeWorkspace() && sameOrg(orgId);
+      allow create, update: if myProfile().rol == 'admin' && sameOrg(request.resource.data.org_id) && request.resource.data.org_id == orgId;
+      allow delete: if myProfile().rol == 'admin' && sameOrg(resource.data.org_id);
+    }
+
     // ── PRECIOS POR PUNTO (Planning → Timetable, Analytics) ──────────
     // Solo administradores de la org del proyecto (ni intermedio ni
     // conductores); superadmin entra por la regla comodín.

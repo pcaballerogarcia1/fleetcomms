@@ -5,6 +5,12 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { C, DRIVER_STALE_MS, DRIVER_WARN_MS, barrioColor, computeFleetAlerts, font, mono } from "./datos.js";
 import { useUltimo } from "../use-ultimo.js";
 import { tono } from "../tema.js";
+import { Satellite } from "lucide-react";
+import { useConexionGps, useFlota, usePosicionesGps } from "../gps/usar-gps.js";
+import { emparejarGps, proveedorGps } from "../gps/proveedores.js";
+import { VentanaGps } from "../gps/ventana.jsx";
+
+const GPS_VIEJO_MS = 15 * 60_000; // posición del GPS de más de 15 min: en gris
 
 // ── LEAFLET MINI-MAP (read-only, updates on ubicaciones change) ────
 // Stops are drawn on a single canvas overlay instead of one Leaflet DOM
@@ -143,10 +149,18 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
   );
 }
 
-export function MapaFlota({ orgId, isSuperAdmin, planes }) {
+export function MapaFlota({ orgId, isSuperAdmin, planes, sesion = null }) {
   const divRef      = useRef(null);
   const mapRef      = useRef(null);
   const markersRef  = useRef(new Map()); // uid -> Leaflet marker
+  const gpsMarkersRef = useRef(new Map()); // id del GPS -> Leaflet marker
+  // GPS de la empresa (si está conectado): sus vehículos, cada minuto
+  const conexionGps = useConexionGps(orgId);
+  const flota = useFlota(orgId);
+  const gps = usePosicionesGps(conexionGps);
+  const paresGps = useMemo(() => emparejarGps(gps.vehiculos, flota, conexionGps?.enlaces || {}), [gps.vehiculos, flota, conexionGps]);
+  const [verGps, setVerGps] = useState(false);
+  const puedeEditarGps = sesion?.rol === "admin" || isSuperAdmin;
   const firstFitRef = useRef(false);
   const [drivers, setDrivers] = useState([]);
   // "now" congelado en estado (no Date.now() directo en el render, que React
@@ -234,8 +248,29 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
       if (!seen.has(uid)) { map.removeLayer(marker); markersRef.current.delete(uid); }
     }
 
+    // Vehículos del GPS de la empresa: cuadrado azul (gris si la posición es vieja)
+    const vistosGps = new Set();
+    for (const g of gps.vehiculos) {
+      vistosGps.add(g.id);
+      const viejo = !g.hora || now - g.hora > GPS_VIEJO_MS;
+      const color = viejo ? C.dim : C.blue;
+      const nombre = paresGps.get(g.id)?.nombre || g.nombre || g.id;
+      const extra = viejo ? (g.hora ? ` · hace ${Math.round((now - g.hora) / 60000)} min` : "") : g.velocidad != null ? ` · ${Math.round(g.velocidad)} km/h` : "";
+      const html = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none;">
+        <div style="width:14px;height:14px;border-radius:4px;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>
+        <div style="margin-top:3px;padding:2px 7px;border-radius:4px;background:${C.card};border:1px solid ${C.border};color:${C.text};font-size:10px;font-weight:600;font-family:${font};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${String(nombre).replace(/[<>&"]/g, "")}${extra}</div>
+      </div>`;
+      const icon = L.divIcon({ className: "", html, iconSize: [14, 14], iconAnchor: [7, 7] });
+      const m = gpsMarkersRef.current.get(g.id);
+      if (m) { m.setLatLng([g.lat, g.lng]); m.setIcon(icon); }
+      else gpsMarkersRef.current.set(g.id, L.marker([g.lat, g.lng], { icon }).addTo(map));
+    }
+    for (const [id, marker] of gpsMarkersRef.current.entries()) {
+      if (!vistosGps.has(id)) { map.removeLayer(marker); gpsMarkersRef.current.delete(id); }
+    }
+
     if (!firstFitRef.current) {
-      const pts = drivers.filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]);
+      const pts = [...drivers.filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]), ...gps.vehiculos.map(g => [g.lat, g.lng])];
       if (pts.length > 0) {
         firstFitRef.current = true;
         map.fitBounds(pts, { padding: [50, 50], maxZoom: 14 });
@@ -247,7 +282,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
   const drawDriversRef = useUltimo(drawDrivers);
   useEffect(() => {
     ensureLeaflet(() => { if (!mapRef.current) initFlotaRef.current(); drawDriversRef.current(); });
-  }, [drivers, now, planes, drawDriversRef, initFlotaRef]);
+  }, [drivers, now, planes, gps, paresGps, drawDriversRef, initFlotaRef]);
 
   useEffect(() => () => {
     if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
@@ -275,8 +310,17 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
             <span style={{ fontWeight: 700, fontFamily: mono }}>{alertedDrivers.length}</span> alerta{alertedDrivers.length !== 1 ? "s" : ""} activa{alertedDrivers.length !== 1 ? "s" : ""}
           </span>
         )}
-        {drivers.length === 0 && (
+        {drivers.length === 0 && !gps.vehiculos.length && (
           <span style={{ fontSize: 11, color: C.dim }}>Nadie está compartiendo ubicación todavía — se activa al entrar en Rutas y aceptar el permiso</span>
+        )}
+        <div style={{ flex: 1 }} />
+        {conexionGps?.activa && (
+          <span style={{ fontSize: 12, color: gps.error ? C.red : C.muted }} title={gps.error || undefined}>
+            {gps.error ? `GPS: ${gps.error}` : <><span style={{ color: C.blue, fontWeight: 700, fontFamily: mono }}>{gps.vehiculos.length}</span> vehículos de {proveedorGps(conexionGps.proveedor)?.nombre || "GPS"}</>}
+          </span>
+        )}
+        {conexionGps !== undefined && (puedeEditarGps || conexionGps?.activa) && (
+          <button className="op-btn" onClick={() => setVerGps(true)}><Satellite size={14} />{conexionGps?.activa ? "GPS de la flota" : "Conectar GPS de la flota"}</button>
         )}
       </div>
 
@@ -303,6 +347,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes }) {
       )}
 
       <div ref={divRef} style={{ flex: 1, background: tono("#131e35", "#e7ecf6") }} />
+      {verGps && <VentanaGps orgId={orgId} conexion={conexionGps} flota={flota} puedeEditar={puedeEditarGps} onCerrar={() => setVerGps(false)} />}
     </div>
   );
 }
