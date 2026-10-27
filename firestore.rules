@@ -273,6 +273,13 @@ service cloud.firestore {
         allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
         allow write: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
       }
+
+      // Versiones con nombre del cuadrante del mes (Cuadrante → Versiones)
+      match /versiones/{versionId} {
+        allow read, delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+        allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace();
+        allow update: if sameOrg(resource.data.org_id) && sameOrg(request.resource.data.org_id) && puedeWorkspace();
+      }
     }
 
     // ── PRECIOS POR PUNTO (Planning → Timetable, Analytics) ──────────

@@ -11,6 +11,7 @@ import { C, MONTH_NAMES, SHIFTS, font, useVehicleAvailability } from "./rosterin
 import { OptResultModal, PublishModal, RulesModal } from "./rostering/modales.jsx";
 import { VehicleAvailabilityGrid, ModeTabs } from "./rostering/vehiculos.jsx";
 import { DespachoPage } from "./despacho.jsx";
+import { VentanaVersiones } from "./rostering/versiones.jsx";
 import { doPublish as doPublishMod, optimizar as optimizarMod, optimizarLibre as optimizarLibreMod } from "./rostering/acciones.js";
 import { CabeceraCuadrante, TablaCuadrante, PieYResumen } from "./rostering/cuadrante.jsx";
 
@@ -201,6 +202,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   // url, arts: { regla: "art. 23" }, pdf: { name, size, chunks } }
   const [convenio, setConvenio] = useState({});
   const [showRules, setShowRules] = useState(false);
+  const [showVersiones, setShowVersiones] = useState(false);
   const [optResult, setOptResult] = useState(null);
   const rulesDocId = orgId ? `${orgId}_reglas` : null;
 
@@ -569,7 +571,17 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       background: C.bg, fontFamily: font, overflow: "hidden",
     }}>
 
-      <CabeceraCuadrante {...{ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} />
+      <CabeceraCuadrante {...{ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} setShowVersiones={docId && cargadoDe === docId ? setShowVersiones : null} />
+      {showVersiones && (
+        <VentanaVersiones orgId={orgId} year={year} month={month} grid={grid} asign={asign} workers={workers}
+          autor={sesion ? { uid: sesion.uid, nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" ") } : null}
+          onCerrar={() => setShowVersiones(false)}
+          onRestaurar={({ grid: g = {}, asign: a = {} }) => {
+            updateGrid(g); asignRef.current = a; setAsign(a);
+            persistMonth(g, a);
+            logAudit({ modulo: "Rostering", accion: "Volvió a una versión del cuadrante", projectId: null, detalle: `${MONTH_NAMES[month - 1]} ${year}` });
+          }} />
+      )}
 
       <TablaCuadrante {...{ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia, calsLineas, coveredIds, dayTotals, days, daysInMonth, fillRow, getDow, grid, handleCellMouseDown, handleCellMouseEnter, handleKeyDown, horasPorTrabajador, isCellSelected, isToday, isWeekend, libreShifts, linkWorker, loading, month, publicados, publishing, rules, scheduledCode, setPublishModal, setSelEnd, setSelStart, setSummaryCell, suggestUser, tableRef, usuarios, workedInterval, workerStats, workers, year }} />
 

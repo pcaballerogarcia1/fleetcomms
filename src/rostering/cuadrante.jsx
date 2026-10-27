@@ -2,14 +2,14 @@
 // la tabla de trabajadores × días y el resumen del turno de una celda).
 
 
-import { AlertTriangle, Scale, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, History, Scale, Sparkles, Users } from "lucide-react";
 import { checkWorkerMonth } from "../roster-optimizer.js";
 import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnStyle, pubBtn, thStyle } from "./datos.js";
 import { ModeTabs } from "./vehiculos.jsx";
 import { tono } from "../tema.js";
 
 
-export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }) {
+export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, setShowVersiones, workers, year }) {
   return (
     <>
       {/* ── HEADER ──────────────────────────────────────────────── */}
@@ -52,6 +52,11 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
             className="op-btn"><Scale size={14} />
             Reglas
           </button>
+          {setShowVersiones && (
+            <button onClick={() => setShowVersiones(true)} title="Guardar el cuadrante con un nombre, compararlo o volver a una versión anterior" className="op-btn">
+              <History size={14} />Versiones
+            </button>
+          )}
 
           {avisoServicio && <span style={{ fontSize: 11, color: C.green, borderLeft: `1px solid ${C.border}`, paddingLeft: 10 }}>✓ {avisoServicio}</span>}
           {calsLineas && calsLineas.length > 0 && (
