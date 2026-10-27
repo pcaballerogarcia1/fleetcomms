@@ -10,7 +10,8 @@ import {
   vehicleCodeOnDay, workerCodeOnDay,
 } from "../rostering/datos.js";
 import { scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
-import { loadScenarioCloud, watchScenarioMeta } from "../scenario-store.js";
+import { loadScenarioCloud, nombreDeVersion, watchScenarioMeta } from "../scenario-store.js";
+import { ComparadorEscenarios } from "./comparar.jsx";
 import { applyTaskMove, fijarCarretera, turnoWindow } from "../vrp-engine.js";
 import { leerVecinos } from "./vecinos-guardados.js";
 import { ROSTER_TURNO, applyShiftMoves, deriveWorkerRows, lastScenarioDay, loadTasksFromLayers, spliceWorkerWindowIntoVehicle } from "./datos.js";
@@ -50,6 +51,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [mode,         setMode]        = useState("vehicles");
   const [showC,        setShowC]       = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
+  const [comparando,   setComparando]  = useState(null); // { p, kpis, error } — otra versión puesta al lado de la actual
   const [scenarioHistory, setScenarioHistory] = useState([]);
   const [showSimulador, setShowSimulador] = useState(false);
   const [simDelta,     setSimDelta]     = useState(1);
@@ -335,6 +337,28 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     maxShiftMin: constraints.maxShiftMin, reglas: reglasGantt,
     costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
   }) : null, [schedules, unassigneds, activeDays, constraints.maxShiftMin, reglasGantt, constraints.costeHora, constraints.costeKm]);
+
+  // Historial → «Comparar»: descarga esa versión y saca sus cifras con las
+  // mismas reglas y costes que el escenario actual
+  async function compararCon(p) {
+    const pid = activeProject?._id;
+    if (!pid || !p?.v) return;
+    setComparando({ p, kpis: null, error: null });
+    try {
+      const { data } = await loadScenarioCloud(pid, p);
+      const vehicles = sinDuplicados(data.vehicles || []).rows;
+      const kpisOtra = scenarioKpis({
+        vehicles, workers: sinDuplicados(data.workers || []).rows,
+        unassigned: (data.unassigned?.vehicles || []).length,
+        days: Math.max(activeDays, lastScenarioDay(vehicles, constraints.startMin)),
+        maxShiftMin: constraints.maxShiftMin, reglas: reglasGantt,
+        costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
+      });
+      setComparando(c => (c?.p.v === p.v ? { ...c, kpis: kpisOtra } : c));
+    } catch (e) {
+      setComparando(c => (c?.p.v === p.v ? { ...c, error: e.message || String(e) } : c));
+    }
+  }
 
   // Reasignación manual de paradas en el Gantt (mover de vehículo/trabajador)
   // — historial tipo Excel: cada movimiento guarda el estado de TODOS los
@@ -789,7 +813,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       <VentanaPublicar {...{ publishModal, publishToRoutes, publishing, setPublishModal }} />
 
-      <VentanaHistorial {...{ cloudMeta, projectId: activeProject?._id, restorePoint, scenarioHistory, setShowHistorial, showHistorial }} />
+      <VentanaHistorial {...{ cloudMeta, compararCon: kpis ? compararCon : null, projectId: activeProject?._id, restorePoint, scenarioHistory, setShowHistorial, showHistorial }} />
+      {comparando && (
+        <ComparadorEscenarios nombreA={nombreDeVersion(cloudMeta)} kpisA={kpis} nombreB={nombreDeVersion(comparando.p)}
+          kpisB={comparando.kpis} cargando={!comparando.kpis && !comparando.error} error={comparando.error} onCerrar={() => setComparando(null)} />
+      )}
 
       <VentanaSimulador {...{ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, showSimulador, simDelta, simError, simResult, simRunning, totalKm, unassigned, vehicles }} />
     </div>

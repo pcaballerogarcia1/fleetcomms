@@ -41,6 +41,13 @@ test("el escenario se puede nombrar y el nombre viaja con cada versión", async 
   await page.getByTitle("Historial de versiones del escenario").click();
   await expect(page.getByText("Octubre · base")).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/e2-historial.png` });
+  // compararlo con el actual
+  await page.getByRole("button", { name: "Comparar", exact: true }).first().click();
+  const comp = page.getByRole("dialog", { name: "Comparar escenarios" });
+  await expect(comp.getByText("Paradas hechas")).toBeVisible();
+  await expect(comp.getByText(/Octubre · base/)).toBeVisible();
+  if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/e3-comparar.png` });
+  await comp.getByRole("button", { name: "Cerrar" }).click();
   await page.getByRole("button", { name: "Restaurar" }).first().click();
   await expect.poll(async () => (await leer("scheduling_scenarios/p-puntos"))?.nombre, { timeout: 30_000 }).toBe("Octubre · base");
   expect(errores.filter(e => !/osrm|router\.project-osrm|Failed to load resource|ERR_/i.test(e))).toEqual([]);

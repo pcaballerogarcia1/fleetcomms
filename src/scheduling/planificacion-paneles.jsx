@@ -359,7 +359,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
   );
 }
 
-export function VentanaHistorial({ cloudMeta, projectId, restorePoint, scenarioHistory, setShowHistorial, showHistorial }) {
+export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoint, scenarioHistory, setShowHistorial, showHistorial }) {
   return (
     <>
       {/* Historial de versiones del escenario */}
@@ -403,6 +403,11 @@ export function VentanaHistorial({ cloudMeta, projectId, restorePoint, scenarioH
                       <div style={{ fontSize: 11, color: C.muted }}>{p.motivo}</div>
                       <div style={{ fontSize: 10.5, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
                     </div>
+                    {compararCon && (
+                      <button onClick={() => compararCon(p)} title="Ver esta versión al lado del escenario actual" style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontWeight: 600, flexShrink: 0 }}>
+                        Comparar
+                      </button>
+                    )}
                     <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(91,124,250,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
                       Restaurar
                     </button>
