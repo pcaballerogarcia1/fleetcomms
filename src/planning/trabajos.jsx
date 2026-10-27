@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { sectorDe } from "../sector.js";
 import { FRECUENCIAS, columnasDe, cumple, idNuevo, plantillaDe, resumenTrabajos } from "../trabajos.js";
 import { useUltimo } from "../use-ultimo.js";
+import { fmtEur, listenPrices, saveTrabajoPrice } from "../price-store.js";
 import { C, font, mono } from "./estilo.js";
 
 const COLORES = [C.blue, C.green, C.violet, C.orange, "#f472b6", "#22d3ee", C.amber, C.red];
@@ -40,6 +41,20 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
   const puntos = useMemo(() => layers.filter(l => l.visible !== false && !l.lineasCloud).flatMap(l => l.markers || []), [layers]);
   const columnas = useMemo(() => columnasDe(puntos), [puntos]);
   const resumen = useMemo(() => resumenTrabajos(puntos, trabajos, reglas), [puntos, trabajos, reglas]);
+  // precio por visita de cada trabajo: aparte y solo para administradores (precios/{proyecto})
+  const [precios, setPrecios] = useState(null);
+  useEffect(() => (activeProject?._id ? listenPrices(activeProject._id, setPrecios) : undefined), [activeProject?._id]);
+  const verPrecios = precios?.ready && !precios.denegado;
+  const precioDe = t => precios?.porTrabajo?.[t.id] ?? null;
+  const [errorPrecio, setErrorPrecio] = useState(null);
+  function cambiarPrecio(t, texto) {
+    const n = texto === "" ? null : Number(String(texto).replace(",", "."));
+    if (n != null && !(n >= 0)) return;
+    setErrorPrecio(null);
+    saveTrabajoPrice(activeProject._id, activeProject.org_id, t.id, n).catch(e => setErrorPrecio(`No se pudo guardar el precio: ${e.message || e}`));
+  }
+  const importeDe = t => { const r = resumen[t.id]; const p = precioDe(t); return r?.visitas != null && p != null ? r.visitas * p : null; };
+  const importeTotal = trabajos.reduce((s, t) => s + (importeDe(t) || 0), 0);
   const tiposVehiculo = useMemo(() => [...new Set([...vehicles.map(v => v.tipo).filter(Boolean), ...trabajos.map(t => t.vehiculo).filter(Boolean)])], [vehicles, trabajos]);
 
   function usarPlantilla() { tocar(); setTrabajos(plantillaDe(sector.id)); }
@@ -89,7 +104,7 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
       ) : (<>
         <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "auto", background: C.card }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Trabajo", "Frecuencia", "Min / punto", "Vehículo", "Personas", "Dónde", "Puntos", "Visitas / año", "Horas / año", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Trabajo", "Frecuencia", "Min / punto", "Vehículo", "Personas", "Dónde", "Puntos", "Visitas / año", "Horas / año", ...(verPrecios ? ["€ / visita", "Importe / año"] : []), ""].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {trabajos.map(t => {
                 const r = resumen[t.id] || {};
@@ -109,13 +124,23 @@ export function TabTrabajos({ layers, activeProject, onProjectUpdate, vehicles =
                     <td style={{ ...td, fontFamily: mono, textAlign: "right" }}>{fmt(r.puntos)}</td>
                     <td style={{ ...td, fontFamily: mono, textAlign: "right" }} title={r.visitas == null ? "Hay frecuencias que no se entienden" : ""}>{fmt(r.visitas)}</td>
                     <td style={{ ...td, fontFamily: mono, textAlign: "right" }}>{fmt(r.horas)}</td>
+                    {verPrecios && <td style={td}><input key={`${t.id}-${precioDe(t)}`} aria-label={`Precio por visita de ${t.nombre}`} inputMode="decimal" defaultValue={precioDe(t) == null ? "" : String(precioDe(t)).replace(".", ",")} placeholder="—" onBlur={e => { const v = e.target.value.trim(); if (v.replace(",", ".") !== String(precioDe(t) ?? "")) cambiarPrecio(t, v); }} onKeyDown={e => e.key === "Enter" && e.currentTarget.blur()} style={{ ...inp, width: 76, textAlign: "right" }} /></td>}
+                    {verPrecios && <td style={{ ...td, fontFamily: mono, textAlign: "right", color: importeDe(t) != null ? C.green : C.dim }}>{importeDe(t) != null ? fmtEur(importeDe(t)) : "—"}</td>}
                     <td style={td}><button onClick={() => quitarTrabajo(t)} title="Quitar trabajo" style={{ background: "none", border: "none", color: C.dim, cursor: "pointer" }}><Trash2 size={14} /></button></td>
                   </tr>
                 );
               })}
             </tbody>
+            {verPrecios && importeTotal > 0 && (
+              <tfoot><tr>
+                <td style={{ ...td, fontWeight: 700 }} colSpan={10}>Importe previsto al año</td>
+                <td style={{ ...td, fontFamily: mono, textAlign: "right", fontWeight: 700, color: C.green }}>{fmtEur(importeTotal)}</td>
+                <td style={td} />
+              </tr></tfoot>
+            )}
           </table>
         </div>
+        {errorPrecio && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{errorPrecio}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
           <button onClick={anadirTrabajo} style={btn}><Plus size={14} /> Añadir trabajo</button>
           {!puntos.length && <span style={{ fontSize: 11.5, color: C.dim }}>Sube los puntos en Mapa para ver cuántos lleva cada trabajo.</span>}

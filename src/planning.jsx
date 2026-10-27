@@ -6,7 +6,6 @@ import { logAudit } from "./audit.js";
 import { cambiarDepots, getContenedor, getFraccion } from "./planning/datos.js";
 import { C, LAYER_COLORS, font } from "./planning/estilo.js";
 import { TabTimetable } from "./planning/horarios.jsx";
-import { TabInventario } from "./planning/inventario.jsx";
 import { TabTrabajos } from "./planning/trabajos.jsx";
 import { TabRecursos } from "./planning/recursos.jsx";
 import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
@@ -540,7 +539,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
           { key: "mapa",      label: "Mapa" },
           { key: "trabajos",  label: "Trabajos" },
           { key: "timetable", label: "Horarios" },
-          { key: "inventario", label: "Inventario" },
           { key: "recursos",  label: "Recursos" },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -597,8 +595,6 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
             />
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} recorridos={recorridos} />
           </>
-        ) : tab === "inventario" ? (
-          <TabInventario layers={layers} projectId={projectId} orgId={orgId} />
         ) : tab === "trabajos" ? (
           <TabTrabajos key={projectId} layers={layers} activeProject={activeProject} onProjectUpdate={onProjectUpdate} vehicles={vehicles} />
         ) : tab === "recursos" ? (

@@ -111,7 +111,6 @@ test("capturas oficina", async ({ browser }) => {
   await paso("07-control-flota", () => p.getByRole("button", { name: /flota/i }).first().click());
   await paso("08-analytics", () => ir("Análisis"));
   for (const [n, t] of [["09-an-pesadas", "Pesadas"], ["10-an-personal", "Personal"], ["11-an-varios", "Varios"]]) await paso(n, () => p.getByRole("button", { name: t, exact: true }).first().click());
-  await paso("12-inventario", async () => { await ir("Planificación"); await p.getByText("Inventario", { exact: true }).first().click(); });
   await paso("13-timetable", () => p.getByText("Horarios", { exact: true }).first().click());
   // líneas
   await p.goto("/projects"); await p.waitForTimeout(1500);

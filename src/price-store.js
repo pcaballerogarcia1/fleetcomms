@@ -3,7 +3,7 @@
 // permitan leerla y escribirla SOLO a administradores (ni intermedio ni
 // conductores), no solo ocultarla en pantalla:
 //
-//   precios/{projectId}              { org_id, projectId, defaultPrecio }
+//   precios/{projectId}              { org_id, projectId, defaultPrecio, porTrabajo: { idTrabajo: € por visita } }
 //   precios/{projectId}/trozos/{0..7} { org_id, projectId, map: { puntoKey: € } }
 //
 // Los puntos se reparten en 8 trozos por un hash de su clave: cambiar el
@@ -34,21 +34,22 @@ export function effectivePrice(prices, key) {
 
 // Escucha en vivo los precios de un proyecto → cb({ defaultPrecio, byKey: Map, ready })
 export function listenPrices(projectId, cb) {
-  let defaultPrecio = null;
+  let defaultPrecio = null, porTrabajo = {}, denegado = false;
   const parts = Array.from({ length: PRICE_PARTS }, () => ({}));
   let got = 0;
   const seen = new Set();
   const emit = () => {
     const byKey = new Map();
     for (const p of parts) for (const [k, v] of Object.entries(p)) if (typeof v === "number") byKey.set(k, v);
-    cb({ defaultPrecio, byKey, ready: got >= PRICE_PARTS + 1 });
+    cb({ defaultPrecio, porTrabajo, byKey, ready: got >= PRICE_PARTS + 1, denegado });
   };
   const mark = id => { if (!seen.has(id)) { seen.add(id); got++; } };
   const unsubs = [
     onSnapshot(doc(db, "precios", projectId), s => {
       defaultPrecio = s.exists() && typeof s.data().defaultPrecio === "number" ? s.data().defaultPrecio : null;
+      porTrabajo = (s.exists() && s.data().porTrabajo) || {};
       mark("main"); emit();
-    }, () => { mark("main"); emit(); }),
+    }, () => { denegado = true; mark("main"); emit(); }), // sin permiso (no administrador): no hay precios
     ...parts.map((_, i) => onSnapshot(doc(db, "precios", projectId, "trozos", String(i)), s => {
       parts[i] = s.exists() ? (s.data().map || {}) : {};
       mark(i); emit();
@@ -60,6 +61,13 @@ export function listenPrices(projectId, cb) {
 export async function saveDefaultPrice(projectId, orgId, precio) {
   await setDoc(doc(db, "precios", projectId), {
     org_id: orgId, projectId, defaultPrecio: precio == null ? deleteField() : precio, updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+// El precio por visita de un trabajo del proyecto (o lo borra, con null)
+export async function saveTrabajoPrice(projectId, orgId, trabajoId, precio) {
+  await setDoc(doc(db, "precios", projectId), {
+    org_id: orgId, projectId, porTrabajo: { [trabajoId]: precio == null ? deleteField() : precio }, updatedAt: serverTimestamp(),
   }, { merge: true });
 }
 

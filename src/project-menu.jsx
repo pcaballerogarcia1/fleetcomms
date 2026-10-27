@@ -1,5 +1,5 @@
-// Nombre del proyecto en la cabecera: al pincharlo, menú con "Duplicar
-// proyecto" (ver project-copy.js).
+// Nombre del proyecto en la cabecera: al pincharlo, menú con el sector,
+// "Renombrar proyecto" y "Duplicar proyecto" (ver project-copy.js).
 import { useState, useEffect, useRef } from "react";
 import { duplicarProyecto, nombreCopia } from "./project-copy.js";
 import { logAudit } from "./audit.js";
@@ -11,7 +11,7 @@ import { tono } from "./tema.js";
 const font = "var(--font)";
 export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
   const [open, setOpen] = useState(false);
-  const [modo, setModo] = useState("menu"); // menu | duplicar
+  const [modo, setModo] = useState("menu"); // menu | duplicar | renombrar
   const [nombre, setNombre] = useState("");
   const [paso, setPaso] = useState(null);   // texto del avance mientras copia
   const [error, setError] = useState(null);
@@ -54,6 +54,17 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
     }
   }
 
+  async function renombrar() {
+    const n = nombre.trim();
+    if (!n || n === activeProject.nombre) { setOpen(false); return; }
+    setError(null);
+    try {
+      await onProjectUpdate({ nombre: n });
+      logAudit({ modulo: "Proyectos", accion: "Renombró un proyecto", detalle: `${activeProject.nombre} → ${n}`, projectId: activeProject._id, proyecto: n, orgId: activeProject.org_id });
+      setOpen(false);
+    } catch (e) { setError(`No se ha podido renombrar: ${e?.message || e}`); }
+  }
+
   if (!activeProject) return null;
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -90,6 +101,18 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
                 {error && <div style={{ fontSize: 11.5, color: C.red, marginTop: 4 }}>{error}</div>}
               </div>
             )}
+            {onProjectUpdate && (
+              <button role="menuitem" onClick={() => { setNombre(activeProject.nombre || ""); setError(null); setModo("renombrar"); }} style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 7,
+                background: "none", border: "none", color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer", textAlign: "left",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.surface2; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                <span style={{ fontWeight: 600 }}>Renombrar proyecto</span>
+              </button>
+            )}
             <button role="menuitem" onClick={() => { setNombre(nombreCopia(activeProject.nombre)); setModo("duplicar"); }} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 7,
               background: "none", border: "none", color: C.text, fontSize: 12.5, fontFamily: font, cursor: "pointer", textAlign: "left",
@@ -105,7 +128,20 @@ export function ProjectMenu({ activeProject, onOpenProject, onProjectUpdate }) {
                 <div style={{ fontSize: 11, color: C.dim, marginTop: 1 }}>Copia puntos, depósitos, horarios, precios y escenario</div>
               </span>
             </button>
-          </>) : (
+          </>) : modo === "renombrar" ? (
+            <form onSubmit={e => { e.preventDefault(); renombrar(); }} style={{ padding: 6 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>Renombrar proyecto</div>
+              <input autoFocus aria-label="Nombre del proyecto" value={nombre} onChange={e => setNombre(e.target.value)} onFocus={e => e.target.select()} style={{
+                width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, color: C.text,
+                borderRadius: 7, padding: "7px 9px", fontSize: 12.5, fontFamily: font, outline: "none",
+              }} />
+              {error && <div style={{ fontSize: 11.5, color: C.red, lineHeight: 1.4, marginTop: 8 }}>{error}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+                <button type="button" onClick={() => setModo("menu")} style={{ padding: "6px 12px", borderRadius: 7, background: "none", border: `1px solid ${C.border}`, color: C.muted, fontSize: 12, fontFamily: font, cursor: "pointer" }}>Cancelar</button>
+                <button type="submit" disabled={!nombre.trim()} style={{ padding: "6px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, fontFamily: font, background: nombre.trim() ? C.blue : C.surface2, color: nombre.trim() ? "#fff" : C.dim, cursor: nombre.trim() ? "pointer" : "default" }}>Guardar</button>
+              </div>
+            </form>
+          ) : (
             <form onSubmit={e => { e.preventDefault(); duplicar(); }} style={{ padding: 6 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>Duplicar «{activeProject.nombre}»</div>
               <label style={{ fontSize: 11, color: C.muted }}>Nombre de la copia</label>

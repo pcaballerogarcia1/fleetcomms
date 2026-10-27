@@ -196,6 +196,15 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
   // "facturado". Precio = el propio del punto o el de por defecto del
   // proyecto (Planning → Timetable). Solo cuentan los planes de este
   // proyecto (o los antiguos sin proyecto, que aún no lo guardaban).
+  // precio por visita de cada trabajo (Planificación → Trabajos), por su nombre: el de las rutas publicadas (plan.trabajo)
+  const precioTrabajo = useMemo(() => {
+    const m = new Map();
+    for (const t of activeProject?.trabajos || []) {
+      const v = prices.porTrabajo?.[t.id];
+      if (v != null && t.nombre) m.set(String(t.nombre).trim().toLowerCase(), v);
+    }
+    return m;
+  }, [activeProject?.trabajos, prices]);
   const fact = useMemo(() => {
     if (!canPrice) return null;
     let facturado = 0, pendiente = 0, hechas = 0, sinPrecio = 0;
@@ -205,7 +214,8 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       const veh = p.vehiculoNombre || p.conductorNombre || p.nombre || "Plan";
       for (const u of p.ubicaciones || []) {
         if (u.lat == null || u.lng == null) continue;
-        const precio = effectivePrice(prices, puntoKeyOf(u.lat, u.lng));
+        // el del trabajo de la ruta si tiene; si no, el del punto (o el de por defecto)
+        const precio = (p.trabajo && precioTrabajo.get(String(p.trabajo).trim().toLowerCase())) ?? effectivePrice(prices, puntoKeyOf(u.lat, u.lng));
         if (precio == null) { sinPrecio++; continue; }
         if (u.realizado) {
           facturado += precio; hechas++;
@@ -229,7 +239,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
         .map(([nombre, euros]) => ({ nombre: etiqueta(nombre), euros: +euros.toFixed(2) }))
         .sort((a, b) => b.euros - a.euros).slice(0, 10),
     };
-  }, [canPrice, planesReales, prices, projectId]);
+  }, [canPrice, planesReales, prices, projectId, precioTrabajo]);
 
   // ── PERSONAL ──
   const personal = useMemo(() => {
@@ -384,9 +394,9 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
               <KpiCard label="Previsto del mes" value={fmtEur(fact.total)} color={C.blue} />
               <KpiCard label="% facturado" value={`${fact.pct}%`} color={fact.pct === 100 ? C.green : C.purple} />
             </div>
-            {(!prices.ready || (prices.defaultPrecio == null && prices.byKey.size === 0)) ? (
+            {(!prices.ready || (prices.defaultPrecio == null && prices.byKey.size === 0 && !precioTrabajo.size)) ? (
               <div style={{ fontSize: 12, color: C.muted }}>
-                {prices.ready ? "Este proyecto todavía no tiene precios: ponlos en Planificación → Horarios → € Precio." : "Cargando precios…"}
+                {prices.ready ? "Este proyecto todavía no tiene precios: ponlos por trabajo en Planificación → Trabajos (€ / visita) o por punto en Horarios → € Precio." : "Cargando precios…"}
               </div>
             ) : fact.sinPrecio > 0 ? (
               <div style={{ fontSize: 11, color: C.dim }}>
