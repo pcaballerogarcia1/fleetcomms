@@ -120,7 +120,18 @@ export function taskToUbicacion(task, idx) {
     realizadoPor: null,
     realizadoEn: null,
     nota: "",
+    // hora prevista (minutos del día), para comparar con la hora en que se hizo
+    horaPlan: Number.isFinite(task._start) ? Math.round(task._start % 1440) : null,
   };
+}
+
+/** Lo planificado de un día de ruta (para Análisis → Realizado): inicio y fin
+ *  previstos (minutos del día), minutos de jornada y km (si se conocen). */
+export function planDelDia(stops, km = null) {
+  const con = (stops || []).filter(a => Number.isFinite(a._start));
+  if (!con.length) return { km: km != null ? +(+km).toFixed(1) : null };
+  const inicio = Math.min(...con.map(a => a._start)), fin = Math.max(...con.map(a => a._end ?? a._start));
+  return { inicio: Math.round(inicio % 1440), fin: Math.round(fin % 1440), minutos: Math.round(fin - inicio), km: km != null ? +(+km).toFixed(1) : null };
 }
 
 const isStop = a => !a._travel && !a._break && !a._wait;
@@ -219,6 +230,7 @@ export async function publishWorker({
         vehiculoNombre: vehiculo, mes, diaServicio: dayLabel, diaNum: d,
         ubicaciones: stops.map((a, i) => taskToUbicacion(a, i)),
         recorrido: stops.filter(a => hasCoords(a.lat, a.lng)).map(a => ({ lat: +a.lat, lng: +a.lng })),
+        plan: planDelDia(stops),
         fechaSubida: Date.now(), origenVRP: true, origenRostering: true, sector,
         projectId: projectId || null, org_id: orgId,
       });

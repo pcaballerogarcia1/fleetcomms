@@ -5,7 +5,7 @@ import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from "fir
 import { logAudit } from "../audit.js";
 import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { db } from "../firebase.js";
-import { diaDelPlan, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
+import { diaDelPlan, planDelDia, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { diaDe, rutasLargas, scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
@@ -971,6 +971,9 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
           vehiculoNombre: row.nombre || row.matricula || "",
           mes, diaServicio: dayLabel, diaNum: d + 1,
           ubicaciones, recorrido,
+          // lo previsto ese día (jornada y km de la ruta), para Análisis → Realizado
+          plan: planDelDia(row.assignments.filter(a => Math.floor((a._start - startMin) / 1440) === d),
+            row.assignments.filter(a => a._travel && Math.floor((a._start - startMin) / 1440) === d).reduce((x, a) => x + (a.km || 0), 0)),
           fechaSubida: Date.now(),
           origenVRP: true, origenScheduling: true,
           sector: activeProject?.sector || null, // la app del conductor adapta sus palabras
