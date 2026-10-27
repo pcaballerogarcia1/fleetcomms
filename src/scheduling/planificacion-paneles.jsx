@@ -57,10 +57,10 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
         </button>
 
 
-        <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`}><SlidersHorizontal size={14} /> {t("restricciones", lang)}</button>
-        {activeProject && <button onClick={() => setShowHistorial(true)} className="op-btn" title="Historial de versiones del escenario"><History size={14} /> {t("historial", lang)}</button>}
+        <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`} title={t("restricciones", lang)}><SlidersHorizontal size={14} /><span className="op-texto-medio">{t("restricciones", lang)}</span></button>
+        {activeProject && <button onClick={() => setShowHistorial(true)} className="op-btn" title="Historial de versiones del escenario"><History size={14} /><span className="op-texto-ancho">{t("historial", lang)}</span></button>}
         {activeProject && cloudMeta?.v && <NombreEscenario projectId={activeProject._id} meta={cloudMeta} />}
-        {schedule && <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} className="op-btn" title="Simular +/- vehículos sin tocar el escenario actual"><FlaskConical size={14} /> {t("simulador", lang)}</button>}
+        {schedule && <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} className="op-btn" title="Simulador: añadir o quitar vehículos y trabajadores sin tocar el escenario actual"><FlaskConical size={14} /><span className="op-texto-ancho">{t("simulador", lang)}</span></button>}
 
         {schedule && <>
           {schedules.vehicles && <>
@@ -87,7 +87,7 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
               </>}
             </div>
             <div className="op-sep" />
-            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn"><Send size={14} /> {t("publicarRutas", lang)}</button>
+            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn" title={t("publicarRutas", lang)}><Send size={14} /><span className="op-texto-medio">{t("publicarRutas", lang)}</span></button>
             {/* Deshacer / rehacer movimientos manuales del Gantt */}
             <div style={{ display: "flex", gap: 2 }}>
               <button onClick={undoMove} disabled={!canUndoMove} className="op-btn op-fantasma op-icono" title={canUndoMove ? `Deshacer: ${moveHistory[historyIndex]?.label || "último movimiento"}` : "Nada que deshacer"}><Undo2 size={15} /></button>

@@ -186,3 +186,6 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
 /* Con los módulos en español la barra no cabía en pantallas de portátil (1440 px):
    el nombre y el perfil junto a la foto sobran (está el avatar) */
 @media (max-width: 1600px) { .op-cabecera-quien { display: none; } }
+/* Rutas: en pantallas normales, los botones secundarios solo con su icono (el nombre sale al pasar el ratón) para que la barra quepa en una línea */
+@media (max-width: 1640px) { .op-texto-ancho { display: none; } }
+@media (max-width: 1500px) { .op-texto-medio { display: none; } }
