@@ -8,6 +8,7 @@
 import { Check, Download, Info, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { nombreDeVersion, renombrarEscenario, renombrarPunto } from "../scenario-store.js";
+import { textoPuesto } from "./simulador.js";
 import { t } from "../i18n.js";
 import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
@@ -467,7 +468,14 @@ export function VentanaHistorial({ cloudMeta, compararCon, projectId, restorePoi
   );
 }
 
-export function VentanaSimulador({ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, showSimulador, simDelta, simError, simResult, simRunning, totalKm, unassigned, vehicles }) {
+export function VentanaSimulador({ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, setSimTrab, showSimulador, simDelta, simError, simResult, simRunning, simTrab, totalKm, unassigned, vehicles, workers = [] }) {
+  const contador = (valor, cambiar, min, etiqueta) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <button aria-label={`Quitar ${etiqueta}`} onClick={() => cambiar(d => Math.max(min, d - 1))} disabled={simRunning || valor <= min} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>−</button>
+      <span style={{ width: 46, textAlign: "center", fontFamily: mono, fontSize: 14, fontWeight: 700, color: valor > 0 ? C.green : valor < 0 ? C.red : C.muted }}>{valor > 0 ? `+${valor}` : valor}</span>
+      <button aria-label={`Añadir ${etiqueta}`} onClick={() => cambiar(d => d + 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>+</button>
+    </div>
+  );
   return (
     <>
       {/* Simulador "qué pasaría si" */}
@@ -485,19 +493,16 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
               {!simRunning && <button onClick={() => setShowSimulador(false)} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>}
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
-              Prueba a añadir o quitar vehículos sobre tu flota real y compara el resultado con el escenario actual — no se guarda nada hasta que tú lo decidas.
+              Prueba a añadir o quitar vehículos, o a añadir trabajadores, y compara el resultado y el coste con el escenario actual. No se guarda nada.
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "90px auto 1fr", alignItems: "center", gap: "10px 10px", marginBottom: 16 }}>
               <span style={{ fontSize: 11, color: C.muted }}>Vehículos</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={() => setSimDelta(d => d - 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>−</button>
-                <span style={{ width: 46, textAlign: "center", fontFamily: mono, fontSize: 14, fontWeight: 700, color: simDelta > 0 ? C.green : simDelta < 0 ? C.red : C.muted }}>
-                  {simDelta > 0 ? `+${simDelta}` : simDelta}
-                </span>
-                <button onClick={() => setSimDelta(d => d + 1)} disabled={simRunning} style={{ width: 26, height: 26, borderRadius: 6, background: C.surface2, border: `1px solid ${C.border}`, color: C.text, cursor: simRunning ? "not-allowed" : "pointer", fontSize: 14 }}>+</button>
-              </div>
+              {contador(simDelta, setSimDelta, -vehicles.length + 1, "vehículo")}
               <span style={{ fontSize: 10, color: C.dim }}>respecto a los {vehicles.length} actuales</span>
+              <span style={{ fontSize: 11, color: C.muted }}>Trabajadores</span>
+              {contador(simTrab, setSimTrab, 0, "trabajador")}
+              <span style={{ fontSize: 10, color: C.dim }}>cada uno, un segundo turno en el vehículo con menos horas</span>
             </div>
 
             <button onClick={runSimulation} disabled={simRunning || vehicles.length + simDelta <= 0} style={{
@@ -515,34 +520,56 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
             {simError && <div style={{ fontSize: 11, color: C.red, marginBottom: 12 }}>{simError}</div>}
 
             {simResult && (() => {
-              const actual = { vehicleCount: schedules.vehicles?.length || 0, unassigned: unassigned.length, totalKm, daysUsed: constraints.days || 1 };
+              const act = simResult.actual || {};
+              const eur = n => `${Math.round(n).toLocaleString("es-ES")} €`;
+              const h = n => `${Math.round(n / 60).toLocaleString("es-ES")} h`;
+              // [etiqueta, actual, simulado, cuanto menos mejor, formato]
               const rows = [
-                ["Vehículos", actual.vehicleCount, simResult.vehicleCount],
-                ["Días", actual.daysUsed, simResult.daysUsed],
-                ["Km totales", actual.totalKm.toFixed(0), simResult.totalKm.toFixed(0)],
-                ["Sin asignar", actual.unassigned, simResult.unassigned],
+                ["Vehículos", schedules.vehicles?.length || 0, simResult.vehicleCount, null],
+                ["Trabajadores", act.trabajadores ?? workers.length, simResult.trabajadores ?? workers.length, null],
+                ["Días", constraints.days || 1, simResult.daysUsed, true],
+                ["Km totales", Math.round(totalKm), Math.round(simResult.totalKm), true],
+                ["Sin asignar", unassigned.length, simResult.unassigned, true],
+                ...(simResult.pagado != null ? [["Horas pagadas", act.pagado || 0, simResult.pagado, true, h]] : []),
+                ...(simResult.coste != null ? [["Coste", act.coste || 0, simResult.coste, true, eur]] : []),
               ];
+              const difCoste = simResult.coste != null ? simResult.coste - (act.coste || 0) : null;
               return (
-                <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: C.surface2, padding: "7px 12px" }}>
-                    <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase" }}></span>
-                    <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", textAlign: "right" }}>Actual</span>
-                    <span style={{ fontSize: 10, color: C.blueText, textTransform: "uppercase", textAlign: "right" }}>Simulado</span>
+                <>
+                  <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: C.surface2, padding: "7px 12px" }}>
+                      <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase" }}></span>
+                      <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", textAlign: "right" }}>Actual</span>
+                      <span style={{ fontSize: 10, color: C.blueText, textTransform: "uppercase", textAlign: "right" }}>Simulado</span>
+                    </div>
+                    {rows.map(([label, a, s, menos, fmt = n => n]) => {
+                      const color = menos == null || Math.round(s) === Math.round(a) ? C.text : (s < a) === menos ? C.green : C.orange;
+                      return (
+                        <div key={label} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
+                          <span style={{ fontSize: 12, color: C.muted }}>{label}</span>
+                          <span style={{ fontSize: 12, color: C.muted, fontFamily: mono, textAlign: "right" }}>{fmt(a)}</span>
+                          <span style={{ fontSize: 12, color, fontFamily: mono, fontWeight: 700, textAlign: "right" }}>{fmt(s)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {rows.map(([label, a, s]) => {
-                    const numA = +a, numS = +s;
-                    const better = label === "Sin asignar" || label === "Km totales" || label === "Días" ? numS < numA : null;
-                    const worse  = label === "Sin asignar" || label === "Km totales" || label === "Días" ? numS > numA : null;
-                    const color = numS === numA ? C.text : better ? C.green : worse ? C.orange : C.text;
-                    return (
-                      <div key={label} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
-                        <span style={{ fontSize: 12, color: C.muted }}>{label}</span>
-                        <span style={{ fontSize: 12, color: C.muted, fontFamily: mono, textAlign: "right" }}>{a}</span>
-                        <span style={{ fontSize: 12, color, fontFamily: mono, fontWeight: 700, textAlign: "right" }}>{s}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                  {difCoste != null && Math.abs(difCoste) >= 1 && (
+                    <div style={{ marginTop: 12, fontSize: 12.5, color: C.text }}>
+                      El simulado cuesta <b style={{ color: difCoste > 0 ? C.orange : C.green }}>{eur(Math.abs(difCoste))} {difCoste > 0 ? "más" : "menos"}</b> en los días del escenario.
+                    </div>
+                  )}
+                  {simResult.coste != null && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: C.dim }}>Coste contado igual en los dos: horas de cada vehículo de la salida a la vuelta, más los turnos enteros de los trabajadores de más, y los km.</div>
+                  )}
+                  {simResult.coste == null && (
+                    <div style={{ marginTop: 12, fontSize: 11.5, color: C.muted }}>Para ver el coste, pon el coste por hora de conductor y por km en Restricciones.</div>
+                  )}
+                  {simResult.puestos?.length > 0 && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
+                      Trabajadores de más: {simResult.puestos.map(textoPuesto).join(" · ")}
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>

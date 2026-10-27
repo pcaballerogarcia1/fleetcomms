@@ -55,6 +55,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   const [scenarioHistory, setScenarioHistory] = useState([]);
   const [showSimulador, setShowSimulador] = useState(false);
   const [simDelta,     setSimDelta]     = useState(1);
+  const [simTrab,      setSimTrab]      = useState(0); // trabajadores de más en el simulador
   const [simRunning,   setSimRunning]   = useState(false);
   const [simResult,    setSimResult]    = useState(null);
   const [simError,     setSimError]     = useState(null);
@@ -623,7 +624,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   // de conductores — es una previsión de vehículos/km/días, no un
   // escenario publicable.
   function runSimulation() {
-    return runSimulationMod({ activeProject, constraints, setSimError, setSimResult, setSimRunning, simDelta, tasks, vehicles, workers });
+    return runSimulationMod({ activeProject, constraints, schedules, setSimError, setSimResult, setSimRunning, simDelta, simTrab, tasks, vehicles, workers });
   }
 
   // ── Excel export ───────────────────────────────────────────────
@@ -819,7 +820,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
           kpisB={comparando.kpis} cargando={!comparando.kpis && !comparando.error} error={comparando.error} onCerrar={() => setComparando(null)} />
       )}
 
-      <VentanaSimulador {...{ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, showSimulador, simDelta, simError, simResult, simRunning, totalKm, unassigned, vehicles }} />
+      <VentanaSimulador {...{ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, setSimTrab, showSimulador, simDelta, simError, simResult, simRunning, simTrab, totalKm, unassigned, vehicles, workers }} />
     </div>
   );
 }

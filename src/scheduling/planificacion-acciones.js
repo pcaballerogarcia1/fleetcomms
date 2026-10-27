@@ -16,6 +16,7 @@ import { deriveWorkerRows, extractShifts, kpiHistorial, lastScenarioDay, loadTas
 import { idbSave } from "./idb.js";
 import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
 import { NOMBRE_DIA } from "./frecuencias.js";
+import { pagadoSimulado, ponerTrabajadoresExtra } from "./simulador.js";
 import { enrichWithOSRM } from "./osrm.js";
 import { medirCarretera, textoCarretera } from "./carretera.js";
 import { cargarVecinos } from "./vecinos-guardados.js";
@@ -584,7 +585,7 @@ export async function runGenerate(ctx) {
 // de conductores — es una previsión de vehículos/km/días, no un
 // escenario publicable.
 export async function runSimulation(ctx) {
-  const { activeProject, constraints, setSimError, setSimResult, setSimRunning, simDelta, tasks, vehicles, workers } = ctx;
+  const { activeProject, constraints, schedules, setSimError, setSimResult, setSimRunning, simDelta, simTrab = 0, tasks, vehicles, workers } = ctx;
   if (!tasks.length || !vehicles.length) return;
   setSimRunning(true);
   setSimError(null);
@@ -633,8 +634,20 @@ export async function runSimulation(ctx) {
       simVehicles = vehiclesForVRP.slice(0, Math.max(0, vehiclesForVRP.length + simDelta));
     }
 
+    // Trabajadores de más: cada uno, un segundo turno en el vehículo con menos horas
+    const jornada = +constraints.personalNecesarioMaxMin || +constraints.maxShiftMin || 480;
+    const extra = ponerTrabajadoresExtra(simVehicles, simTrab, jornada, constraints.startMin, constraints.endMin);
+    if (simTrab > 0) simVehicles = extra.vehicles;
+
+    // Coste: horas pagadas (de cada vehículo, de su primera salida a su última llegada) y km,
+    // contado igual en el escenario actual y en el simulado para que se puedan comparar
+    const costes = { costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0 };
+    const actualDias = Math.max(constraints.days || 1, lastScenarioDay(schedules?.vehicles || [], constraints.startMin));
+    const kAct = scenarioKpis({ vehicles: schedules?.vehicles || [], days: actualDias, ...costes });
+    const actual = { pagado: kAct.pagado, coste: kAct.coste, trabajadores: workers.length };
+
     if (simVehicles.length === 0) {
-      setSimResult({ vehicleCount: 0, unassigned: tasks.length, totalKm: 0, daysUsed: 0 });
+      setSimResult({ vehicleCount: 0, unassigned: tasks.length, totalKm: 0, daysUsed: 0, actual });
       return;
     }
 
@@ -648,9 +661,18 @@ export async function runSimulation(ctx) {
       finalVehicleCount = scaled.resources.length;
     }
     const totalKm = vr.schedule.reduce((s, v) => s + (v.totalKm || 0), 0);
+    const diasSim = Math.max(vr.daysUsed || 1, lastScenarioDay(vr.schedule, constraints.startMin));
+    const kSim = scenarioKpis({ vehicles: vr.schedule, days: diasSim, ...costes });
+    // los trabajadores de más se pagan enteros (ver simulador.js)
+    if (extra.puestos.length) {
+      kSim.pagado = pagadoSimulado(vr.schedule, extra.puestos, diasSim);
+      if (kSim.coste != null) kSim.coste = (kSim.pagado / 60) * costes.costeHora + kSim.km * costes.costeKm;
+    }
     setSimResult({
       vehicleCount: finalVehicleCount, unassigned: vr.unassigned.length,
       totalKm: +totalKm.toFixed(1), daysUsed: vr.daysUsed,
+      pagado: kSim.pagado, coste: kSim.coste, trabajadores: workers.length + extra.puestos.length,
+      puestos: extra.puestos, actual,
     });
   } catch (e) {
     console.error("Simulación error:", e);
