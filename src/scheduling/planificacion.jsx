@@ -172,14 +172,15 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     return restorePointMod({ activeProject, applyScenario, persistScenario, scenarioProjectRef, scenarioStampRef, setCloudSync, setShowHistorial }, p);
   }
 
-  function persistScenario(projectId, payload, motivo) {
+  function persistScenario(projectId, payload, motivo, extra = {}) {
     // Local al momento (sobrevive a recargar aunque la nube falle)…
     idbSave(`vrp_${projectId}`, { ...payload, cloudV: cloudVRef.current, dirty: true });
     // …y a la nube con un pequeño retardo, para no subir el escenario
     // entero por cada parada que se arrastra.
     clearTimeout(cloudTimerRef.current);
     const prevMotivo = cloudPendingRef.current?.projectId === projectId ? cloudPendingRef.current.motivo : undefined;
-    cloudPendingRef.current = { projectId, payload, motivo: motivo || prevMotivo };
+    const prevNombre = cloudPendingRef.current?.projectId === projectId ? cloudPendingRef.current.nombre : undefined;
+    cloudPendingRef.current = { projectId, payload, motivo: motivo || prevMotivo, nombre: extra.nombre !== undefined ? extra.nombre : prevNombre };
     cloudTimerRef.current = setTimeout(runCloudSave, 1500);
   }
 
@@ -647,7 +648,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      <BarraHerramientas {...{ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
+      <BarraHerramientas {...{ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
 
       {/* Focus-mode mini bar — only when focusMode */}
       {focusMode && (
@@ -788,7 +789,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       <VentanaPublicar {...{ publishModal, publishToRoutes, publishing, setPublishModal }} />
 
-      <VentanaHistorial {...{ cloudMeta, restorePoint, scenarioHistory, setShowHistorial, showHistorial }} />
+      <VentanaHistorial {...{ cloudMeta, projectId: activeProject?._id, restorePoint, scenarioHistory, setShowHistorial, showHistorial }} />
 
       <VentanaSimulador {...{ constraints, runSimulation, schedules, setShowSimulador, setSimDelta, showSimulador, simDelta, simError, simResult, simRunning, totalKm, unassigned, vehicles }} />
     </div>

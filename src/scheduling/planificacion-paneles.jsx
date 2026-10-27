@@ -5,8 +5,9 @@
 
 
 
-import { Check, Download, Info, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
+import { Check, Download, Info, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
 import { useState } from "react";
+import { nombreDeVersion, renombrarEscenario, renombrarPunto } from "../scenario-store.js";
 import { t } from "../i18n.js";
 import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
@@ -16,16 +17,16 @@ import { alfa } from "../tema.js";
 
 
 
-export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
+export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
   const chip = (n, txt, color) => <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}><span style={{ fontWeight: 650, color }}>{n}</span><span style={{ color: C.dim }}>{txt}</span></span>;
   return (
     <>
       {/* ── TOOLBAR ──────────────────────────────────────────────── */}
       {!focusMode && <div style={{
-        padding: "0 16px", height: 50, borderBottom: `1px solid ${C.border}`,
+        padding: "9px 16px", minHeight: 50, borderBottom: `1px solid ${C.border}`,
         background: C.bg, flexShrink: 0,
-        display: "flex", alignItems: "center", gap: 8,
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, // si no cabe, a una segunda línea (antes «Generar escenario» se salía)
       }}>
         {/* Paradas importadas de Planning */}
         <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planificación">
@@ -44,6 +45,7 @@ export function BarraHerramientas({ activeProject, canGenerate, canRedoMove, can
 
         <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`}><SlidersHorizontal size={14} /> {t("restricciones", lang)}</button>
         {activeProject && <button onClick={() => setShowHistorial(true)} className="op-btn" title="Historial de versiones del escenario"><History size={14} /> {t("historial", lang)}</button>}
+        {activeProject && cloudMeta?.v && <NombreEscenario projectId={activeProject._id} meta={cloudMeta} />}
         {schedule && <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} className="op-btn" title="Simular +/- vehículos sin tocar el escenario actual"><FlaskConical size={14} /> {t("simulador", lang)}</button>}
 
         {schedule && <>
@@ -357,7 +359,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
   );
 }
 
-export function VentanaHistorial({ cloudMeta, restorePoint, scenarioHistory, setShowHistorial, showHistorial }) {
+export function VentanaHistorial({ cloudMeta, projectId, restorePoint, scenarioHistory, setShowHistorial, showHistorial }) {
   return (
     <>
       {/* Historial de versiones del escenario */}
@@ -393,7 +395,12 @@ export function VentanaHistorial({ cloudMeta, restorePoint, scenarioHistory, set
                       {p.savedAtMs ? new Date(p.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: C.text }}>{p.motivo}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombreDeVersion(p)}</span>
+                        <button title="Cambiar el nombre de esta versión" aria-label="Renombrar versión" onClick={() => { const n = window.prompt("Nombre de esta versión:", p.nombre || ""); if (n != null) renombrarPunto(projectId, p.v, n).catch(e => window.alert(`No se pudo renombrar: ${e.message || e}`)); }}
+                          style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", padding: 0, display: "inline-flex" }}><Pencil size={11} /></button>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{p.motivo}</div>
                       <div style={{ fontSize: 10.5, color: C.dim }}>{p.savedBy?.nombre ? `Guardada por ${p.savedBy.nombre}` : "Autor desconocido"}{p.bytes ? ` · ${(p.bytes / 1e6).toFixed(1)} MB` : ""}</div>
                     </div>
                     <button onClick={() => restorePoint(p)} style={{ padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11.5, fontFamily: font, background: "rgba(91,124,250,0.12)", border: `1px solid ${C.blue}55`, color: C.blueText, fontWeight: 600, flexShrink: 0 }}>
@@ -563,5 +570,30 @@ function AvisoCalculo({ mensajes, onCerrar }) {
         </ul>
       )}
     </div>
+  );
+}
+
+// El nombre del escenario actual: se ve junto a «Historial» y se cambia con un clic
+function NombreEscenario({ projectId, meta }) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [error, setError] = useState(null);
+  async function guardar() {
+    setEditando(false);
+    if (texto.trim() === (meta.nombre || "")) return;
+    try { await renombrarEscenario(projectId, texto); setError(null); }
+    catch (e) { setError(e.message || String(e)); }
+  }
+  if (editando) return (
+    <input autoFocus aria-label="Nombre del escenario" value={texto} placeholder="Nombre del escenario" onChange={e => setTexto(e.target.value)}
+      onBlur={guardar} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setTexto(meta.nombre || ""); setEditando(false); } }}
+      style={{ height: 30, width: 220, background: C.bg, border: `1px solid ${C.blue}`, color: C.text, borderRadius: 8, padding: "0 10px", fontSize: 12.5, fontFamily: font, outline: "none" }} />
+  );
+  return (
+    <button onClick={() => { setTexto(meta.nombre || ""); setEditando(true); }} className="op-btn op-fantasma" title={error ? `No se pudo renombrar: ${error}` : "Cambiar el nombre del escenario"}
+      style={{ maxWidth: 240, color: meta.nombre ? C.text : C.dim, fontStyle: meta.nombre ? "normal" : "italic" }}>
+      <Pencil size={12} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{meta.nombre || "Ponle nombre"}</span>
+    </button>
   );
 }

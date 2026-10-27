@@ -14,7 +14,7 @@
 // así quien esté leyendo nunca se encuentra una versión a medias.
 
 import { db } from "./firebase.js";
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp, runTransaction, Bytes } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, runTransaction, Bytes } from "firebase/firestore";
 import { gzip, gunzip, splitBytes, joinBytes } from "./layer-store.js";
 
 const metaRef  = projectId => doc(db, "scheduling_scenarios", projectId);
@@ -65,8 +65,10 @@ export function motivoPunto(cur, nextStamp, motivo, now = Date.now()) {
  *  baseV: versión de la que partía esta edición. Si en la nube ya hay otra
  *  (alguien guardó entre medias), no se pisa: lanza ScenarioConflictError.
  *  Sin baseV (undefined) se guarda encima sin comprobar.
- *  motivo: "restaurar" | "sobrescribir" | undefined (puntos de restauración). */
-export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion(), { baseV, savedBy, motivo } = {}) {
+ *  motivo: "restaurar" | "sobrescribir" | undefined (puntos de restauración).
+ *  nombre: el nombre de la versión que se guarda (al restaurar, el de esa versión); si no se
+ *  da, se queda el que tenía, salvo un escenario recién generado, que empieza sin nombre. */
+export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioVersion(), { baseV, savedBy, motivo, nombre } = {}) {
   const bytes  = await gzip(JSON.stringify(scenarioBody(data)));
   const pieces = splitBytes(bytes);
   await Promise.all(pieces.map((p, i) =>
@@ -82,15 +84,17 @@ export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioV
       const quitar = [];
       const razon = motivoPunto(cur, data?.stamp, motivo, now);
       if (razon) {
-        puntos = [{ v: cur.v, n: cur.n, bytes: cur.bytes || 0, stamp: cur.stamp || null,
+        puntos = [{ v: cur.v, n: cur.n, bytes: cur.bytes || 0, stamp: cur.stamp || null, nombre: cur.nombre || null,
           savedBy: cur.savedBy || null, savedAtMs: cur.savedAtMs || null, at: now, motivo: razon }, ...puntos];
         quitar.push(...puntos.slice(MAX_PUNTOS));
         puntos = puntos.slice(0, MAX_PUNTOS);
       } else if (cur?.v && cur.v !== v && !puntos.some(p => p.v === cur.v)) {
         quitar.push(cur); // la anterior no se conserva
       }
+      const nuevoNombre = nombre !== undefined ? (nombre || null)
+        : (cur?.stamp || null) !== (data?.stamp || null) ? null : (cur?.nombre || null);
       tx.set(metaRef(projectId), {
-        org_id: orgId ?? null, projectId, v, n: pieces.length, bytes: bytes.length,
+        org_id: orgId ?? null, projectId, v, n: pieces.length, bytes: bytes.length, nombre: nuevoNombre,
         stamp: data?.stamp || null, savedBy: savedBy || null, savedAtMs: now,
         puntos, puntoRefMs: razon ? now : (cur?.puntoRefMs ?? now), updatedAt: serverTimestamp(),
       });
@@ -103,6 +107,24 @@ export async function saveScenarioCloud(projectId, orgId, data, v = newScenarioV
   for (const p of borrar) deleteScenarioPieces(projectId, p).catch(() => {});
   return v;
 }
+
+/** Pone nombre al escenario actual (o lo quita, con "") */
+export async function renombrarEscenario(projectId, nombre) {
+  await updateDoc(metaRef(projectId), { nombre: String(nombre || "").trim() || null });
+}
+
+/** Pone nombre a una versión guardada (punto de restauración) */
+export async function renombrarPunto(projectId, v, nombre) {
+  await runTransaction(db, async tx => {
+    const s = await tx.get(metaRef(projectId));
+    if (!s.exists()) return;
+    const puntos = (s.data().puntos || []).map(p => (p.v === v ? { ...p, nombre: String(nombre || "").trim() || null } : p));
+    tx.update(metaRef(projectId), { puntos });
+  });
+}
+
+/** Cómo se llama una versión: su nombre o, si no tiene, su fecha */
+export const nombreDeVersion = m => m?.nombre || (m?.savedAtMs ? `Escenario del ${new Date(m.savedAtMs).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : "Escenario sin nombre");
 
 export async function getScenarioMeta(projectId) {
   const s = await getDoc(metaRef(projectId));

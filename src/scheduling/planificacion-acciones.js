@@ -42,7 +42,7 @@ export async function runCloudSave(ctx) {
   setCloudSync("saving");
   try {
     const savedBy = sesion ? { uid: sesion.uid, nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" ") } : null;
-    await saveScenarioCloud(job.projectId, orgId, job.payload, v, { baseV, savedBy, motivo: job.force ? "sobrescribir" : job.motivo });
+    await saveScenarioCloud(job.projectId, orgId, job.payload, v, { baseV, savedBy, motivo: job.force ? "sobrescribir" : job.motivo, nombre: job.nombre });
     idbSave(`vrp_${job.projectId}`, { ...job.payload, cloudV: v, dirty: false });
     setCloudSync(s => (s === "saving" ? "saved" : s));
     setCloudConflict(null);
@@ -95,7 +95,7 @@ export async function restorePoint(ctx, p) {
     const { data } = await loadScenarioCloud(pid, p);
     if (scenarioProjectRef.current !== pid && activeProject?._id !== pid) return;
     applyScenario(pid, data);
-    persistScenario(pid, data, "restaurar");
+    persistScenario(pid, data, "restaurar", { nombre: p.nombre || null }); // con el nombre que tenía esa versión
     setCloudSync(null);
     logAudit({ modulo: "Scheduling", accion: "Restauró una versión anterior del escenario",
       detalle: [p.motivo, cuando, p.savedBy?.nombre].filter(Boolean).join(" · ") });
