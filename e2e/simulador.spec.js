@@ -26,9 +26,10 @@ test("simular un trabajador de más enseña dónde va y el coste", async ({ page
   await expect(page.getByRole("button", { name: /Generando/ })).toHaveCount(0, { timeout: 60_000 });
 
   await page.getByRole("button", { name: /Simulador/ }).first().click();
-  await page.getByRole("button", { name: "Quitar vehículo" }).click(); // de +1 a 0
-  await page.getByRole("button", { name: "Añadir trabajador" }).click();
-  await page.getByRole("button", { name: "Simular", exact: true }).click();
+  const sim = page.getByRole("dialog", { name: "Simulador" });
+  await sim.getByRole("button", { name: "Quitar vehículo" }).click(); // de +1 a 0
+  await sim.getByRole("button", { name: "Añadir trabajador" }).click();
+  await sim.getByRole("button", { name: "Simular", exact: true }).click();
   await expect(page.getByText(/Trabajadores de más:/)).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText("Coste", { exact: true })).toBeVisible();
   await expect(page.getByText("Horas pagadas")).toBeVisible();

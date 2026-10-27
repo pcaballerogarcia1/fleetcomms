@@ -507,7 +507,7 @@ export function VentanaSimulador({ constraints, runSimulation, schedules, setSho
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999,
         }} onClick={() => !simRunning && setShowSimulador(false)}>
-          <div style={{
+          <div role="dialog" aria-label="Simulador" style={{
             background: C.card, borderRadius: 12, padding: "24px 24px 22px",
             width: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: `1px solid ${C.border}`,
           }} onClick={e => e.stopPropagation()}>
