@@ -1,6 +1,6 @@
 // Diagrama de Gantt del escenario y barra de KPIs.
 // (Separado de scheduling.jsx sin cambiar su comportamiento.)
-import { ArrowRight, Home } from "lucide-react";
+import { ArrowRight, Home, Pencil } from "lucide-react";
 import { MIN_VACIO } from "./gantt-lienzo.jsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { dayIssues, dayMetrics, diaDe, jornadasDe } from "../scenario-metrics.js";
@@ -15,7 +15,34 @@ import { ClockBadge } from "./kpi-bar.jsx";
 import { FilaLienzo } from "./gantt-lienzo.jsx";
 import { alfa } from "../tema.js";
 
-export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null, nombreDia = d => `Día ${d + 1}` }) {
+// Nombre de la fila. Los vehículos y conductores que crea el cálculo
+// («… necesario») se pueden renombrar aquí (lápiz); los de la organización no.
+function NombreFila({ row, onRenombrar }) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState("");
+  const nombre = rowName(row);
+  const estilo = { fontFamily: font, fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+  if (!row._virtual || !onRenombrar) return <span title={nombre} style={{ ...estilo, display: "block" }}>{nombre}</span>;
+  if (editando) {
+    const guardar = () => { setEditando(false); if (texto.trim() && texto.trim() !== nombre) onRenombrar(row, texto); };
+    return (
+      <input autoFocus value={texto} onChange={e => setTexto(e.target.value)} aria-label={`Nuevo nombre de ${nombre}`}
+        onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onBlur={guardar}
+        onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") guardar(); if (e.key === "Escape") setEditando(false); }}
+        className="op-input" style={{ height: 24, padding: "0 6px", fontSize: 12, width: "100%" }} />
+    );
+  }
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }} title={row._renombrado ? `${nombre} · no está en la organización (lo ha puesto el cálculo)` : nombre}>
+      <span style={estilo}>{nombre}{!row._renombrado && <span style={{ color: C.dim, fontWeight: 400 }}> · necesario</span>}</span>
+      <button type="button" aria-label={`Cambiar el nombre de ${nombre}`} title="Cambiar el nombre"
+        onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setTexto(nombre); setEditando(true); }}
+        style={{ background: "none", border: "none", padding: 2, color: C.dim, cursor: "pointer", display: "inline-flex", flexShrink: 0 }}><Pencil size={11} /></button>
+    </span>
+  );
+}
+
+export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers = [], allVehicles = [], onScheduleChange, unassigned = [], onPlaceUnassigned, maxShiftMin = 0, reglas = null, nombreDia = d => `Día ${d + 1}`, onRenombrar = null }) {
   // Vista "Tabla" (columnas de datos) o "Compacta" (solo nombre y resumen)
   const [vista, setVista] = useState(() => { try { return localStorage.getItem("fc_gantt_vista") || "tabla"; } catch { return "tabla"; } });
   const cambiarVista = v => { setVista(v); try { localStorage.setItem("fc_gantt_vista", v); } catch { /* sin almacenamiento local */ } };
@@ -368,9 +395,7 @@ export function GanttChart({ rows, startMin, endMin, days = 1, mode, allWorkers 
           ? <span title={x.issues.map(i => "• " + i.texto).join("\n")} style={{ color: hasErr ? C.red : C.amber, fontWeight: 800, fontSize: 13, cursor: "help" }}>!</span>
           : null;
       } else if (col.k === "nombre") {
-        content = <span title={rowName(row)} style={{ fontFamily: font, fontSize: 12, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-          {rowName(row)}{row._virtual && <span style={{ color: C.dim, fontWeight: 400 }}> · necesario</span>}
-        </span>;
+        content = <NombreFila row={row} onRenombrar={onRenombrar} />;
       } else if (col.k === "turno") {
         content = <span style={{ color: C.muted, fontFamily: font, fontSize: 11 }}>{turnoCorto(row)}</span>;
       } else {

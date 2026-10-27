@@ -17,6 +17,7 @@ import { idbSave } from "./idb.js";
 import { aplicarDescargas, capacidadDe, reservarDescargas, sinReserva } from "./capacidad.js";
 import { NOMBRE_DIA } from "./frecuencias.js";
 import { pagadoSimulado, ponerTrabajadoresExtra } from "./simulador.js";
+import { ponerNombres } from "./nombres.js";
 import { enrichWithOSRM } from "./osrm.js";
 import { medirCarretera, textoCarretera } from "./carretera.js";
 import { cargarVecinos } from "./vecinos-guardados.js";
@@ -379,7 +380,8 @@ export async function runGenerate(ctx) {
     const totalBlocks = vehicleSchedule.reduce((s, v) => s + (v.assignments?.length || 0), 0);
     console.log(`[PERF] setSchedules — vehicles=${vehicleSchedule.length} workers=${usedWorkerRows.length} totalBlocks=${totalBlocks}`);
     const t_setSchedules = performance.now();
-    setSchedules({ vehicles: vehicleSchedule, workers: usedWorkerRows });
+    // los nombres que se dieron a mano a los vehículos y conductores del cálculo
+    setSchedules({ vehicles: ponerNombres(vehicleSchedule, constraints.nombresVirtuales), workers: ponerNombres(usedWorkerRows, constraints.nombresVirtuales) });
     logAudit({ modulo: "Scheduling", accion: "Generó un escenario",
       detalle: `${vehicleSchedule.length} vehículos · ${vehicleSchedule.reduce((n, v) => n + v.assignments.filter(a => !a._break && !a._travel && !a._wait).length, 0)} paradas · ${vr.daysUsed} día(s) · ${vr.unassigned.length} sin asignar${rosterLibre ? " · modo libre" : ""}` });
     setScenarioRosterMode(rosterLibre ? "libre" : "cuadrante");

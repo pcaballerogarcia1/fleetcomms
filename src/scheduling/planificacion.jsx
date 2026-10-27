@@ -12,6 +12,7 @@ import {
 import { scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
 import { loadScenarioCloud, nombreDeVersion, watchScenarioMeta } from "../scenario-store.js";
 import { ComparadorEscenarios } from "./comparar.jsx";
+import { renombrarEnEscenario } from "./nombres.js";
 import { applyTaskMove, fijarCarretera, turnoWindow } from "../vrp-engine.js";
 import { leerVecinos } from "./vecinos-guardados.js";
 import { ROSTER_TURNO, applyShiftMoves, deriveWorkerRows, lastScenarioDay, loadTasksFromLayers, spliceWorkerWindowIntoVehicle } from "./datos.js";
@@ -338,6 +339,20 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     maxShiftMin: constraints.maxShiftMin, reglas: reglasGantt,
     costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
   }) : null, [schedules, unassigneds, activeDays, constraints.maxShiftMin, reglasGantt, constraints.costeHora, constraints.costeKm]);
+
+  // Cambiar el nombre de un vehículo o conductor del cálculo (los de la
+  // organización no): en el escenario y, para la próxima vez que se genere,
+  // en las restricciones del proyecto
+  function renombrarRecurso(row, nombre) {
+    const id = row?._id || row?.id;
+    const n = String(nombre || "").trim();
+    if (!id || !row._virtual || !n) return;
+    setSchedules(prev => renombrarEnEscenario(prev, id, n));
+    const nombresVirtuales = { ...(constraints.nombresVirtuales || {}), [id]: n };
+    setConstraints(prev => ({ ...prev, nombresVirtuales }));
+    const sc = activeProject?.scheduling;
+    if (sc && onProjectUpdate) onProjectUpdate({ scheduling: { ...sc, constraints: { ...(sc.constraints || {}), nombresVirtuales } } });
+  }
 
   // Historial → «Comparar»: descarga esa versión y saca sus cifras con las
   // mismas reglas y costes que el escenario actual
@@ -807,6 +822,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
               maxShiftMin={constraints.maxShiftMin}
               reglas={reglasGantt}
               nombreDia={d => nombreDiaEscenario(constraints, d)}
+              onRenombrar={renombrarRecurso}
             />
           </div>
         </div>
