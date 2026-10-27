@@ -35,7 +35,6 @@ const TabProyectosLazy   = lazy(() => import("./scheduling.jsx").then(m => ({ de
 const SchedulingModuleWrapperLazy = lazy(() => import("./scheduling.jsx").then(m => ({ default: m.SchedulingModuleWrapper })));
 const RosteringPageLazy  = lazy(() => import("./rostering.jsx").then(m => ({ default: m.RosteringPage })));
 const ControlPageLazy    = lazy(() => import("./control.jsx").then(m => ({ default: m.ControlPage })));
-const DespachoPageLazy   = lazy(() => import("./despacho.jsx").then(m => ({ default: m.DespachoPage })));
 const AnalyticsPageLazy  = lazy(() => import("./analytics.jsx").then(m => ({ default: m.AnalyticsPage })));
 const AnalyticsLineasLazy = lazy(() => import("./analytics-lineas.jsx").then(m => ({ default: m.AnalyticsLineasPage })));
 // Proyectos de "Líneas regulares" (autobuses): su propio Planning y Scheduling
@@ -123,7 +122,6 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           {crumb(t("planning", lang),   "/planning",    path === "/planning")}
           {crumb(t("scheduling", lang), "/scheduling",  path === "/scheduling")}
           {crumb(t("rostering", lang),  "/rostering",   path === "/rostering")}
-          {activeProject?.tipo !== "lineas" && crumb(t("departure", lang), "/departure", path === "/departure")}
           {crumb(t("control", lang),    "/control",     path === "/control")}
           {crumb(t("analytics", lang),  "/analytics",   path === "/analytics")}
         </>}
@@ -297,6 +295,8 @@ export function WorkspaceRouter() {
     }
     // un concurso no tiene Departure/Control/Analytics, ni la operativa los módulos del concurso
     if (sesion && activeProject?.concurso && RUTAS_SOLO_OPERATIVA.includes(path)) go("/planning");
+    // la Salida del día vive ahora dentro del Cuadrante (enlaces antiguos)
+    else if (sesion && activeProject && path === "/departure") go("/rostering?vista=salida");
     if (sesion && activeProject && !activeProject.concurso && RUTAS_CONCURSO.some(r => r[0] === path)) go("/planning");
   }, [sesion, activeProject, path]);
 
@@ -445,23 +445,12 @@ export function WorkspaceRouter() {
             pointerEvents: path === "/rostering" ? "auto" : "none",
           }}>
             <Suspense fallback={<LazyFallback />}>
-              <RosteringPageLazy sesion={sesionModulos} embedded activeProject={activeProject} orgId={effectiveOrgId} />
+              <RosteringPageLazy sesion={sesionModulos} embedded activeProject={activeProject} orgId={effectiveOrgId}
+                conSalida={!enConcurso && !esLineas} workersOrg={workers} vehiculosOrg={vehicles} />
             </Suspense>
           </div>
         )}
 
-        {/* /departure (Despacho) — el día de hoy: ausencias, quién cubre y vehículos (proyectos de puntos) */}
-        {activeProject && !enConcurso && visitedTabs.departure && !esLineas && (
-          <div style={{
-            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-            visibility: path === "/departure" ? "visible" : "hidden",
-            pointerEvents: path === "/departure" ? "auto" : "none",
-          }}>
-            <Suspense fallback={<LazyFallback />}>
-              <DespachoPageLazy orgId={effectiveOrgId} workers={workers} vehicles={vehicles} />
-            </Suspense>
-          </div>
-        )}
 
         {/* /control — mounted on first visit, then kept mounted so its
             Firestore listeners (planes, usuarios, ubicaciones_activas) stay

@@ -11,10 +11,11 @@ import { Truck } from "lucide-react";
 
 // Selector "Trabajadores / Vehículos" — compartido entre las dos vistas
 // del módulo Rostering.
-export function ModeTabs({ mode, setMode }) {
+export function ModeTabs({ mode, setMode, conSalida = false }) {
+  const pestanas = [["workers", "Trabajadores"], ["vehicles", "Vehículos"], ...(conSalida ? [["salida", "Salida del día"]] : [])];
   return (
     <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
-      {[["workers", "Trabajadores"], ["vehicles", "Vehículos"]].map(([m, label]) => (
+      {pestanas.map(([m, label]) => (
         <button key={m} onClick={() => setMode(m)} style={{
           padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
           fontFamily: font, fontSize: 12, fontWeight: 600,
@@ -33,7 +34,7 @@ export function ModeTabs({ mode, setMode }) {
 // Disponible/Taller/Avería/ITV en vez de los turnos M/T/N/L/G/B/D. No
 // tiene el solape de "turno planificado" de Scheduling ni el botón
 // "Optimizar" — eso es específico del reparto de conductores.
-export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, setMode, embedded }) {
+export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth, mode, setMode, embedded, conSalida }) {
   const [vehicles, setVehicles] = useState([]);
   // En vivo: lo que cambian otros aparece aquí sin recargar, y lo que se
   // edita aquí se guarda casilla a casilla (saveVehicleCells) sin pisar lo
@@ -226,7 +227,7 @@ export function VehicleAvailabilityGrid({ orgId, year, month, setYear, setMonth,
         padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ModeTabs mode={mode} setMode={setMode} />
+          <ModeTabs mode={mode} setMode={setMode} conSalida={conSalida} />
           <button onClick={prevMonth} style={navBtnStyle}>‹</button>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
             {MONTH_NAMES[month - 1]} {year}

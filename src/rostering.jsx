@@ -9,18 +9,20 @@ import { listenScenarioRoster, listenRosterMonth, saveRosterMonth, savedSnapshot
 import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp, collection, query, where, deleteField, FieldPath } from "firebase/firestore";
 import { C, MONTH_NAMES, SHIFTS, font, useVehicleAvailability } from "./rostering/datos.js";
 import { OptResultModal, PublishModal, RulesModal } from "./rostering/modales.jsx";
-import { VehicleAvailabilityGrid } from "./rostering/vehiculos.jsx";
+import { VehicleAvailabilityGrid, ModeTabs } from "./rostering/vehiculos.jsx";
+import { DespachoPage } from "./despacho.jsx";
 import { doPublish as doPublishMod, optimizar as optimizarMod, optimizarLibre as optimizarLibreMod } from "./rostering/acciones.js";
 import { CabeceraCuadrante, TablaCuadrante, PieYResumen } from "./rostering/cuadrante.jsx";
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
-export function RosteringPage({ sesion, embedded = false, activeProject = null, orgId: orgIdProp = null }) {
+export function RosteringPage({ sesion, embedded = false, activeProject = null, orgId: orgIdProp = null, conSalida = false, workersOrg = [], vehiculosOrg = [] }) {
   const orgId = orgIdProp ?? sesion?.org_id ?? null;
 
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [mode,  setMode]  = useState("workers"); // "workers" | "vehicles"
+  // "workers" | "vehicles" | "salida" (la Salida del día, antes un módulo aparte)
+  const [mode,  setMode]  = useState(() => (new URLSearchParams(window.location.search).get("vista") === "salida" ? "salida" : "workers"));
 
   const [workers, setWorkers] = useState([]);
   // ── Publicar a Rutas por trabajador ─────────────────────────────
@@ -544,8 +546,19 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       <VehicleAvailabilityGrid
         orgId={orgId} year={year} month={month}
         setYear={setYear} setMonth={setMonth}
-        mode={mode} setMode={setMode} embedded={embedded}
+        mode={mode} setMode={setMode} embedded={embedded} conSalida={conSalida}
       />
+    );
+  }
+
+  if (mode === "salida" && conSalida) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: embedded ? "100%" : "100vh", background: C.bg, fontFamily: font, overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+          <ModeTabs mode={mode} setMode={setMode} conSalida />
+        </div>
+        <DespachoPage orgId={orgId} workers={workersOrg} vehicles={vehiculosOrg} />
+      </div>
     );
   }
 
@@ -556,7 +569,7 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       background: C.bg, fontFamily: font, overflow: "hidden",
     }}>
 
-      <CabeceraCuadrante {...{ avisoServicio, calsLineas, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} />
+      <CabeceraCuadrante {...{ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} />
 
       <TablaCuadrante {...{ CELL_W, NAME_W, PUB_W, STATS_W, asign, calDeDia, calsLineas, coveredIds, dayTotals, days, daysInMonth, fillRow, getDow, grid, handleCellMouseDown, handleCellMouseEnter, handleKeyDown, horasPorTrabajador, isCellSelected, isToday, isWeekend, libreShifts, linkWorker, loading, month, publicados, publishing, rules, scheduledCode, setPublishModal, setSelEnd, setSelStart, setSummaryCell, suggestUser, tableRef, usuarios, workedInterval, workerStats, workers, year }} />
 

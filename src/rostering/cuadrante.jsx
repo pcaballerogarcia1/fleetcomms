@@ -9,7 +9,7 @@ import { ModeTabs } from "./vehiculos.jsx";
 import { tono } from "../tema.js";
 
 
-export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }) {
+export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }) {
   return (
     <>
       {/* ── HEADER ──────────────────────────────────────────────── */}
@@ -21,7 +21,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, coveredCount, day
       }}>
         {/* Month nav */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ModeTabs mode={mode} setMode={setMode} />
+          <ModeTabs mode={mode} setMode={setMode} conSalida={conSalida} />
           <button onClick={prevMonth} style={navBtnStyle}>‹</button>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
             {MONTH_NAMES[month - 1]} {year}
