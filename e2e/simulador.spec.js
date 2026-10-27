@@ -21,7 +21,7 @@ test("simular un trabajador de más enseña dónde va y el coste", async ({ page
   await page.getByRole("button", { name: "Rutas", exact: true }).first().click();
   await page.getByRole("button", { name: /Importar desde Planificación/ }).first().click();
   await page.getByRole("button", { name: /Generar escenario/ }).first().click();
-  await expect(page.getByText(/asignadas/).first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("button", { name: /Excel/ })).toBeVisible({ timeout: 90_000 });
   await expect.poll(async () => (await leer("scheduling_scenarios/p-puntos"))?.v || null, { timeout: 60_000 }).not.toBeNull();
   await expect(page.getByRole("button", { name: /Generando/ })).toHaveCount(0, { timeout: 60_000 });
 

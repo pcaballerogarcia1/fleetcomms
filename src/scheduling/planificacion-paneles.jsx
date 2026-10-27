@@ -5,7 +5,7 @@
 
 
 
-import { Check, Download, Info, FileDown, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
+import { Check, ChevronDown, Download, Info, FileDown, FileSpreadsheet, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Truck, Undo2, Users, X } from "lucide-react";
 import { useState } from "react";
 import { nombreDeVersion, renombrarEscenario, renombrarPunto } from "../scenario-store.js";
 import { textoPuesto } from "./simulador.js";
@@ -18,9 +18,15 @@ import { alfa } from "../tema.js";
 
 
 
-export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }) {
+export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
-  const chip = (n, txt, color) => <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}><span style={{ fontWeight: 650, color }}>{n}</span><span style={{ color: C.dim }}>{txt}</span></span>;
+  const [menuExcel, setMenuExcel] = useState(false);
+  function elegirExcel(que) {
+    setMenuExcel(false);
+    if (que === "vehiculos") downloadVehicleXLSX();
+    else if (que === "trabajadores") downloadCrewXLSX();
+    else xlsxUploadRef.current?.click();
+  }
   return (
     <>
       {/* ── TOOLBAR ──────────────────────────────────────────────── */}
@@ -29,6 +35,20 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
         background: C.bg, flexShrink: 0,
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, // si no cabe, a una segunda línea (antes «Generar escenario» se salía)
       }}>
+        {/* Qué se ve: el escenario de los vehículos o el de los trabajadores */}
+        <div role="tablist" aria-label="Ver el escenario de" style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, background: C.surface2, border: `1px solid ${C.border}` }}>
+          {[["vehicles", t("vehiculos", lang), Truck], ["workers", t("trabajadores", lang), Users]].map(([v, l, Icono]) => (
+            <button key={v} role="tab" aria-selected={mode === v} onClick={() => setMode(v)} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, height: 32, padding: "0 14px", borderRadius: 7, border: "none", cursor: "pointer",
+              fontFamily: font, fontSize: 13, fontWeight: 650,
+              background: mode === v ? C.blue : "transparent", color: mode === v ? "#fff" : C.muted,
+              transition: "background .12s, color .12s",
+            }}><Icono size={16} />{l}</button>
+          ))}
+        </div>
+
+        <div className="op-sep" />
+
         {/* Paradas importadas de Planning */}
         <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planificación">
           {importing ? <>{girando} Importando…</>
@@ -36,13 +56,6 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
             : <><Download size={14} /> Importar desde Planificación</>}
         </button>
 
-        <div className="op-sep" />
-
-        <div className="op-seg">
-          {[["vehicles", t("vehiculos", lang)], ["workers", t("trabajadores", lang)]].map(([v, l]) => (
-            <button key={v} onClick={() => setMode(v)} className={mode === v ? "op-on" : ""}>{l}</button>
-          ))}
-        </div>
 
         <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`}><SlidersHorizontal size={14} /> {t("restricciones", lang)}</button>
         {activeProject && <button onClick={() => setShowHistorial(true)} className="op-btn" title="Historial de versiones del escenario"><History size={14} /> {t("historial", lang)}</button>}
@@ -50,19 +63,29 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
         {schedule && <button onClick={() => { setShowSimulador(true); setSimResult(null); setSimError(null); }} className="op-btn" title="Simular +/- vehículos sin tocar el escenario actual"><FlaskConical size={14} /> {t("simulador", lang)}</button>}
 
         {schedule && <>
-          <div className="op-sep" />
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12 }}>
-            {chip(totalAssigned.toLocaleString(), "asignadas", C.text)}
-            {unassigned.length > 0 && chip(unassigned.length.toLocaleString(), "sin asignar", C.red)}
-            {chip(constraints.days || 1, (constraints.days || 1) === 1 ? "día" : "días", C.text)}
-            {totalKm > 0 && chip(totalKm.toFixed(0), "km", C.text)}
-          </div>
           {schedules.vehicles && <>
-            <div className="op-sep" />
-            <button onClick={downloadVehicleXLSX} className="op-btn op-fantasma" title="Descargar el escenario de vehículos en Excel"><FileDown size={14} /> Vehículos</button>
-            {schedules.workers && <button onClick={downloadCrewXLSX} className="op-btn op-fantasma" title="Descargar el escenario de trabajadores en Excel"><FileDown size={14} /> Trabajadores</button>}
-            <input ref={xlsxUploadRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUploadXLSX} />
-            <button onClick={() => xlsxUploadRef.current?.click()} className="op-btn op-fantasma" title="Importar un escenario de vehículos o de trabajadores desde Excel"><FileUp size={14} /> {t("importar", lang)}</button>
+            {/* Excel: descargar o importar el escenario, todo en un menú */}
+            <div style={{ position: "relative" }}>
+              <input ref={xlsxUploadRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleUploadXLSX} />
+              <button onClick={() => setMenuExcel(m => !m)} className={`op-btn${menuExcel ? " op-activo" : ""}`} aria-haspopup="menu" aria-expanded={menuExcel} title="Descargar o importar el escenario en Excel">
+                <FileSpreadsheet size={14} /> Excel <ChevronDown size={13} />
+              </button>
+              {menuExcel && <>
+                <div onClick={() => setMenuExcel(false)} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
+                <div role="menu" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 51, minWidth: 290, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, boxShadow: "0 10px 30px rgba(0,0,0,.35)" }}>
+                  {[
+                    [FileDown, "Descargar escenario de vehículos", "vehiculos"],
+                    ...(schedules.workers ? [[FileDown, "Descargar escenario de trabajadores", "trabajadores"]] : []),
+                    [FileUp, "Importar escenario desde Excel", "importar"],
+                  ].map(([Icono, txt, que]) => (
+                    <button key={que} role="menuitem" onClick={() => elegirExcel(que)} className="op-menu-item" style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", borderRadius: 6, background: "transparent",
+                      color: C.text, fontFamily: font, fontSize: 12.5, cursor: "pointer", textAlign: "left", whiteSpace: "nowrap",
+                    }}><Icono size={14} color={C.muted} />{txt}</button>
+                  ))}
+                </div>
+              </>}
+            </div>
             <div className="op-sep" />
             <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn"><Send size={14} /> {t("publicarRutas", lang)}</button>
             {/* Deshacer / rehacer movimientos manuales del Gantt */}

@@ -12,7 +12,7 @@ test.beforeEach(async () => {
 
 async function generar(page) {
   await page.getByRole("button", { name: /Generar escenario/ }).first().click();
-  await expect(page.getByText(/asignadas/).first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("button", { name: /Excel/ })).toBeVisible({ timeout: 90_000 });
   await expect.poll(async () => (await leer("scheduling_scenarios/p-puntos"))?.v || null, { timeout: 60_000 }).not.toBeNull();
 }
 
@@ -32,6 +32,12 @@ test("el escenario se puede nombrar y el nombre viaja con cada versión", async 
   await expect.poll(async () => (await leer("scheduling_scenarios/p-puntos"))?.nombre).toBe("Octubre · base");
   await expect(page.getByRole("button", { name: /Octubre · base/ })).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/e1-nombre.png` });
+  // Excel: descargar e importar, en un solo menú
+  await page.getByRole("button", { name: /Excel/ }).click();
+  await expect(page.getByRole("menuitem", { name: "Descargar escenario de vehículos" })).toBeVisible();
+  if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/e1b-excel.png` });
+  await page.mouse.click(700, 800);
+  await expect(page.getByRole("menu")).toHaveCount(0);
   // volver a generar: el nuevo empieza sin nombre y el anterior queda guardado con el suyo
   const v1 = (await leer("scheduling_scenarios/p-puntos")).v;
   await generar(page);
