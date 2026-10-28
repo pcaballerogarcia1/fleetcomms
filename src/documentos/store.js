@@ -4,7 +4,7 @@ import { Bytes, collection, deleteDoc, doc, getDoc, onSnapshot, query, setDoc, u
 import { db } from "../firebase.js";
 import { enviarAvisos } from "../avisos.js";
 import { logAudit } from "../audit.js";
-import { juntar, nombreCategoria, trocear } from "./datos.js";
+import { juntar, mimeDe, nombreCategoria, tipoArchivo, trocear } from "./datos.js";
 
 const lista = s => s.docs.map(d => ({ id: d.id, ...d.data() }));
 const quien = sesion => ({ uid: sesion?.uid || null, nombre: [sesion?.nombre, sesion?.apellidos].filter(Boolean).join(" ") || null });
@@ -15,7 +15,7 @@ async function subirTrozos(orgId, docId, file) {
   const trozos = trocear(bytes);
   const v = nuevaV();
   await Promise.all(trozos.map((t, i) => setDoc(doc(db, "documentos", docId, "trozos", `${v}_${i}`), { org_id: orgId, v, i, data: Bytes.fromUint8Array(t) })));
-  return { nombre: file.name, tipo: file.type || "application/pdf", bytes: bytes.length, n: trozos.length, v };
+  return { nombre: file.name, tipo: mimeDe(file), bytes: bytes.length, n: trozos.length, v };
 }
 const borrarTrozos = (docId, a) => Promise.all(Array.from({ length: a?.n || 0 }, (_, i) => deleteDoc(doc(db, "documentos", docId, "trozos", `${a.v}_${i}`)).catch(() => {})));
 
@@ -55,7 +55,7 @@ export async function eliminarDocumento(d) {
   logAudit({ modulo: "Rostering", accion: "Eliminó un documento", detalle: d.titulo, projectId: null });
 }
 
-/** El PDF como dirección para abrirlo (blob:) */
+/** El archivo como dirección para abrirlo (blob:) */
 export async function abrirArchivo(d) {
   const a = d.archivo;
   const snaps = await Promise.all(Array.from({ length: a.n }, (_, i) => getDoc(doc(db, "documentos", d.id, "trozos", `${a.v}_${i}`))));
@@ -63,6 +63,14 @@ export async function abrirArchivo(d) {
   const bytes = juntar(snaps.map(s => s.data().data.toUint8Array()));
   return URL.createObjectURL(new Blob([bytes], { type: a.tipo || "application/pdf" }));
 }
+
+/** Un Word no se ve en el navegador: se descarga con su nombre y lo abre la aplicación del móvil u ordenador */
+export function descargar(url, nombre) {
+  const a = document.createElement("a");
+  a.href = url; a.download = nombre || "documento"; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+export const esWord = d => tipoArchivo(d?.archivo) === "word";
 
 export const escucharDocumentosOrg = (orgId, cb) =>
   onSnapshot(query(collection(db, "documentos"), where("org_id", "==", orgId)), s => cb(lista(s)), () => cb([]));

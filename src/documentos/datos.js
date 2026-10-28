@@ -18,6 +18,24 @@ export const nombreCategoria = c => (CATEGORIAS.find(x => x[0] === c) || [c, c])
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const TROZO = 900_000; // bytes por trozo (una ficha de Firestore admite < 1 MB)
 
+// Lo que se puede subir: PDF, fotos y Word
+export const ACEPTA = "application/pdf,.pdf,image/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const MIME_EXT = { pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic" };
+
+/** «pdf», «imagen», «word» o null (no se admite) */
+export function tipoArchivo(a) {
+  const ext = String(a?.name || a?.nombre || "").toLowerCase().split(".").pop();
+  const mime = String(a?.type || a?.tipo || "").toLowerCase();
+  if (mime === "application/pdf" || ext === "pdf") return "pdf";
+  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "heic"].includes(ext)) return "imagen";
+  if (mime.includes("msword") || mime.includes("wordprocessingml") || ["doc", "docx"].includes(ext)) return "word";
+  return null;
+}
+
+/** El tipo MIME con el que se guarda (algunos móviles no lo dan) */
+export const mimeDe = file => file.type || MIME_EXT[String(file.name || "").toLowerCase().split(".").pop()] || "application/octet-stream";
+
 /** Parte un archivo en trozos de `max` bytes */
 export function trocear(bytes, max = TROZO) {
   const out = [];
@@ -70,7 +88,7 @@ export function problemaDocumento({ titulo, categoria, archivo, paraTodos, paraU
   if (!CATEGORIAS.some(c => c[0] === categoria)) return "Elige el tipo de documento";
   if (!archivo) return "Elige el archivo";
   if (archivo.size > MAX_BYTES) return "El archivo pasa de 10 MB";
-  if (!/pdf$/i.test(archivo.type || "") && !/\.pdf$/i.test(archivo.name || "")) return "Tiene que ser un PDF";
+  if (!tipoArchivo(archivo)) return "Tiene que ser un PDF, una foto o un Word";
   if (!paraTodos && !(paraUids || []).length) return "Elige a quién va dirigido";
   return null;
 }

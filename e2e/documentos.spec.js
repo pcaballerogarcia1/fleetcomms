@@ -16,7 +16,7 @@ test("subir una IT, leerla en la app y ver quién la ha leído", async ({ browse
   await page.getByRole("button", { name: "Subir documento" }).click();
   await page.getByLabel("Título del documento").fill("IT-04 Vaciado de soterrados");
   await page.getByLabel("Descripción").fill("Pasos y equipos de protección");
-  await page.getByLabel("Archivo PDF").setInputFiles({ name: "IT-04.pdf", mimeType: "application/pdf", buffer: pdfMini([["IT-04: usar guantes y chaleco"]]) });
+  await page.getByLabel("Archivo", { exact: true }).setInputFiles({ name: "IT-04.pdf", mimeType: "application/pdf", buffer: pdfMini([["IT-04: usar guantes y chaleco"]]) });
   await page.getByRole("button", { name: "Subir y avisar" }).click();
   await expect(page.getByText("IT-04 Vaciado de soterrados")).toBeVisible();
   await expect(page.getByText("Leído por 0 de 3")).toBeVisible(); // 2 conductores y el jefe
@@ -39,6 +39,14 @@ test("subir una IT, leerla en la app y ver quién la ha leído", async ({ browse
   await expect(page.getByText("Leído por 1 de 3")).toBeVisible();
   await page.getByRole("button", { name: /Ver quién ha leído/ }).click();
   await expect(page.getByText("Sin leer (2)")).toBeVisible();
+  // también un Word (una DPT)
+  await page.getByRole("button", { name: "Subir documento" }).click();
+  await page.getByLabel("Título del documento").fill("DPT Conductor de recolector");
+  await page.getByLabel("Tipo de documento").selectOption("DPT");
+  await page.getByLabel("Archivo", { exact: true }).setInputFiles({ name: "DPT-conductor.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: pdfMini([["simulado"]]) });
+  await page.getByRole("button", { name: "Subir y avisar" }).click();
+  await expect(page.getByText(/Ficha de puesto y riesgos \(DPT\) · Word · para todos/)).toBeVisible();
+  await expect(movil.getByRole("button", { name: /Descargar/ })).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/doc2-oficina.png` });
   const ruido = e => /Failed to load resource|ERR_|api\/avisos/i.test(e);
   expect(errores.filter(e => !ruido(e))).toEqual([]);

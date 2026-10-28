@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Check, ChevronLeft, FileText, Loader2 } from "lucide-react";
 import { C, S } from "../conductor/comun.js";
-import { nombreCategoria } from "./datos.js";
-import { abrirArchivo, marcarLeido } from "./store.js";
+import { nombreCategoria, tipoArchivo } from "./datos.js";
+import { abrirArchivo, descargar, esWord, marcarLeido } from "./store.js";
 
 /** La tarjeta de la portada de la app (con los pendientes de leer) */
 export function TarjetaDocumentos({ docs, onAbrir }) {
@@ -30,11 +30,14 @@ export function PantallaDocumentos({ docs, sesion, onBack }) {
   const [error, setError] = useState(null);
   async function abrir(d) {
     setAbriendo(d.id); setError(null);
-    // la ventana se abre ya (si no, el móvil la bloquea) y luego se le pone el PDF
-    const w = window.open("", "_blank");
+    // un Word se descarga (lo abre la aplicación del móvil); un PDF o una foto, en
+    // otra pestaña, que se abre ya (si no, el móvil la bloquea) y luego se rellena
+    const word = esWord(d);
+    const w = word ? null : window.open("", "_blank");
     try {
       const url = await abrirArchivo(d);
-      if (w) w.location.assign(url); else window.location.assign(url);
+      if (word) descargar(url, d.archivo?.nombre);
+      else if (w) w.location.assign(url); else window.location.assign(url);
       setVistos(v => new Set(v).add(d.id));
     } catch (e) { if (w) w.close(); setError(e.message || String(e)); } finally { setAbriendo(null); }
   }
@@ -51,11 +54,11 @@ export function PantallaDocumentos({ docs, sesion, onBack }) {
           : docs.map(d => (
             <div key={d.id} style={{ ...S.card, borderColor: d.leido ? C.border : `${C.amber}66` }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{d.titulo}</div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{nombreCategoria(d.categoria)}{d.version > 1 ? ` · versión ${d.version}` : ""}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{nombreCategoria(d.categoria)} · {({ pdf: "PDF", imagen: "Foto", word: "Word" })[tipoArchivo(d.archivo)] || "Archivo"}{d.version > 1 ? ` · versión ${d.version}` : ""}</div>
               {d.descripcion && <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{d.descripcion}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
                 <button style={{ ...S.btnGhost, flex: 1 }} onClick={() => abrir(d)} disabled={abriendo === d.id}>
-                  {abriendo === d.id ? <Loader2 size={15} className="op-girando" style={{ verticalAlign: "-3px" }} /> : <FileText size={15} style={{ verticalAlign: "-3px", marginRight: 6 }} />}Abrir
+                  {abriendo === d.id ? <Loader2 size={15} className="op-girando" style={{ verticalAlign: "-3px" }} /> : <FileText size={15} style={{ verticalAlign: "-3px", marginRight: 6 }} />}{esWord(d) ? "Descargar" : "Abrir"}
                 </button>
                 {d.leido
                   ? <span style={{ flex: 1, fontSize: 13, color: C.green, display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}><Check size={16} />Leído</span>

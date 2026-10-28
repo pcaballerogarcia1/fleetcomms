@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { estadoLectura, juntar, leidoAlDia, misDocumentos, problemaDocumento, trocear } from "./datos.js";
+import { estadoLectura, juntar, leidoAlDia, mimeDe, misDocumentos, problemaDocumento, tipoArchivo, trocear } from "./datos.js";
 
 describe("documentos para los trabajadores", () => {
   it("trocea y junta el archivo sin perder nada", () => {
@@ -41,12 +41,23 @@ describe("documentos para los trabajadores", () => {
     expect(m.map(d => [d.id, d.leido])).toEqual([["a", false], ["b", true]]);
   });
 
+  it("PDF, fotos y Word", () => {
+    expect(tipoArchivo({ name: "IT.PDF" })).toBe("pdf");
+    expect(tipoArchivo({ name: "x", type: "image/png" })).toBe("imagen");
+    expect(tipoArchivo({ name: "IMG_1.HEIC", type: "" })).toBe("imagen");
+    expect(tipoArchivo({ nombre: "DPT.docx", tipo: "" })).toBe("word");
+    expect(tipoArchivo({ name: "a.zip" })).toBeNull();
+    expect(mimeDe({ name: "DPT.docx", type: "" })).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  });
+
   it("comprueba lo que se sube", () => {
     const pdf = { name: "it.pdf", type: "application/pdf", size: 1000 };
     expect(problemaDocumento({ titulo: "IT-01", categoria: "IT", archivo: pdf, paraTodos: true })).toBeNull();
     expect(problemaDocumento({ titulo: "", categoria: "IT", archivo: pdf, paraTodos: true })).toMatch(/título/);
     expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: { ...pdf, size: 11e6 }, paraTodos: true })).toMatch(/10 MB/);
-    expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: { name: "a.docx", type: "x" }, paraTodos: true })).toMatch(/PDF/);
+    expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: { name: "a.docx", type: "", size: 10 }, paraTodos: true })).toBeNull();
+    expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: { name: "foto.jpg", type: "image/jpeg", size: 10 }, paraTodos: true })).toBeNull();
+    expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: { name: "a.xlsx", type: "application/vnd.ms-excel", size: 10 }, paraTodos: true })).toMatch(/PDF, una foto o un Word/);
     expect(problemaDocumento({ titulo: "x", categoria: "IT", archivo: pdf, paraTodos: false, paraUids: [] })).toMatch(/quién/);
   });
 });

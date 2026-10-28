@@ -1,10 +1,10 @@
 // Cuadrante → Documentos: subir ITs, DPTs y otros documentos para los
 // trabajadores, ver quién los ha leído y subir versiones nuevas.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ChevronDown, ChevronRight, Eye, FileText, Loader2, RotateCcw, Trash2, Upload } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, Eye, FileText, Image as IconoImagen, Loader2, RotateCcw, Trash2, Upload } from "lucide-react";
 import { C, font } from "../tema.js";
-import { CATEGORIAS, estadoLectura, nombreCategoria, problemaDocumento } from "./datos.js";
-import { abrirArchivo, archivarDocumento, eliminarDocumento, escucharDocumentosOrg, escucharLecturasOrg, nuevaVersion, subirDocumento } from "./store.js";
+import { ACEPTA, CATEGORIAS, MAX_BYTES, estadoLectura, nombreCategoria, problemaDocumento, tipoArchivo } from "./datos.js";
+import { abrirArchivo, archivarDocumento, descargar, eliminarDocumento, escucharDocumentosOrg, escucharLecturasOrg, esWord, nuevaVersion, subirDocumento } from "./store.js";
 
 const fecha = ms => (ms ? new Date(ms).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const nombreDe = u => [u.nombre, u.apellidos].filter(Boolean).join(" ") || u.email || "Sin nombre";
@@ -50,8 +50,8 @@ function FormularioDocumento({ usuarios, onSubir, onCancelar }) {
           )) : <span style={{ fontSize: 12, color: C.dim }}>Todavía no hay trabajadores con acceso a la app.</span>}
         </div>
       )}
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: C.muted }}>Archivo (PDF, hasta 10 MB)
-        <input type="file" accept="application/pdf,.pdf" onChange={e => setF({ ...f, archivo: e.target.files?.[0] || null })} aria-label="Archivo PDF" style={{ fontSize: 12, color: C.text }} />
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: C.muted }}>Archivo (PDF, foto o Word, hasta 10 MB)
+        <input type="file" accept={ACEPTA} onChange={e => setF({ ...f, archivo: e.target.files?.[0] || null })} aria-label="Archivo" style={{ fontSize: 12, color: C.text }} />
       </label>
       {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -78,7 +78,7 @@ export function PanelDocumentos({ orgId, sesion, usuarios = [] }) {
 
   const visibles = useMemo(() => (docs || []).filter(d => (verArchivados ? !d.activo : d.activo)).sort((a, b) => (b.subidoAt || 0) - (a.subidoAt || 0)), [docs, verArchivados]);
   async function hacer(id, fn) { setOcupado(id); setError(null); try { await fn(); } catch (e) { setError(e.message || String(e)); } finally { setOcupado(null); } }
-  async function ver(d) { await hacer(d.id, async () => { const url = await abrirArchivo(d); window.open(url, "_blank", "noopener"); }); }
+  async function ver(d) { await hacer(d.id, async () => { const url = await abrirArchivo(d); if (esWord(d)) descargar(url, d.archivo?.nombre); else window.open(url, "_blank", "noopener"); }); }
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "20px 24px", fontFamily: font, background: C.bg }}>
@@ -92,8 +92,8 @@ export function PanelDocumentos({ orgId, sesion, usuarios = [] }) {
           {!nuevo && <button className="op-btn op-primario" onClick={() => setNuevo(true)}><Upload size={14} />Subir documento</button>}
         </div>
       </div>
-      <input ref={versionRef} type="file" accept="application/pdf,.pdf" style={{ display: "none" }}
-        onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file && paraVersion) hacer(paraVersion.id, () => nuevaVersion(paraVersion, file, sesion)); }} />
+      <input ref={versionRef} type="file" accept={ACEPTA} style={{ display: "none" }}
+        onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || !paraVersion) return; if (!tipoArchivo(file)) { setError("Tiene que ser un PDF, una foto o un Word"); return; } if (file.size > MAX_BYTES) { setError("El archivo pasa de 10 MB"); return; } hacer(paraVersion.id, () => nuevaVersion(paraVersion, file, sesion)); }} />
 
       {nuevo && <div style={{ marginBottom: 14 }}><FormularioDocumento usuarios={usuarios} onCancelar={() => setNuevo(false)}
         onSubir={async f => { await subirDocumento({ orgId, sesion, ...f }); setNuevo(false); }} /></div>}
@@ -111,17 +111,17 @@ export function PanelDocumentos({ orgId, sesion, usuarios = [] }) {
                 <div key={d.id} className="op-tarjeta" style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <button onClick={() => setAbierto(ab ? null : d.id)} aria-label={`Ver quién ha leído ${d.titulo}`} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex", padding: 0 }}>{ab ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>
-                    <FileText size={18} color={d.categoria === "DPT" ? C.amber : d.categoria === "IT" ? C.blue : C.muted} />
+                    {tipoArchivo(d.archivo) === "imagen" ? <IconoImagen size={18} color={d.categoria === "DPT" ? C.amber : d.categoria === "IT" ? C.blue : C.muted} /> : <FileText size={18} color={d.categoria === "DPT" ? C.amber : d.categoria === "IT" ? C.blue : C.muted} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 650, color: C.text }}>{d.titulo} <span style={{ fontWeight: 400, color: C.dim }}>· v{d.version || 1}</span></div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{nombreCategoria(d.categoria)} · {d.paraTodos ? "para todos" : `para ${d.paraUids.length} ${d.paraUids.length === 1 ? "trabajador" : "trabajadores"}`} · {fecha(d.subidoAt)}{d.descripcion ? ` · ${d.descripcion}` : ""}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{nombreCategoria(d.categoria)} · {({ pdf: "PDF", imagen: "Foto", word: "Word" })[tipoArchivo(d.archivo)] || "Archivo"} · {d.paraTodos ? "para todos" : `para ${d.paraUids.length} ${d.paraUids.length === 1 ? "trabajador" : "trabajadores"}`} · {fecha(d.subidoAt)}{d.descripcion ? ` · ${d.descripcion}` : ""}</div>
                     </div>
                     <div style={{ width: 170, flexShrink: 0 }}>
                       <div style={{ fontSize: 12, color: est.total && est.leidos.length === est.total ? C.green : C.text, marginBottom: 4 }}>Leído por {est.leidos.length} de {est.total}</div>
                       <div style={{ height: 6, borderRadius: 4, background: C.surface2, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? C.green : C.blue }} /></div>
                     </div>
-                    <button className="op-btn" onClick={() => ver(d)} disabled={ocupado === d.id} title="Abrir el PDF">{ocupado === d.id ? <Loader2 size={14} className="op-girando" /> : <Eye size={14} />}Ver</button>
-                    {d.activo && <button className="op-btn" onClick={() => { setParaVersion(d); versionRef.current?.click(); }} disabled={!!ocupado} title="Sustituir el PDF: todos tendrán que volver a confirmar la lectura"><Upload size={14} />Nueva versión</button>}
+                    <button className="op-btn" onClick={() => ver(d)} disabled={ocupado === d.id} title={esWord(d) ? "Descargar el Word" : "Abrir"}>{ocupado === d.id ? <Loader2 size={14} className="op-girando" /> : <Eye size={14} />}Ver</button>
+                    {d.activo && <button className="op-btn" onClick={() => { setParaVersion(d); versionRef.current?.click(); }} disabled={!!ocupado} title="Sustituir el archivo: todos tendrán que volver a confirmar la lectura"><Upload size={14} />Nueva versión</button>}
                     <button className="op-btn" onClick={() => hacer(d.id, () => archivarDocumento(d, !d.activo))} disabled={!!ocupado} title={d.activo ? "Deja de verse en la app" : "Vuelve a verse en la app"}>{d.activo ? <Archive size={14} /> : <RotateCcw size={14} />}{d.activo ? "Archivar" : "Recuperar"}</button>
                     {!d.activo && <button aria-label="Eliminar documento" title="Eliminar del todo" onClick={() => window.confirm(`¿Eliminar «${d.titulo}» del todo? Se perderá también el registro de quién lo leyó.`) && hacer(d.id, () => eliminarDocumento(d))} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", display: "inline-flex", padding: 4 }}><Trash2 size={15} /></button>}
                   </div>
