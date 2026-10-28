@@ -224,7 +224,7 @@ export async function publishWorker({
       const d = Number(dStr);
       if (keptDays.has(d)) continue;
       const code = gridWorker?.[dStr];
-      if (code === "L" || code === "B") continue; // de libre/baja ese día: no se le publica
+      if (code === "L" || code === "B" || code === "V") continue; // de libre, baja o vacaciones ese día: no se le publica
       const dayLabel = `Día ${String(d).padStart(2, "0")}`;
       await addDoc(collection(db, "planes"), {
         tipo, ...trabajoParaGuardar(tipo, trabajo), nombre: `${nombre} · ${dayLabel} · ${mes}`, archivo: "vrp-generado",

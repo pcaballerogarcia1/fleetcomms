@@ -23,7 +23,7 @@ export function turnoDe(datos, d) {
   if (!datos) return null;
   const code = datos.grid?.[k(d)] || "";
   const a = datos.asign?.[k(d)];
-  if (code === "B" || code === "L") return null;
+  if (code === "B" || code === "L" || code === "V") return null;
   if (a && a.s != null) return { code: TRABAJA.has(code) ? code : "M", s: a.s, e: a.e, v: a.v || null, vn: a.vn || null };
   if (TRABAJA.has(code)) return { code, s: CODE_WINDOWS[code].start, e: CODE_WINDOWS[code].end, v: null, vn: null };
   return null;
@@ -87,7 +87,7 @@ export function candidatos({ hueco, workers, porTrabajador, rules = {}, d, daysI
     if (w._id === hueco.workerId || w.activo === false) continue;
     const datos = porTrabajador[w._id] || {};
     const code = datos.grid?.[k(d)] || "";
-    if (code === "B") continue; // de baja: ni se enseña
+    if (code === "B" || code === "V") continue; // de baja o de vacaciones: ni se enseña
     if (turnoDe(datos, d)) continue; // ya trabaja ese día
     let valido = true, motivo = null;
     // descanso con el turno de ayer y el de mañana

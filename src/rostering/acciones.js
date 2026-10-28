@@ -90,7 +90,7 @@ export function optimizar(ctx) {
 
   if (schedRoster.modo === "libre") { optimizarLibre(); return; }
 
-  const BLOCKED = new Set(["L", "B"]);     // can't override
+  const BLOCKED = new Set(["L", "B", "V"]);     // can't override
   const MANUAL  = new Set(["M","T","N","G"]); // already manually set, skip
 
   const newGrid = { ...gridRef.current };

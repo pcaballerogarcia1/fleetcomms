@@ -282,6 +282,26 @@ service cloud.firestore {
       }
     }
 
+    // ── VACACIONES Y PERMISOS (app del trabajador → Cuadrante) ────────
+    // El trabajador crea las suyas (pendientes) y puede retirarlas mientras
+    // no se contesten; la oficina las aprueba o rechaza. Nadie las borra.
+    match /solicitudes_ausencia/{id} {
+      allow read: if sameOrg(resource.data.org_id)
+        && (resource.data.uid == request.auth.uid || puedeWorkspace());
+      allow create: if sameOrg(request.resource.data.org_id)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.keys().hasOnly(['org_id', 'uid', 'nombre', 'tipo', 'desde', 'hasta', 'dias', 'comentario', 'estado', 'creadaAt']);
+      allow update: if sameOrg(resource.data.org_id) && (
+        (puedeWorkspace() && resource.data.estado == 'pendiente'
+          && request.resource.data.estado in ['aprobada', 'rechazada']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resueltaPor', 'resueltaAt', 'motivo']))
+        || (resource.data.uid == request.auth.uid && resource.data.estado == 'pendiente'
+          && request.resource.data.estado == 'cancelada'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'canceladaAt'])));
+      allow delete: if false;
+    }
+
     // ── CONEXIÓN CON EL GPS DE LA EMPRESA (Control → GPS de la flota) ──
     // Proveedor y claves de acceso. La lee la oficina (Control pide las
     // posiciones con ellas a /api/gps); solo un administrador la cambia.

@@ -2,7 +2,7 @@
 // la tabla de trabajadores × días y el resumen del turno de una celda).
 
 
-import { AlertTriangle, History, Scale, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, History, Scale, Sparkles, Users } from "lucide-react";
 import { checkWorkerMonth } from "../roster-optimizer.js";
 import { C, DAY_NAMES, MONTH_NAMES, SHIFTS, SHIFT_META, fmtClock, font, navBtnStyle, pubBtn, thStyle } from "./datos.js";
 import { ModeTabs } from "./vehiculos.jsx";
@@ -10,7 +10,7 @@ import { tono } from "../tema.js";
 
 import { BotonCerrar } from "../ui/cerrar.jsx";
 
-export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, setShowVersiones, workers, year }) {
+export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, setShowVersiones, setShowSolicitudes, solicitudesPendientes = 0, workers, year }) {
   return (
     <>
       {/* ── HEADER ──────────────────────────────────────────────── */}
@@ -53,6 +53,11 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
             className="op-btn"><Scale size={14} />
             Reglas
           </button>
+          {setShowSolicitudes && (
+            <button onClick={() => setShowSolicitudes(true)} title="Vacaciones y permisos que piden los trabajadores desde la app" className={`op-btn${solicitudesPendientes ? " op-activo" : ""}`}>
+              <CalendarClock size={14} />Solicitudes{solicitudesPendientes ? <span style={{ background: C.amber, color: "#111", borderRadius: 999, padding: "0 6px", fontSize: 11, fontWeight: 700 }}>{solicitudesPendientes}</span> : null}
+            </button>
+          )}
           {setShowVersiones && (
             <button onClick={() => setShowVersiones(true)} title="Guardar el cuadrante con un nombre, compararlo o volver a una versión anterior" className="op-btn">
               <History size={14} />Versiones
@@ -460,12 +465,12 @@ export function PieYResumen({ asign, getDow, grid, month, schedDayFor, schedRost
             {n > 1 ? (
               <>
                 <span style={{ color: C.blue, fontWeight: 600 }}>{n} celdas seleccionadas</span>
-                <span>Escribe <b style={{color:C.muted}}>M T N L G B D</b> para asignar a todas · <b style={{color:C.muted}}>Supr</b> para borrar · <b style={{color:C.muted}}>Esc</b> para deseleccionar</span>
+                <span>Escribe <b style={{color:C.muted}}>M T N L V G B D</b> para asignar a todas · <b style={{color:C.muted}}>Supr</b> para borrar · <b style={{color:C.muted}}>Esc</b> para deseleccionar</span>
               </>
             ) : (
               <>
                 <span>Clic o arrastra para seleccionar · <b style={{color:C.muted}}>Shift+clic</b> para extender</span>
-                <span>Escribe <b style={{color:C.muted}}>M T N L G B D</b> · <b style={{color:C.muted}}>Supr</b> para borrar · Flechas para navegar</span>
+                <span>Escribe <b style={{color:C.muted}}>M T N L V G B D</b> · <b style={{color:C.muted}}>Supr</b> para borrar · Flechas para navegar</span>
                 <span>Botones M/T/N en el nombre → rellenar mes completo</span>
                 <span>Clic derecho → resumen del turno</span>
               </>

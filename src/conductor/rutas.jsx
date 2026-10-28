@@ -15,6 +15,7 @@ import { DetallePlan } from "./ruta-detalle.jsx";
 import { Btn } from "./ui.jsx";
 import { comprobarLugarFichaje, escucharDepotsFichaje, RADIO_FICHAJE_M } from "../fichaje-depots.js";
 import { tono } from "../tema.js";
+import { MisAusencias } from "../vacaciones/app-trabajador.jsx";
 
 // Correctivo: tarjeta de tarea manual (sin KML)
 function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
@@ -368,7 +369,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             <div style={{width:46,height:46,borderRadius:12,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.blue}}><CalendarDays size={22} strokeWidth={1.8}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:15,fontWeight:700,marginBottom:3}}>Mi cuadrante</div>
-              <div style={{fontSize:11,color:C.muted}}>Tus turnos, libres y vehículo de cada día</div>
+              <div style={{fontSize:11,color:C.muted}}>Tus turnos, libres y vehículo de cada día · pedir vacaciones</div>
             </div>
             <div style={{fontSize:20,color:C.border}}>›</div>
           </div>
@@ -615,7 +616,7 @@ function MiCuadrante({sesion,onBack}){
   );
 
   if(docs===null) return <div style={{paddingBottom:80}}>{header}<div style={{padding:20,color:C.dim,fontSize:13}}>Cargando…</div></div>;
-  if(!actual) return <div style={{paddingBottom:80}}>{header}<div style={{padding:20,color:C.dim,fontSize:13}}>Todavía no te han publicado ningún cuadrante.</div></div>;
+  if(!actual) return <div style={{paddingBottom:80}}>{header}<div style={{padding:20,color:C.dim,fontSize:13}}>Todavía no te han publicado ningún cuadrante.</div><div style={{padding:"0 14px"}}><MisAusencias sesion={sesion}/></div></div>;
 
   const {year,month,dias={}}=actual;
   const nDias=new Date(year,month,0).getDate();
@@ -669,7 +670,8 @@ function MiCuadrante({sesion,onBack}){
             <div key={c} style={{fontSize:11,color:CUADRANTE_META[c]?.text||C.muted}}>{CUADRANTE_META[c]?.label||c}: {n}</div>
           ))}
         </div>
-        <div style={{fontSize:10,color:C.dim,marginTop:8}}>Publicado {new Date(actual.publicadoEn).toLocaleString()}</div>
+        {actual.publicadoEn&&<div style={{fontSize:10,color:C.dim,marginTop:8}}>Publicado {new Date(actual.publicadoEn).toLocaleString()}</div>}
+        <MisAusencias sesion={sesion}/>
       </div>
     </div>
   );

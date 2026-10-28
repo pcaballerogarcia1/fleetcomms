@@ -100,7 +100,7 @@ export const CODE_WINDOWS = {
   N: { start: 1320, end: 1800 },
 };
 const WORK_CODES = new Set(["M", "T", "N"]);
-const OFF_CODES  = new Set(["L", "B"]);
+const OFF_CODES  = new Set(["L", "B", "V"]); // V: vacaciones aprobadas
 
 export const REASON_LABELS = {
   off:     "de libre/baja",

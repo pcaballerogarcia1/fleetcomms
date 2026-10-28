@@ -12,6 +12,8 @@ import { OptResultModal, PublishModal, RulesModal } from "./rostering/modales.js
 import { VehicleAvailabilityGrid, ModeTabs } from "./rostering/vehiculos.jsx";
 import { DespachoPage } from "./despacho.jsx";
 import { VentanaVersiones } from "./rostering/versiones.jsx";
+import { VentanaSolicitudes } from "./vacaciones/ventana-oficina.jsx";
+import { escucharAusenciasOrg } from "./vacaciones/store.js";
 import { doPublish as doPublishMod, optimizar as optimizarMod, optimizarLibre as optimizarLibreMod } from "./rostering/acciones.js";
 import { CabeceraCuadrante, TablaCuadrante, PieYResumen } from "./rostering/cuadrante.jsx";
 
@@ -203,6 +205,10 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
   const [convenio, setConvenio] = useState({});
   const [showRules, setShowRules] = useState(false);
   const [showVersiones, setShowVersiones] = useState(false);
+  // Vacaciones y permisos pedidos desde la app de los trabajadores
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [showSolicitudes, setShowSolicitudes] = useState(false);
+  useEffect(() => { if (!orgId) return; return escucharAusenciasOrg(orgId, setSolicitudes); }, [orgId]);
   const [optResult, setOptResult] = useState(null);
   const rulesDocId = orgId ? `${orgId}_reglas` : null;
 
@@ -571,7 +577,9 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
       background: C.bg, fontFamily: font, overflow: "hidden",
     }}>
 
-      <CabeceraCuadrante {...{ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} setShowVersiones={docId && cargadoDe === docId ? setShowVersiones : null} />
+      <CabeceraCuadrante {...{ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, workers, year }} setShowVersiones={docId && cargadoDe === docId ? setShowVersiones : null}
+        setShowSolicitudes={orgId ? setShowSolicitudes : null} solicitudesPendientes={solicitudes.filter(s => s.estado === "pendiente").length} />
+      {showSolicitudes && <VentanaSolicitudes orgId={orgId} solicitudes={solicitudes} workers={workers} sesion={sesion} onCerrar={() => setShowSolicitudes(false)} />}
       {showVersiones && (
         <VentanaVersiones orgId={orgId} year={year} month={month} grid={grid} asign={asign} workers={workers}
           autor={sesion ? { uid: sesion.uid, nombre: [sesion.nombre, sesion.apellidos].filter(Boolean).join(" ") } : null}

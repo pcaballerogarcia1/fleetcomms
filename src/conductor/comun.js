@@ -402,6 +402,7 @@ export const CUADRANTE_META={
   T:{label:"Tarde",bg:tono("#3d1a00", "#f8ede4"),text:C.orange},
   N:{label:"Noche",bg:tono("#1a0d3d", "#eae4f8"),text:C.violet},
   L:{label:"Libre",bg:tono("#1a1f2a", "#ebedf2"),text:C.dim},
+  V:{label:"Vacaciones",bg:tono("#0b2a33", "#e0f2f7"),text:tono("#5ec8e6", "#0e7490")},
   G:{label:"Guardia",bg:tono("#2d2200", "#f8f4e4"),text:C.amber},
   B:{label:"Baja",bg:tono("#3d0d0d", "#f8e4e4"),text:C.red},
   D:{label:"Disponible",bg:C.greenDim,text:C.green},

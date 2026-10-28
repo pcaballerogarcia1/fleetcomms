@@ -201,7 +201,7 @@ function ProximosDias({ cuadrantes, desdeManana }) {
       <div style={{ fontSize: 11, color: C.dim, letterSpacing:0, textTransform:"none", fontWeight: 700, margin: "10px 0 6px" }}>Próximos días</div>
       {dias.map(x => {
         const d = new Date(x.fecha + "T12:00:00");
-        const libre = !x.c || ["L", "B"].includes(x.c);
+        const libre = !x.c || ["L", "B", "V"].includes(x.c);
         return (
           <div key={x.fecha} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${C.border}`, opacity: libre ? 0.55 : 1 }}>
             <div style={{ width: 54, flexShrink: 0 }}>

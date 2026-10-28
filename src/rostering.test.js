@@ -19,12 +19,13 @@ describe("workerCodeOnDay", () => {
 });
 
 describe("isUnavailable", () => {
-  it("Libre y Baja cuentan como no disponible", () => {
+  it("Libre, Baja y Vacaciones cuentan como no disponible", () => {
     expect(isUnavailable("L")).toBe(true);
     expect(isUnavailable("B")).toBe(true);
+    expect(isUnavailable("V")).toBe(true);
   });
   it("el resto de códigos de turno cuentan como disponible", () => {
-    for (const code of SHIFTS.filter(c => c !== "L" && c !== "B")) {
+    for (const code of SHIFTS.filter(c => !["L", "B", "V"].includes(c))) {
       expect(isUnavailable(code)).toBe(false);
     }
   });

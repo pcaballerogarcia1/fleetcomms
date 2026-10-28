@@ -81,12 +81,12 @@ export function cierreDelMes({ fichajes = [], workers = [], grid = {}, rules = {
       const fecha = `${year}-${pad(month)}-${pad(dd)}`, code = g[dd];
       const fichado = !!p.porDia[fecha] || p.abiertos.includes(fecha);
       if (TRABAJA.has(code) && !fichado) faltas.push(dd);
-      if ((code === "L" || code === "B") && fichado) enLibre.push(dd);
+      if ((code === "L" || code === "B" || code === "V") && fichado) enLibre.push(dd);
     }
     const avisos = [];
     if (p.abiertos.length) avisos.push(`${p.abiertos.length} fichaje(s) sin cerrar: ${p.abiertos.map(f => +f.slice(8)).join(", ")}`);
     if (faltas.length) avisos.push(`Con turno sin fichaje: ${faltas.join(", ")}`);
-    if (enLibre.length) avisos.push(`Fichó estando de libre o baja: ${enLibre.join(", ")}`);
+    if (enLibre.length) avisos.push(`Fichó estando de libre, baja o vacaciones: ${enLibre.join(", ")}`);
     if (!p.workerId) avisos.push("No está vinculado a ningún trabajador de la plantilla");
     const ordinarias = total - extra;
     const ch = +precios.costeHora || 0;

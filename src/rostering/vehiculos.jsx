@@ -18,7 +18,7 @@ export function ModeTabs({ mode, setMode, conSalida = false }) {
       {pestanas.map(([m, label]) => (
         <button key={m} onClick={() => setMode(m)} style={{
           padding: "5px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-          fontFamily: font, fontSize: 12, fontWeight: 600,
+          fontFamily: font, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
           background: mode === m ? alfa(0.1) : "transparent",
           color: mode === m ? C.text : C.muted,
           transition: "all .12s",
