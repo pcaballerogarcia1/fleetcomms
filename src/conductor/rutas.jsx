@@ -16,6 +16,8 @@ import { Btn } from "./ui.jsx";
 import { comprobarLugarFichaje, escucharDepotsFichaje, RADIO_FICHAJE_M } from "../fichaje-depots.js";
 import { tono } from "../tema.js";
 import { MisAusencias } from "../vacaciones/app-trabajador.jsx";
+import { PantallaDocumentos, TarjetaDocumentos } from "../documentos/app-trabajador.jsx";
+import { useMisDocumentos } from "../documentos/usar-documentos.js";
 
 // Correctivo: tarjeta de tarea manual (sin KML)
 function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){
@@ -271,6 +273,8 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   },[esSA]);
   const [formTarea,setFormTarea]     = useState({titulo:"",descripcion:"",vehiculo:"",estado:"pendiente"});
   const [verCuadrante,setVerCuadrante] = useState(false);
+  const [verDocumentos,setVerDocumentos] = useState(false);
+  const misDocs = useMisDocumentos(sesion);
   const fileRef = useRef();
   // Intermedio tiene la misma gestión de Rutas que Administrador (subir
   // KML, borrar planes, gestionar tareas) — solo Incidencias/Inventario/
@@ -334,6 +338,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
   // se están guardando pintados encima, para que el ✓ salga al instante sin
   // esperar la ida y vuelta a Firestore (muy notorio en 4G).
   if(verCuadrante) return <MiCuadrante sesion={sesion} onBack={()=>setVerCuadrante(false)}/>;
+  if(verDocumentos) return <PantallaDocumentos docs={misDocs} sesion={sesion} onBack={()=>setVerDocumentos(false)}/>;
 
   if(planActivo){
     const fresco=planes.find(p=>p._id===planActivo._id)||planActivo;
@@ -374,6 +379,7 @@ function ModuloRutas({planes,addPlan,updatePlan,deletePlan,sesion,usuarios}){
             <div style={{fontSize:20,color:C.border}}>›</div>
           </div>
         </div>
+        <TarjetaDocumentos docs={misDocs} onAbrir={()=>setVerDocumentos(true)}/>
         <AvisosMovil sesion={sesion}/>
         <div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:14}}>Selecciona tipo de trabajo</div>
         {gruposTrabajo(planes).map(({t,trabajo})=>{

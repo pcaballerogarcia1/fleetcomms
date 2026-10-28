@@ -12,7 +12,7 @@ import { Truck } from "lucide-react";
 // Selector "Trabajadores / Vehículos" — compartido entre las dos vistas
 // del módulo Rostering.
 export function ModeTabs({ mode, setMode, conSalida = false }) {
-  const pestanas = [["workers", "Trabajadores"], ["vehicles", "Vehículos"], ...(conSalida ? [["salida", "Salida del día"]] : [])];
+  const pestanas = [["workers", "Trabajadores"], ["vehicles", "Vehículos"], ...(conSalida ? [["salida", "Salida del día"]] : []), ["documentos", "Documentos"]];
   return (
     <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
       {pestanas.map(([m, label]) => (

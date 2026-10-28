@@ -13,6 +13,7 @@ import { VehicleAvailabilityGrid, ModeTabs } from "./rostering/vehiculos.jsx";
 import { DespachoPage } from "./despacho.jsx";
 import { VentanaVersiones } from "./rostering/versiones.jsx";
 import { VentanaSolicitudes } from "./vacaciones/ventana-oficina.jsx";
+import { PanelDocumentos } from "./documentos/panel-oficina.jsx";
 import { escucharAusenciasOrg } from "./vacaciones/store.js";
 import { doPublish as doPublishMod, optimizar as optimizarMod, optimizarLibre as optimizarLibreMod } from "./rostering/acciones.js";
 import { CabeceraCuadrante, TablaCuadrante, PieYResumen } from "./rostering/cuadrante.jsx";
@@ -556,6 +557,17 @@ export function RosteringPage({ sesion, embedded = false, activeProject = null, 
         setYear={setYear} setMonth={setMonth}
         mode={mode} setMode={setMode} embedded={embedded} conSalida={conSalida}
       />
+    );
+  }
+
+  if (mode === "documentos") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: embedded ? "100%" : "100vh", background: C.bg, fontFamily: font, overflow: "hidden" }}>
+        <div style={{ flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+          <ModeTabs mode={mode} setMode={setMode} conSalida={conSalida} />
+        </div>
+        <PanelDocumentos orgId={orgId} sesion={sesion} usuarios={usuarios} />
+      </div>
     );
   }
 

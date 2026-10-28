@@ -282,6 +282,34 @@ service cloud.firestore {
       }
     }
 
+    // ── DOCUMENTOS PARA LOS TRABAJADORES (ITs, DPTs…) ─────────────────
+    // La oficina los sube y los gestiona; cada trabajador lee los activos que
+    // van a todos o a él, y confirma su lectura (solo la suya).
+    function documentoPara(docId) {
+      let d = get(/databases/$(database)/documents/documentos/$(docId)).data;
+      return sameOrg(d.org_id) && d.activo == true && (d.paraTodos == true || request.auth.uid in d.paraUids);
+    }
+    match /documentos/{docId} {
+      allow read: if sameOrg(resource.data.org_id) && (puedeWorkspace()
+        || (resource.data.activo == true && (resource.data.paraTodos == true || request.auth.uid in resource.data.paraUids)));
+      allow create, update: if puedeWorkspace() && sameOrg(request.resource.data.org_id)
+        && request.resource.data.paraUids is list;
+      allow delete: if puedeWorkspace() && sameOrg(resource.data.org_id);
+      match /trozos/{trozo} {
+        allow read: if sameOrg(resource.data.org_id) && (puedeWorkspace() || documentoPara(docId));
+        allow create, update: if puedeWorkspace() && sameOrg(request.resource.data.org_id);
+        allow delete: if puedeWorkspace() && sameOrg(resource.data.org_id);
+      }
+    }
+    match /documentos_lecturas/{id} {
+      allow read: if sameOrg(resource.data.org_id) && (resource.data.uid == request.auth.uid || puedeWorkspace());
+      allow create, update: if sameOrg(request.resource.data.org_id)
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.docId + '_' + request.auth.uid
+        && documentoPara(request.resource.data.docId);
+      allow delete: if false;
+    }
+
     // ── VACACIONES Y PERMISOS (app del trabajador → Cuadrante) ────────
     // El trabajador crea las suyas (pendientes) y puede retirarlas mientras
     // no se contesten; la oficina las aprueba o rechaza. Nadie las borra.
