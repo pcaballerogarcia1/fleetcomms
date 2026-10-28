@@ -27,8 +27,12 @@ test("subir una IT, leerla en la app y ver quién la ha leído", async ({ browse
   movil.on("popup", p => p.close().catch(() => {})); // la pestaña del PDF
   const errMovil = vigilarErrores(movil);
   await entrarCampo(movil, "cond1@demo.test");
-  await expect(movil.getByText("1 sin leer")).toBeVisible();
-  await movil.getByText("Documentos", { exact: true }).click();
+  // en el menú de su foto (con el número de pendientes encima)
+  await movil.getByRole("button", { name: "Tu perfil" }).click();
+  await expect(movil.getByRole("menuitem", { name: /Documentos\s*1/ })).toBeVisible();
+  await expect(movil.getByRole("menuitem", { name: /Avisos en el móvil/ })).toBeVisible();
+  if (globalThis.process.env.CAPTURAS) await movil.screenshot({ path: `${globalThis.process.env.CAPTURAS}/doc0-menu.png` });
+  await movil.getByRole("menuitem", { name: /Documentos/ }).click();
   await expect(movil.getByRole("button", { name: "He leído y entendido" })).toBeDisabled(); // primero hay que abrirlo
   if (globalThis.process.env.CAPTURAS) await movil.screenshot({ path: `${globalThis.process.env.CAPTURAS}/doc1-app.png` });
   await movil.getByRole("button", { name: /Abrir/ }).click();
@@ -47,6 +51,10 @@ test("subir una IT, leerla en la app y ver quién la ha leído", async ({ browse
   await page.getByRole("button", { name: "Subir y avisar" }).click();
   await expect(page.getByText(/Ficha de puesto y riesgos \(DPT\) · Word · para todos/)).toBeVisible();
   await expect(movil.getByRole("button", { name: /Descargar/ })).toBeVisible();
+  // y los avisos al móvil, también desde el menú de la foto
+  await movil.getByRole("button", { name: "Tu perfil" }).click();
+  await movil.getByRole("menuitem", { name: /Avisos en el móvil/ }).click();
+  await expect(movil.getByText(/Avisos en el móvil|Avisos activados|no admite avisos|Añadir a pantalla de inicio/).first()).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/doc2-oficina.png` });
   const ruido = e => /Failed to load resource|ERR_|api\/avisos/i.test(e);
   expect(errores.filter(e => !ruido(e))).toEqual([]);

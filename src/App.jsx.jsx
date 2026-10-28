@@ -15,6 +15,9 @@ import { watchServiciosFechas, watchMisCuadrantes } from "./lineas-servicio-stor
 import { fechaLocal, sumarDias, servicioVigente } from "./lineas-servicio.js";
 import { PanelAdminRutas } from "./conductor/admin.jsx";
 import { AvatarPerfil } from "./foto-perfil.jsx";
+import { OpcionesPerfilApp, PantallaAvisos } from "./conductor/menu-perfil-app.jsx";
+import { PantallaDocumentos } from "./documentos/app-trabajador.jsx";
+import { useMisDocumentos } from "./documentos/usar-documentos.js";
 import { OlvideClave } from "./olvide-clave.jsx";
 import { C, S, fbAdd, fbDelete, fbUpdate, font, useCollection } from "./conductor/comun.js";
 import { ModuloIncidencias } from "./conductor/incidencias.jsx";
@@ -67,6 +70,10 @@ export default function App(){
   const [bloqueado,setBloqueado]=useState(false); // su perfil está inactivo: se le dice al volver a la entrada
   const [usuarios,setUsuarios]=useState([]);
   const [tab,setTab]=useState("rutas");
+  // Documentos y avisos al móvil: en el menú de la foto; se abren encima de la pestaña
+  const misDocs = useMisDocumentos(sesion);
+  const [verDocs,setVerDocs] = useState(false);
+  const [verAvisos,setVerAvisos] = useState(false);
 
   // Firebase Auth — escuchar cambios de sesión
   useEffect(()=>{
@@ -207,35 +214,38 @@ export default function App(){
     ]),
     ...(esAdmin?[{key:"admin",Icono:Settings,label:"Admin"}]:[]),
   ];
-  const TAB_TITLES={turno:"Mi turno",rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
+  const TAB_TITLES={documentos:"Documentos",avisos:"Avisos en el móvil",turno:"Mi turno",rutas:"Rutas de servicio",incidencias:"Canal de incidencias",inventario:"Inventario",admin:"Panel de administración"};
 
   return(
     <div style={S.page}>
       <div style={{...S.header,background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"),borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <Logo size={26}/>
-          <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[tab]||tab}</div>
+          <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[verDocs?"documentos":verAvisos?"avisos":tab]||tab}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:11,color:C.text,fontWeight:500}}>{sesion.nombre}</div>
             <div style={{fontSize:11,color:C.dim}}>{roleLabel(sesion.rol)}</div>
           </div>
-          <AvatarPerfil sesion={sesion} size={34} onCerrarSesion={()=>signOut(auth)}/>
+          <AvatarPerfil sesion={sesion} size={34} onCerrarSesion={()=>signOut(auth)} marca={(misDocs||[]).filter(d=>!d.leido).length}
+            extra={cerrar=><OpcionesPerfilApp docs={misDocs} onDocumentos={()=>{cerrar();setVerAvisos(false);setVerDocs(true);}} onAvisos={()=>{cerrar();setVerDocs(false);setVerAvisos(true);}}/>}/>
         </div>
       </div>
 
-      {tab==="turno"&&<MiTurno sesion={sesion} servicios={servicios} cuadrantes={cuadrantesBus}/>}
-      {tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
-      {tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
-      {tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
-      {tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan} sesion={sesion}/>}
+      {verDocs&&<PantallaDocumentos docs={misDocs} sesion={sesion} onBack={()=>setVerDocs(false)}/>}
+      {verAvisos&&!verDocs&&<PantallaAvisos sesion={sesion} onBack={()=>setVerAvisos(false)}/>}
+      {!verDocs&&!verAvisos&&tab==="turno"&&<MiTurno sesion={sesion} servicios={servicios} cuadrantes={cuadrantesBus}/>}
+      {!verDocs&&!verAvisos&&tab==="rutas"&&<ListaPlanes planes={planes} addPlan={addPlan} updatePlan={updatePlan} deletePlan={deletePlan} sesion={sesion} usuarios={usuarios}/>}
+      {!verDocs&&!verAvisos&&tab==="incidencias"&&<ModuloIncidencias sesion={sesion} usuarios={usuarios}/>}
+      {!verDocs&&!verAvisos&&tab==="inventario"&&<ModuloInventario sesion={sesion} usuarios={usuarios}/>}
+      {!verDocs&&!verAvisos&&tab==="admin"&&esAdmin&&<PanelAdminRutas planes={planes} usuarios={usuarios} deletePlan={deletePlan} sesion={sesion}/>}
 
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:520,background:tono("rgba(11,13,18,0.9)", "rgba(255,255,255,0.9)"),borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200,backdropFilter:"blur(16px)",paddingBottom:"env(safe-area-inset-bottom)"}}>
         {TABS.map(t=>{
           const active=tab===t.key;
           return(
-            <button key={t.key} onClick={()=>setTab(t.key)} style={{flex:1,padding:"10px 0 9px",background:"none",border:"none",cursor:"pointer",fontFamily:font,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",transition:"all .15s"}}>
+            <button key={t.key} onClick={()=>{setTab(t.key);setVerDocs(false);setVerAvisos(false);}} style={{flex:1,padding:"10px 0 9px",background:"none",border:"none",cursor:"pointer",fontFamily:font,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",transition:"all .15s"}}>
               {active&&<div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:28,height:2,background:"linear-gradient(90deg,#2563eb,#6d28d9)",borderRadius:4}}/>}
               <t.Icono size={21} strokeWidth={active?2.1:1.7} color={active?C.text:C.dim}/>
               <span style={{fontSize:11,fontWeight:active?600:500,color:active?C.text:C.dim,transition:"color .15s"}}>{t.label}</span>

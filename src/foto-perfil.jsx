@@ -25,7 +25,8 @@ export function CirculoPerfil({ usuario, size = 30, style }) {
 }
 
 /** El círculo de la cabecera con su menú */
-export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
+/** extra: opciones de más para el menú, (cerrar) => JSX; marca: un número encima de la foto (p. ej. documentos sin leer) */
+export function AvatarPerfil({ sesion, size = 32, onCerrarSesion, extra = null, marca = 0 }) {
   const [foto, setFoto] = useState(sesion?.foto || null);
   const [abierto, setAbierto] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -60,8 +61,9 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
   const opcion = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 15, cursor: "pointer", textAlign: "left" };
   return (
     <div ref={caja} style={{ position: "relative" }}>
-      <button onClick={() => setAbierto(a => !a)} title="Tu perfil" aria-label="Tu perfil" style={{ padding: 0, background: "none", border: "none", cursor: "pointer", borderRadius: "50%" }}>
+      <button onClick={() => setAbierto(a => !a)} title="Tu perfil" aria-label="Tu perfil" style={{ padding: 0, background: "none", border: "none", cursor: "pointer", borderRadius: "50%", position: "relative" }}>
         <CirculoPerfil usuario={{ ...sesion, foto }} size={size} />
+        {marca > 0 && <span style={{ position: "absolute", top: -4, right: -4, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: C.amber, color: "#111", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${C.bg}` }}>{marca}</span>}
       </button>
       <input ref={archivo} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) poner(f); }} />
       {abierto && (
@@ -73,6 +75,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion }) {
               {sesion?.email && <div style={{ fontSize: 12, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{usuarioDeCorreo(sesion.email)}</div>}
             </div>
           </div>
+          {extra && extra(() => setAbierto(false))}
           <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => archivo.current?.click()}><Camera size={16} color={C.blue} /> {ocupado ? "Guardando…" : foto ? "Cambiar foto" : "Poner foto"}</button>
           {foto && <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => poner(null)}><Trash2 size={16} color={C.muted} /> Quitar foto</button>}
           {esCorreoReal(sesion?.email) && <button role="menuitem" style={opcion} disabled={ocupado} onClick={cambiarClave}><KeyRound size={16} color={C.blue} /> Cambiar mi contraseña</button>}
