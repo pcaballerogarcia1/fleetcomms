@@ -1,5 +1,5 @@
 // Planning de rutas por puntos: el panel lateral (capas, filtros, precios).
-import { AlertTriangle, Loader2, Upload, Warehouse } from "lucide-react";
+import { AlertTriangle, Loader2, Route, Upload, Warehouse } from "lucide-react";
 import { useState, useRef } from "react";
 import { db } from "../firebase.js";
 import { doc, deleteDoc, updateDoc } from "firebase/firestore";
@@ -39,7 +39,7 @@ export function Sidebar(props) {
   const sector = useSector();
   return <SidebarSector {...props} sector={sector} />;
 }
-function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
+function SidebarSector({ sector, layers, setLayers, onUpload, onCallejero, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
   const [manualLat, setManualLat] = useState("");
@@ -316,6 +316,11 @@ function SidebarSector({ sector, layers, setLayers, onUpload, uploading, depots,
                 ? <><Loader2 size={14} className="op-girando" /> Procesando…</>
                 : <><Upload size={14} /> Subir CSV / KML / Excel</>}
             </button>
+            {sector.ver.callejero && onCallejero && (
+              <button onClick={onCallejero} className="op-btn" style={{ width: "100%", height: 34, marginTop: 8 }}>
+                <Route size={14} /> Calles para barrer (callejero)
+              </button>
+            )}
             <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.7 }}>
               <div>CSV: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
               <div>Excel: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Latitud</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Longitud</code></div>

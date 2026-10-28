@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { VentanaCallejero } from "./viaria/ventana-callejero.jsx";
 import { db } from "./firebase.js";
 import { collection, onSnapshot, query, doc, setDoc, updateDoc, serverTimestamp, where, getDoc } from "firebase/firestore";
 import { uploadLayerMarkers, loadLayerMarkers, localGet } from "./layer-store.js";
@@ -345,6 +346,53 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
     setDepotUploading(false);
   }
 
+  // Una capa nueva (de un archivo o del callejero): pequeña, en la ficha; grande, troceada en la nube
+  async function guardarCapa({ name, ext, color, markers }) {
+    const newLayer = {
+      id: Date.now() + Math.random(),
+      name, type: ext, color,
+      markers, visible: true,
+    };
+    if (projectId) {
+      const markers = newLayer.markers;
+      const docId = `${projectId}_${newLayer.id}`;
+      if (markers.length > 500) {
+        // Capa grande: los puntos van a la nube comprimidos y troceados
+        // (layer-store.js) para que la vea cualquier navegador — antes
+        // solo se guardaban en el IndexedDB de este. Se muestra ya desde
+        // memoria y se sube en segundo plano.
+        setLayers(prev => [...prev, { ...newLayer, _docId: docId, totalMarkers: markers.length }]);
+        logAudit({ modulo: "Planning", accion: "Subió una capa", detalle: `${name} · ${markers.length} puntos` });
+        (async () => {
+          try {
+            const cloud = await uploadLayerMarkers(docId, projectId, markers);
+            setLayers(prev => prev.map(l => l._docId === docId ? { ...l, _cloudV: cloud.v } : l));
+            await setDoc(doc(db, "planning_layers", docId), {
+              id: newLayer.id, name, type: ext, color, visible: true,
+              markers: [], cloud, totalMarkers: markers.length,
+              projectId, orgId, createdAt: serverTimestamp(),
+            });
+          } catch (e) {
+            console.error("Layer persist:", e);
+            setErrors(prev => [...prev, `${name}: no se pudo guardar en la nube (${e.message || e}) — vuelve a subir el archivo.`]);
+          }
+        })();
+      } else {
+        // Small layer: store inline in Firestore, onSnapshot updates state
+        await setDoc(doc(db, "planning_layers", docId), {
+          ...newLayer, projectId, orgId, createdAt: serverTimestamp(),
+        });
+      }
+    } else {
+      setLayers(prev => [...prev, newLayer]);
+    }
+  }
+
+  // Limpieza viaria: las calles de una zona como capa de tramos
+  const [verCallejero, setVerCallejero] = useState(false);
+  const crearCapaCallejero = ({ name, markers }) =>
+    guardarCapa({ name, ext: "callejero", color: LAYER_COLORS[layers.length % LAYER_COLORS.length], markers });
+
   async function handleUpload(files) {
     if (!files || files.length === 0) return;
     setUploading(true);
@@ -378,44 +426,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
         continue;
       }
 
-      const newLayer = {
-        id: Date.now() + Math.random(),
-        name, type: ext, color,
-        markers: result.markers, visible: true,
-      };
-      if (projectId) {
-        const markers = newLayer.markers;
-        const docId = `${projectId}_${newLayer.id}`;
-        if (markers.length > 500) {
-          // Capa grande: los puntos van a la nube comprimidos y troceados
-          // (layer-store.js) para que la vea cualquier navegador — antes
-          // solo se guardaban en el IndexedDB de este. Se muestra ya desde
-          // memoria y se sube en segundo plano.
-          setLayers(prev => [...prev, { ...newLayer, _docId: docId, totalMarkers: markers.length }]);
-          logAudit({ modulo: "Planning", accion: "Subió una capa", detalle: `${name} · ${markers.length} puntos` });
-          (async () => {
-            try {
-              const cloud = await uploadLayerMarkers(docId, projectId, markers);
-              setLayers(prev => prev.map(l => l._docId === docId ? { ...l, _cloudV: cloud.v } : l));
-              await setDoc(doc(db, "planning_layers", docId), {
-                id: newLayer.id, name, type: ext, color, visible: true,
-                markers: [], cloud, totalMarkers: markers.length,
-                projectId, orgId, createdAt: serverTimestamp(),
-              });
-            } catch (e) {
-              console.error("Layer persist:", e);
-              setErrors(prev => [...prev, `${name}: no se pudo guardar en la nube (${e.message || e}) — vuelve a subir el archivo.`]);
-            }
-          })();
-        } else {
-          // Small layer: store inline in Firestore, onSnapshot updates state
-          await setDoc(doc(db, "planning_layers", docId), {
-            ...newLayer, projectId, orgId, createdAt: serverTimestamp(),
-          });
-        }
-      } else {
-        setLayers(prev => [...prev, newLayer]);
-      }
+      await guardarCapa({ name, ext, color, markers: result.markers });
     }
 
     if (newErrors.length) setErrors(newErrors);
@@ -560,6 +571,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
               layers={layers}
               setLayers={setLayers}
               onUpload={handleUpload}
+              onCallejero={() => setVerCallejero(true)}
               uploading={uploading}
               gtfsGrupos={gtfsGrupos}
               lineaSel={lineaSel}
@@ -589,6 +601,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
               setContenedorFilter={setContenedorFilter}
             />
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} recorridos={recorridos} />
+            {verCallejero && <VentanaCallejero onCrear={crearCapaCallejero} onCerrar={() => setVerCallejero(false)} />}
           </>
         ) : tab === "trabajos" ? (
           <TabTrabajos key={projectId} layers={layers} activeProject={activeProject} onProjectUpdate={onProjectUpdate} vehicles={vehicles} />

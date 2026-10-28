@@ -11,6 +11,7 @@ import {
 import { sectorDe } from "./sector.js";
 import { PanelRealizado } from "./analisis/realizado-panel.jsx";
 import { PanelCierre } from "./analisis/cierre-panel.jsx";
+import { PanelCobertura } from "./viaria/cobertura-panel.jsx";
 import { C, alfa } from "./tema.js";
 
 // Nombre corto para el eje de una gráfica (sin el mes, que ya se elige arriba; con «…» si no cabe)
@@ -326,7 +327,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
-              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ...(sectorDe(activeProject).ver.pesadas ? [["pesadas", "Pesadas"]] : []), ["realizado", "Realizado"], ["cierre", "Cierre del mes"], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
+              {[["produccion", t("produccion", lang)], ...(canPrice ? [["facturacion", "Facturación"]] : []), ...(sectorDe(activeProject).ver.pesadas ? [["pesadas", "Pesadas"]] : []), ["realizado", "Realizado"], ...(sectorDe(activeProject).ver.callejero ? [["cobertura", "Cobertura"]] : []), ["cierre", "Cierre del mes"], ["personal", t("personal", lang)], ["varios", t("varios", lang)]].map(([k, l]) => (
                 <button key={k} onClick={() => setVista(k)} style={{
                   padding: "5px 11px", borderRadius: 4, border: "none", cursor: "pointer",
                   background: vista === k ? alfa(0.1) : "none",
@@ -354,6 +355,7 @@ export function AnalyticsPage({ sesion, orgId: orgIdProp, activeProject = null }
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
         {vista === "realizado" && <PanelRealizado planes={planes} fichajes={fichajesMes} mes={mesFilter} />}
+        {vista === "cobertura" && <PanelCobertura planes={planes} />}
         {vista === "cierre" && <PanelCierre orgId={orgId} sesion={sesion} fichajes={fichajesMes} mes={mesFilter} />}
         {vista === "produccion" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

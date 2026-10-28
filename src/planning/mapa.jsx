@@ -7,6 +7,7 @@ import { C, MAP_STYLES, font } from "./estilo.js";
 import { useUltimo } from "../use-ultimo.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
+import { lineaDe } from "../viaria/callejero.js";
 
 // ── POPUP HTML ────────────────────────────────────────────────────
 function makePopupHtml(marker, color) {
@@ -42,6 +43,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
   const selPolyRef    = useRef(null);
   const selPinsRef    = useRef([]);
   const recorridosRef = useRef(null); // trazados de líneas GTFS
+  const tramosRef = useRef(null); // limpieza viaria: la línea de cada tramo de calle
   const [showStylePicker, setShowStylePicker] = useState(false);
   const currentStyle = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
 
@@ -86,6 +88,19 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
       recorridosRef.current = L.layerGroup(recorridos.flatMap(r => r.trazados.map(t =>
         L.polyline(t, { color: r.color, weight: r.grosor || 3, opacity: r.opacidad ?? 0.9, renderer, interactive: false })))).addTo(map);
     }
+
+    // Limpieza viaria: cada tramo de calle como una línea por la calle (debajo de su punto)
+    if (tramosRef.current) { try { map.removeLayer(tramosRef.current); } catch { /* ya no estaba */ } tramosRef.current = null; }
+    const lineas = [];
+    const rendererTramos = L.canvas({ padding: 0.3 });
+    for (const layer of layers || []) {
+      if (!layer.visible) continue;
+      for (const m of layer.markers || []) {
+        const linea = lineaDe(m.geom || m.campos?.geom);
+        if (linea) lineas.push(L.polyline(linea, { color: layer.color || C.blue, weight: 4, opacity: 0.85, renderer: rendererTramos, interactive: false }));
+      }
+    }
+    if (lineas.length) tramosRef.current = L.layerGroup(lineas).addTo(map);
 
     // Remove previous Leaflet marker layers
     leafletLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch { /* ya no estaba en el mapa */ } });

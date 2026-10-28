@@ -64,7 +64,12 @@ export async function loadTasksFromLayers(projectId) {
       const nombre = extractFieldVRP(fields, ["nombre","name","calle","street"]) || "";
       const barrio = extractFieldVRP(fields, BARRIO_KEYS_VRP) || "";
       const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
-      allTasks.push({ _id: puntoKey, lat, lng, nombre, barrio, campos: fields, layerColor: layer.color });
+      const tarea = { _id: puntoKey, lat, lng, nombre, barrio, campos: fields, layerColor: layer.color };
+      // la duración que trae la propia capa (p. ej. el tiempo de barrido de un tramo de calle);
+      // la del Timetable manda sobre ella, y esta sobre la de por defecto
+      const durCapa = +fields.duracion;
+      if (durCapa > 0) tarea._duracionCapa = durCapa;
+      allTasks.push(tarea);
     });
   });
 
@@ -96,6 +101,8 @@ export async function loadTasksFromLayers(projectId) {
       }
     }
   } catch { /* sin timetable — las tareas siguen sin ventana, comportamiento de siempre */ }
+
+  for (const t of allTasks) { if (t.duracion == null && t._duracionCapa) t.duracion = t._duracionCapa; delete t._duracionCapa; }
 
   // Apply default duration from project settings (set in Timetable tab)
   try {

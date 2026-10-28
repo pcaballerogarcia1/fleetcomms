@@ -5,6 +5,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { C, DRIVER_STALE_MS, DRIVER_WARN_MS, barrioColor, computeFleetAlerts, font, mono } from "./datos.js";
 import { useUltimo } from "../use-ultimo.js";
 import { tono } from "../tema.js";
+import { lineaDe } from "../viaria/callejero.js";
 import { Satellite } from "lucide-react";
 import { useConexionGps, useFlota, usePosicionesGps } from "../gps/usar-gps.js";
 import { emparejarGps, proveedorGps } from "../gps/proveedores.js";
@@ -22,6 +23,7 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
   const divRef      = useRef(null);
   const mapRef      = useRef(null);
   const polyRef      = useRef(null);
+  const tramosRef    = useRef(null); // limpieza viaria: tramos hechos (verde) y pendientes (rojo)
   const canvasRef    = useRef(null); // { canvas, draw }
 
   function ensureLeaflet(cb) {
@@ -47,6 +49,13 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
     if (recorrido && recorrido.length > 1) {
       const ll = recorrido.map(p => Array.isArray(p) ? p : [p.lat, p.lng]);
       polyRef.current = L.polyline(ll, { color: "#1e3a5f", weight: 2, opacity: 0.6, dashArray: "6,4" }).addTo(map);
+    }
+
+    if (tramosRef.current) { try { map.removeLayer(tramosRef.current); } catch { /* ya no estaba */ } tramosRef.current = null; }
+    const lineas = (ubicaciones || []).map(u => [u, lineaDe(u.geom)]).filter(([, l]) => l);
+    if (lineas.length) {
+      const renderer = L.canvas({ padding: 0.3 });
+      tramosRef.current = L.layerGroup(lineas.map(([u, l]) => L.polyline(l, { color: u.realizado ? C.green : C.red, weight: 5, opacity: 0.85, renderer, interactive: false }))).addTo(map);
     }
 
     if (canvasRef.current) {

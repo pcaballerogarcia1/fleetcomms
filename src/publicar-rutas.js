@@ -122,6 +122,8 @@ export function taskToUbicacion(task, idx) {
     nota: "",
     // hora prevista (minutos del día), para comparar con la hora en que se hizo
     horaPlan: Number.isFinite(task._start) ? Math.round(task._start % 1440) : null,
+    // limpieza viaria: la forma del tramo de calle (lat, lng, lat, lng…) y sus metros
+    ...(Array.isArray(campos.geom) && campos.geom.length >= 4 ? { geom: campos.geom.map(Number), metros: +campos.metros || null } : {}),
   };
 }
 

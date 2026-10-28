@@ -14,6 +14,7 @@ describe("sector del proyecto", () => {
       expect(Object.keys(s.ver).sort()).toEqual([...ver].sort());
     }
     expect(sectorDe("contadores").t.Elementos).toBe("Contadores");
+    expect(sectorDe("viaria")).toMatchObject({ nombre: "Limpieza viaria", ver: { callejero: true, pesadas: false } });
     expect(sectorDe({ sector: "contadores" }).ver.pesadas).toBe(false);
   });
   it("fijarSector acepta un id o nada", () => {

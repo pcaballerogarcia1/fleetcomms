@@ -9,22 +9,27 @@ export const SECTORES = [
   {
     id: "residuos", nombre: "Residuos y limpieza", detalle: "Contenedores, fracciones, plantas de descarga y pesadas",
     t: { elemento: "contenedor", elementos: "contenedores", Elemento: "Contenedor", Elementos: "Contenedores", tipoElemento: "Tipo de contenedor", categoria: "Fracción", tipoCategoria: "Tipo de fracción", revision: "Lavado", codigo: "código del contenedor" },
-    ver: { pesadas: true, capacidad: true, plantas: true, volumen: true },
+    ver: { pesadas: true, capacidad: true, plantas: true, volumen: true, callejero: false },
+  },
+  {
+    id: "viaria", nombre: "Limpieza viaria", detalle: "Barrido manual, papeleras y baldeo por tramos de calle",
+    t: { elemento: "tramo", elementos: "tramos", Elemento: "Tramo", Elementos: "Tramos", tipoElemento: "Tipo de vía", categoria: "Servicio", tipoCategoria: "Servicio", revision: "Último barrido", codigo: "código del tramo" },
+    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false, callejero: true },
   },
   {
     id: "contadores", nombre: "Contadores y redes", detalle: "Lectura, cambio e inspección de contadores de agua o gas",
     t: { elemento: "contador", elementos: "contadores", Elemento: "Contador", Elementos: "Contadores", tipoElemento: "Tipo de contador", categoria: "Calibre", tipoCategoria: "Calibre", revision: "Última lectura", codigo: "número de serie del contador" },
-    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false },
+    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false, callejero: false },
   },
   {
     id: "mantenimiento", nombre: "Mantenimiento urbano", detalle: "Alumbrado, parques, mobiliario urbano e instalaciones",
     t: { elemento: "elemento", elementos: "elementos", Elemento: "Elemento", Elementos: "Elementos", tipoElemento: "Tipo de elemento", categoria: "Categoría", tipoCategoria: "Categoría", revision: "Última revisión", codigo: "código del elemento" },
-    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false },
+    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false, callejero: false },
   },
   {
     id: "otros", nombre: "Otros servicios con rutas", detalle: "Visitas, servicio técnico, reparto",
     t: { elemento: "punto", elementos: "puntos", Elemento: "Punto", Elementos: "Puntos", tipoElemento: "Tipo de punto", categoria: "Categoría", tipoCategoria: "Categoría", revision: "Última visita", codigo: "código del punto" },
-    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false },
+    ver: { pesadas: false, capacidad: false, plantas: false, volumen: false, callejero: false },
   },
 ];
 

@@ -4,6 +4,7 @@ import { C, barrioColor, font, mono } from "./comun.js";
 import { useUltimo } from "../use-ultimo.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
+import { lineaDe } from "../viaria/callejero.js";
 
 // Componente base de botón con hover
 export const Btn = ({children, onClick, style={}, variant="primary", size="md", disabled=false, title=""}) => {
@@ -134,6 +135,13 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       const l=L.polyline(pts.map(u=>[u.lat,u.lng]),{color:tono("#2a3142", "#ebedf2"),weight:1.5,opacity:0.4,dashArray:"4,8"}).addTo(map);
       layersRef.current.push(l);
     }
+    // limpieza viaria: cada tramo de calle como una línea (verde si ya está hecho)
+    pts.forEach(u=>{
+      const linea=lineaDe(u.geom);
+      if(!linea)return;
+      const l=L.polyline(linea,{color:u.realizado?C.green:selId===u.id?C.orange:C.blue,weight:6,opacity:0.85}).addTo(map).on("click",()=>onSelect(u.id));
+      layersRef.current.push(l);
+    });
     pts.forEach((u)=>{
       const isSel=selId===u.id;
       const baseColor=barrioColor(u.barri);
