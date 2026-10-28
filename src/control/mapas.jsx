@@ -10,6 +10,7 @@ import { Satellite } from "lucide-react";
 import { useConexionGps, useFlota, usePosicionesGps } from "../gps/usar-gps.js";
 import { emparejarGps, proveedorGps } from "../gps/proveedores.js";
 import { VentanaGps } from "../gps/ventana.jsx";
+import { capaFondo, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
 
 const GPS_VIEJO_MS = 15 * 60_000; // posición del GPS de más de 15 min: en gris
 
@@ -122,8 +123,8 @@ export function MapaControl({ ubicaciones, recorrido, height = 280 }) {
     const L = window.L;
     const pts = (ubicaciones || []).filter(u => u.lat && u.lng);
     const center = pts.length > 0 ? [pts[0].lat, pts[0].lng] : [39.57, 2.65];
-    const map = L.map(divRef.current, { zoomControl: false, attributionControl: false }).setView(center, 13);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+    const map = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: false }))).setView(center, 13);
+    capaFondo(L, "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
     mapRef.current = map;
     drawLayers();
   }
@@ -210,8 +211,8 @@ export function MapaFlota({ orgId, isSuperAdmin, planes, sesion = null }) {
   function initMap() {
     if (!divRef.current || mapRef.current) return;
     const L = window.L;
-    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false }).setView([39.57, 2.65], 11);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+    const map = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: true }))).setView([39.57, 2.65], 11);
+    capaFondo(L, "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
     mapRef.current = map;
   }
 

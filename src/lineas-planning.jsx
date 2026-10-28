@@ -21,6 +21,7 @@ import { C } from "./tema.js";
 import { tono } from "./tema.js";
 
 import { BotonCerrar } from "./ui/cerrar.jsx";
+import { capaDetalle, capaFondo, opcionesMapa, sinPrefijo } from "./mapa-fondo.js";
 
 const font = "var(--font)";
 const mono = "var(--mono)";
@@ -46,11 +47,12 @@ function MapaRed({ red, linea, paradasPorId, cocheras = [], poniendoCochera, onC
 
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
-    const map = L.map(divRef.current, { zoomControl: true, preferCanvas: true }).setView([40.4, -3.7], 6);
+    const map = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: true, preferCanvas: true }))).setView([40.4, -3.7], 6);
     map.attributionControl.setPrefix(false); // sin el «Leaflet» de la esquina
     // Mismo fondo que el Planning de puntos (Esri; CARTO pide ya API key)
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
+    capaFondo(L, "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}").addTo(map);
+    capaFondo(L, "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { attribution: "" }).addTo(map);
+    capaDetalle(L).addTo(map);
     mapRef.current = map;
     map.on("click", e => clickRef.current?.(e.latlng));
     const ro = new ResizeObserver(() => map.invalidateSize());

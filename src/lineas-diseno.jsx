@@ -14,6 +14,7 @@ import { C, alfa } from "./tema.js";
 import { tono } from "./tema.js";
 
 import { BotonCerrar } from "./ui/cerrar.jsx";
+import { capaDetalle, capaFondo, opcionesMapa, sinPrefijo } from "./mapa-fondo.js";
 
 const font = "var(--font)";
 const mono = "var(--mono)";
@@ -46,10 +47,11 @@ function MapaDiseno({ d, linea, dir, anadiendo, onPinchar, onMoverParada, onEleg
   useEffect(() => { cb.current = { onPinchar, onMoverParada, onElegirParada, anadiendo }; });
   useEffect(() => {
     if (!L || !divRef.current || mapRef.current) return;
-    const map = L.map(divRef.current, { zoomControl: true, doubleClickZoom: false }).setView([40.4, -3.7], 6);
+    const map = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: true, doubleClickZoom: false }))).setView([40.4, -3.7], 6);
     map.attributionControl.setPrefix(false); // sin el «Leaflet» de la esquina
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { attribution: "Esri" }).addTo(map);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}").addTo(map);
+    capaFondo(L, "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}").addTo(map);
+    capaFondo(L, "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { attribution: "" }).addTo(map);
+    capaDetalle(L).addTo(map);
     map.on("click", e => { if (cb.current.anadiendo) cb.current.onPinchar([e.latlng.lat, e.latlng.lng]); });
     mapRef.current = map;
     const ro = new ResizeObserver(() => map.invalidateSize());

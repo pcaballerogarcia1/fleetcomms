@@ -6,6 +6,7 @@ import { useLeaflet } from "../use-leaflet.js";
 import { Cifra } from "../analisis/ui.jsx";
 import { coberturaTramos, colorCobertura, resumenCobertura } from "./cobertura.js";
 import { lineaDe } from "./callejero.js";
+import { capaFondo, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
 
 const num = (n, d = 0) => Number(n).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -18,8 +19,8 @@ export function PanelCobertura({ planes }) {
   useEffect(() => {
     if (!L || !divRef.current || !tramos.length) return;
     if (!mapRef.current) {
-      mapRef.current = L.map(divRef.current, { zoomControl: true, attributionControl: false });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { opacity: 0.6 }).addTo(mapRef.current);
+      mapRef.current = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: true })));
+      capaFondo(L, "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { opacity: 0.6 }).addTo(mapRef.current);
     }
     const map = mapRef.current;
     if (capaRef.current) map.removeLayer(capaRef.current);

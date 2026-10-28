@@ -8,6 +8,7 @@ import { useUltimo } from "../use-ultimo.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
 import { lineaDe } from "../viaria/callejero.js";
+import { capaDetalle, capaFondo, esOscuro, necesitaDetalle, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
 
 // ── POPUP HTML ────────────────────────────────────────────────────
 function makePopupHtml(marker, color) {
@@ -43,6 +44,7 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
   const selPolyRef    = useRef(null);
   const selPinsRef    = useRef([]);
   const recorridosRef = useRef(null); // trazados de líneas GTFS
+  const tileDetalleRef = useRef(null); // calles a mucho zoom (ver mapa-fondo.js)
   const tramosRef = useRef(null); // limpieza viaria: la línea de cada tramo de calle
   const [showStylePicker, setShowStylePicker] = useState(false);
   const currentStyle = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
@@ -388,11 +390,12 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     if (!divRef.current || mapRef.current) return;
     const L = window.L;
     if (!L) return;
-    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false })
+    const map = sinPrefijo(L.map(divRef.current, opcionesMapa({ zoomControl: true })))
       .setView([40.416, -3.703], 6);
     const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
-    tileRef.current = L.tileLayer(style.url).addTo(map);
-    if (style.labelsUrl) tileLabelsRef.current = L.tileLayer(style.labelsUrl).addTo(map);
+    tileRef.current = capaFondo(L, style.url).addTo(map);
+    if (style.labelsUrl) tileLabelsRef.current = capaFondo(L, style.labelsUrl, { attribution: "" }).addTo(map);
+    if (necesitaDetalle(style.url)) tileDetalleRef.current = capaDetalle(L, esOscuro(style.url)).addTo(map);
     mapRef.current = map;
     drawLayers();
   }, [drawLayers, mapStyle]);
@@ -404,10 +407,12 @@ export function MapaPlanning({ layers, depots = [], barrioColors = {}, mapStyle,
     const style = MAP_STYLES.find(s => s.key === mapStyle) ?? MAP_STYLES[0];
     if (tileRef.current) mapRef.current.removeLayer(tileRef.current);
     if (tileLabelsRef.current) { mapRef.current.removeLayer(tileLabelsRef.current); tileLabelsRef.current = null; }
-    tileRef.current = L.tileLayer(style.url).addTo(mapRef.current);
+    if (tileDetalleRef.current) { mapRef.current.removeLayer(tileDetalleRef.current); tileDetalleRef.current = null; }
+    if (necesitaDetalle(style.url)) tileDetalleRef.current = capaDetalle(L, esOscuro(style.url)).addTo(mapRef.current);
+    tileRef.current = capaFondo(L, style.url).addTo(mapRef.current);
     // Etiquetas (nombres de calles/barrios) por encima del fondo, si el
     // estilo las trae en una capa aparte (ver comentario en MAP_STYLES).
-    if (style.labelsUrl) tileLabelsRef.current = L.tileLayer(style.labelsUrl).addTo(mapRef.current);
+    if (style.labelsUrl) tileLabelsRef.current = capaFondo(L, style.labelsUrl, { attribution: "" }).addTo(mapRef.current);
     if (tileLabelsRef.current) tileLabelsRef.current.bringToBack();
     tileRef.current.bringToBack();
   }, [mapStyle]);

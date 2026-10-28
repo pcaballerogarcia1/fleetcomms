@@ -5,6 +5,7 @@ import { useUltimo } from "../use-ultimo.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
 import { lineaDe } from "../viaria/callejero.js";
+import { capaFondo, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
 
 // Componente base de botón con hover
 export const Btn = ({children, onClick, style={}, variant="primary", size="md", disabled=false, title=""}) => {
@@ -106,8 +107,8 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
     if(!divRef.current||mapRef.current)return;
     const L=window.L;
     const center=ubicaciones.length>0?[ubicaciones[0].lat,ubicaciones[0].lng]:[39.57,2.65];
-    const map=L.map(divRef.current,{zoomControl:true,attributionControl:false}).setView(center,14);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+    const map=sinPrefijo(L.map(divRef.current,opcionesMapa({zoomControl:true}))).setView(center,14);
+    capaFondo(L,"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
     mapRef.current=map;
     drawLayers();
   }
