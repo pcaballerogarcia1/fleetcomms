@@ -50,3 +50,20 @@ describe("callejero de limpieza viaria", () => {
     await expect(descargarCallejero([0, 0, 1, 1], {}, async () => ({ ok: false, status: 429 }))).rejects.toThrow(/ocupado/);
   });
 });
+
+describe("callejero desde el servidor", () => {
+  it("valida el rectángulo, prueba otro servidor si uno falla y quita lo que sobra", async () => {
+    const { rectanguloValido, descargarConEspejos, compactarTramos, marcadoresDeTramos } = await import("./callejero.js");
+    expect(rectanguloValido([40.4, -3.71, 40.42, -3.69])).toBe(true);
+    expect(rectanguloValido([40.4, -3.71, 40.6, -3.69])).toBe(false); // 22 km de alto
+    expect(rectanguloValido([40.42, -3.71, 40.4, -3.69])).toBe(false);
+    expect(rectanguloValido(["x", 1, 2, 3])).toBe(false);
+    const llamadas = [];
+    const fetchFn = async u => { llamadas.push(u); if (u.includes("a.test")) throw new TypeError("Failed to fetch"); return { ok: true, status: 200, json: async () => osm }; };
+    const t = await descargarConEspejos([40.4, -3.71, 40.42, -3.69], {}, fetchFn, ["https://a.test/i", "https://b.test/i"]);
+    expect(llamadas).toEqual(["https://a.test/i", "https://b.test/i"]);
+    const c = compactarTramos(t);
+    expect(c[0].campos).toBeUndefined();
+    expect(marcadoresDeTramos(c)[0]).toMatchObject({ calle: "Calle Mayor", tipo: "Calle", servicio: "Barrido manual", frecuencia: "L-X-V" });
+  });
+});

@@ -7,6 +7,8 @@
 // y Análisis trabajan con él igual que con un contenedor.
 
 export const OVERPASS = "https://overpass-api.de/api/interpreter";
+// otros servidores públicos de OpenStreetMap por si el primero no responde
+export const OVERPASS_ESPEJOS = [OVERPASS, "https://overpass.kumi.systems/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
 
 // Tipos de vía de OpenStreetMap que se barren (y su nombre en español)
 export const TIPOS_VIA = {
@@ -107,7 +109,7 @@ export function tramosDeOsm(osm, { maxM = 250, minM = 15, mPorHora = 1200, acera
       const m = puntoMedio(tr);
       const frecuencia = frecuencias[tipo] || "1/semana";
       out.push({
-        id: `osm-${el.id}-${i}`, nombre: todos.length > 1 ? `${nombre} (${i + 1})` : nombre, tipoVia: tipo,
+        id: `osm-${el.id}-${i}`, nombre: todos.length > 1 ? `${nombre} (${i + 1})` : nombre, calle: nombre, tipoVia: tipo,
         longitudM: Math.round(L), lat: +m.lat.toFixed(6), lng: +m.lng.toFixed(6),
         geom: simplificar(tr).flatMap(p => [+p.lat.toFixed(6), +p.lng.toFixed(6)]),
         duracion: minutosBarrido(L, { mPorHora, aceras: acerasTramo }), frecuencia,
@@ -120,16 +122,36 @@ export function tramosDeOsm(osm, { maxM = 250, minM = 15, mPorHora = 1200, acera
 
 /** Los tramos como puntos de una capa de Planificación (planos: lat, lng y una columna por dato) */
 export const marcadoresDeTramos = tramos => tramos.map(t => ({
-  lat: t.lat, lng: t.lng, nombre: t.nombre, calle: t.campos.calle, tipo: t.campos.tipo, metros: t.longitudM,
-  frecuencia: t.frecuencia, servicio: t.campos.servicio, duracion: t.duracion, tramo: t.id, geom: t.geom,
+  lat: t.lat, lng: t.lng, nombre: t.nombre, calle: t.calle || t.campos?.calle || t.nombre, tipo: TIPOS_VIA[t.tipoVia] || t.tipoVia || "", metros: t.longitudM,
+  frecuencia: t.frecuencia, servicio: t.campos?.servicio || "Barrido manual", duracion: t.duracion, tramo: t.id, geom: t.geom,
 }));
 
-/** Pide a Overpass las calles del rectángulo y las devuelve en tramos */
-export async function descargarCallejero(bbox, opciones = {}, fetchFn = globalThis.fetch) {
-  const r = await fetchFn(OVERPASS, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `data=${encodeURIComponent(consultaCalles(bbox, opciones.tipos))}` });
+/** Lo que manda el servidor: sin `campos` (se rehacen aquí) para que pese menos */
+export const compactarTramos = tramos => tramos.map(t => { const c = { ...t }; delete c.campos; return c; });
+
+/** Comprueba un rectángulo [sur, oeste, norte, este]: números, en orden y de como mucho `maxKm` de lado */
+export function rectanguloValido(b, maxKm = 12) {
+  if (!Array.isArray(b) || b.length !== 4 || !b.every(v => Number.isFinite(+v))) return false;
+  const [s, w, n, e] = b.map(Number);
+  if (s >= n || w >= e || Math.abs(s) > 90 || Math.abs(n) > 90 || Math.abs(w) > 180 || Math.abs(e) > 180) return false;
+  return distanciaM({ lat: s, lng: w }, { lat: n, lng: w }) <= maxKm * 1000 && distanciaM({ lat: s, lng: w }, { lat: s, lng: e }) <= maxKm * 1000;
+}
+
+/** Pide a un servidor de Overpass las calles del rectángulo y las devuelve en tramos */
+export async function descargarCallejero(bbox, opciones = {}, fetchFn = globalThis.fetch, url = OVERPASS) {
+  const r = await fetchFn(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `data=${encodeURIComponent(consultaCalles(bbox, opciones.tipos))}` });
   if (r.status === 429 || r.status === 504) throw new Error("El servidor de OpenStreetMap está ocupado; prueba en un minuto");
   if (!r.ok) throw new Error(`OpenStreetMap respondió con un error (${r.status})`);
   return tramosDeOsm(await r.json(), opciones);
+}
+
+/** Lo mismo probando varios servidores de OpenStreetMap seguidos (el primero que responda) */
+export async function descargarConEspejos(bbox, opciones = {}, fetchFn = globalThis.fetch, espejos = OVERPASS_ESPEJOS) {
+  let ultimo;
+  for (const url of espejos) {
+    try { return await descargarCallejero(bbox, opciones, fetchFn, url); } catch (e) { ultimo = e; }
+  }
+  throw ultimo || new Error("No se pudo conectar con OpenStreetMap");
 }
 
 /** La línea de un tramo como [[lat, lng]…] (para Leaflet), desde su geom plana */

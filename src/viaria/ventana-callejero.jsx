@@ -5,7 +5,8 @@ import { Loader2, MapPin, Search } from "lucide-react";
 import { C, font } from "../tema.js";
 import { BotonCerrar } from "../ui/cerrar.jsx";
 import { sitios } from "../concursos/distancias.js";
-import { TIPOS_POR_DEFECTO, TIPOS_VIA, descargarCallejero, marcadoresDeTramos, rectanguloDe } from "./callejero.js";
+import { TIPOS_POR_DEFECTO, TIPOS_VIA, marcadoresDeTramos, rectanguloDe } from "./callejero.js";
+import { pedirCallejero } from "./pedir.js";
 
 const RADIOS = [0.5, 1, 2, 3, 5];
 const num = (n, d = 0) => Number(n).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -31,7 +32,7 @@ export function VentanaCallejero({ onCrear, onCerrar }) {
   async function descargar() {
     setEstado({ cargando: true });
     try {
-      const tramos = await descargarCallejero(rectanguloDe(lugar.lat, lugar.lng, km), { tipos, mPorHora: +mPorHora || 1200, aceras: +aceras || 2 });
+      const tramos = await pedirCallejero(rectanguloDe(lugar.lat, lugar.lng, km), { tipos, mPorHora: +mPorHora || 1200, aceras: +aceras || 2 });
       setEstado({ tramos });
     } catch (e) { setEstado({ error: e.message || String(e) }); }
   }
