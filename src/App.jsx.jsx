@@ -218,7 +218,7 @@ export default function App(){
 
   return(
     <div style={S.page}>
-      <div style={{...S.header,background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"),borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
+      <div style={{...S.header,paddingTop:"calc(12px + env(safe-area-inset-top))",paddingLeft:"calc(20px + env(safe-area-inset-left))",paddingRight:"calc(20px + env(safe-area-inset-right))",background:tono("rgba(11,13,18,0.86)", "rgba(255,255,255,0.86)"),borderBottom:`1px solid ${C.border}`,backdropFilter:"blur(16px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <Logo size={26}/>
           <div style={{fontSize:15,fontWeight:650,color:C.text,letterSpacing:"-0.01em"}}>{TAB_TITLES[verDocs?"documentos":verAvisos?"avisos":tab]||tab}</div>
