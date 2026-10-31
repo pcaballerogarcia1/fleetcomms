@@ -1,0 +1,92 @@
+{
+ "C101": {
+  "distancia": 827.3,
+  "rutas": 10,
+  "factible": true,
+  "segundos": 60
+ },
+ "C105": {
+  "distancia": 827.3,
+  "rutas": 10,
+  "factible": true,
+  "segundos": 60
+ },
+ "R101": {
+  "distancia": 1637.7,
+  "rutas": 20,
+  "factible": true,
+  "segundos": 60
+ },
+ "R105": {
+  "distancia": 1355.3,
+  "rutas": 15,
+  "factible": true,
+  "segundos": 60
+ },
+ "R110": {
+  "distancia": 1068.0,
+  "rutas": 12,
+  "factible": true,
+  "segundos": 60
+ },
+ "R201": {
+  "distancia": 1143.2,
+  "rutas": 8,
+  "factible": true,
+  "segundos": 60
+ },
+ "RC101": {
+  "distancia": 1619.8,
+  "rutas": 15,
+  "factible": true,
+  "segundos": 60
+ },
+ "RC105": {
+  "distancia": 1513.7,
+  "rutas": 15,
+  "factible": true,
+  "segundos": 60
+ },
+ "RC201": {
+  "distancia": 1261.8,
+  "rutas": 9,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n101-k25": {
+  "distancia": 27591.0,
+  "rutas": 26,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n106-k14": {
+  "distancia": 26381.0,
+  "rutas": 14,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n125-k30": {
+  "distancia": 55695.0,
+  "rutas": 30,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n153-k22": {
+  "distancia": 21324.0,
+  "rutas": 23,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n200-k36": {
+  "distancia": 58932.0,
+  "rutas": 36,
+  "factible": true,
+  "segundos": 60
+ },
+ "X-n256-k16": {
+  "distancia": 18919.0,
+  "rutas": 17,
+  "factible": true,
+  "segundos": 60
+ }
+}

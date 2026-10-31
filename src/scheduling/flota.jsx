@@ -95,7 +95,7 @@ function FichaVehiculoCampos({ obj, setObj, selStyle }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 10 }}>
       {CAMPOS_FICHA_VEHICULO.map(c => (
-        <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: c.k === "autonomiaKm" ? C.blueText : C.muted, gridColumn: c.k === "notas" || c.k === "autonomiaKm" ? "1 / -1" : undefined }}>
+        <label key={c.k} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: c.k === "autonomiaKm" || c.k === "cargaMax" ? C.blueText : C.muted, gridColumn: c.k === "notas" || c.k === "autonomiaKm" || c.k === "cargaMax" ? "1 / -1" : undefined }}>
           {c.l}
           {c.tipo === "opciones" ? (
             <select value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })} style={{ ...selStyle, flex: "none", color: obj[c.k] ? C.text : C.dim }}>
@@ -104,7 +104,7 @@ function FichaVehiculoCampos({ obj, setObj, selStyle }) {
             </select>
           ) : (
             <input type={c.tipo === "fecha" ? "date" : "text"} inputMode={c.tipo === "decimal" ? "decimal" : undefined}
-              placeholder={c.k === "autonomiaKm" ? "sin límite — no se le darán rutas más largas" : ""}
+              placeholder={c.k === "autonomiaKm" ? "sin límite — no se le darán rutas más largas" : c.k === "cargaMax" ? "sin límite — no se le cargará más de esto en un viaje" : ""}
               value={obj[c.k] ?? ""} onChange={e => setObj({ ...obj, [c.k]: e.target.value })}
               style={{ ...selStyle, flex: "none", colorScheme: tono("dark", "light") }} />
           )}
@@ -275,6 +275,7 @@ export function TabVehiculos({ vehicles, loading, activeProject, orgId }) {
                   {v.turno && <span style={{ color: C.blueText }}>{v.turno}</span>}
                   {[v.marca, v.modelo].filter(Boolean).length > 0 && <span>{[v.marca, v.modelo].filter(Boolean).join(" ")}</span>}
                   {v.combustible && <span>{v.combustible}</span>}
+                  {Number(v.cargaMax) > 0 && <span style={{ color: C.blueText }} title="No se le carga más en un viaje">carga {Number(v.cargaMax).toLocaleString("es-ES")}</span>}
                   {Number(v.autonomiaKm) > 0 && <span style={{ color: C.green }} title="No se le dan rutas de más km al día">{/el[eé]ctric/i.test(v.combustible || "") ? <BatteryCharging size={12} style={{ verticalAlign: "-2px" }} /> : <Fuel size={12} style={{ verticalAlign: "-2px" }} />} {Number(v.autonomiaKm).toLocaleString("es-ES")} km</span>}
                   <AvisoFecha fecha={v.proximaITV} que="ITV" />
                   <AvisoFecha fecha={v.seguroVence} que="Seguro" />

@@ -1,0 +1,19 @@
+C101             827.3 vs    828.94 · -0.2 %  · 10 rutas (mejor 10) · PyVRP 827.3 (10 rutas) · 50.6 s
+C105             827.3 vs    828.94 · -0.2 %  · 10 rutas (mejor 10) · PyVRP 827.3 (10 rutas) · 50.6 s
+R101            1692.5 vs    1650.8 · +2.53 %  · 19 rutas (mejor 19) · PyVRP 1637.7 (20 rutas) · 82.7 s
+R105            1394.7 vs   1377.11 · +1.28 %  · 14 rutas (mejor 14) · PyVRP 1355.3 (15 rutas) · 73.3 s
+R110            1105.3 vs      1068 · +3.49 %  · 11 rutas (mejor 12; se puede con 10) · PyVRP 1068 (12 rutas) · 85.5 s
+R201            1248.4 vs   1252.37 · -0.32 %  · 4 rutas (mejor 4) · PyVRP 1143.2 (8 rutas) · 62.0 s
+RC101           1631.3 vs    1619.8 · +0.71 %  · 15 rutas (mejor 15; se puede con 14) · PyVRP 1619.8 (15 rutas) · 64.1 s
+RC105           1534.5 vs    1513.7 · +1.37 %  · 14 rutas (mejor 15; se puede con 13) · PyVRP 1513.7 (15 rutas) · 79.4 s
+RC201           1403.3 vs   1406.94 · -0.26 %  · 4 rutas (mejor 4) · PyVRP 1261.8 (9 rutas) · 84.1 s
+X-n101-k25       27591 vs     27591 · +0 %  · 26 rutas (mejor 26) · PyVRP 27591 (26 rutas) · 87.6 s
+X-n106-k14       26387 vs     26362 · +0.09 %  · 14 rutas (mejor 14) · PyVRP 26381 (14 rutas) · 91.8 s
+X-n125-k30       56030 vs     55539 · +0.88 %  · 30 rutas (mejor 30) · PyVRP 55695 (30 rutas) · 84.6 s
+X-n153-k22       21290 vs     21220 · +0.33 %  · 23 rutas (mejor 23) · PyVRP 21324 (23 rutas) · 97.2 s
+X-n200-k36       58933 vs     58578 · +0.61 %  · 36 rutas (mejor 36) · PyVRP 58932 (36 rutas) · 102.6 s
+X-n256-k16       19588 vs     18839 · +3.98 %  · 16 rutas (mejor 16) · PyVRP 18919 (17 rutas) · 97.9 s
+
+Media de la distancia a la mejor solución conocida:
+  Solomon (franjas y capacidad): Operanzia +0.93 % · PyVRP (60 s) +0.00 % · 0 con problemas · 3 vehículos de más en total
+  X de Uchoa (capacidad): Operanzia +0.98 % · PyVRP (60 s) +0.31 % · 0 con problemas

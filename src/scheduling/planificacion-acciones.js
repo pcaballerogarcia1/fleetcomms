@@ -21,7 +21,7 @@ import { ponerNombres } from "./nombres.js";
 import { enrichWithOSRM } from "./osrm.js";
 import { medirCarretera, textoCarretera } from "./carretera.js";
 import { cargarVecinos } from "./vecinos-guardados.js";
-import { fijarCarretera, fueraDeAutonomia } from "../vrp-engine.js";
+import { fijarCarretera, fueraDeAutonomia, fueraDeCapacidad } from "../vrp-engine.js";
 
 // La librería de Excel se descarga solo cuando se usa
 const loadXLSX = () => import("xlsx");
@@ -262,7 +262,8 @@ export async function runGenerate(ctx) {
     console.timeEnd("[PERF] vrp+autoscale");
     // las que no alcanza ningún vehículo con su autonomía (ficha del vehículo), marcadas para decirlo
     if (vr.unassigned?.length && vehiclesForVRP.some(v => Number(v.autonomiaKm) > 0)) {
-      vr = { ...vr, unassigned: vr.unassigned.map(t => (!t._fueraAutonomia && fueraDeAutonomia(t, vehiclesForVRP) ? { ...t, _fueraAutonomia: true } : t)) };
+      vr = { ...vr, unassigned: vr.unassigned.map(t => (!t._fueraAutonomia && fueraDeAutonomia(t, vehiclesForVRP) ? { ...t, _fueraAutonomia: true }
+        : !t._fueraCapacidad && fueraDeCapacidad(t, vehiclesForVRP) ? { ...t, _fueraCapacidad: true } : t)) };
     }
     // (sin copias exactas de un mismo bloque: red de seguridad, ver sinDuplicados)
     const { rows: vehicleScheduleRaw, quitadas: bloquesRepetidos } = sinDuplicados(vehiclesForSchedule.map((v, i) => ({

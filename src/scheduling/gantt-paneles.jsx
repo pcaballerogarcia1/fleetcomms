@@ -331,6 +331,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
             <span style={{ background: "rgba(242,109,109,0.12)", border: "1px solid rgba(242,109,109,0.3)", color: C.red, borderRadius: 12, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{unassigned.length}</span>
             <span style={{ fontSize: 10, color: C.dim }}>arrastra una parada a una fila para colocarla</span>
             {unassigned.some(t => t._fueraAutonomia) && <span style={{ fontSize: 10, color: C.amber }}>· {unassigned.filter(t => t._fueraAutonomia).length} no las alcanza ningún vehículo con su autonomía</span>}
+            {unassigned.some(t => t._fueraCapacidad) && <span style={{ fontSize: 10, color: C.amber }}>· {unassigned.filter(t => t._fueraCapacidad).length} no caben en ningún vehículo (su carga pasa de la carga máxima)</span>}
             <span style={{ fontSize: 10, color: C.dim, marginLeft: "auto" }}>{unassignedOpen ? "▲" : "▼"}</span>
           </button>
           {unassignedOpen && (
@@ -349,7 +350,7 @@ export function PieGantt({ dragging, jornadaStats, setDragging, setUnassignedOpe
                     draggable
                     onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ task, fromRowId: null }); }}
                     onDragEnd={() => setDragging(null)}
-                    title={task._fueraAutonomia ? "Ningún vehículo llega y vuelve a su base con su autonomía" : hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
+                    title={task._fueraAutonomia ? "Ningún vehículo llega y vuelve a su base con su autonomía" : task._fueraCapacidad ? `Su carga (${task.demanda}) no cabe en ningún vehículo` : hasWindow ? `Franja ${minToTime(task.windowStart % 1440)}–${minToTime((task.windowEnd ?? task.windowStart) % 1440)}` : label}
                     style={{
                       position: "relative", height: ROW_H - 22, minWidth: 60, background: color + "d0",
                       border: `1px solid ${color}`, borderRadius: 4, overflow: "visible", cursor: "grab",

@@ -8,6 +8,7 @@ import { loadLayerMarkers } from "../layer-store.js";
 import { idbGet, isJunkCoord } from "../planning/datos.js";
 import { isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { shiftForDay, timeToMin, turnoWindow } from "../vrp-engine.js";
+import { decimal } from "../vehiculo-ficha.js";
 
 // ── helpers for loading tasks from planning_layers ────────────────
 const BARRIO_KEYS_VRP = ["barri","barrio","barri_nom","sector","zona","zone","district",
@@ -26,6 +27,19 @@ export function extractFieldVRP(fields, keys) {
   return "";
 }
 const _vrpKeyCache = new WeakMap();
+// Columnas de Planificación que dicen cuánto se entrega o se recoge en la parada
+const COLUMNAS_DEMANDA = new Set(["demanda", "kg", "kilos", "peso", "peso kg", "palets", "pales", "palet", "pale", "bultos", "cajas", "unidades", "carga", "cantidad"]);
+const normCol = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+/** La demanda de una parada (número) desde sus columnas, o 0 */
+export function demandaDeCampos(fields) {
+  for (const [k, v] of Object.entries(fields || {})) {
+    if (!COLUMNAS_DEMANDA.has(normCol(k))) continue;
+    const n = decimal(v); // a la española: «1.200», «12,5»
+    if (n !== "" && n > 0) return n;
+  }
+  return 0;
+}
+
 export async function loadTasksFromLayers(projectId) {
   const snap = await getDocs(
     query(collection(db, "planning_layers"), where("projectId", "==", projectId))
@@ -69,6 +83,9 @@ export async function loadTasksFromLayers(projectId) {
       // la del Timetable manda sobre ella, y esta sobre la de por defecto
       const durCapa = +fields.duracion;
       if (durCapa > 0) tarea._duracionCapa = durCapa;
+      // lo que se entrega o se recoge (kg, palés, cajas…): contra la carga máxima del vehículo
+      const dem = demandaDeCampos(fields);
+      if (dem > 0) tarea.demanda = dem;
       allTasks.push(tarea);
     });
   });

@@ -1,7 +1,7 @@
 // La ficha de cada vehículo: los datos que se guardan con él (además de
 // nombre, matrícula, tipo, capacidad y turno). La autonomía (km que hace en un
-// día con una carga o un depósito) la respeta el Scheduling: ninguna ruta del
-// vehículo pasa de ahí. La usan el formulario de Recursos y la subida desde
+// día con una carga o un depósito) y la carga máxima por viaje (kg, palés…) las
+// respeta el Scheduling: ninguna ruta del vehículo pasa de ahí. La usan el formulario de Recursos y la subida desde
 // Excel. Sin React ni Firebase.
 import { fechaISO } from "./trabajador-ficha.js";
 
@@ -18,6 +18,7 @@ export const CAMPOS_FICHA_VEHICULO = [
   { k: "propiedad", l: "Propiedad", sin: ["propiedad", "regimen", "tenencia"], tipo: "opciones", opciones: PROPIEDAD },
   { k: "combustible", l: "Combustible", sin: ["combustible", "energia", "carburante", "motorizacion", "propulsion"], tipo: "opciones", opciones: COMBUSTIBLES },
   { k: "autonomiaKm", l: "Autonomía (km al día, con una carga o depósito)", sin: ["autonomia", "autonomia km", "km autonomia", "rango", "range"], tipo: "decimal" },
+  { k: "cargaMax", l: "Carga máxima por viaje (kg, palés, cajas… en la misma unidad que la demanda de las paradas)", sin: ["carga maxima", "carga util", "carga util kg", "carga maxima kg", "palets", "pales", "n palets", "numero de palets", "carga por viaje"], tipo: "decimal" },
   { k: "consumo", l: "Consumo (litros o kWh cada 100 km)", sin: ["consumo", "consumo 100 km", "consumo l 100 km", "consumo kwh 100 km", "l 100 km", "kwh 100 km"], tipo: "decimal" },
   { k: "deposito", l: "Depósito o batería (litros o kWh)", sin: ["deposito", "deposito l o kwh", "deposito o bateria", "capacidad deposito", "bateria", "capacidad bateria", "kwh"], tipo: "decimal" },
   { k: "mma", l: "MMA (kg)", sin: ["mma", "masa maxima", "peso maximo", "mma kg"], tipo: "decimal" },
