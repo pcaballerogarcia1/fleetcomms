@@ -74,7 +74,7 @@ async function resolver({ coords, deposito, clientes, capacidad, ventanas, servi
   const salida = r0.unassigned.length ? await conMejora("autoscale", await autoScaleFleet(tareas, vehs, cons), cons) : { result: await conMejora("generate", r0, cons) };
   const r = salida.result;
   const rutas = r.schedule.map(f => f.assignments.filter(esParada).sort((a, b) => a._start - b._start).map(a => deVuelta.get(clave(a)))).filter(x => x.length);
-  return { rutas, sinAsignar: r.unassigned.length, segundos: (Date.now() - t0) / 1000, fases: `mejora ${r.mejora?.seg ?? "-"} s · sisr ${r.sisr?.seg ?? "-"} s (${r.sisr?.vueltas ?? 0} vueltas)` };
+  return { rutas, sinAsignar: r.unassigned.length, segundos: (Date.now() - t0) / 1000, fases: `mejora ${r.mejora?.seg ?? "-"} s ${JSON.stringify(r.mejora?.antes)}→${JSON.stringify(r.mejora?.despues)} · sisr ${r.sisr?.seg ?? "-"} s (${r.sisr?.vueltas ?? 0} vueltas) ${Math.round(r.sisr?.antes?.conduccion)}→${Math.round(r.sisr?.despues?.conduccion)}${r.sisr?.motivo ? " " + r.sisr.motivo : ""}` };
 }
 
 function medir(rutas, coords, deposito, dist) {

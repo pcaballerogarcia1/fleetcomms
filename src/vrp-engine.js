@@ -269,6 +269,38 @@ export function cargaDelDia(row, dayOffset, sin = null) {
   for (const a of row?.assignments || []) if (a !== sin && !a._travel && !a._break && !a._wait && a._start >= desde && a._start < hasta) c += demandaDe(a);
   return c;
 }
+/** Paradas que ya hace `row` en su jornada del día que empieza en `dayOffset` (sin contar `sin`), para el tope de paradas */
+export function paradasDelDia(row, dayOffset, sin = null) {
+  const [desde, hasta] = rangoJornada(row, dayOffset);
+  let n = 0;
+  for (const a of row?.assignments || []) if (a !== sin && !a._travel && !a._break && !a._wait && a._start >= desde && a._start < hasta) n++;
+  return n;
+}
+/**
+ * Quita las pausas que se quedaron al final de una jornada sin ninguna parada
+ * detrás (el reparto la mete antes de probar la siguiente parada, y si esa ya
+ * no cabe, se quedaba): no hacen falta y retrasaban la vuelta a la base, que
+ * podía acabar pasado el fin de turno. La vuelta se adelanta lo que duraba.
+ */
+export function quitarPausasFinales(row) {
+  const items = [...(row.assignments || [])].sort((a, b) => a._start - b._start);
+  let cambio = false;
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i];
+    if (!p?._break) continue;
+    const dia = diaJornada(row, p._start);
+    let j = i + 1, hayParada = false;
+    for (; j < items.length && diaJornada(row, items[j]._start) === dia; j++) {
+      if (!items[j]._travel && !items[j]._wait && !items[j]._break) { hayParada = true; break; }
+    }
+    if (hayParada) continue;
+    const d = p._end - p._start;
+    for (let q = i + 1; q < j; q++) items[q] = { ...items[q], _start: items[q]._start - d, _end: items[q]._end - d };
+    items.splice(i, 1); i--;
+    cambio = true;
+  }
+  if (cambio) row.assignments = items;
+}
 /** ¿Ninguna parada cabe en ningún vehículo? (su demanda pasa de la carga máxima de todos) */
 export function fueraDeCapacidad(task, resources) {
   const q = demandaDe(task);
@@ -276,7 +308,7 @@ export function fueraDeCapacidad(task, resources) {
   return resources.every(r => cargaMaxDe(r) < q);
 }
 
-export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
+export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0, maxStops = 0) {
   const sh = shiftForDay(row, Math.floor(dayOffset / 1440));
   if (!sh) return []; // ese día no trabaja (cuadrante de Rostering)
   const dayStart = dayOffset + sh.start;
@@ -288,6 +320,7 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
     .filter(a => a._start >= dayStart && a._start < Math.max(dayEnd, dayOffset + 1440))
     .sort((a, b) => a._start - b._start);
   const stops = dayItems.filter(a => a !== task && !a._travel && !a._break && !a._wait);
+  if (maxStops > 0 && stops.length >= maxStops) return []; // ya hace las paradas máximas ese día
   const hasBreakIn = (from, to) => dayItems.some(a => a._break && a._start >= from && a._start < to);
   const shiftBoundaries = sh.breaks.map(b => b + dayOffset).filter(b => b > dayStart && b < dayEnd);
   const crossesShiftBoundary = (from, to) => shiftBoundaries.some(b => b > from && b < to);
@@ -344,11 +377,44 @@ export function computeCandidateSlots(task, row, dayOffset, maxShiftMin = 0) {
   return slots;
 }
 
+// Los viajes que cierran el hueco que deja una parada al quitarla de su
+// jornada: entre la de antes y la de después; y si era la primera, de la base
+// a la nueva primera; si era la última, de la nueva última de vuelta a la base
+// (o a la primera parada, si va y vuelve sin base). Sin estos dos últimos, la
+// jornada se quedaba sin la salida o sin la vuelta: menos km de los de verdad,
+// y lo siguiente que se metía podía pasarse de la autonomía del vehículo.
+// Con ida y vuelta y un relevo entre las dos (`cortes`), no se va directo: se
+// vuelve a la base para el relevo y se sale otra vez.
+function viajesDeCierre(row, origPrev, origNext, dayStart, dayStops, circular, cortes = []) {
+  const viaje = (a, b, ini, extra) => {
+    if (!a || !b || !hasCoords(a.lat, a.lng) || !hasCoords(b.lat, b.lng)) return null;
+    const km = kmRuta(+a.lat, +a.lng, +b.lat, +b.lng);
+    if (km < 0.05) return null;
+    const min = Math.max(1, Math.ceil(minutosRuta(km)));
+    return { _travel: true, _start: ini(min), _end: ini(min) + min, duracion: min, km: +km.toFixed(3), ...extra };
+  };
+  const base = hasCoords(row.depotLat, row.depotLng) ? { lat: +row.depotLat, lng: +row.depotLng } : null;
+  if (origPrev && origNext) {
+    const corte = circular && base ? cortes.find(c => c > origPrev._end && c < origNext._start) : undefined;
+    if (corte === undefined) return [viaje(origPrev, origNext, () => origPrev._end, {})].filter(Boolean);
+    return [
+      viaje(origPrev, base, () => origPrev._end, { _depot_return: true }),
+      viaje(base, origNext, min => Math.max(corte, origNext._start - min), { _depot_exit: true }),
+    ].filter(Boolean);
+  }
+  if (!origPrev && origNext && base) return [viaje(base, origNext, min => Math.max(dayStart, origNext._start - min), { _depot_exit: true })].filter(Boolean);
+  if (origPrev && !origNext) {
+    const ancla = base || (circular ? dayStops[0] : null);
+    if (ancla && ancla !== origPrev) return [viaje(origPrev, ancla, () => origPrev._end, { _depot_return: true })].filter(Boolean);
+  }
+  return [];
+}
+
 // Aplica un movimiento ya validado por computeCandidateSlots. Devuelve los
 // nuevos arrays de assignments para la fila origen y destino (quita la
 // tarea y cierra su hueco antiguo con un viaje directo; la inserta en el
 // hueco elegido con sus nuevos bloques de viaje/espera alrededor).
-export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
+export function applyTaskMove(task, fromRow, toRow, slot, dayOffset, circular = false) {
   const sameRow = (fromRow._id || fromRow.id) === (toRow._id || toRow.id);
   const [f0, f1] = rangoJornada(fromRow, dayOffset), [t0, t1] = rangoJornada(toRow, dayOffset);
   const dayS = a => a._start >= f0 && a._start < f1;   // jornada de la fila de origen
@@ -365,17 +431,9 @@ export function applyTaskMove(task, fromRow, toRow, slot, dayOffset) {
   const gapStart = origPrev ? origPrev._end   : origDayStart;
   const gapEnd   = origNext ? origNext._start : origDayEnd;
 
-  let closingBlock = null;
-  if (origPrev && origNext) {
-    const km = kmRuta(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
-    if (km >= 0.05) {
-      const min = Math.max(1, Math.ceil(minutosRuta(km)));
-      closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + min, duracion: min, km: +km.toFixed(3) };
-    }
-  }
   const newFromAssignments = fromItems
     .filter(a => a !== task && !(dayS(a) && a._start >= gapStart && a._start < gapEnd))
-    .concat(closingBlock ? [closingBlock] : []);
+    .concat(viajesDeCierre(fromRow, origPrev, origNext, origDayStart, fromDayStops, circular, (fromSh.breaks || []).map(b => b + dayOffset)));
 
   const movedTask = { ...task, _start: slot.arrival, _end: slot.taskEnd };
   const newBlocks = [];
@@ -1254,6 +1312,7 @@ export async function generateScenario(tasks, resources, constraints) {
       const dOff = bDay * 1440;
       let kmB = autB < Infinity ? kmDelDia(res, dOff) : 0;
       let cargaB = cargaDelDia(res, dOff);
+      let nB = maxStops > 0 ? paradasDelDia(res, dOff) : 0; // tope de paradas del día
       const bSh  = shiftForDay(res, bDay);
       if (!bSh) continue; // ese día no trabaja
       const dEnd = bSh.end + dOff;
@@ -1298,6 +1357,7 @@ export async function generateScenario(tasks, resources, constraints) {
             if (kmB + tKm + vuelta > autB) { pi++; continue; }
           }
           if (cargaB + demandaDe(task) > capB) { pi++; continue; } // no cabe en el camión
+          if (maxStops > 0 && nB >= maxStops) break; // tope de paradas: ninguna más ese día
 
           if (tMin > 0) {
             const blk = { _travel: true, _start: cur, _end: cur + tMin, duracion: tMin, km: +tKm.toFixed(3) };
@@ -1311,7 +1371,7 @@ export async function generateScenario(tasks, resources, constraints) {
             cur += tWait;
           }
           res.assignments.push({ ...task, _start: cur, _end: cur + dur });
-          cur += dur; sinceB += dur; cargaB += demandaDe(task);
+          cur += dur; sinceB += dur; cargaB += demandaDe(task); nB++;
           if (hasCoords(task.lat, task.lng)) { lLat = +task.lat; lLng = +task.lng; }
           if (circular && !eDepot && !anchor) anchor = { lat: lLat, lng: lLng };
           sortedQueues[i].splice(pi, 1); // remove assigned task; pi stays (next shifts down)
@@ -1426,7 +1486,7 @@ export async function generateScenario(tasks, resources, constraints) {
             // destino — se filtra a solo los huecos que caen DENTRO del
             // tramo infra-cargado, para no colar la tarea en otro tramo
             // (p.ej. la mañana) sin querer.
-            const slots = computeCandidateSlots(t, under.res, under.seg.dayOffset, maxShiftMin)
+            const slots = computeCandidateSlots(t, under.res, under.seg.dayOffset, maxShiftMin, maxStops)
               .filter(s => s.arrival >= under.seg.segStart && s.taskEnd <= under.seg.segEnd);
             if (!slots.length) continue;
             const slot = slots.reduce((a, b) => b.kmDelta < a.kmDelta ? b : a);
@@ -1434,7 +1494,7 @@ export async function generateScenario(tasks, resources, constraints) {
           }
         }
         if (bestMove) {
-          const { newFromAssignments, newToAssignments } = applyTaskMove(bestMove.task, bestMove.fromRow, under.res, bestMove.slot, under.seg.dayOffset);
+          const { newFromAssignments, newToAssignments } = applyTaskMove(bestMove.task, bestMove.fromRow, under.res, bestMove.slot, under.seg.dayOffset, circular);
           bestMove.fromRow.assignments = newFromAssignments;
           bestMove.fromRow.totalKm = newFromAssignments.reduce((s, a) => s + (a._travel ? (a.km || 0) : 0), 0);
           under.res.assignments = newToAssignments;
@@ -1473,6 +1533,7 @@ export async function generateScenario(tasks, resources, constraints) {
         let kmM     = autM < Infinity ? kmDelDia(res, mopDay * 1440) : 0;
         const capM  = cargaMaxDe(res);
         let cargaM  = cargaDelDia(res, mopDay * 1440); // lo que ya lleva si sigue un día empezado
+        let nM      = maxStops > 0 ? paradasDelDia(res, mopDay * 1440) : 0; // y las paradas que ya hace
         const mSh   = shiftForDay(res, mopDay);
         if (!mSh) { mopSkippedOff = true; continue; }
         const depot = (res.depotLat && res.depotLng)
@@ -1556,6 +1617,7 @@ export async function generateScenario(tasks, resources, constraints) {
             const vueltaM = autM < Infinity && anchor && hasCoords(task.lat, task.lng) ? kmRuta(+task.lat, +task.lng, anchor.lat, anchor.lng) : 0;
             const fitsAut = kmM + travelKm + vueltaM <= autM; // autonomía del vehículo
             const fitsCarga = cargaM + demandaDe(task) <= capM; // carga máxima del vehículo
+            if (maxStops > 0 && nM >= maxStops) break; // tope de paradas: este vehículo ya no hace más ese día
             if (!fitsShift || !fitsSeg || !fitsAut || !fitsCarga) {
               pi++; // skip this task for now; it stays in pool for later vehicles/days
               continue;
@@ -1574,7 +1636,7 @@ export async function generateScenario(tasks, resources, constraints) {
               cursor += wait;
             }
             res.assignments.push({ ...task, _start: cursor, _end: cursor + dur });
-            cursor += dur; sinceBreak += dur; cargaM += demandaDe(task);
+            cursor += dur; sinceBreak += dur; cargaM += demandaDe(task); nM++;
             if (hasCoords(task.lat, task.lng)) { lastLat = +task.lat; lastLng = +task.lng; }
             if (circular && !depot && !anchor) anchor = { lat: lastLat, lng: lastLng };
             pool.splice(pi, 1); // remove from pool; pi now points to next element
@@ -1642,7 +1704,7 @@ export async function generateScenario(tasks, resources, constraints) {
         daysUsedSet.add(0);
         for (const d of daysUsedSet) {
           const dOff = d * 1440;
-          for (const slot of computeCandidateSlots(task, res, dOff, maxShiftMin)) {
+          for (const slot of computeCandidateSlots(task, res, dOff, maxShiftMin, maxStops)) {
             if (slot.kmDelta < bestKm) { bestKm = slot.kmDelta; best = { i, slot }; bestDayOffset = dOff; }
           }
         }
@@ -1669,17 +1731,9 @@ export async function generateScenario(tasks, resources, constraints) {
       const origDayEnd   = dayOffset + rSh.end;
       const gapStart = origPrev ? origPrev._end : origDayStart;
       const gapEnd   = origNext ? origNext._start : origDayEnd;
-      let closingBlock = null;
-      if (origPrev && origNext) {
-        const cKm = kmRuta(origPrev.lat, origPrev.lng, origNext.lat, origNext.lng);
-        if (cKm >= 0.05) {
-          const cMin = Math.max(1, Math.ceil(minutosRuta(cKm)));
-          closingBlock = { _travel: true, _start: origPrev._end, _end: origPrev._end + cMin, duracion: cMin, km: +cKm.toFixed(3) };
-        }
-      }
       return items
         .filter(a => a !== task && !(dayS(a) && a._start >= gapStart && a._start < gapEnd))
-        .concat(closingBlock ? [closingBlock] : []);
+        .concat(viajesDeCierre(res, origPrev, origNext, origDayStart, dayStops, circular, (rSh.breaks || []).map(b => b + dayOffset)));
     }
 
     // Reparación por DESALOJO — solo para huérfanas con franja horaria que
@@ -1721,7 +1775,7 @@ export async function generateScenario(tasks, resources, constraints) {
 
           for (const { a: evictee } of candidates) {
             const withoutEvictee = removeFromRow(res, evictee, dOff);
-            const slots = computeCandidateSlots(task, { ...res, assignments: withoutEvictee }, dOff, maxShiftMin);
+            const slots = computeCandidateSlots(task, { ...res, assignments: withoutEvictee }, dOff, maxShiftMin, maxStops);
             if (!slots.length) continue;
             const slot = slots.reduce((a2, b2) => b2.kmDelta < a2.kmDelta ? b2 : a2);
 
@@ -1798,6 +1852,7 @@ export async function generateScenario(tasks, resources, constraints) {
             const prevEnd = prev ? prev._end : dayStart;
             const prevLat = prev ? prev.lat : depotLat;
             const prevLng = prev ? prev.lng : depotLng;
+            if (crosses(prevEnd, next._start)) continue; // el hueco entero en el mismo turno (con relevo, la de después es del otro conductor)
 
             const inKm  = kmRuta(prevLat, prevLng, task.lat, task.lng);
             const inMin = inKm >= 0.05 ? Math.max(1, Math.ceil(minutosRuta(inKm))) : 0;
@@ -1814,6 +1869,7 @@ export async function generateScenario(tasks, resources, constraints) {
             if (carry <= 0) continue; // cabría sin empujar nada — eso ya lo cubre tryInsertOrphan/tryEvictAndInsertOrphan
             if (autonomiaDe(res) < Infinity && kmDelDia(res, dOff) + inKm + outKm - kmRuta(prevLat, prevLng, next.lat, next.lng) > autonomiaDe(res)) continue; // autonomía
             if (cargaMaxDe(res) < Infinity && cargaDelDia(res, dOff, task) + demandaDe(task) > cargaMaxDe(res)) continue; // carga máxima
+            if (maxStops > 0 && paradasDelDia(res, dOff, task) >= maxStops) continue; // tope de paradas
 
             const tailItems = dayItems.slice(idxInDay.get(next));
             if (tailItems.some(a => a._break)) continue;
@@ -1922,11 +1978,13 @@ export async function generateScenario(tasks, resources, constraints) {
     let ultimoDia = 0;
     for (const res of state) for (const a of res.assignments) if (!a._travel && !a._wait && !a._break) ultimoDia = Math.max(ultimoDia, diaJornada(res, a._start) + 1);
     const daysUsed = Math.max(1, day, ultimoDia);
+    for (const res of state) quitarPausasFinales(res);
     return { schedule: state, unassigned: stillUnassigned, daysUsed };
   }
 
   await rebalanceLoad();
   const daysUsed = Math.max(1, day);
+  for (const res of state) quitarPausasFinales(res);
   return { schedule: state, unassigned: [], daysUsed };
 }
 

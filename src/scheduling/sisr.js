@@ -161,11 +161,18 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     r.final = llegada(r.depotSitio, fin);
   }
   for (const x of tareas) x.rara = x.sitio < 0 || !!x.t._dayWindows; // sin coordenadas o con franjas por día: con simular
+  const nodos = new Map(); // el trozo de cada parada en cada día (no cambia)
   const nodo = (i, off) => {
-    const x = tareas[i], t = x.t;
-    return t.windowStart != null
-      ? trozoParada(x.sitio, x.dur, t.windowStart + off, (t.windowEnd ?? t.windowStart) + off, x.q, x.miembros.length)
-      : trozoParada(x.sitio, x.dur, null, null, x.q, x.miembros.length);
+    const k = off * 1e6 + i;
+    let n = nodos.get(k);
+    if (!n) {
+      const x = tareas[i], t = x.t;
+      n = t.windowStart != null
+        ? trozoParada(x.sitio, x.dur, t.windowStart + off, (t.windowEnd ?? t.windowStart) + off, x.q, x.miembros.length)
+        : trozoParada(x.sitio, x.dur, null, null, x.q, x.miembros.length);
+      nodos.set(k, n);
+    }
+    return n;
   };
   const rapida = (r, seq) => r.rapida && !seq.some(i => tareas[i].rara);
 
@@ -199,7 +206,9 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     if (!s.ok) return { ok: false };
     return { ok: true, travel: s.conduccion, km: s.km, carga, lenta: true };
   }
-  const coste = st => st.sinRecoger.length * SISR.costeSinRecoger + st.turnos * SISR.costeTurno + st.travel;
+  // las sin recoger se cuentan por contenedores, no por grupos: dejar un grupo de 3 por meter dos sueltos es peor
+  const pendientes = lista => lista.reduce((n, i) => n + tareas[i].miembros.length, 0);
+  const coste = st => pendientes(st.sinRecoger) * SISR.costeSinRecoger + st.turnos * SISR.costeTurno + st.travel;
 
   // estado: secuencias por ruta + sus medidas
   const medidas = new Map();
@@ -209,9 +218,10 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     else medidas.set(r, e);
   }
   const libres = vivas.filter(r => !r.fija);
-  const totales = st => ({ ...st, turnos: libres.filter(r => st.seqs.get(r).length).length, travel: libres.reduce((s, r) => s + (st.med.get(r)?.travel || 0), 0) });
+  // (una ruta que no cuadra pesa muchísimo: nunca puede parecer la mejor)
+  const totales = st => ({ ...st, turnos: libres.filter(r => st.seqs.get(r).length).length, travel: libres.reduce((s, r) => { const m = st.med.get(r); return s + (m?.ok === false ? SISR.costeSinRecoger : m?.travel || 0); }, 0) });
   let actual = totales({ seqs: new Map(libres.map(r => [r, r.seq])), med: new Map(libres.map(r => [r, medidas.get(r)])), sinRecoger: sinRecoger0 });
-  const antes = { sinRecoger: actual.sinRecoger.length, turnos: actual.turnos, conduccion: actual.travel };
+  const antes = { sinRecoger: pendientes(actual.sinRecoger), turnos: actual.turnos, conduccion: actual.travel };
   let mejor = actual;
   const rutaDe = st => { const m = new Map(); for (const r of libres) for (const i of st.seqs.get(r)) m.set(i, r); return m; };
 
@@ -221,6 +231,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   function recolocar(st0, quitadas, prohibida = null) {
     const st = { ...st0, seqs: new Map(st0.seqs), med: new Map(st0.med) }; // sin tocar la solución de la que parte
     const orden = [...quitadas];
+    if (!orden.length) return totales(st);
     const modo = rnd();
     if (modo < 0.4) orden.sort(() => rnd() - 0.5);
     else if (modo < 0.7) orden.sort((a, b) => dur(b) - dur(a));
@@ -238,11 +249,11 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
         const s = tareas[i].sitio;
         const extraTurno = n ? 0 : SISR.costeTurno;
         // rápido (sin pausas ni relevos): cada hueco se comprueba juntando trozos (tramos.js)
-        if (rapida(r, seq) && !tareas[i].rara) {
-          if (cons.maxStops > 0 && cuantas(seq) + tareas[i].miembros.length > cons.maxStops) continue;
-          const mm = m?.P ? m : evaluar(r, seq);
+        let mm = m;
+        if (r.rapida && !mm?.P && !mm?.lenta) { mm = evaluar(r, seq); if (mm.ok) st.med.set(r, mm); }
+        if (mm?.P && !tareas[i].rara) {
           if (!mm.ok) continue;
-          if (mm !== m) st.med.set(r, mm);
+          if (cons.maxStops > 0 && cuantas(seq) + tareas[i].miembros.length > cons.maxStops) continue;
           if ((mm.carga || 0) + tareas[i].q > r.cap + 1e-9) continue; // no cabe en el camión
           const nd = nodo(i, r.off);
           for (let p = 0; p <= n; p++) {
@@ -294,20 +305,23 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   // seguidas, cambiar las colas de dos rutas o dar la vuelta a un trozo. Cada
   // cambio entre rutas se comprueba juntando trozos (tramos.js): miles en
   // milisegundos. Se queda con el primero que ahorra y sigue hasta que ninguno ahorra.
-  function pulir(st0, hasta = t0 + tiempoMs) {
+  // Con `foco` (las paradas que se acaban de recolocar), solo alrededor de
+  // ellas: pulirlo todo en cada vuelta deja dar muy pocas vueltas (con miles de
+  // paradas, o tras quitar un turno) y la búsqueda se queda atascada.
+  function pulir(st0, foco = null, hasta = t0 + tiempoMs) {
     const st = { ...st0, seqs: new Map(st0.seqs), med: new Map(st0.med) };
-    const donde = new Map();
-    for (const r of libres) for (const i of st.seqs.get(r)) donde.set(i, r);
-    const medDe = r => { let m = st.med.get(r); if (!m?.P) { m = evaluar(r, st.seqs.get(r)); st.med.set(r, m); } return m; };
-    const usable = r => !cerradas.has(r) && rapida(r, st.seqs.get(r));
+    const donde = new Map(), pos = new Map(); // la ruta de cada parada y su posición en ella
+    for (const r of libres) st.seqs.get(r).forEach((i, k) => { donde.set(i, r); pos.set(i, k); });
+    const medDe = r => { let m = st.med.get(r); if (!m?.P && !m?.lenta) { m = evaluar(r, st.seqs.get(r)); st.med.set(r, m); } return m; };
+    const usable = r => !cerradas.has(r) && !!medDe(r).P;
     const cabe = (r, x) => aTiempo(x) && x.km <= r.aut + 1e-9 && x.q <= r.cap + 1e-9 && !(cons.maxStops > 0 && x.c > cons.maxStops);
-    const poner = (r, seq) => { const e = evaluar(r, seq); if (!e.ok) return false; st.seqs.set(r, seq); st.med.set(r, e); for (const i of seq) donde.set(i, r); return true; };
+    const poner = (r, seq) => { const e = evaluar(r, seq); if (!e.ok) return false; st.seqs.set(r, seq); st.med.set(r, e); seq.forEach((i, k) => { donde.set(i, r); pos.set(i, k); }); return true; };
     // dos rutas a la vez: si la segunda no cuadra al rehacerla, se deja la primera como estaba
     const ponerDos = (ru, nu, rv, nv) => {
       const su = st.seqs.get(ru), mu = st.med.get(ru);
       if (!poner(ru, nu)) return false;
       if (poner(rv, nv)) return true;
-      st.seqs.set(ru, su); st.med.set(ru, mu); for (const i of su) donde.set(i, ru);
+      st.seqs.set(ru, su); st.med.set(ru, mu); su.forEach((i, k) => { donde.set(i, ru); pos.set(i, k); });
       return false;
     };
     const sitioDe = i => tareas[i].sitio;
@@ -320,9 +334,9 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     // entre dos rutas: con los trozos de antes (P) y de después (Q) de cada parada
     function entre(u, v, ru, rv) {
       const su = st.seqs.get(ru), sv = st.seqs.get(rv);
-      const a = su.indexOf(u), b = sv.indexOf(v);
+      const a = pos.get(u), b = pos.get(v);
       const mu = medDe(ru), mv = medDe(rv);
-      if (a < 0 || b < 0 || !mu.ok || !mv.ok) return false;
+      if (!mu.ok || !mv.ok) return false;
       const { P: Pu, Q: Qu } = mu, { P: Pv, Q: Qv } = mv;
       const us = sitioDe(u), vs = sitioDe(v), pu = Pu[a].l, nu = Qu[a + 1].f, pv = Pv[b].l, nv = Qv[b + 1].f;
       const vaciaU = su.length === 1 ? -SISR.costeTurno : 0;
@@ -366,20 +380,20 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     const conducir = (r, seq) => { let prev = r.depotSitio, t = 0; for (const i of seq) { t += tt(prev, tareas[i].sitio); prev = tareas[i].sitio; } return t + tt(prev, r.depotSitio); };
     function dentro(u, v, r) {
       const s = st.seqs.get(r), m = medDe(r);
-      const a = s.indexOf(u), b = s.indexOf(v);
-      if (a < 0 || b < 0 || !m.ok) return false;
+      const a = pos.get(u), b = pos.get(v);
+      if (!m.ok) return false;
       // lo que ahorra cada cambio se sabe al momento (solo se rehace la ruta si ahorra)
       const us = sitioDe(u), vs = sitioDe(v), pu = m.P[a].l, nu = m.Q[a + 1].f, pv = m.P[b].l, nv = m.Q[b + 1].f;
       const quitarU = tt(pu, nu) - tt(pu, us) - tt(us, nu);
       const sinU = () => [...s.slice(0, a), ...s.slice(a + 1)];
       // u detrás de v
       if (b + 1 !== a && quitarU + tt(vs, us) + tt(us, nv) - tt(vs, nv) < -1e-6) {
-        const x = sinU(), bb = x.indexOf(v);
+        const x = sinU(), bb = b > a ? b - 1 : b;
         if (poner(r, [...x.slice(0, bb + 1), u, ...x.slice(bb + 1)])) return true;
       }
       // u delante de v
       if (b - 1 !== a && quitarU + tt(pv, us) + tt(us, vs) - tt(pv, vs) < -1e-6) {
-        const x = sinU(), bb = x.indexOf(v);
+        const x = sinU(), bb = b > a ? b - 1 : b;
         if (poner(r, [...x.slice(0, bb), u, ...x.slice(bb)])) return true;
       }
       // dar la vuelta al trozo entre las dos, para que u siga con v (o v con u)
@@ -394,7 +408,12 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
       return false;
     }
 
-    const orden = [...donde.keys()];
+    let orden = [...donde.keys()];
+    if (foco) {
+      const zona = new Set();
+      for (const i of foco) { zona.add(i); for (let k = 0; k < Math.min(5, vecinas[i].length); k++) zona.add(vecinas[i][k]); }
+      orden = [...zona].filter(i => donde.has(i));
+    }
     for (let k = orden.length - 1; k > 0; k--) { const j = Math.floor(rnd() * (k + 1)); [orden[k], orden[j]] = [orden[j], orden[k]]; }
     let algo = true, pasadas = 0;
     while (algo && pasadas++ < 50 && Date.now() < hasta) {
@@ -432,17 +451,23 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
       if (pos < 0) continue;
       const l = Math.max(1, Math.floor(rnd() * Math.min(ls, seq.length)) + 1);
       const ini = Math.max(0, Math.min(seq.length - l, pos - Math.floor(rnd() * l)));
-      quitadas.push(...seq.slice(ini, ini + l));
       const nueva = [...seq.slice(0, ini), ...seq.slice(ini + l)];
-      seqs.set(r, nueva); med.set(r, evaluar(r, nueva));
+      // sin esas paradas la ruta casi siempre cuadra, pero no siempre (la carretera estimada no
+      // cumple que ir directo sea lo más corto): entonces esa ruta no se toca
+      const e = evaluar(r, nueva);
       tocadas.add(r);
+      if (!e.ok) continue;
+      quitadas.push(...seq.slice(ini, ini + l));
+      seqs.set(r, nueva); med.set(r, e);
     }
+    if (!quitadas.length) return null; // ninguna ruta se dejaba quitar nada
     return { st: { ...st, seqs, med }, quitadas };
   }
 
   // ── Recocido ──
   let vueltas = 0;
-  const ceder = () => new Promise(res => setTimeout(res, 0));
+  let cedido = Date.now();
+  const ceder = async () => { if (Date.now() - cedido < 50) return; await new Promise(res => setTimeout(res, 0)); cedido = Date.now(); };
   // primero, lo que el motor dejó sin recoger
   if (actual.sinRecoger.length) { actual = recolocar(actual, actual.sinRecoger); if (coste(actual) < coste(mejor)) mejor = actual; }
 
@@ -450,7 +475,7 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
   // (se aceptan soluciones con paradas pendientes mientras se busca; si al
   // final no queda ninguna, ese turno sobraba y se prueba con otro)
   const tFlota = t0 + tiempoMs * SISR.parteFlota;
-  const costePend = st => st.sinRecoger.length * SISR.costePendiente + st.travel;
+  const costePend = st => pendientes(st.sinRecoger) * SISR.costePendiente + st.travel;
   let flota = mejor;
   while (Date.now() < tFlota && !mejor.sinRecoger.length) {
     const conTrabajo = libres.filter(r => flota.seqs.get(r).length).sort((a, b) => flota.seqs.get(a).length - flota.seqs.get(b).length);
@@ -462,21 +487,22 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     seqs.set(quitada, []); med.set(quitada, { ok: true, travel: 0, km: 0 });
     let st = recolocar({ ...flota, seqs, med }, pend);
     const limite = Math.min(tFlota, Date.now() + Math.max(1500, (tFlota - Date.now()) / 2));
+    let sinQuitar = 0;
     while (st.sinRecoger.length && Date.now() < limite) {
       const temp = SISR.tempIni * Math.pow(SISR.tempFin / SISR.tempIni, (Date.now() - t0) / tiempoMs);
       const q = quitar(st);
-      if (!q) break;
+      if (!q) { if (++sinQuitar > 50) break; continue; } // esta vez no se pudo quitar nada: se prueba con otra parada
       const nuevo = recolocar(q.st, [...q.quitadas, ...st.sinRecoger]);
       vueltas++;
       const dc = costePend(nuevo) - costePend(st);
       if (dc < 0 || rnd() < Math.exp(-dc / temp)) st = nuevo;
-      if (vueltas % 50 === 0) await ceder();
+      if (vueltas % 8 === 0) await ceder();
     }
     if (st.sinRecoger.length) break; // no se pudo: esa es la flota
     flota = st;
   }
   cerradas = new Set(); abrir = false; // con la flota conseguida, solo se mejora la conducción
-  if (SISR.pulir && !flota.sinRecoger.length) flota = pulir(flota);
+  if (SISR.pulir) { flota = pulir(flota); if (flota.sinRecoger.length) flota = recolocar(flota, flota.sinRecoger); }
   if (coste(flota) < coste(mejor)) mejor = flota;
   actual = mejor;
 
@@ -487,15 +513,19 @@ export async function optimizarSISR(resultado, constraints = {}, opciones = {}) 
     const frac = (Date.now() - t0) / tiempoMs;
     const temp = SISR.tempIni * Math.pow(SISR.tempFin / SISR.tempIni, frac);
     let nuevo;
-    const q = quitar(actual); nuevo = q ? recolocar(q.st, q.quitadas) : null;
-    if (nuevo && SISR.pulir && !nuevo.sinRecoger.length && coste(nuevo) < coste(actual) + SISR.pulirMargen) nuevo = pulir(nuevo);
+    // lo quitado y lo que sigue sin recoger (cada vuelta puede haber hecho hueco)
+    const q = quitar(actual); nuevo = q ? recolocar(q.st, [...q.quitadas, ...actual.sinRecoger]) : null;
+    if (nuevo && SISR.pulir && coste(nuevo) < coste(actual) + SISR.pulirMargen) {
+      nuevo = pulir(nuevo, q.quitadas);
+      if (nuevo.sinRecoger.length) nuevo = recolocar(nuevo, nuevo.sinRecoger); // pulir ahorra tiempo: quizá ya caben
+    }
     vueltas++;
     if (nuevo) {
       const dc = coste(nuevo) - coste(actual);
       if (dc < 0 || rnd() < Math.exp(-dc / temp)) actual = nuevo;
       if (coste(actual) < coste(mejor)) { mejor = actual; ultimaMejora = Date.now(); }
     }
-    if (vueltas % 50 === 0) await ceder();
+    if (vueltas % 8 === 0) await ceder();
   }
 
   // ── Volver a montar el escenario con la mejor solución ──

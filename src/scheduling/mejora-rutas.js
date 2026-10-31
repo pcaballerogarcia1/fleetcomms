@@ -88,13 +88,14 @@ export function simular(ruta, cons) {
   }
   if (x > finDia + 1e-9) return { ok: false };
   if (ruta.aut != null && km > ruta.aut + 1e-9) return { ok: false }; // autonomía del vehículo
+  // con relevo de conductor, ninguna parada (ni pausa) a caballo: una la empieza un conductor y la acaba otro
+  const cortes = (sh.breaks || []).map(b => b + off).filter(b => b > ini && b < sh.end + off).sort((a, b) => a - b);
+  if (cortes.length && items.some(a => !a._travel && !a._wait && cortes.some(b => a._start < b && a._end > b))) return { ok: false };
   if (maxShiftMin > 0) {
     // la duración máxima es de cada conductor: con relevos, cada uno desde el inicio de su turno
     const lim = maxShiftMin * (1 - margen) + 1e-9;
-    const cortes = (sh.breaks || []).map(b => b + off).filter(b => b > ini && b < sh.end + off).sort((a, b) => a - b);
     if (!cortes.length) { if (x - ini > lim) return { ok: false }; }
     else {
-      if (items.some(a => !a._travel && !a._wait && cortes.some(b => a._start < b && a._end > b))) return { ok: false }; // nada a caballo de un relevo
       const bordes = [ini, ...cortes];
       for (let k = 0; k < bordes.length; k++) {
         const suyos = items.filter(a => a._start >= bordes[k] && (k + 1 >= bordes.length || a._start < bordes[k + 1]));
@@ -403,15 +404,8 @@ export async function porTurnos(resultado, cons, mejorar) {
         for (const a of f.assignments || []) if (a._travel && !assignments.includes(a)) { const d = diaJornada(f, a._start); otros.set(d, (otros.get(d) || 0) + (a.km || 0)); }
         autonomiaKm = Math.max(0.001, aut - Math.max(0, ...otros.values()));
       }
-      // y la carga máxima: la del vehículo menos lo que llevan sus otros turnos (el día que más)
-      const cap = cargaMaxDe(f);
-      let cargaMax = f.cargaMax;
-      if (cap < Infinity) {
-        const otras = new Map();
-        for (const a of f.assignments || []) if (!assignments.includes(a) && !a._travel && !a._break && !a._wait) { const d = diaJornada(f, a._start); otras.set(d, (otras.get(d) || 0) + demandaDe(a)); }
-        cargaMax = Math.max(0.001, cap - Math.max(0, ...otras.values()));
-      }
-      partidas.push({ ...f, assignments, autonomiaKm, cargaMax, _dayWindows: ventanas, _onlyDayWindows: true });
+      // la carga máxima es por viaje, y cada turno es un viaje (vuelve a la base con el relevo): la entera
+      partidas.push({ ...f, assignments, autonomiaKm, _dayWindows: ventanas, _onlyDayWindows: true });
     }
   });
   const r = await mejorar({ ...resultado, schedule: partidas });
@@ -421,6 +415,29 @@ export async function porTurnos(resultado, cons, mejorar) {
     const assignments = suyas.flatMap(x => x.assignments || []).sort((a, b) => a._start - b._start);
     return { ...f, assignments, totalKm: assignments.reduce((s, a) => s + (a._travel ? a.km || 0 : 0), 0) };
   });
+  // cada turno ha mirado la autonomía con los km que hacían los otros antes de mejorar, y el tope
+  // de paradas por su cuenta; si al juntarlos algún día se pasa del total, no se aplica la mejora
+  const paradasPorDia = f => {
+    const n = new Map();
+    for (const a of f.assignments || []) if (esParada(a)) { const d = diaJornada(f, a._start); n.set(d, (n.get(d) || 0) + 1); }
+    return n;
+  };
+  const kmPorDia = f => {
+    const km = new Map();
+    for (const a of f.assignments || []) if (a._travel) { const d = diaJornada(f, a._start); km.set(d, (km.get(d) || 0) + (a.km || 0)); }
+    return km;
+  };
+  for (let fi = 0; fi < schedule.length; fi++) {
+    const aut = autonomiaDe(schedule[fi]);
+    if (aut < Infinity) {
+      const antes = kmPorDia(filas[fi]);
+      for (const [d, km] of kmPorDia(schedule[fi])) if (km > aut + 1e-6 && km > (antes.get(d) || 0) + 1e-6) return resultado;
+    }
+    if (cons.maxStops > 0) {
+      const antes = paradasPorDia(filas[fi]);
+      for (const [d, n] of paradasPorDia(schedule[fi])) if (n > cons.maxStops && n > (antes.get(d) || 0)) return resultado;
+    }
+  }
   return { ...r, schedule };
 }
 
