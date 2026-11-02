@@ -148,6 +148,19 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
+    // Prueba de entrega (reparto): las fotos y la firma de cada parada
+    // (src/entregas). Las sube el conductor (a su nombre); las ve su empresa.
+    // Se pueden reenviar (mismo id) si se cortó la conexión; solo las borra la oficina.
+    match /entregas_pruebas/{id} {
+      allow read: if sameOrg(resource.data.org_id);
+      allow create, update: if sameOrg(request.resource.data.org_id)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.tipo in ['firma', 'foto']
+        && request.resource.data.data is bytes
+        && request.resource.data.data.size() < 900000
+        && id == request.resource.data.planId + '_' + request.resource.data.ubicId + '_' + request.resource.data.tipo + string(request.resource.data.k);
+      allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+    }
     // Pesadas de báscula (kg por camión, planta y fracción): las apunta la
     // oficina o el conductor en la planta; solo la oficina las corrige o borra.
     match /pesadas/{docId} {

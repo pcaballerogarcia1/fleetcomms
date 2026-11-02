@@ -8,6 +8,7 @@ import { PanelFichajes } from "./control/fichajes.jsx";
 import { MapaControl, MapaFlota } from "./control/mapas.jsx";
 import { ActivityFeed, PlanCard } from "./control/planes.jsx";
 import { alfa } from "./tema.js";
+import { nombreMotivo } from "./entregas/datos.js";
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────
 export function ControlPage({ sesion, orgId: orgIdProp }) {
@@ -131,7 +132,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
     source.forEach(plan => {
       (plan.ubicaciones || []).forEach(u => {
         if (u.realizado && u.realizadoEn) {
-          events.push({ ...u, planNombre: plan.nombre || plan.archivo || "Plan" });
+          events.push({ ...u, planId: plan._id, planNombre: plan.nombre || plan.archivo || "Plan" });
         }
       });
     });
@@ -151,7 +152,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
       return d.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     };
 
-    const header = ["Plan", "Mes", "Turno", "Orden", "Dirección", "Barrio", "Trabajador", "Fecha y hora", "Nota"];
+    const header = ["Plan", "Mes", "Turno", "Orden", "Dirección", "Barrio", "Trabajador", "Fecha y hora", "Nota", "Pedido", "Entrega", "Recibe / motivo"];
     const rows = activityEvents.map(ev => [
       ev.planNombre,
       mesFilter || "",
@@ -162,6 +163,9 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
       userName(ev.realizadoPor, usuarios),
       fmtDate(ev.realizadoEn),
       ev.nota ?? "",
+      ev.pedido ?? "",
+      ev.entrega ? (ev.entrega.estado === "no_entregada" ? "No entregado" : "Entregado") : "",
+      ev.entrega ? (ev.entrega.estado === "no_entregada" ? nombreMotivo(ev.entrega.motivo) : ev.entrega.recibe || "") : "",
     ]);
 
     const csv = "﻿" + [header, ...rows].map(r => r.map(esc).join(";")).join("\r\n");
@@ -320,7 +324,7 @@ export function ControlPage({ sesion, orgId: orgIdProp }) {
             <div style={{ fontSize: 10, color: C.dim, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
               {selectedId ? "Actividad del plan" : "Actividad global"} · {activityEvents.length} registros
             </div>
-            <ActivityFeed events={activityEvents} usuarios={usuarios} />
+            <ActivityFeed events={activityEvents} usuarios={usuarios} orgId={orgId} />
           </div>
 
         </div>

@@ -1,6 +1,8 @@
 // Control de rutas por puntos: tarjetas de ruta y actividad reciente.
-import { memo } from "react";
+import { memo, useState } from "react";
 import { C, mono, timeAgo, userName } from "./datos.js";
+import { cuentaEntregas } from "../entregas/datos.js";
+import { EtiquetaEntrega, VentanaEntrega } from "../entregas/oficina.jsx";
 
 // ── PLAN CARD ─────────────────────────────────────────────────────
 export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
@@ -9,6 +11,7 @@ export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
   const done  = ubs.filter(u => u.realizado).length;
   const pct   = total > 0 ? Math.round(done / total * 100) : 0;
   const color = pct === 100 ? C.green : pct > 50 ? C.blue : pct > 0 ? C.orange : C.dim;
+  const noEntregadas = ubs.some(u => u.entrega) ? cuentaEntregas(ubs).noEntregadas : 0;
 
   return (
     <div
@@ -46,6 +49,7 @@ export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
           { l: "Total",  v: total,        c: C.muted   },
           { l: "Hechas", v: done,          c: C.green   },
           { l: "Pend.",  v: total - done,  c: total - done > 0 ? C.orange : C.dim },
+          ...(noEntregadas ? [{ l: "No entregadas", v: noEntregadas, c: C.red }] : []),
         ].map(s => (
           <div key={s.l} style={{ fontSize: 10, color: s.c, fontFamily: mono }}>
             <span style={{ fontWeight: 700 }}>{s.v}</span>
@@ -58,7 +62,8 @@ export const PlanCard = memo(function PlanCard({ plan, selected, onSelect }) {
 });
 
 // ── ACTIVITY FEED ─────────────────────────────────────────────────
-export function ActivityFeed({ events, usuarios }) {
+export function ActivityFeed({ events, usuarios, orgId }) {
+  const [abierta, setAbierta] = useState(null); // la parada con la prueba de entrega abierta
   if (events.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 0", color: C.dim, fontSize: 13 }}>
@@ -69,10 +74,11 @@ export function ActivityFeed({ events, usuarios }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {abierta && <VentanaEntrega ev={abierta} orgId={orgId} conductor={userName(abierta.realizadoPor, usuarios)} onCerrar={() => setAbierta(null)} />}
       {events.map((ev, i) => (
         <div key={i} style={{
           background: C.card, border: `1px solid ${C.border}`,
-          borderLeft: `3px solid ${C.green}`, borderRadius: 8, padding: "9px 12px",
+          borderLeft: `3px solid ${ev.entrega?.estado === "no_entregada" ? C.red : C.green}`, borderRadius: 8, padding: "9px 12px",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -84,6 +90,12 @@ export function ActivityFeed({ events, usuarios }) {
               </div>
               {ev.nota && (
                 <div style={{ fontSize: 10, color: C.dim, marginTop: 3, fontStyle: "italic" }}>"{ev.nota}"</div>
+              )}
+              {ev.entrega && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+                  <EtiquetaEntrega ub={ev} />
+                  <button className="op-btn" onClick={() => setAbierta(ev)} style={{ fontSize: 10, padding: "1px 8px", height: "auto" }}>Ver prueba de entrega</button>
+                </div>
               )}
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>

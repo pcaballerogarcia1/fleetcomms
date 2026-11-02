@@ -109,6 +109,11 @@ export function taskToUbicacion(task, idx) {
     // para contactar desde la app del conductor (si el Excel de Planning lo trae)
     telefono: field("telefono","teléfono","tel","tlf","movil","móvil","phone","telefono contacto","teléfono contacto"),
     contacto: field("contacto","persona contacto","persona de contacto","cliente","contact"),
+    // reparto: qué se entrega (de las columnas del Excel de Planificación) y la franja prometida
+    pedido: field("pedido","n pedido","nº pedido","n.º pedido","num pedido","número de pedido","numero de pedido","albaran","albarán","nº albarán","referencia","ref","order","order id"),
+    bultos: field("bultos","n bultos","nº bultos","cajas","palets","palés","pales","unidades","paquetes"),
+    kg: field("kg","kilos","peso","peso kg","peso (kg)"),
+    franja: task.windowStart != null ? { desde: task.windowStart, hasta: task.windowEnd ?? task.windowStart } : null,
     barri: task.barrio || field("barri","barrio","neighbourhood","neighborhood","sector","zona"),
     districte: field("districte","distrito","district"),
     turno: field("turno","turn","shift"),

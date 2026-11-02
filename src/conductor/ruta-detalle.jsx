@@ -10,6 +10,9 @@ import { MapaLeaflet } from "./ui.jsx";
 import { NAVEGADORES, abrirNavegacion, elegirNavegador, enlacesContacto, navegadorElegido, telefonoDe, useDictado } from "./contacto.js";
 import { sectorDe } from "../sector.js";
 import { tono } from "../tema.js";
+import { PackageCheck, PackageX } from "lucide-react";
+import { conEntrega, cuentaEntregas, franjaTexto, nombreMotivo, queSeEntrega } from "../entregas/datos.js";
+import { PantallaEntrega } from "../entregas/pantalla.jsx";
 
 // Botón de dictar con la voz (solo si el móvil lo permite)
 function BotonDictar({ d }) {
@@ -108,7 +111,7 @@ function ApuntarPesada({plan,sesion}){
 }
 
 // ── TARJETA UBICACIÓN ─────────────────────────────────────────────
-function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNota,onNavegar,onParte,done}){
+function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNota,onNavegar,onParte,onEntregar,done}){
   const elReal=ub.elementos.filter(e=>e.realizado).length;
   const tieneParteIniciado = ub.parte && Object.values(ub.parte.checks||{}).some(Boolean);
   const parteFirmado = ub.parte?.firmado;
@@ -122,8 +125,12 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           <div style={{fontSize:13,color:C.text,fontWeight:700,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.calle} {ub.num}</div>
           <div style={{fontSize:10,color:C.muted}}>{ub.barri}{ub.districte?" · "+ub.districte:""}</div>
           {ub.comentari&&<div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.comentari}</div>}
+          {onEntregar&&queSeEntrega(ub)&&<div style={{fontSize:12,color:C.blueText,marginTop:3,fontWeight:600}}>{queSeEntrega(ub)}</div>}
+          {onEntregar&&franjaTexto(ub.franja)&&!done&&<div style={{fontSize:11,color:C.amber,marginTop:1}}>Entregar {franjaTexto(ub.franja)}</div>}
           <ContactoParada ub={ub}/>
-          {done&&ub.realizadoEn&&<div style={{fontSize:10,color:C.green,marginTop:2}}>✓ {timeAgo(ub.realizadoEn)}</div>}
+          {done&&ub.entrega?.estado==="no_entregada"
+            ?<div style={{fontSize:11,color:C.red,marginTop:2,display:"flex",alignItems:"center",gap:4}}><PackageX size={13}/> No entregado · {nombreMotivo(ub.entrega.motivo)} · {timeAgo(ub.realizadoEn)}</div>
+            :done&&ub.realizadoEn&&<div style={{fontSize:10,color:C.green,marginTop:2}}>✓ {ub.entrega?.recibe?`${ub.entrega.sinFirma?"Se deja en":"Recibe"} ${ub.entrega.recibe} · `:""}{timeAgo(ub.realizadoEn)}</div>}
           {ub.nota&&<div style={{fontSize:11,color:C.violet,marginTop:2,display:"flex",alignItems:"center",gap:4}}><StickyNote size={12}/> {ub.nota}</div>}
           <div style={{fontSize:10,color:C.dim,marginTop:2}}>{ub.pa}</div>
           {onParte&&(
@@ -140,7 +147,9 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
         <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
           <div style={{display:"flex",gap:4}}>
             <button onClick={onNavegar} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center"}} title="Navegar"><Navigation size={15}/></button>
-            <button onClick={onMarcar} style={{...(done?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{done?<Check size={16}/>:"Marcar"}</button>
+            {onEntregar
+              ?<button onClick={onEntregar} style={{...(done?(ub.entrega?.estado==="no_entregada"?{...S.btnGhost,borderColor:C.red,color:C.red}:S.btnOk):S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>{done?(ub.entrega?.estado==="no_entregada"?<PackageX size={16}/>:<PackageCheck size={16}/>):"Entregar"}</button>
+              :<button onClick={onMarcar} style={{...(done?S.btnOk:S.btnSm),display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{done?<Check size={16}/>:"Marcar"}</button>}
           </div>
           <div style={{display:"flex",gap:4}}>
             {onParte&&<button onClick={onParte} style={{...S.btnGhost,fontSize:10,padding:"4px 6px",flex:1,borderColor:parteFirmado?C.green:tieneParteIniciado?C.orange:C.border,color:parteFirmado?C.green:tieneParteIniciado?C.orange:C.muted}}><ClipboardList size={13} style={{verticalAlign:"-2px",marginRight:4}}/>Parte</button>}
@@ -349,6 +358,8 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
   const dictadoNota=useDictado(t=>setNotaText(x=>(x?x.trim()+" ":"")+t));
   const [filtroBa,setFiltroBa]=useState("");
   const [parteUbicId,setParteUbicId]=useState(null); // id de parada con parte abierto
+  const [entregaId,setEntregaId]=useState(null); // id de parada con la entrega abierta
+  const entrega = conEntrega(sectorDe(plan)); // reparto: cada parada se entrega con firma, fotos o motivo
 
   const esPrev = plan.tipo==="prev";
   const {ubicaciones,recorrido}=plan;
@@ -400,6 +411,18 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
     setTimeout(()=>{const el=document.getElementById("u-"+id);if(el)el.scrollIntoView({behavior:"smooth",block:"nearest"});},100);
   }
 
+  function confirmarEntrega(id,reg){
+    cambiarParada(id,u=>({...u,realizado:true,realizadoPor:sesion.id,realizadoEn:reg.en,entrega:reg}));
+    setEntregaId(null);
+  }
+  function deshacerEntrega(id){
+    cambiarParada(id,u=>({...u,realizado:false,realizadoPor:null,realizadoEn:null,entrega:null}));
+  }
+  if(entregaId!=null){
+    const ub=ubicaciones.find(u=>u.id===entregaId);
+    if(ub) return <PantallaEntrega ub={ub} plan={plan} sesion={sesion} onConfirmar={reg=>confirmarEntrega(ub.id,reg)} onDeshacer={()=>deshacerEntrega(ub.id)} onClose={()=>setEntregaId(null)}/>;
+  }
+
   // Si hay parte abierto, mostrarlo
   if(parteUbicId){
     const ub=ubicaciones.find(u=>u.id===parteUbicId);
@@ -420,7 +443,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
       </div>
       <div style={{padding:"10px 14px 0"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
-          {[{l:"Paradas",v:ubicaciones.length,c:C.blueText},{l:"Hechas",v:realizadas,c:C.green},{l:"Pendient.",v:ubicaciones.length-realizadas,c:tasaColor},{l:"QR",v:`${realizadosQR}/${totalQR}`,c:"#8b5cf6"}].map(s=>(
+          {[{l:"Paradas",v:ubicaciones.length,c:C.blueText},entrega?{l:"Entregadas",v:cuentaEntregas(ubicaciones).entregadas,c:C.green}:{l:"Hechas",v:realizadas,c:C.green},{l:"Pendient.",v:ubicaciones.length-realizadas,c:tasaColor},entrega?{l:"No entreg.",v:cuentaEntregas(ubicaciones).noEntregadas,c:C.red}:{l:"QR",v:`${realizadosQR}/${totalQR}`,c:"#8b5cf6"}].map(s=>(
             <div key={s.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
               <div style={{fontSize:15,fontWeight:800,color:s.c}}>{s.v}</div>
               <div style={{fontSize:12,color:C.dim,textTransform:"none",letterSpacing:0}}>{s.l}</div>
@@ -461,12 +484,12 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
         )}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div style={{...S.label,marginBottom:0}}>Paradas ({ubics.length})</div>
-          <button onClick={()=>{const t=ubics.every(u=>u.realizado);ubics.forEach(u=>marcarUbic(u.id,!t));}} style={{...S.btnGhost,fontSize:10,padding:"4px 10px"}}>
+          {!entrega&&<button onClick={()=>{const t=ubics.every(u=>u.realizado);ubics.forEach(u=>marcarUbic(u.id,!t));}} style={{...S.btnGhost,fontSize:10,padding:"4px 10px"}}>
             {ubics.every(u=>u.realizado)?"Desmarcar todas":<><CheckCheck size={14} style={{verticalAlign:"-3px",marginRight:4}}/>Marcar todas</>}
-          </button>
+          </button>}
         </div>
-        {pendientes.length>0&&<><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:6,paddingLeft:4}}>Pendientes ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev?()=>setParteUbicId(ub.id):undefined}/>)}</>}
-        {hechas.length>0&&<><div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:12,paddingLeft:4}}>Completadas ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev?()=>setParteUbicId(ub.id):undefined} done/>)}</>}
+        {pendientes.length>0&&<><div style={{fontSize:12,color:C.dim,letterSpacing:0,textTransform:"none",marginBottom:6,paddingLeft:4}}>Pendientes ({pendientes.length})</div>{pendientes.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,true)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev&&!entrega?()=>setParteUbicId(ub.id):undefined} onEntregar={entrega?()=>setEntregaId(ub.id):undefined}/>)}</>}
+        {hechas.length>0&&<><div style={{fontSize:12,color:C.green,letterSpacing:0,textTransform:"none",marginBottom:6,marginTop:12,paddingLeft:4}}>Completadas ({hechas.length})</div>{hechas.map(ub=><TarjetaUbic key={ub.id} ub={ub} isSel={selId===ub.id} isExp={expandId===ub.id} onSelect={()=>sel(ub.id)} onExpand={()=>setExpandId(expandId===ub.id?null:ub.id)} onMarcar={()=>marcarUbic(ub.id,false)} onMarcarQR={(qr,v)=>marcarQR(ub.id,qr,v)} onNota={()=>{setNotaId(ub.id);setNotaText(ub.nota||"");}} onNavegar={()=>abrirNavegacion(ub.lat,ub.lng)} onParte={esPrev&&!entrega?()=>setParteUbicId(ub.id):undefined} onEntregar={entrega?()=>setEntregaId(ub.id):undefined} done/>)}</>}
       </div>
       {notaId&&(
         <div style={{position:"fixed",inset:0,background:"#000b",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setNotaId(null)}>
