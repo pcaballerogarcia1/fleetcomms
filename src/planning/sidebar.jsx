@@ -1,5 +1,7 @@
 // Planning de rutas por puntos: el panel lateral (capas, filtros, precios).
-import { AlertTriangle, Loader2, Route, Upload, Warehouse } from "lucide-react";
+import { AlertTriangle, FileDown, Loader2, Route, Upload, Warehouse } from "lucide-react";
+import { PLANTILLA, PLANTILLA_AYUDA } from "./direcciones.js";
+import { loadXLSX } from "./datos.js";
 import { useState, useRef } from "react";
 import { db } from "../firebase.js";
 import { doc, deleteDoc, updateDoc } from "firebase/firestore";
@@ -39,6 +41,15 @@ export function Sidebar(props) {
   const sector = useSector();
   return <SidebarSector {...props} sector={sector} />;
 }
+// La plantilla de Excel para empezar sin nada: clientes con su dirección y lo que se les entrega
+async function bajarPlantilla() {
+  const XLSX = await loadXLSX();
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(PLANTILLA), "Clientes");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(PLANTILLA_AYUDA), "Cómo rellenarla");
+  XLSX.writeFile(wb, "plantilla_clientes_operanzia.xlsx");
+}
+
 function SidebarSector({ sector, layers, setLayers, onUpload, onCallejero, uploading, depots, setDepots, onDepotImport, depotUploading, barrioColors, setBarrioColors, saveBarrioColors, searchQuery, setSearchQuery, totalFiltered, totalAll, addPointMode, setAddPointMode, manualForm, setManualForm, onAddManualPoint, projectId, orgId, fraccionFilter, setFraccionFilter, contenedorFilter, setContenedorFilter, gtfsGrupos = [], lineaSel = null, setLineaSel, verTodasLineas = false, setVerTodasLineas }) {
   const fileRef      = useRef(null);
   const depotFileRef = useRef(null);
@@ -322,9 +333,12 @@ function SidebarSector({ sector, layers, setLayers, onUpload, onCallejero, uploa
               </button>
             )}
             <div style={{ fontSize: 10, color: C.dim, marginTop: 7, lineHeight: 1.7 }}>
-              <div>CSV: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lat</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>lon</code></div>
-              <div>Excel: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Latitud</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Longitud</code></div>
+              <div>Con coordenadas: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Latitud</code> / <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Longitud</code></div>
+              <div>O con dirección: <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Dirección</code> y <code style={{ color: C.muted, fontFamily: mono, fontSize: 10 }}>Población</code> (se sitúan solas en el mapa)</div>
             </div>
+            <button onClick={bajarPlantilla} className="op-btn" style={{ width: "100%", height: 30, marginTop: 6, fontSize: 12 }}>
+              <FileDown size={13} /> Plantilla de Excel con ejemplo
+            </button>
           </div>
         )}
       </div>

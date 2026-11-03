@@ -129,9 +129,11 @@ export function quitarLejanos(porDireccion, maxKm = 25) {
 
 /**
  * Busca las coordenadas de cada dirección (varias a la vez, sin pasarse).
+ * maxKm: lo que cae más lejos del centro de lo encontrado se descarta (una calle
+ * igual en otra provincia); un municipio, 25 km; el reparto de una provincia, más.
  * @returns { porDireccion: Map<dirección, resultado|null>, encontradas, aproximadas, sinEncontrar }
  */
-export async function geocodificar(direcciones, { fetchFn = (...a) => fetch(...a), aLaVez = 4, onProgreso } = {}) {
+export async function geocodificar(direcciones, { fetchFn = (...a) => fetch(...a), aLaVez = 4, onProgreso, maxKm = 25 } = {}) {
   const lista = [...direcciones];
   const porDireccion = new Map();
   let i = 0, hechas = 0;
@@ -147,7 +149,7 @@ export async function geocodificar(direcciones, { fetchFn = (...a) => fetch(...a
     }
   }
   await Promise.all(Array.from({ length: Math.min(aLaVez, lista.length) }, trabajador));
-  const lejanos = quitarLejanos(porDireccion);
+  const lejanos = quitarLejanos(porDireccion, maxKm);
   const vals = [...porDireccion.values()];
   return {
     porDireccion,

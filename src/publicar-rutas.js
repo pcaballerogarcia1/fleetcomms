@@ -103,12 +103,13 @@ export function taskToUbicacion(task, idx) {
     id: "u" + idx,
     pa: task.nombre || field("pa","idsap","id_sap","codigopoint","codigo","codi") || ("PA-" + (idx + 1)),
     orden: idx + 1,
-    calle: field("calle","carrer","street","via"),
+    calle: field("calle","carrer","street","via","dirección","direccion","dirección de entrega","direccion de entrega","domicilio","address"),
     num: field("num","num.","número","numero"),
-    comentari: field("comentari","comentario","comment"),
+    comentari: field("comentari","comentario","comment","notas","nota","observaciones","instrucciones"),
     // para contactar desde la app del conductor (si el Excel de Planning lo trae)
     telefono: field("telefono","teléfono","tel","tlf","movil","móvil","phone","telefono contacto","teléfono contacto"),
     contacto: field("contacto","persona contacto","persona de contacto","cliente","contact"),
+    cliente: field("cliente","nombre cliente","razón social","razon social"),
     // reparto: qué se entrega (de las columnas del Excel de Planificación) y la franja prometida
     pedido: field("pedido","n pedido","nº pedido","n.º pedido","num pedido","número de pedido","numero de pedido","albaran","albarán","nº albarán","referencia","ref","order","order id"),
     bultos: field("bultos","n bultos","nº bultos","cajas","palets","palés","pales","unidades","paquetes"),

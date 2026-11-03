@@ -28,15 +28,53 @@ export function extractFieldVRP(fields, keys) {
 }
 const _vrpKeyCache = new WeakMap();
 // Columnas de Planificación que dicen cuánto se entrega o se recoge en la parada
-const COLUMNAS_DEMANDA = new Set(["demanda", "kg", "kilos", "peso", "peso kg", "palets", "pales", "palet", "pale", "bultos", "cajas", "unidades", "carga", "cantidad"]);
+// (por orden de preferencia: si el Excel trae kilos y bultos, cuentan los kilos)
+const COLUMNAS_DEMANDA = ["demanda", "carga", "kg", "kilos", "peso", "peso kg", "palets", "pales", "palet", "pale", "bultos", "cajas", "unidades", "cantidad"];
 const normCol = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 /** La demanda de una parada (número) desde sus columnas, o 0 */
 export function demandaDeCampos(fields) {
-  for (const [k, v] of Object.entries(fields || {})) {
-    if (!COLUMNAS_DEMANDA.has(normCol(k))) continue;
-    const n = decimal(v); // a la española: «1.200», «12,5»
+  const cols = Object.entries(fields || {}).map(([k, v]) => [normCol(k), v]);
+  for (const c of COLUMNAS_DEMANDA) {
+    const e = cols.find(([k]) => k === c);
+    if (!e) continue;
+    const n = decimal(e[1]); // a la española: «1.200», «12,5»
     if (n !== "" && n > 0) return n;
   }
+  return 0;
+}
+
+// La franja horaria de la parada desde sus columnas (reparto: la que se promete al cliente):
+// «Desde» y «Hasta», o una sola «Franja» como «9:00-11:00», «de 9 a 11». La del Timetable manda.
+const COLS_DESDE = ["desde", "hora desde", "franja desde", "franja inicio", "inicio franja", "entrega desde", "hora inicio", "inicio"];
+const COLS_HASTA = ["hasta", "hora hasta", "franja hasta", "franja fin", "fin franja", "entrega hasta", "hora fin", "fin"];
+const COLS_FRANJA = ["franja", "franja horaria", "horario", "horario de entrega", "horario entrega", "hora de entrega", "ventana"];
+const hora = v => {
+  const t = String(v ?? "").trim();
+  if (!t) return null;
+  if (/^\d{1,2}$/.test(t)) return +t <= 24 ? +t * 60 : null; // «9» = 9:00
+  if (/^0?\.\d+$/.test(t)) return timeToMin(t); // celda de hora de Excel sin formato (0,375 = 9:00)
+  const m = timeToMin(t.replace(/[.h]/i, ":").replace(/:$/, ":00"));
+  return Number.isFinite(m) ? m : null;
+};
+/** { desde, hasta } en minutos del día, o null */
+export function franjaDeCampos(fields) {
+  const cols = Object.entries(fields || {}).map(([k, v]) => [normCol(k), v]);
+  const valor = lista => { for (const c of lista) { const e = cols.find(([k]) => k === c); if (e && String(e[1]).trim()) return e[1]; } return null; };
+  let desde = hora(valor(COLS_DESDE)), hasta = hora(valor(COLS_HASTA));
+  if (desde == null) {
+    const f = valor(COLS_FRANJA);
+    const m = String(f ?? "").match(/(\d{1,2}(?:[:.h]\d{2})?)\s*(?:-|–|a|hasta)\s*(\d{1,2}(?:[:.h]\d{2})?)/i);
+    if (m) { desde = hora(m[1]); hasta = hora(m[2]); }
+  }
+  if (desde == null) return null;
+  if (hasta == null || hasta < desde) hasta = desde;
+  return { desde, hasta };
+}
+const COLS_DURACION = ["duracion", "duracion min", "duracion minutos", "minutos", "tiempo", "tiempo min", "tiempo de servicio", "tiempo servicio"];
+/** Los minutos que se está en la parada, si el Excel los trae, o 0 */
+export function duracionDeCampos(fields) {
+  const cols = Object.entries(fields || {}).map(([k, v]) => [normCol(k), v]);
+  for (const c of COLS_DURACION) { const e = cols.find(([k]) => k === c); const n = e ? decimal(e[1]) : ""; if (n !== "" && n > 0) return n; }
   return 0;
 }
 
@@ -75,14 +113,17 @@ export async function loadTasksFromLayers(projectId) {
       // IDB markers are flat { lat, lng, Barrio: "X", ... }; Firestore markers nest under .campos/.fields
       const nested = m.campos || m.fields || null;
       const fields = (nested && Object.keys(nested).length > 0) ? nested : m;
-      const nombre = extractFieldVRP(fields, ["nombre","name","calle","street"]) || "";
+      const nombre = extractFieldVRP(fields, ["nombre","name","cliente","nombre cliente","razon social","razón social","calle","street"]) || "";
       const barrio = extractFieldVRP(fields, BARRIO_KEYS_VRP) || "";
       const puntoKey = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
       const tarea = { _id: puntoKey, lat, lng, nombre, barrio, campos: fields, layerColor: layer.color };
       // la duración que trae la propia capa (p. ej. el tiempo de barrido de un tramo de calle);
       // la del Timetable manda sobre ella, y esta sobre la de por defecto
-      const durCapa = +fields.duracion;
+      const durCapa = duracionDeCampos(fields);
       if (durCapa > 0) tarea._duracionCapa = durCapa;
+      // la franja prometida al cliente, si el Excel la trae (la del Timetable manda)
+      const fr = franjaDeCampos(fields);
+      if (fr) { tarea.windowStart = fr.desde; tarea.windowEnd = fr.hasta; }
       // lo que se entrega o se recoge (kg, palés, cajas…): contra la carga máxima del vehículo
       const dem = demandaDeCampos(fields);
       if (dem > 0) tarea.demanda = dem;

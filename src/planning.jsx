@@ -9,7 +9,8 @@ import { C, LAYER_COLORS, font } from "./planning/estilo.js";
 import { TabTimetable } from "./planning/horarios.jsx";
 import { TabTrabajos } from "./planning/trabajos.jsx";
 import { TabRecursos } from "./planning/recursos.jsx";
-import { parseCSV, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
+import { parseCSV, parseCSVTabla, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
+import { SituarDirecciones } from "./planning/situar-direcciones.jsx";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
 import { useUltimo } from "./use-ultimo.js";
@@ -306,6 +307,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
   }
 
   const [uploading, setUploading]           = useState(false);
+  const [situar, setSituar]                 = useState(null); // archivo con direcciones sin coordenadas: { nombre, pendientes, dirCols, markers, resolver }
   const [depotUploading, setDepotUploading] = useState(false);
   const [errors, setErrors]                 = useState([]);
   const [tab, setTab]                       = useState("mapa");
@@ -407,7 +409,9 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
       let result;
       try {
         if (ext === "csv") {
-          result = parseCSV(await file.text());
+          const texto = await file.text();
+          result = parseCSV(texto);
+          if (result.error) { const r2 = await parseCSVTabla(texto); if (!r2.error) result = r2; } // sin coordenadas: quizá con dirección
         } else if (ext === "kml") {
           result = parseKMLPlanning(await file.text());
         } else if (ext === "xlsx") {
@@ -426,7 +430,16 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
         continue;
       }
 
-      await guardarCapa({ name, ext, color, markers: result.markers });
+      // filas con dirección y sin coordenadas: se sitúan en el mapa antes de crear la capa
+      let markers = result.markers;
+      if (result.pendientes?.length) {
+        const situadas = await new Promise(resolver => setSituar({ nombre: name, pendientes: result.pendientes, dirCols: result.dirCols, conCoordenadas: markers.length, resolver }));
+        setSituar(null);
+        if (!situadas) continue; // cancelado
+        markers = [...markers, ...situadas];
+      }
+      if (!markers.length) continue;
+      await guardarCapa({ name, ext, color, markers });
     }
 
     if (newErrors.length) setErrors(newErrors);
@@ -602,6 +615,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
             />
             <MapaPlanning layers={filteredLayers} depots={depots} barrioColors={barrioColors} mapStyle={mapStyle} setMapStyle={setMapStyle} addPointMode={addPointMode} onMapClickAddPoint={onMapClickAddPoint} projectId={projectId} windowedKeys={windowedKeys} nombreOverrides={nombreOverrides} recorridos={recorridos} />
             {verCallejero && <VentanaCallejero onCrear={crearCapaCallejero} onCerrar={() => setVerCallejero(false)} />}
+            {situar && <SituarDirecciones nombre={situar.nombre} pendientes={situar.pendientes} dirCols={situar.dirCols} conCoordenadas={situar.conCoordenadas}
+              onListo={m => situar.resolver(m)} onCancelar={() => situar.resolver(null)} />}
           </>
         ) : tab === "trabajos" ? (
           <TabTrabajos key={projectId} layers={layers} activeProject={activeProject} onProjectUpdate={onProjectUpdate} vehicles={vehicles} />

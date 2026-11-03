@@ -9,6 +9,7 @@
 
 
 import { loadXLSX } from "./datos.js";
+import { columnasDireccion, textoDireccion } from "./direcciones.js";
 
 // ── CSV PARSER ────────────────────────────────────────────────────
 export function parseCSV(text) {
@@ -141,14 +142,22 @@ function parseXLSXRows(rows) {
   // Priority 2: combined "coordenadas" column (only when separate columns not found)
   const coordKey = (!latKey || !lngKey) ? _findCol(keys, ["coordenadas", "coordinates", "coords"]) : null;
 
-  if (!latKey && !lngKey && !coordKey) {
-    return { markers: [], error: `No se encontraron columnas de coordenadas. Columnas detectadas: ${keys.join(", ")}. El Excel debe tener columnas "Latitud"/"Longitud" o una columna "Coordenadas" (lat,lng).` };
+  // sin coordenadas (o en las filas que no las traen): la dirección, para situarla después (direcciones.js)
+  const dirCols = columnasDireccion(keys);
+  if (!latKey && !lngKey && !coordKey && !dirCols) {
+    return { markers: [], error: `No se encontraron columnas de coordenadas ni de dirección. Columnas detectadas: ${keys.join(", ")}. El Excel debe tener columnas "Latitud"/"Longitud", una columna "Coordenadas" (lat,lng) o una columna "Dirección" (con su "Municipio" o "Población").` };
   }
 
-  const markers = [];
+  const markers = [], pendientes = [];
+  const camposDe = (row, quitar) => Object.fromEntries(Object.entries(row).filter(([k]) => !quitar.has(k)).map(([k, v]) => [k, String(v)]));
+  const porDireccion = row => {
+    const texto = dirCols && textoDireccion(row, dirCols);
+    if (texto) pendientes.push({ campos: camposDe(row, new Set([coordKey, latKey, lngKey].filter(Boolean))), texto });
+  };
   let utmCount = 0;
   for (const row of rows) {
     let lat, lng;
+    if (!latKey && !lngKey && !coordKey) { porDireccion(row); continue; }
     if (latKey && lngKey) {
       // Numeric cells from SheetJS — most reliable
       lat = parseFloat(String(row[latKey] ?? "").replace(",", "."));
@@ -156,10 +165,10 @@ function parseXLSXRows(rows) {
     } else {
       // Combined "coordenadas" text column — a prueba de coma decimal (ver parseCoordPair)
       const raw = String(row[coordKey] ?? "").trim();
-      if (!raw) continue;
+      if (!raw) { porDireccion(row); continue; }
       [lat, lng] = parseCoordPair(raw);
     }
-    if (isNaN(lat) || isNaN(lng)) continue;
+    if (isNaN(lat) || isNaN(lng)) { porDireccion(row); continue; }
     // Skip UTM / out-of-range geographic coordinates
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { utmCount++; continue; }
 
@@ -171,13 +180,14 @@ function parseXLSXRows(rows) {
     markers.push({ lat, lng, ...fields });
   }
 
+  if (markers.length === 0 && pendientes.length) return { markers, pendientes, dirCols, error: null };
   if (markers.length === 0) {
     const hint = utmCount > 0
       ? `Se detectaron ${utmCount} filas con coordenadas fuera de rango geográfico (¿están en UTM?). Convierte a WGS84 decimal antes de subir.`
       : `No se encontraron filas con coordenadas válidas.`;
     return { markers: [], error: hint };
   }
-  return { markers, error: null };
+  return { markers, pendientes, dirCols, error: null };
 }
 
 export async function parseXLSX(file) {
@@ -198,10 +208,21 @@ export async function parseXLSX(file) {
   for (const sheetName of wb.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
     const result = parseXLSXRows(rows);
-    if (result.markers.length > 0) return result;
+    if (result.markers.length > 0 || result.pendientes?.length > 0) return result;
     lastResult = result;
   }
   return lastResult;
+}
+
+/** Un CSV sin coordenadas (con dirección): se lee como hoja de cálculo, que entiende las comillas
+ *  («Calle Mayor, 12») — el lector de CSV de arriba parte las filas por la coma sin más */
+export async function parseCSVTabla(texto) {
+  const XLSX = await loadXLSX();
+  const limpio = texto.replace(/^\uFEFF/, "");
+  const cabecera = limpio.split(/\r?\n/)[0] || "";
+  const sep = cabecera.split(";").length > cabecera.split(",").length ? ";" : ",";
+  const wb = XLSX.read(limpio, { type: "string", FS: sep, raw: true });
+  return parseXLSXRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "", raw: false }));
 }
 
 // ── KML PARSER (generic) ─────────────────────────────────────────
