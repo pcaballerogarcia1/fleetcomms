@@ -148,6 +148,23 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
+    // Pedidos con fecha y pedidos fijos (reparto, Planificación → Pedidos):
+    // los lleva la oficina de la empresa (src/pedidos).
+    match /pedidos/{id} {
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace()
+        && request.resource.data.projectId is string && sameOrg(projectOrg(request.resource.data.projectId))
+        && request.resource.data.fecha is string;
+      allow update: if sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id;
+      allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+    }
+    match /pedidos_fijos/{id} {
+      allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace()
+        && request.resource.data.projectId is string && sameOrg(projectOrg(request.resource.data.projectId));
+      allow update: if sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id;
+      allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+    }
     // Prueba de entrega (reparto): las fotos y la firma de cada parada
     // (src/entregas). Las sube el conductor (a su nombre); las ve su empresa.
     // Se pueden reenviar (mismo id) si se cortó la conexión; solo las borra la oficina.

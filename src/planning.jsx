@@ -11,6 +11,8 @@ import { TabTrabajos } from "./planning/trabajos.jsx";
 import { TabRecursos } from "./planning/recursos.jsx";
 import { parseCSV, parseCSVTabla, parseKMLPlanning, parseXLSX } from "./planning/importar.js";
 import { SituarDirecciones } from "./planning/situar-direcciones.jsx";
+import { TabPedidos } from "./pedidos/tab.jsx";
+import { sectorDe as sectorDelProyecto } from "./sector.js";
 import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
 import { useUltimo } from "./use-ultimo.js";
@@ -556,6 +558,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
       }}>
         {[
           { key: "mapa",      label: "Mapa" },
+          // reparto: la bandeja de pedidos de cada día
+          ...(sectorDelProyecto(activeProject).ver.entrega ? [{ key: "pedidos", label: "Pedidos" }] : []),
           { key: "trabajos",  label: "Trabajos" },
           { key: "timetable", label: "Horarios" },
           { key: "recursos",  label: "Recursos" },
@@ -618,6 +622,8 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
             {situar && <SituarDirecciones nombre={situar.nombre} pendientes={situar.pendientes} dirCols={situar.dirCols} conCoordenadas={situar.conCoordenadas}
               onListo={m => situar.resolver(m)} onCancelar={() => situar.resolver(null)} />}
           </>
+        ) : tab === "pedidos" ? (
+          <TabPedidos key={projectId} layers={layers} activeProject={activeProject} orgId={orgId} sesion={sesion} />
         ) : tab === "trabajos" ? (
           <TabTrabajos key={projectId} layers={layers} activeProject={activeProject} onProjectUpdate={onProjectUpdate} vehicles={vehicles} />
         ) : tab === "recursos" ? (
