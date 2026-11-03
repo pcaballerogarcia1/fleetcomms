@@ -24,7 +24,7 @@ import { ConstraintsPanel } from "./restricciones.jsx";
 import { nombreDiaEscenario } from "./frecuencias.js";
 import { RESTRICCIONES_DEFECTO } from "./restricciones-defecto.js";
 import {
-  runCloudSave as runCloudSaveMod, takeTheirScenario as takeTheirScenarioMod, restorePoint as restorePointMod, importFromPlanning as importFromPlanningMod, runGenerate as runGenerateMod, runSimulation as runSimulationMod,
+  runCloudSave as runCloudSaveMod, takeTheirScenario as takeTheirScenarioMod, restorePoint as restorePointMod, importFromPlanning as importFromPlanningMod, importarPedidosDelDia as importarPedidosDelDiaMod, runGenerate as runGenerateMod, runSimulation as runSimulationMod,
   downloadVehicleXLSX as downloadVehicleXLSXMod, downloadCrewXLSX as downloadCrewXLSXMod, handleUploadXLSX as handleUploadXLSXMod, publishToRoutes as publishToRoutesMod,
 } from "./planificacion-acciones.js";
 import {
@@ -625,7 +625,11 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   }, [activeProject?._id]);
 
   function importFromPlanning() {
-    return importFromPlanningMod({ activeProject, onProjectUpdate, setImporting, setTasks });
+    return importFromPlanningMod({ activeProject, onProjectUpdate, setImporting, setTasks, setConstraints });
+  }
+  // reparto: los pedidos de un día (Planificación → Pedidos)
+  function importarPedidos(fecha) {
+    return importarPedidosDelDiaMod({ activeProject, orgId, onProjectUpdate, setImporting, setTasks, setConstraints }, fecha);
   }
 
   function runGenerate() {
@@ -688,7 +692,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      <BarraHerramientas {...{ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
+      <BarraHerramientas {...{ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importarPedidos, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, totalAssigned, totalKm, unassigned, undoMove, xlsxUploadRef }} />
 
       {/* Focus-mode mini bar — only when focusMode */}
       {focusMode && (
@@ -828,7 +832,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
         </div>
       )}
 
-      <VentanaPublicar {...{ publishModal, publishToRoutes, publishing, setPublishModal }} />
+      <VentanaPublicar {...{ publishModal, publishToRoutes, publishing, setPublishModal }} diaUnico={constraints.diaUnico} />
 
       <VentanaHistorial {...{ cloudMeta, compararCon: kpis ? compararCon : null, projectId: activeProject?._id, restorePoint, scenarioHistory, setShowHistorial, showHistorial }} />
       {comparando && (

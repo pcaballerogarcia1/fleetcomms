@@ -12,6 +12,8 @@ import { textoPuesto } from "./simulador.js";
 import { t } from "../i18n.js";
 import { NOMBRE_TIPO, recordarTrabajo, trabajoRecordado } from "../publicar-rutas.js";
 import { C, font, mono } from "./estilo.js";
+import { sectorDe } from "../sector.js";
+import { fechaLarga, masDias, ymd } from "../pedidos/datos.js";
 import { alfa } from "../tema.js";
 
 
@@ -19,9 +21,12 @@ import { alfa } from "../tema.js";
 
 import { BotonCerrar } from "../ui/cerrar.jsx";
 
-export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
+export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importarPedidos, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
   const [menuExcel, setMenuExcel] = useState(false);
+  // reparto: el día cuyos pedidos se planifican (por defecto, el que ya se trajo, o mañana)
+  const conPedidos = sectorDe(activeProject).ver.entrega && importarPedidos;
+  const [fechaPedidos, setFechaPedidos] = useState(() => constraints?.diaUnico || masDias(ymd(), 1));
   function elegirExcel(que) {
     setMenuExcel(false);
     if (que === "vehiculos") downloadVehicleXLSX();
@@ -50,12 +55,23 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
 
         <div className="op-sep" />
 
-        {/* Paradas importadas de Planning */}
+        {/* Reparto: los pedidos de un día (Planificación → Pedidos) */}
+        {conPedidos ? <>
+          <input type="date" className="op-input" aria-label="Día de los pedidos" value={fechaPedidos} onChange={e => e.target.value && setFechaPedidos(e.target.value)} style={{ height: 32, width: 150 }} />
+          <button onClick={() => importarPedidos(fechaPedidos)} disabled={importing} className={`op-btn${constraints?.diaUnico === fechaPedidos && tasks.length ? " op-ok" : ""}`}
+            title={constraints?.diaUnico ? `Pedidos del ${fechaLarga(constraints.diaUnico)}` : "Traer los pedidos de ese día"}>
+            {importing ? <>{girando} Trayendo…</>
+              : constraints?.diaUnico === fechaPedidos && tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} pedidos</>
+              : <><Download size={14} /> Traer los pedidos del día</>}
+          </button>
+        </> : (
+        /* Paradas importadas de Planning */
         <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planificación">
           {importing ? <>{girando} Importando…</>
             : tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} paradas</>
             : <><Download size={14} /> Importar desde Planificación</>}
         </button>
+        )}
 
 
         <button onClick={() => setShowC(!showC)} className={`op-btn${showC ? " op-activo" : ""}`} title={t("restricciones", lang)}><SlidersHorizontal size={14} /><span className="op-texto-medio">{t("restricciones", lang)}</span></button>
@@ -88,7 +104,7 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
               </>}
             </div>
             <div className="op-sep" />
-            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn" title={t("publicarRutas", lang)}><Send size={14} /><span className="op-texto-medio">{t("publicarRutas", lang)}</span></button>
+            <button onClick={() => { const now = new Date(); setPublishModal({ tipo: "ruta", mes: constraints?.diaUnico ? constraints.diaUnico.slice(0, 7) : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` }); }} className="op-btn" title={t("publicarRutas", lang)}><Send size={14} /><span className="op-texto-medio">{t("publicarRutas", lang)}</span></button>
             {/* Deshacer / rehacer movimientos manuales del Gantt */}
             <div style={{ display: "flex", gap: 2 }}>
               <button onClick={undoMove} disabled={!canUndoMove} className="op-btn op-fantasma op-icono" title={canUndoMove ? `Deshacer: ${moveHistory[historyIndex]?.label || "último movimiento"}` : "Nada que deshacer"}><Undo2 size={15} /></button>
@@ -295,7 +311,7 @@ export function AvisosEscenario({ activeProject, cloudConflict, cloudSync, focus
   );
 }
 
-export function VentanaPublicar({ publishModal, publishToRoutes, publishing, setPublishModal }) {
+export function VentanaPublicar({ publishModal, publishToRoutes, publishing, setPublishModal, diaUnico = null }) {
   return (
     <>
       {/* Publish modal */}
@@ -342,7 +358,14 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
               <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>Así lo verán los conductores en la app (p. ej. «Recogida de vidrio»).</div>
             </div>
 
-            {/* Mes */}
+            {/* Reparto: un día de pedidos (solo se sustituyen las rutas de ese día) */}
+            {diaUnico ? (
+              <div style={{ marginBottom: 22, fontSize: 12, color: C.text }}>
+                <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Día</div>
+                {fechaLarga(diaUnico).replace(/^./, c => c.toUpperCase())}
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>Se sustituyen solo las rutas de ese día que no se hayan empezado; los demás días no se tocan.</div>
+              </div>
+            ) : (
             <div style={{ marginBottom: 22 }}>
               <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, marginBottom: 6 }}>Mes</div>
               <input
@@ -357,6 +380,7 @@ export function VentanaPublicar({ publishModal, publishToRoutes, publishing, set
                 }}
               />
             </div>
+            )}
 
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setPublishModal(null)} disabled={publishing} className="op-btn" style={{ flex: 1 }}>Cancelar</button>

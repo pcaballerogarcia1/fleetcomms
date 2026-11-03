@@ -1,5 +1,5 @@
 // Pedidos con fecha y pedidos fijos en la base de datos (ver datos.js).
-import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { logAudit } from "../audit.js";
 import { pedidosDeFijos } from "./datos.js";
@@ -67,4 +67,15 @@ export async function anadirClienteNuevo(projectId, orgId, cliente, campos) {
   const punto = { lat: cliente.lat, lng: cliente.lng, Cliente: cliente.nombre, Dirección: cliente.direccion, ...campos };
   // de una vez, la cree o la amplíe (leerla antes, si aún no existe, no lo permiten las reglas)
   await setDoc(ref, { id, name: "Clientes nuevos", type: "pedidos", color: "#22d3ee", visible: true, markers: arrayUnion(punto), projectId, orgId, createdAt: serverTimestamp() }, { merge: true });
+}
+
+/** Los pedidos de un día (una vez, para planificarlo) */
+export async function leerPedidosDelDia(orgId, projectId, fecha) {
+  const s = await getDocs(query(collection(db, "pedidos"), where("org_id", "==", orgId), where("projectId", "==", projectId), where("fecha", "==", fecha)));
+  return lista(s);
+}
+/** Al publicar el día: en qué ruta (vehículo) va cada pedido */
+export async function marcarEnRuta(porPedido) {
+  const ahora = Date.now();
+  await Promise.all(Object.entries(porPedido).map(([id, ruta]) => updateDoc(doc(db, "pedidos", id), { ruta, publicadoEn: ahora }).catch(() => {})));
 }

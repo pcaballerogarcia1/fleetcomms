@@ -128,6 +128,8 @@ export function taskToUbicacion(task, idx) {
     nota: "",
     // hora prevista (minutos del día), para comparar con la hora en que se hizo
     horaPlan: Number.isFinite(task._start) ? Math.round(task._start % 1440) : null,
+    // reparto: el pedido de la bandeja (Planificación → Pedidos) del que sale la parada
+    ...(task._pedidoId ? { pedidoId: task._pedidoId } : {}),
     // limpieza viaria: la forma del tramo de calle (lat, lng, lat, lng…) y sus metros
     ...(Array.isArray(campos.geom) && campos.geom.length >= 4 ? { geom: campos.geom.map(Number), metros: +campos.metros || null } : {}),
   };

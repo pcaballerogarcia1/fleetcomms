@@ -313,7 +313,8 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
                   <td style={{ ...td, color: C.muted }}>{p.notas}</td>
                   <td style={td}>{p.origen === "fijo" && <span style={{ fontSize: 10, color: C.violet, border: `1px solid ${C.violet}55`, borderRadius: 8, padding: "1px 6px" }}>fijo</span>}
                     {p.origen === "excel" && <span style={{ fontSize: 10, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "1px 6px" }}>Excel</span>}
-                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}</td>
+                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}
+                    {p.ruta && !anulado && <span title="Publicado en esta ruta" style={{ fontSize: 10, color: C.green, border: `1px solid ${C.green}55`, borderRadius: 8, padding: "1px 6px", marginLeft: 4, whiteSpace: "nowrap" }}>en ruta · {p.ruta}</span>}</td>
                   <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
                     {anulado
                       ? <button className="op-btn" style={{ height: 26, fontSize: 11 }} onClick={() => anularPedido(p.id, false)}><RotateCcw size={12} />Recuperar</button>

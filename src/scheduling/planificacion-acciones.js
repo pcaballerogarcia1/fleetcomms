@@ -22,6 +22,8 @@ import { enrichWithOSRM } from "./osrm.js";
 import { medirCarretera, textoCarretera } from "./carretera.js";
 import { cargarVecinos } from "./vecinos-guardados.js";
 import { fijarCarretera, fueraDeAutonomia, fueraDeCapacidad } from "../vrp-engine.js";
+import { diaDelMes, fechaLarga, tareasDePedidos } from "../pedidos/datos.js";
+import { leerPedidosDelDia, marcarEnRuta } from "../pedidos/store.js";
 
 // La librería de Excel se descarga solo cuando se usa
 const loadXLSX = () => import("xlsx");
@@ -108,7 +110,7 @@ export async function restorePoint(ctx, p) {
 }
 
 export async function importFromPlanning(ctx) {
-  const { activeProject, onProjectUpdate, setImporting, setTasks } = ctx;
+  const { activeProject, onProjectUpdate, setImporting, setTasks, setConstraints } = ctx;
   if (!activeProject) return;
   setImporting(true);
   try {
@@ -122,6 +124,7 @@ export async function importFromPlanning(ctx) {
 
     const uniqueBarrios = [...new Set(allTasks.map(t => t.barrio).filter(Boolean))];
     setTasks(allTasks);
+    setConstraints?.(c => (c.diaUnico ? { ...c, diaUnico: null } : c)); // ya no es un día de pedidos
     logAudit({ modulo: "Scheduling", accion: "Importó las paradas de Planning", detalle: `${allTasks.length} paradas` });
     onProjectUpdate({
       planning: {
@@ -136,6 +139,40 @@ export async function importFromPlanning(ctx) {
     alert("Error al importar: " + e.message);
   }
   setImporting(false);
+}
+
+/**
+ * Reparto: las paradas son los pedidos de un día (Planificación → Pedidos).
+ * El escenario es de ese día solo (día 0 = esa fecha) y mira el cuadrante de
+ * ese día; al publicar, se sustituyen solo las rutas de esa fecha.
+ */
+export async function importarPedidosDelDia(ctx, fecha) {
+  const { activeProject, orgId, onProjectUpdate, setImporting, setTasks, setConstraints } = ctx;
+  if (!activeProject?._id || !orgId || !fecha) return;
+  setImporting(true);
+  try {
+    const pedidos = await leerPedidosDelDia(orgId, activeProject._id, fecha);
+    let durDefecto = null;
+    try { const s = await getDoc(doc(db, "planning_settings", activeProject._id)); durDefecto = s.exists() ? s.data().defaultDuracion : null; } catch { /* sin ajustes */ }
+    const tareas = tareasDePedidos(pedidos, durDefecto);
+    if (!tareas.length) { alert(`No hay pedidos para el ${fechaLarga(fecha)}.\nApúntalos en Planificación → Pedidos.`); return; }
+    // el cuadrante que se mira es el del mes del proyecto: el de esa fecha
+    if (activeProject.mes !== fecha.slice(0, 7)) await onProjectUpdate({ mes: fecha.slice(0, 7) });
+    setTasks(tareas);
+    setConstraints(c => ({ ...c, diaUnico: fecha, maxDays: 1, usarFrecuencias: false }));
+    logAudit({ modulo: "Scheduling", accion: "Trajo los pedidos de un día", detalle: `${fecha} · ${tareas.length} pedidos`, projectId: activeProject._id });
+  } catch (e) {
+    console.error("importarPedidosDelDia:", e);
+    alert("No se pudieron traer los pedidos: " + (e.message || e));
+  } finally { setImporting(false); }
+}
+
+/** Un recurso con sus franjas del mes → solo las de ese día del mes, como día 0 del escenario */
+function soloElDia(r, dia) {
+  const out = { ...r };
+  if (r._dayWindows) out._dayWindows = Object.prototype.hasOwnProperty.call(r._dayWindows, dia - 1) ? { 0: r._dayWindows[dia - 1] } : {};
+  if (r._coverDays) out._coverDays = r._coverDays.includes(dia - 1) ? [0] : [];
+  return out;
 }
 
 export async function runGenerate(ctx) {
@@ -183,7 +220,7 @@ export async function runGenerate(ctx) {
     // disponibilidad de VEHÍCULOS (taller/avería/ITV) sí, en los dos modos.
     // La ruta maestra es una semana tipo: tampoco mira el cuadrante de un mes concreto.
     const rosterLibre = constraints.rosterMode === "libre" || !!constraints.usarFrecuencias;
-    const rosterWorkers = workers.map(w => ({
+    const rosterWorkersMes = workers.map(w => ({
       ...w,
       _tw: turnoWindow(w.turno, constraints.startMin, constraints.endMin),
       ...(schedDaysInMonth && !rosterLibre
@@ -197,8 +234,8 @@ export async function runGenerate(ctx) {
     // franja de cada día según el cuadrante (vehicleDayWindows). En modo
     // libre los vinculados solo dan la estructura de turnos del vehículo
     // (mañana+tarde...), no quién lo lleva cada día.
-    const vehiclesForVRP = vehiclesWithDepot.map(v => {
-      const linked = rosterWorkers.filter(w => w.vehiculoId === (v._id || v.id));
+    const vehiclesForVRPMes = vehiclesWithDepot.map(v => {
+      const linked = rosterWorkersMes.filter(w => w.vehiculoId === (v._id || v.id));
       const daily = schedDaysInMonth
         ? vehicleDayWindows(v._id || v.id, rosterLibre ? [] : linked, vehicleRosterGrid, schedDaysInMonth)
         : null;
@@ -218,6 +255,11 @@ export async function runGenerate(ctx) {
         .sort((a, b) => a - b);
       return { ...v, _effectiveStart: effStart, _effectiveEnd: effEnd, _shiftBreaks: shiftBreaks, ...dayFields };
     });
+    // Reparto, un día de pedidos: el escenario es ese día solo (día 0 = esa fecha, con su cuadrante)
+    const diaUnico = diaDelMes(constraints.diaUnico, activeProject?.mes);
+    const rosterWorkers = diaUnico ? rosterWorkersMes.map(w => soloElDia(w, diaUnico)) : rosterWorkersMes;
+    const vehiclesForVRP = diaUnico ? vehiclesForVRPMes.map(v => soloElDia(v, diaUnico)) : vehiclesForVRPMes;
+    if (diaUnico) constraints = { ...constraints, maxDays: 1 };
 
     // ── Step 1: Vehicle VRP ──────────────────────────────────────
     // generateScenario preserves resource order: vr.schedule[i] ↔ vehiclesForSchedule[i]
@@ -858,11 +900,14 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
   setPublishing(true);
   const startMin = constraints.startMin;
   const col = collection(db, "planes");
+  // reparto, un día de pedidos: el día 0 del escenario es esa fecha, y solo se sustituyen las rutas de ese día
+  const diaUnico = diaDelMes(constraints.diaUnico, mes);
   try {
     // Rutas ya publicadas de este proyecto y mes (desde aquí o desde
     // Rostering): las no empezadas se sustituyen; las empezadas se
     // conservan y no se vuelven a publicar (antes se duplicaban).
-    const previas = activeProject?._id ? await planesPublicados(orgId, activeProject._id, mes) : [];
+    const previas = (activeProject?._id ? await planesPublicados(orgId, activeProject._id, mes) : [])
+      .filter(d => !diaUnico || diaDelPlan(d.data()) === diaUnico);
     const empezadas = new Set(previas.filter(d => planEmpezado(d.data())).map(d => `${diaDelPlan(d.data())}|${d.data().vehiculoNombre || ""}`));
     const aSustituir = previas.filter(d => !planEmpezado(d.data()));
     let yaEmpezadas = 0;
@@ -924,7 +969,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
         // d empieza en 0 (día 1 del escenario), el cuadrante en 1 (día
         // del mes) — antes se consultaba con d tal cual, es decir, el
         // cuadrante del día ANTERIOR.
-        const calDay = d + 1;
+        const calDay = diaUnico ? diaUnico + d : d + 1;
         const vCode = vehicleCodeOnDay(vehicleRosterGrid, vid ?? "", calDay);
         if (isVehicleUnavailable(vCode)) {
           skipped.push({ label: `${vehicleLabel} (${VEHICLE_STATUS_META[vCode]?.label ?? vCode})`, day: calDay, stops: byDay[d].length });
@@ -960,9 +1005,9 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
         const recorrido = stops
           .filter(a => hasCoords(a.lat, a.lng))
           .map(a => ({ lat: +a.lat, lng: +a.lng }));
-        const dayLabel = `Día ${String(d + 1).padStart(2, "0")}`;
-        if (empezadas.has(`${d + 1}|${row.nombre || row.matricula || ""}`)) { yaEmpezadas++; continue; }
-        const nombre = totalDays > 1
+        const dayLabel = `Día ${String(calDay).padStart(2, "0")}`;
+        if (empezadas.has(`${calDay}|${row.nombre || row.matricula || ""}`)) { yaEmpezadas++; continue; }
+        const nombre = totalDays > 1 || diaUnico
           ? `${conductorLabel} · ${dayLabel} · ${mes}`
           : `${conductorLabel} · ${mes}`;
         docs.push({
@@ -970,7 +1015,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
           turno: row.turno || "",
           conductorNombre: conductorLabel,
           vehiculoNombre: row.nombre || row.matricula || "",
-          mes, diaServicio: dayLabel, diaNum: d + 1,
+          mes, diaServicio: dayLabel, diaNum: calDay, ...(diaUnico ? { fecha: constraints.diaUnico } : {}),
           ubicaciones, recorrido,
           // lo previsto ese día (jornada y km de la ruta), para Análisis → Realizado
           plan: planDelDia(row.assignments.filter(a => Math.floor((a._start - startMin) / 1440) === d),
@@ -1001,7 +1046,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       if (!ok) { setPublishing(false); return; }
     }
 
-    if (aSustituir.length && !confirm(`Ya hay ${aSustituir.length} ruta(s) publicadas de este proyecto en ${mes} que no se han empezado: se sustituirán por estas ${docs.length}.${yaEmpezadas ? ` ${yaEmpezadas} vehículo-día ya empezados se conservan y no se vuelven a publicar.` : ""}\n\n¿Publicar?`)) { setPublishing(false); return; }
+    if (aSustituir.length && !confirm(`Ya hay ${aSustituir.length} ruta(s) publicadas de este proyecto ${diaUnico ? `para el ${fechaLarga(constraints.diaUnico)}` : `en ${mes}`} que no se han empezado: se sustituirán por estas ${docs.length}.${yaEmpezadas ? ` ${yaEmpezadas} vehículo-día ya empezados se conservan y no se vuelven a publicar.` : ""}\n\n¿Publicar?`)) { setPublishing(false); return; }
 
     // Primero las nuevas y después se quitan las viejas: si algo falla a
     // medias puede quedar alguna repetida, pero nunca un conductor sin ruta.
@@ -1013,9 +1058,16 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       await Promise.all(aSustituir.slice(i, i + CHUNK).map(d => deleteDoc(d.ref)));
     }
 
+    // reparto: cada pedido de la bandeja dice en qué ruta va
+    if (diaUnico) {
+      const porPedido = {};
+      for (const d of docs) for (const u of d.ubicaciones) if (u.pedidoId) porPedido[u.pedidoId] = d.vehiculoNombre || d.conductorNombre;
+      await marcarEnRuta(porPedido);
+    }
     setPublishModal(null);
     // aviso al móvil de los conductores (las rutas por vehículo son de todos)
-    enviarAvisos(orgId, "todos", { titulo: "Rutas nuevas", cuerpo: `Ya están publicadas las rutas de ${mes}.`, url: "/rutas", etiqueta: `rutas-${mes}` })
+    const cuando = diaUnico ? `del ${fechaLarga(constraints.diaUnico)}` : `de ${mes}`;
+    enviarAvisos(orgId, "todos", { titulo: "Rutas nuevas", cuerpo: `Ya están publicadas las rutas ${cuando}.`, url: "/rutas", etiqueta: `rutas-${diaUnico ? constraints.diaUnico : mes}` })
       .then(r => console.info("[avisos]", resumenEnvio(r)), e => console.warn("[avisos] no enviados:", e));
     logAudit({ modulo: "Scheduling", accion: "Publicó los planes en Rutas", detalle: `${docs.length} plan(es)${aSustituir.length ? ` · sustituye ${aSustituir.length}` : ""}${yaEmpezadas ? ` · ${yaEmpezadas} ya empezados se conservan` : ""}` });
   } catch (e) {

@@ -66,3 +66,22 @@ describe("pedidos", () => {
     expect(leerPegado("solo una línea", cs).error).toMatch(/títulos/);
   });
 });
+
+describe("pedidos → paradas del motor", async () => {
+  const { tareasDePedidos, diaDelMes } = await import("./datos.js");
+  it("con su carga, franja, duración y lo que verá el conductor; sin los anulados", () => {
+    const c = { nombre: "Bar El Puente", direccion: "Rúa Mayor 12, Salamanca", lat: 40.96, lng: -5.66, telefono: "923" };
+    const ts = tareasDePedidos([
+      { id: "a", ...nuevoPedido({ cliente: c, ref: "P-1", bultos: 3, kg: 45, desde: "9", hasta: "11", notas: "puerta trasera" }) },
+      { id: "b", ...nuevoPedido({ cliente: c, bultos: 2 }) },
+      { id: "c", ...nuevoPedido({ cliente: c, bultos: 9 }), estado: "anulado" },
+    ], 8);
+    expect(ts).toHaveLength(2);
+    expect(ts[0]).toMatchObject({ _id: "ped_a", _pedidoId: "a", lat: 40.96, nombre: "Bar El Puente", demanda: 45, duracion: 8, windowStart: 540, windowEnd: 660,
+      campos: { Cliente: "Bar El Puente", Pedido: "P-1", Bultos: 3, Kg: 45, Notas: "puerta trasera", Teléfono: "923" } });
+    expect(ts[1]).toMatchObject({ demanda: 2, duracion: 8 });
+    expect(ts[1].windowStart).toBeUndefined();
+    expect(diaDelMes("2026-11-09", "2026-11")).toBe(9);
+    expect(diaDelMes("2026-12-01", "2026-11")).toBe(null);
+  });
+});

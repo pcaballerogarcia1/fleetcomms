@@ -153,3 +153,30 @@ export function nuevoFijo({ orgId, projectId, cliente, dias, ref, bultos, kg, de
   const p = nuevoPedido({ orgId, projectId, fecha: null, cliente, ref, bultos, kg, desde, hasta, duracion, notas });
   return { org_id: p.org_id, projectId: p.projectId, cliente: p.cliente, dias: [...new Set(dias)].sort(), ref: p.ref, bultos: p.bultos, kg: p.kg, desde: p.desde, hasta: p.hasta, duracion: p.duracion, notas: p.notas };
 }
+
+const aMin = h => { const m = String(h || "").match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1] * 60 + +m[2] : null; };
+/**
+ * Los pedidos de un día → paradas del motor de rutas (como las de Planificación:
+ * con sus columnas para el conductor, su carga, su franja y su duración).
+ * Los anulados no; dos pedidos del mismo cliente van como dos paradas en el mismo sitio.
+ */
+export function tareasDePedidos(pedidos, duracionDefecto = null) {
+  return (pedidos || []).filter(p => p.estado !== "anulado" && Number.isFinite(+p.cliente?.lat) && Number.isFinite(+p.cliente?.lng)).map(p => {
+    const c = p.cliente;
+    const campos = Object.fromEntries(Object.entries({
+      Cliente: c.nombre, Dirección: c.direccion, Teléfono: c.telefono, "Persona de contacto": c.contacto,
+      Pedido: p.ref, Bultos: p.bultos, Kg: p.kg, Notas: p.notas,
+    }).filter(([, v]) => v != null && v !== ""));
+    const t = { _id: `ped_${p.id}`, _pedidoId: p.id, lat: +c.lat, lng: +c.lng, nombre: c.nombre || c.direccion || "", barrio: "", campos };
+    const carga = p.kg > 0 ? p.kg : p.bultos > 0 ? p.bultos : 0; // como en Planificación: si hay kilos, cuentan los kilos
+    if (carga) t.demanda = carga;
+    const dur = p.duracion > 0 ? p.duracion : duracionDefecto > 0 ? duracionDefecto : null;
+    if (dur) t.duracion = dur;
+    const desde = aMin(p.desde), hasta = aMin(p.hasta);
+    if (desde != null) { t.windowStart = desde; t.windowEnd = hasta != null && hasta >= desde ? hasta : desde; }
+    return t;
+  });
+}
+
+/** El día del mes (1-31) de «AAAA-MM-DD» si es de ese mes «AAAA-MM»; si no, null */
+export const diaDelMes = (fecha, mes) => (fecha && mes && String(fecha).slice(0, 7) === mes ? Number(String(fecha).slice(8, 10)) : null);
