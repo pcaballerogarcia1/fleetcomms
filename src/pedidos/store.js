@@ -79,3 +79,18 @@ export async function marcarEnRuta(porPedido) {
   const ahora = Date.now();
   await Promise.all(Object.entries(porPedido).map(([id, ruta]) => updateDoc(doc(db, "pedidos", id), { ruta, publicadoEn: ahora }).catch(() => {})));
 }
+
+/** Las rutas publicadas de un día de pedidos (planes con esa fecha), en directo: el resultado de cada entrega */
+export function escucharRutasDelDia(orgId, projectId, fecha, cb, onError) {
+  const q = query(collection(db, "planes"), where("org_id", "==", orgId), where("fecha", "==", fecha));
+  return onSnapshot(q, s => cb(lista(s).filter(p => p.projectId === projectId)), e => onError?.(e));
+}
+
+/** Pasa pedidos no entregados a otra fecha: uno nuevo igual en esa fecha, y el original dice adónde fue */
+export async function reprogramarPedidos(lista, fecha, sesion, reprogramado) {
+  for (const p of lista) {
+    await crearPedido(reprogramado(p, fecha), sesion);
+    await updateDoc(doc(db, "pedidos", p.id), { reprogramadoA: fecha });
+  }
+  logAudit({ modulo: "Planning", accion: "Pasó pedidos no entregados a otro día", detalle: `${lista.length} pedidos · ${lista[0]?.fecha || ""} → ${fecha}`, projectId: lista[0]?.projectId || null });
+}

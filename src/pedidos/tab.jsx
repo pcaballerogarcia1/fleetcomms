@@ -2,15 +2,49 @@
 // Se apuntan en segundos (el cliente se busca por su nombre en la lista
 // importada; uno nuevo, por su dirección), se pegan desde Excel, y los fijos
 // («cada lunes, 2 cajas al Bar Pepe») salen solos los días que tocan.
-import { ChevronLeft, ChevronRight, ClipboardPaste, Plus, Repeat, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, ClipboardPaste, PackageCheck, PackageX, Plus, Repeat, RotateCcw, Trash2, Truck, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
 import { BotonCerrar } from "../ui/cerrar.jsx";
 import { geocodificar } from "../concursos/geocodificar.js";
-import { DIAS, buscarClientes, clientesDe, fechaLarga, leerPegado, masDias, nuevoFijo, nuevoPedido, resumenDia, ymd } from "./datos.js";
-import { anadirClienteNuevo, anularPedido, borrarFijo, borrarPedido, crearPedido, crearPedidos, crearPedidosDeFijos, escucharFijos, escucharPedidos, guardarFijo } from "./store.js";
+import { DIAS, buscarClientes, clientesDe, fechaLarga, leerPegado, masDias, nuevoFijo, nuevoPedido, reprogramado, resultadosPorPedido, resumenDia, resumenEntregas, ymd } from "./datos.js";
+import { anadirClienteNuevo, anularPedido, borrarFijo, borrarPedido, crearPedido, crearPedidos, crearPedidosDeFijos, escucharFijos, escucharPedidos, escucharRutasDelDia, guardarFijo, reprogramarPedidos } from "./store.js";
+import { nombreMotivo } from "../entregas/datos.js";
+import { VentanaEntrega } from "../entregas/oficina.jsx";
 
 const NUM = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+const corta = f => { const [a, m, d] = f.split("-").map(Number); return new Date(a, m - 1, d).toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }); };
+const horaDe = t => (t ? new Date(t).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "");
+
+/** Lo que pasó con el pedido en la ruta: entregado, no entregado (y pasarlo a otro día) o aún en ruta */
+function CeldaEntrega({ p, r, onVer, onPasar }) {
+  const [pasando, setPasando] = useState(null); // la fecha elegida mientras se decide
+  if (p.reprogramadoA) return <span style={{ fontSize: 11, color: C.muted, display: "inline-flex", alignItems: "center", gap: 4 }}><CalendarClock size={12} />Pasado al {corta(p.reprogramadoA)}</span>;
+  if (!r) return p.ruta ? <span style={{ fontSize: 11, color: C.muted, display: "inline-flex", alignItems: "center", gap: 4 }}><Truck size={12} />En ruta · {p.ruta}</span> : null;
+  const e = r.ub.entrega || {};
+  const vehiculo = r.plan.vehiculoNombre || r.plan.conductorNombre || "";
+  if (r.estado === "pendiente") return <span style={{ fontSize: 11, color: C.blueText, display: "inline-flex", alignItems: "center", gap: 4 }}><Truck size={12} />En ruta · {vehiculo}</span>;
+  const ok = r.estado === "entregada";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: ok ? C.green : C.red, display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {ok ? <PackageCheck size={12} /> : <PackageX size={12} />}
+        {ok ? `Entregado${e.recibe ? ` · ${e.sinFirma ? "en " : ""}${e.recibe}` : ""}` : `No entregado · ${nombreMotivo(e.motivo)}`}
+        <span style={{ fontWeight: 400, color: C.muted }}>· {horaDe(e.en || r.ub.realizadoEn)}</span>
+      </span>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {r.ub.entrega && <button className="op-btn" style={{ height: 24, fontSize: 11 }} onClick={onVer} aria-label={`Ver la entrega de ${p.cliente?.nombre}`}>Ver</button>}
+        {!ok && (pasando == null
+          ? <button className="op-btn" style={{ height: 24, fontSize: 11 }} onClick={() => setPasando(masDias(p.fecha, 1))}><CalendarClock size={12} />Pasar a otro día</button>
+          : <>
+            <input type="date" className="op-input" aria-label={`Nueva fecha para ${p.cliente?.nombre}`} value={pasando} min={masDias(p.fecha, 1)} onChange={x => x.target.value && setPasando(x.target.value)} style={{ height: 24, width: 140, fontSize: 11 }} />
+            <button className="op-btn op-primario" style={{ height: 24, fontSize: 11 }} onClick={() => { onPasar(pasando); setPasando(null); }}>Pasar</button>
+            <button className="op-btn" style={{ height: 24, fontSize: 11 }} onClick={() => setPasando(null)}>No</button>
+          </>)}
+      </div>
+    </div>
+  );
+}
 const th = { textAlign: "left", fontSize: 11, color: C.muted, fontWeight: 500, padding: "6px 8px", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" };
 const td = { fontSize: 12, padding: "7px 8px", borderBottom: `1px solid ${C.border}`, verticalAlign: "top" };
 const caja = { border: `1px solid ${C.border}`, borderRadius: 10, background: C.card, padding: "12px 14px", marginBottom: 12 };
@@ -256,6 +290,11 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
     return escucharPedidos(orgId, projectId, fecha, lista => setLeidos({ fecha, lista }), e => setError(`No se pudieron leer los pedidos (${e.code || e.message})`));
   }, [orgId, projectId, fecha]);
   useEffect(() => (orgId && projectId ? escucharFijos(orgId, projectId, setFijos, e => setError(`No se pudieron leer los fijos (${e.code || e.message})`)) : undefined), [orgId, projectId]);
+  // las rutas publicadas de ese día: qué ha pasado con cada pedido (en directo, según entregan)
+  const [rutas, setRutas] = useState({ fecha: null, lista: [] });
+  useEffect(() => (orgId && projectId ? escucharRutasDelDia(orgId, projectId, fecha, lista => setRutas({ fecha, lista }), () => {}) : undefined), [orgId, projectId, fecha]);
+  const resultados = useMemo(() => resultadosPorPedido(rutas.fecha === fecha ? rutas.lista : []), [rutas, fecha]);
+  const [verEntrega, setVerEntrega] = useState(null);
   // los fijos de ese día salen solos (desde hoy en adelante: los días pasados no se tocan)
   useEffect(() => {
     if (!pedidos || !fijos.length || fecha < ymd()) return;
@@ -271,6 +310,9 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
   const guardarUnFijo = x => guardarFijo(x.id ? x : nuevoFijo({ orgId, projectId, ...x }), sesion);
 
   const r = resumenDia(pedidos || []);
+  const re = resumenEntregas(pedidos || [], resultados);
+  const noEntregados = (pedidos || []).filter(p => p.estado !== "anulado" && !p.reprogramadoA && resultados.get(p.id)?.estado === "no_entregada");
+  const pasar = (lista, nueva) => reprogramarPedidos(lista, nueva, sesion, reprogramado).catch(e => setError(`No se pudieron pasar a otro día (${e.code || e.message})`));
   const hoy = ymd();
   const botonDia = (txt, f) => <button className="op-btn" onClick={() => setFecha(f)} style={{ height: 30, fontWeight: fecha === f ? 600 : 400, borderColor: fecha === f ? C.blue : undefined }}>{txt}</button>;
 
@@ -288,11 +330,17 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        {[["Pedidos", r.pedidos], ["Bultos", NUM.format(r.bultos)], ["Kg", NUM.format(r.kg)], ["De pedidos fijos", r.fijos]].map(([t, v]) => (
+        {[["Pedidos", r.pedidos], ["Bultos", NUM.format(r.bultos)], ["Kg", NUM.format(r.kg)], ["De pedidos fijos", r.fijos],
+          ...(resultados.size ? [["Entregados", re.entregados, C.green], ["No entregados", re.noEntregados, re.noEntregados ? C.red : undefined], ["En ruta", re.enRuta]] : [])].map(([t, v, color]) => (
           <div key={t} style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", minWidth: 110, background: C.card }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{v}</div><div style={{ fontSize: 11, color: C.muted }}>{t}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color }}>{v}</div><div style={{ fontSize: 11, color: C.muted }}>{t}</div>
           </div>
         ))}
+        {noEntregados.length > 0 && (
+          <button className="op-btn" onClick={() => pasar(noEntregados, masDias(fecha, 1))} style={{ alignSelf: "center", height: 32 }}>
+            <CalendarClock size={14} />Pasar {noEntregados.length === 1 ? "el no entregado" : `los ${noEntregados.length} no entregados`} al {corta(masDias(fecha, 1))}
+          </button>
+        )}
       </div>
       {clientes.length === 0 && <div style={{ fontSize: 12, color: C.amber, marginBottom: 10 }}>Todavía no hay lista de clientes: súbela en Mapa → Cargar capa (con dirección basta). Mientras, cada pedido se puede apuntar con su dirección.</div>}
       {error && <div role="alert" style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
@@ -302,7 +350,7 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
       <div style={caja}>
         {pedidos == null ? <div style={{ fontSize: 12, color: C.muted }}>Cargando…</div> : pedidos.length === 0 ? <div style={{ fontSize: 12, color: C.dim }}>No hay pedidos para este día.</div> : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr>{["Cliente", "Pedido", "Bultos", "Kg", "Franja", "Notas", "", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Cliente", "Pedido", "Bultos", "Kg", "Franja", "Notas", "", "Entrega", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
             <tbody>{pedidos.map(p => {
               const anulado = p.estado === "anulado";
               return (
@@ -313,13 +361,17 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
                   <td style={{ ...td, color: C.muted }}>{p.notas}</td>
                   <td style={td}>{p.origen === "fijo" && <span style={{ fontSize: 10, color: C.violet, border: `1px solid ${C.violet}55`, borderRadius: 8, padding: "1px 6px" }}>fijo</span>}
                     {p.origen === "excel" && <span style={{ fontSize: 10, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "1px 6px" }}>Excel</span>}
-                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}
-                    {p.ruta && !anulado && <span title="Publicado en esta ruta" style={{ fontSize: 10, color: C.green, border: `1px solid ${C.green}55`, borderRadius: 8, padding: "1px 6px", marginLeft: 4, whiteSpace: "nowrap" }}>en ruta · {p.ruta}</span>}</td>
+                    {p.origen === "reprogramado" && <span title={p.desdeFecha ? `No se entregó el ${corta(p.desdeFecha)}` : ""} style={{ fontSize: 10, color: C.amber, border: `1px solid ${C.amber}55`, borderRadius: 8, padding: "1px 6px" }}>del {p.desdeFecha ? corta(p.desdeFecha) : "otro día"}</span>}
+                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}</td>
+                  <td style={td}>{!anulado && <CeldaEntrega p={p} r={resultados.get(p.id)}
+                    onVer={() => { const x = resultados.get(p.id); setVerEntrega({ ev: { ...x.ub, planId: x.plan.id, planNombre: x.plan.nombre }, conductor: x.plan.conductorNombre || x.plan.vehiculoNombre }); }}
+                    onPasar={nueva => pasar([p], nueva)} />}</td>
                   <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
-                    {anulado
+                    {/* hecho en ruta (entregado o no): ya no se anula ni se borra; en ruta: no se borra */}
+                    {["entregada", "no_entregada"].includes(resultados.get(p.id)?.estado) ? null : anulado
                       ? <button className="op-btn" style={{ height: 26, fontSize: 11 }} onClick={() => anularPedido(p.id, false)}><RotateCcw size={12} />Recuperar</button>
                       : <button className="op-btn" style={{ height: 26, fontSize: 11 }} aria-label={`Anular el pedido de ${p.cliente?.nombre}`} onClick={() => anularPedido(p.id)}><XCircle size={12} />Anular</button>}
-                    {p.origen !== "fijo" && <>{" "}<button className="op-btn" style={{ height: 26, fontSize: 11 }} aria-label={`Borrar el pedido de ${p.cliente?.nombre}`} onClick={() => borrarPedido(p.id)}><Trash2 size={12} /></button></>}
+                    {p.origen !== "fijo" && !p.ruta && !resultados.has(p.id) && <>{" "}<button className="op-btn" style={{ height: 26, fontSize: 11 }} aria-label={`Borrar el pedido de ${p.cliente?.nombre}`} onClick={() => borrarPedido(p.id)}><Trash2 size={12} /></button></>}
                   </td>
                 </tr>
               );
@@ -328,6 +380,7 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
         )}
       </div>
 
+      {verEntrega && <VentanaEntrega ev={verEntrega.ev} orgId={orgId} conductor={verEntrega.conductor} onCerrar={() => setVerEntrega(null)} />}
       {verPegar && <VentanaPegar clientes={clientes} onAnadir={anadirPegados} onCerrar={() => setVerPegar(false)} />}
       {verFijos && <VentanaFijos fijos={fijos} clientes={clientes} onGuardar={x => guardarUnFijo(x)} onBorrar={id => borrarFijo(id)} onCerrar={() => setVerFijos(false)} />}
     </div>

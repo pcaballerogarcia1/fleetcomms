@@ -56,6 +56,6 @@ test("planificar y publicar un día de pedidos", async ({ page }) => {
   await page.getByRole("button", { name: "Planificación", exact: true }).first().click();
   await page.getByRole("button", { name: "Pedidos", exact: true }).click();
   await page.getByLabel("Fecha de los pedidos").fill(fecha);
-  await expect(page.getByText(/en ruta · /).first()).toBeVisible();
+  await expect(page.getByText(/En ruta · /).first()).toBeVisible();
   expect(errores.filter(e => !/osrm|router\.project-osrm|Failed to load resource|ERR_|cartociudad|api\/avisos/i.test(e))).toEqual([]);
 });

@@ -180,3 +180,39 @@ export function tareasDePedidos(pedidos, duracionDefecto = null) {
 
 /** El día del mes (1-31) de «AAAA-MM-DD» si es de ese mes «AAAA-MM»; si no, null */
 export const diaDelMes = (fecha, mes) => (fecha && mes && String(fecha).slice(0, 7) === mes ? Number(String(fecha).slice(8, 10)) : null);
+
+/**
+ * El resultado en ruta de cada pedido de un día, desde las rutas publicadas
+ * (planes con esa fecha): Map<pedidoId, { estado: "pendiente" | "entregada" | "no_entregada", ub, plan }>
+ */
+export function resultadosPorPedido(planes) {
+  const m = new Map();
+  for (const plan of planes || []) {
+    for (const ub of plan.ubicaciones || []) {
+      if (!ub.pedidoId) continue;
+      const estado = ub.entrega?.estado === "no_entregada" ? "no_entregada" : ub.realizado ? "entregada" : "pendiente";
+      m.set(ub.pedidoId, { estado, ub, plan });
+    }
+  }
+  return m;
+}
+
+/** Totales de lo hecho en ruta: { entregados, noEntregados, enRuta } */
+export function resumenEntregas(pedidos, resultados) {
+  const r = { entregados: 0, noEntregados: 0, enRuta: 0 };
+  for (const p of pedidos || []) {
+    if (p.estado === "anulado") continue;
+    const x = resultados.get(p.id);
+    if (!x) continue;
+    if (x.estado === "entregada") r.entregados++; else if (x.estado === "no_entregada") r.noEntregados++; else r.enRuta++;
+  }
+  return r;
+}
+
+/** Un pedido no entregado, otra vez para otra fecha (lo mismo, apuntando de dónde viene) */
+export function reprogramado(p, fecha) {
+  return {
+    ...nuevoPedido({ orgId: p.org_id, projectId: p.projectId, fecha, cliente: p.cliente, ref: p.ref, bultos: p.bultos, kg: p.kg, desde: p.desde, hasta: p.hasta, duracion: p.duracion, notas: p.notas, origen: "reprogramado" }),
+    desdePedido: p.id, desdeFecha: p.fecha,
+  };
+}

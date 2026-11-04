@@ -85,3 +85,26 @@ describe("pedidos → paradas del motor", async () => {
     expect(diaDelMes("2026-12-01", "2026-11")).toBe(null);
   });
 });
+
+describe("el resultado de la entrega en la bandeja", async () => {
+  const { resultadosPorPedido, resumenEntregas, reprogramado } = await import("./datos.js");
+  it("cruza cada pedido con su parada de la ruta", () => {
+    const planes = [{ id: "pl1", vehiculoNombre: "Camión 2", ubicaciones: [
+      { id: "u0", pedidoId: "a", realizado: true, entrega: { estado: "entregada", recibe: "Ana" } },
+      { id: "u1", pedidoId: "b", realizado: true, entrega: { estado: "no_entregada", motivo: "ausente" } },
+      { id: "u2", pedidoId: "c", realizado: false },
+      { id: "u3", realizado: true },
+    ] }];
+    const r = resultadosPorPedido(planes);
+    expect([...r.keys()]).toEqual(["a", "b", "c"]);
+    expect(r.get("b")).toMatchObject({ estado: "no_entregada", plan: { vehiculoNombre: "Camión 2" } });
+    const ps = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e", estado: "anulado" }];
+    expect(resumenEntregas(ps, r)).toEqual({ entregados: 1, noEntregados: 1, enRuta: 1 });
+  });
+  it("pasa un no entregado a otro día, con lo mismo", () => {
+    const p = { ...nuevoPedido({ orgId: "o", projectId: "p", fecha: "2026-11-04", cliente: { nombre: "Bar", lat: 1, lng: 2 }, ref: "P-9", bultos: 2, desde: "9", hasta: "11", notas: "x" }), id: "b", ruta: "Camión 2" };
+    const n = reprogramado(p, "2026-11-05");
+    expect(n).toMatchObject({ fecha: "2026-11-05", ref: "P-9", bultos: 2, desde: "09:00", hasta: "11:00", notas: "x", origen: "reprogramado", desdePedido: "b", desdeFecha: "2026-11-04", estado: "pendiente", cliente: { nombre: "Bar" } });
+    expect(n.ruta).toBeUndefined();
+  });
+});
