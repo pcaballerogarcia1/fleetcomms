@@ -6,6 +6,9 @@ import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
 import { lineaDe } from "../viaria/callejero.js";
 import { capaFondo, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
+import { LocateFixed } from "lucide-react";
+
+const AZUL_YO = "#2f80ff";
 
 // Componente base de botón con hover
 export const Btn = ({children, onClick, style={}, variant="primary", size="md", disabled=false, title=""}) => {
@@ -86,6 +89,43 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   const mapRef=useRef(null);
   const layersRef=useRef([]);
 
+  // dónde está el conductor: un punto azul (y lo que puede fallar el GPS), mientras el mapa está abierto
+  const [yo,setYo]=useState(null); // { lat, lng, precision }
+  const [sinGps,setSinGps]=useState(null); // por qué no hay posición (texto) o null
+  const yoCapasRef=useRef(null);
+  const yoRef=useUltimo(yo);
+  useEffect(()=>{
+    if(!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(
+      p=>{ setYo({lat:p.coords.latitude,lng:p.coords.longitude,precision:p.coords.accuracy}); setSinGps(null); },
+      e=>setSinGps(e.code===1?"El móvil no deja usar tu ubicación: actívala para esta app en los ajustes.":"Todavía no hay señal de GPS."),
+      {enableHighAccuracy:true,maximumAge:10000,timeout:30000},
+    );
+    return()=>navigator.geolocation.clearWatch(id);
+  },[]);
+  function pintarYo(){
+    const L=window.L, map=mapRef.current, p=yoRef.current;
+    if(!L||!map||!p)return;
+    const ll=[p.lat,p.lng];
+    if(!yoCapasRef.current){
+      const circulo=L.circle(ll,{radius:p.precision||0,color:AZUL_YO,weight:1,opacity:0.5,fillColor:AZUL_YO,fillOpacity:0.12,interactive:false}).addTo(map);
+      const punto=L.circleMarker(ll,{radius:8,color:"#fff",weight:3,fillColor:AZUL_YO,fillOpacity:1,interactive:false}).addTo(map);
+      yoCapasRef.current={circulo,punto};
+    } else {
+      yoCapasRef.current.circulo.setLatLng(ll).setRadius(p.precision||0);
+      yoCapasRef.current.punto.setLatLng(ll);
+    }
+    yoCapasRef.current.punto.bringToFront();
+  }
+  const pintarYoRef=useUltimo(pintarYo);
+  useEffect(()=>{ pintarYoRef.current(); },[yo,pintarYoRef]);
+  const [aviso,setAviso]=useState(null);
+  function centrarEnMi(){
+    const p=yoRef.current, map=mapRef.current;
+    if(p&&map){ map.setView([p.lat,p.lng],Math.max(map.getZoom(),16),{animate:true}); setAviso(null); }
+    else setAviso(sinGps||"Buscando tu posición…");
+  }
+
   // el mapa se crea una vez; pinta siempre con las funciones de ahora
   const initMapRef = useUltimo(initMap);
   useEffect(()=>{
@@ -157,6 +197,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       layersRef.current.push(m);
     });
     if(pts.length>0) map.fitBounds(pts.map(u=>[u.lat,u.lng]),{padding:[20,20]});
+    pintarYo();
   }
 
   const drawLayersRef = useUltimo(drawLayers);
@@ -174,10 +215,17 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
 
   return (
     <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-      <div ref={divRef} style={{height,background:tono("#151a26", "#eaecf3")}}/>
+      <div style={{position:"relative"}}>
+        <div ref={divRef} style={{height,background:tono("#151a26", "#eaecf3")}}/>
+        <button type="button" onClick={centrarEnMi} aria-label="Dónde estoy" title="Dónde estoy"
+          style={{position:"absolute",top:10,right:10,zIndex:1000,width:40,height:40,borderRadius:10,border:`1px solid ${C.border}`,background:C.card,color:yo?AZUL_YO:C.muted,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 2px 8px #0006"}}>
+          <LocateFixed size={20}/>
+        </button>
+        {aviso&&<div role="status" onClick={()=>setAviso(null)} style={{position:"absolute",top:56,right:10,left:60,zIndex:1000,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.text,boxShadow:"0 2px 8px #0006"}}>{aviso}</div>}
+      </div>
       <div style={{background:C.card,padding:"7px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",gap:12}}>
-          {[[C.green,"Realizada"],[C.blue,"Pendiente"],[C.orange,"Seleccionada"]].map(([c,l])=>(
+          {[[C.green,"Realizada"],[C.blue,"Pendiente"],[C.orange,"Seleccionada"],...(yo?[[AZUL_YO,"Tú"]]:[])].map(([c,l])=>(
             <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
               <div style={{width:8,height:8,borderRadius:"50%",background:c}}/>
               <span style={{fontSize:10,color:C.muted}}>{l}</span>
