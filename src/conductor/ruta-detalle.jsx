@@ -13,6 +13,22 @@ import { tono } from "../tema.js";
 import { PackageCheck, PackageX } from "lucide-react";
 import { conEntrega, cuentaEntregas, franjaTexto, nombreMotivo, queSeEntrega } from "../entregas/datos.js";
 import { PantallaEntrega } from "../entregas/pantalla.jsx";
+import { Clock } from "lucide-react";
+import { frenteAPrevista, horaPrevista, textoDesfase } from "./horas.js";
+
+// La hora prevista de la parada (del Scheduling) y, si ya está hecha, cuándo se hizo frente a ella
+function HoraParada({ ub, done }) {
+  const prevista = horaPrevista(ub);
+  if (!prevista) return null;
+  const r = done ? frenteAPrevista(ub) : null;
+  const color = !r ? C.muted : r.como === "tarde" ? C.amber : r.como === "antes" ? C.blueText : C.green;
+  return (
+    <div style={{ fontSize: 11, color, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+      <Clock size={12} />
+      <span>Prevista {prevista}{r ? <> · hecha {r.hecha} ({textoDesfase(r.min)})</> : null}</span>
+    </div>
+  );
+}
 
 // Botón de dictar con la voz (solo si el móvil lo permite)
 function BotonDictar({ d }) {
@@ -125,6 +141,7 @@ function TarjetaUbic({ub,isSel,isExp,onSelect,onExpand,onMarcar,onMarcarQR,onNot
           <div style={{fontSize:13,color:C.text,fontWeight:700,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.calle} {ub.num}</div>
           <div style={{fontSize:10,color:C.muted}}>{ub.barri}{ub.districte?" · "+ub.districte:""}</div>
           {ub.comentari&&<div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ub.comentari}</div>}
+          <HoraParada ub={ub} done={done}/>
           {onEntregar&&queSeEntrega(ub)&&<div style={{fontSize:12,color:C.blueText,marginTop:3,fontWeight:600}}>{queSeEntrega(ub)}</div>}
           {onEntregar&&franjaTexto(ub.franja)&&!done&&<div style={{fontSize:11,color:C.amber,marginTop:1}}>Entregar {franjaTexto(ub.franja)}</div>}
           <ContactoParada ub={ub}/>
@@ -459,7 +476,7 @@ export function DetallePlan({plan,sesion,onBack,onUpdate}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:12,color:C.muted,marginBottom:1}}>Próxima parada</div>
               <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proxima.calle} {proxima.num}</div>
-              <div style={{fontSize:10,color:C.dim}}>{proxima.barri} · {proxima.elementos.length} elementos</div>
+              <div style={{fontSize:10,color:C.dim}}>{[horaPrevista(proxima)&&`Prevista ${horaPrevista(proxima)}`,proxima.barri,`${proxima.elementos.length} elementos`].filter(Boolean).join(" · ")}</div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"stretch",flexShrink:0}}>
               <button onClick={()=>abrirNavegacion(proxima.lat,proxima.lng)} style={{...S.btnOk,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}><Navigation size={15}/> Ir</button>

@@ -14,7 +14,9 @@ test("la ficha del vehículo se rellena a la derecha y se guarda", async ({ page
   await page.getByRole("button", { name: "Recursos", exact: true }).first().click();
   await page.getByTitle("Editar").first().click();
   await expect(page.getByText(/^Ficha de Camión/)).toBeVisible();
-  const itv = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  // en fecha local (con toISOString, pasada la medianoche en España aún sería ayer y saldría «en 9 días»)
+  const d10 = new Date(); d10.setDate(d10.getDate() + 10);
+  const itv = `${d10.getFullYear()}-${String(d10.getMonth() + 1).padStart(2, "0")}-${String(d10.getDate()).padStart(2, "0")}`;
   await page.getByLabel("Marca").fill("Renault");
   await page.getByLabel("Modelo").fill("Kangoo E-Tech");
   await page.getByLabel("Combustible").selectOption("Eléctrico");

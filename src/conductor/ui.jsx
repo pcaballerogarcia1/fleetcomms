@@ -105,7 +105,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
   },[]);
   function pintarYo(){
     const L=window.L, map=mapRef.current, p=yoRef.current;
-    if(!L||!map||!p)return;
+    if(!mapaListo()||!p)return;
     const ll=[p.lat,p.lng];
     if(!yoCapasRef.current){
       const circulo=L.circle(ll,{radius:p.precision||0,color:AZUL_YO,weight:1,opacity:0.5,fillColor:AZUL_YO,fillOpacity:0.12,interactive:false}).addTo(map);
@@ -141,10 +141,16 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
       js.onload=()=>initMapRef.current();
       document.head.appendChild(js);
     } else { initMapRef.current(); }
+    // al salir (p. ej. a la pantalla de entrega) se suelta el mapa: nada vuelve a dibujar en uno que ya no está.
+    // (no se cierra con remove(): si está a mitad de una animación de zoom, Leaflet falla al terminarla)
+    return()=>{ mapRef.current=null; yoCapasRef.current=null; layersRef.current=[]; };
   },[initMapRef]);
 
+  // ¿se puede dibujar? (el mapa existe, está en pantalla y ya tiene vista)
+  function mapaListo(){ return !!(window.L&&mapRef.current&&mapRef.current._loaded&&divRef.current?.isConnected); }
+
   function initMap(){
-    if(!divRef.current||mapRef.current)return;
+    if(!divRef.current||!divRef.current.isConnected||mapRef.current)return;
     const L=window.L;
     const center=ubicaciones.length>0?[ubicaciones[0].lat,ubicaciones[0].lng]:[39.57,2.65];
     const map=sinPrefijo(L.map(divRef.current,opcionesMapa({zoomControl:true}))).setView(center,14);
@@ -155,7 +161,7 @@ export function MapaLeaflet({ubicaciones,recorrido,selId,onSelect,height=260}) {
 
   function drawLayers(){
     const L=window.L;
-    if(!L||!mapRef.current)return;
+    if(!mapaListo())return;
     const map=mapRef.current;
     layersRef.current.forEach(l=>map.removeLayer(l));
     layersRef.current=[];
