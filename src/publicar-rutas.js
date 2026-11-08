@@ -20,7 +20,7 @@
 
 import { db } from "./firebase.js";
 import {
-  collection, doc, setDoc, addDoc, deleteDoc, getDocs, query, where,
+  collection, doc, setDoc, addDoc, deleteDoc, getDocs, query, runTransaction, where,
 } from "firebase/firestore";
 import { hasCoords } from "./vrp-engine.js";
 import { getScenarioMeta, loadScenarioCloud } from "./scenario-store.js";
@@ -135,6 +135,43 @@ export function taskToUbicacion(task, idx) {
   };
 }
 
+/**
+ * Una ruta ya empezada no se vuelve a publicar (no se pierde lo marcado), pero
+ * a sus paradas se les añade la hora prevista que les falte, de la ruta recién
+ * calculada: ni el orden ni lo hecho cambian. Cada parada se empareja por su
+ * punto (nombre y sitio); con varias en el mismo punto, por orden.
+ * @returns { ubicaciones, puestas }
+ */
+export function conHorasPrevistas(viejas, nuevas) {
+  const clave = u => `${u.pa ?? ""}|${(+u.lat || 0).toFixed(5)}|${(+u.lng || 0).toFixed(5)}`;
+  const horas = new Map();
+  for (const n of nuevas || []) {
+    if (!Number.isFinite(n.horaPlan)) continue;
+    const k = clave(n);
+    if (!horas.has(k)) horas.set(k, []);
+    horas.get(k).push(n.horaPlan);
+  }
+  let puestas = 0;
+  const ubicaciones = (viejas || []).map(u => {
+    if (Number.isFinite(u.horaPlan)) return u;
+    const l = horas.get(clave(u));
+    if (!l?.length) return u;
+    puestas++;
+    return { ...u, horaPlan: l.shift() };
+  });
+  return { ubicaciones, puestas };
+}
+/** Lo mismo sobre la ruta guardada, sin pisar lo que esté marcando el conductor a la vez */
+export function ponerHorasPrevistas(ref, nuevas) {
+  return runTransaction(db, async t => {
+    const s = await t.get(ref);
+    if (!s.exists()) return 0;
+    const r = conHorasPrevistas(s.data().ubicaciones || [], nuevas);
+    if (r.puestas) t.update(ref, { ubicaciones: r.ubicaciones });
+    return r.puestas;
+  });
+}
+
 /** Lo planificado de un día de ruta (para Análisis → Realizado): inicio y fin
  *  previstos (minutos del día), minutos de jornada y km (si se conocen). */
 export function planDelDia(stops, km = null) {
@@ -220,17 +257,18 @@ export async function publishWorker({
 
     const prev = await getDocs(query(collection(db, "planes"),
       where("org_id", "==", orgId), where("conductorUid", "==", uid), where("mes", "==", mes)));
-    const keptDays = new Set();
+    const keptDays = new Map(); // día → su ruta ya empezada
     for (const p of prev.docs) {
       const data = p.data();
       if (!data.origenRostering || data.projectId !== projectId) continue;
-      if ((data.ubicaciones || []).some(u => u.realizado)) { keptDays.add(data.diaNum); kept.push(data.diaNum); continue; }
+      if ((data.ubicaciones || []).some(u => u.realizado)) { keptDays.set(data.diaNum, p.ref); kept.push(data.diaNum); continue; }
       await deleteDoc(p.ref);
     }
 
     for (const [dStr, { stops, vehiculo }] of Object.entries(byDay)) {
       const d = Number(dStr);
-      if (keptDays.has(d)) continue;
+      // empezada: se queda como está, solo con la hora prevista que les falte a sus paradas
+      if (keptDays.has(d)) { await ponerHorasPrevistas(keptDays.get(d), stops.map((a, i) => taskToUbicacion(a, i))).catch(() => 0); continue; }
       const code = gridWorker?.[dStr];
       if (code === "L" || code === "B" || code === "V") continue; // de libre, baja o vacaciones ese día: no se le publica
       const dayLabel = `Día ${String(d).padStart(2, "0")}`;

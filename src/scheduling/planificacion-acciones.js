@@ -5,7 +5,7 @@ import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from "fir
 import { logAudit } from "../audit.js";
 import { enviarAvisos, resumenEnvio } from "../avisos.js";
 import { db } from "../firebase.js";
-import { diaDelPlan, planDelDia, planEmpezado, planesPublicados, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
+import { diaDelPlan, planDelDia, planEmpezado, planesPublicados, ponerHorasPrevistas, taskToUbicacion, trabajoParaGuardar } from "../publicar-rutas.js";
 import { saveScenarioRoster } from "../roster-store.js";
 import { SHIFT_META, VEHICLE_STATUS_META, isUnavailable, isVehicleUnavailable, vehicleCodeOnDay, workerCodeOnDay } from "../rostering/datos.js";
 import { diaDe, rutasLargas, scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
@@ -908,7 +908,8 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
     // conservan y no se vuelven a publicar (antes se duplicaban).
     const previas = (activeProject?._id ? await planesPublicados(orgId, activeProject._id, mes) : [])
       .filter(d => !diaUnico || diaDelPlan(d.data()) === diaUnico);
-    const empezadas = new Set(previas.filter(d => planEmpezado(d.data())).map(d => `${diaDelPlan(d.data())}|${d.data().vehiculoNombre || ""}`));
+    const empezadas = new Map(previas.filter(d => planEmpezado(d.data())).map(d => [`${diaDelPlan(d.data())}|${d.data().vehiculoNombre || ""}`, d.ref]));
+    const horasEmpezadas = []; // { ref, ubicaciones }: a las empezadas solo se les añade la hora prevista
     const aSustituir = previas.filter(d => !planEmpezado(d.data()));
     let yaEmpezadas = 0;
     // Build all plan documents first, then write concurrently in chunks
@@ -1006,7 +1007,8 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
           .filter(a => hasCoords(a.lat, a.lng))
           .map(a => ({ lat: +a.lat, lng: +a.lng }));
         const dayLabel = `Día ${String(calDay).padStart(2, "0")}`;
-        if (empezadas.has(`${calDay}|${row.nombre || row.matricula || ""}`)) { yaEmpezadas++; continue; }
+        const claveEmpezada = `${calDay}|${row.nombre || row.matricula || ""}`;
+        if (empezadas.has(claveEmpezada)) { yaEmpezadas++; horasEmpezadas.push({ ref: empezadas.get(claveEmpezada), ubicaciones }); continue; }
         const nombre = totalDays > 1 || diaUnico
           ? `${conductorLabel} · ${dayLabel} · ${mes}`
           : `${conductorLabel} · ${mes}`;
@@ -1046,7 +1048,7 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       if (!ok) { setPublishing(false); return; }
     }
 
-    if (aSustituir.length && !confirm(`Ya hay ${aSustituir.length} ruta(s) publicadas de este proyecto ${diaUnico ? `para el ${fechaLarga(constraints.diaUnico)}` : `en ${mes}`} que no se han empezado: se sustituirán por estas ${docs.length}.${yaEmpezadas ? ` ${yaEmpezadas} vehículo-día ya empezados se conservan y no se vuelven a publicar.` : ""}\n\n¿Publicar?`)) { setPublishing(false); return; }
+    if (aSustituir.length && !confirm(`Ya hay ${aSustituir.length} ruta(s) publicadas de este proyecto ${diaUnico ? `para el ${fechaLarga(constraints.diaUnico)}` : `en ${mes}`} que no se han empezado: se sustituirán por estas ${docs.length}.${yaEmpezadas ? ` ${yaEmpezadas} vehículo-día ya empezados se conservan (solo se les añade la hora prevista a las paradas).` : ""}\n\n¿Publicar?`)) { setPublishing(false); return; }
 
     // Primero las nuevas y después se quitan las viejas: si algo falla a
     // medias puede quedar alguna repetida, pero nunca un conductor sin ruta.
@@ -1058,6 +1060,8 @@ export async function publishToRoutes(ctx, tipo, mes, trabajo = "") {
       await Promise.all(aSustituir.slice(i, i + CHUNK).map(d => deleteDoc(d.ref)));
     }
 
+    // las empezadas: solo la hora prevista que les falte (sin tocar lo hecho)
+    for (const h of horasEmpezadas) await ponerHorasPrevistas(h.ref, h.ubicaciones).catch(() => 0);
     // reparto: cada pedido de la bandeja dice en qué ruta va
     if (diaUnico) {
       const porPedido = {};
