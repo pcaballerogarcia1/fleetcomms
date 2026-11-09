@@ -165,6 +165,33 @@ service cloud.firestore {
       allow update: if sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id;
       allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
+    // Conectar con IA (api/mcp.js, api/oauth.js): lo que deja la empresa
+    // (activado, solo consultar o también hacer cambios, qué roles) y las
+    // conexiones de cada usuario con su IA. El servidor lee y escribe con la
+    // sesión del propio usuario, así que estas reglas (y las de siempre) mandan.
+    //  · ajustes: los ve cualquiera de la empresa (aunque aún no existan); solo un admin los cambia.
+    //  · conexiones: las crea el usuario (a su nombre, si su empresa lo tiene activado);
+    //    las ve él o un admin; se desconectan (él o un admin) pero no se reactivan ni se borran.
+    match /ia_ajustes/{orgId} {
+      allow read: if isSignedIn() && orgId == myOrgId();
+      allow create, update: if isSignedIn() && orgId == myOrgId() && myProfile().rol == 'admin'
+        && request.resource.data.org_id == orgId
+        && request.resource.data.activa is bool
+        && request.resource.data.nivel in ['leer', 'actuar']
+        && request.resource.data.roles is list;
+    }
+    match /ia_conexiones/{id} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid
+        || (resource.data.org_id == myOrgId() && myProfile().rol == 'admin'));
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.org_id == myOrgId()
+        && request.resource.data.activa == true
+        && get(/databases/$(database)/documents/ia_ajustes/$(myOrgId())).data.activa == true;
+      allow update: if isSignedIn() && (resource.data.uid == request.auth.uid
+          || (resource.data.org_id == myOrgId() && myProfile().rol == 'admin'))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activa', 'ultimoUso', 'desconectadaEn', 'desconectadaPor'])
+        && (request.resource.data.activa == false || resource.data.activa == true);
+    }
     // Prueba de entrega (reparto): las fotos y la firma de cada parada
     // (src/entregas). Las sube el conductor (a su nombre); las ve su empresa.
     // Se pueden reenviar (mismo id) si se cortó la conexión; solo las borra la oficina.

@@ -1,5 +1,13 @@
 {
   "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/.well-known/oauth-protected-resource", "destination": "/api/oauth?accion=meta-rs" },
+    { "source": "/.well-known/oauth-protected-resource/:resto*", "destination": "/api/oauth?accion=meta-rs" },
+    { "source": "/.well-known/oauth-authorization-server", "destination": "/api/oauth?accion=meta-as" },
+    { "source": "/.well-known/oauth-authorization-server/:resto*", "destination": "/api/oauth?accion=meta-as" },
+    { "source": "/.well-known/openid-configuration", "destination": "/api/oauth?accion=meta-as" },
+    { "source": "/oauth/register", "destination": "/api/oauth?accion=register" },
+    { "source": "/oauth/token", "destination": "/api/oauth?accion=token" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

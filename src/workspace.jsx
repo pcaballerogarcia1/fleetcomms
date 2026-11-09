@@ -8,7 +8,7 @@ import { collection, onSnapshot, doc, updateDoc, serverTimestamp, where, query }
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useLang, setLang, t } from "./i18n.js";
 import { CLARO, cambiarTema } from "./tema.js";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sparkles, Sun } from "lucide-react";
 import { puedeUsarWorkspace, roleLabel } from "./roles.js";
 import { OnlineUsers } from "./presence-bar.jsx";
 import { AuditButton } from "./audit-panel.jsx";
@@ -42,6 +42,7 @@ const PlanningLineasLazy   = lazy(() => import("./lineas-planning.jsx").then(m =
 const SchedulingLineasLazy = lazy(() => import("./lineas-scheduling.jsx").then(m => ({ default: m.SchedulingLineasPage })));
 const ControlLineasLazy    = lazy(() => import("./lineas-control.jsx").then(m => ({ default: m.ControlLineasPage })));
 // Concursos (licitaciones): su lista y sus módulos propios
+const PanelConectarIALazy  = lazy(() => import("./ia/panel.jsx").then(m => ({ default: m.PanelConectarIA })));
 const ConcursosPageLazy    = lazy(() => import("./concursos/lista.jsx").then(m => ({ default: m.ConcursosPage })));
 const ResumenConcursoLazy  = lazy(() => import("./concursos/modulos.jsx").then(m => ({ default: m.ResumenConcurso })));
 const CalculoConcursoLazy  = lazy(() => import("./concursos/calculo.jsx").then(m => ({ default: m.CalculoConcurso })));
@@ -76,6 +77,7 @@ function go(path) {
 // ── Shared header ─────────────────────────────────────────────────
 function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject, onProjectUpdate }) {
   const lang = useLang();
+  const [verIA, setVerIA] = useState(false); // ventana «Conectar con IA» (menú de la foto)
   const crumb = (label, href, active) => (
     <button onClick={() => go(href)} style={{
       background: active ? alfa(0.07) : "none",
@@ -162,7 +164,9 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
             </svg>
           </button>
         )}
-        <AvatarPerfil sesion={sesion} size={30} onCerrarSesion={onLogout} />
+        <AvatarPerfil sesion={sesion} size={30} onCerrarSesion={onLogout}
+          extra={cerrar => <button role="menuitem" onClick={() => { cerrar(); setVerIA(true); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 15, cursor: "pointer", textAlign: "left" }}><Sparkles size={16} color={C.blue} /> Conectar con IA</button>} />
+        {verIA && <Suspense fallback={null}><PanelConectarIALazy sesion={sesion} onCerrar={() => setVerIA(false)} /></Suspense>}
       </div>
     </div>
   );
