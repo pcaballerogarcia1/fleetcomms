@@ -156,7 +156,7 @@ export const HERRAMIENTAS = [
       try { vs = await ctx.fs.consultar("scheduling_vehicles", [["org_id", "==", ctx.org]], 1000); }
       catch (e) { if (e.sinPermiso) return { error: "Tu usuario no puede ver la flota (solo la oficina)." }; throw e; }
       const lista = vs.filter(v => v.activo !== false).map(v => ({ nombre: v.nombre || null, matricula: v.matricula || null, tipo: v.tipo || null, combustible: v.combustible || null,
-        autonomia_km: v.autonomiaKm ?? null, carga_maxima: v.cargaMax ?? null, proxima_itv: v.proximaITV || null, marca: v.marca || null, modelo: v.modelo || null }))
+        autonomia_km: Number(v.autonomiaKm) || null, carga_maxima: Number(v.cargaMax) || null, proxima_itv: v.proximaITV || null, marca: v.marca || null, modelo: v.modelo || null }))
         .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
       return { total: lista.length, vehiculos: lista };
     },
