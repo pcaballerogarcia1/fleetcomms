@@ -23,9 +23,14 @@ const direccion = u => [u.calle, u.num].filter(Boolean).join(" ") || u.pa || "";
 const horaReal = u => (enMs(u.realizadoEn) ? hhmm(minutosEnEspana(enMs(u.realizadoEn))) : null);
 
 /** Las rutas publicadas de un día (las de reparto llevan su fecha; las del mes, su día) */
+// Solo las de ese día (no todo el mes: con cientos de vehículos serían miles de rutas por pregunta)
 export async function rutasDelDia(fs, org, fecha) {
-  const planes = await fs.consultar("planes", [["org_id", "==", org], ["mes", "==", fecha.slice(0, 7)]]);
   const dia = Number(fecha.slice(8, 10));
+  const [porFecha, porDia] = await Promise.all([
+    fs.consultar("planes", [["org_id", "==", org], ["fecha", "==", fecha]], 1000),
+    fs.consultar("planes", [["org_id", "==", org], ["mes", "==", fecha.slice(0, 7)], ["diaNum", "==", dia]], 1000),
+  ]);
+  const planes = [...new Map([...porFecha, ...porDia].map(p => [p._id, p])).values()];
   return planes.filter(p => p.tipo !== "corr" && (p.fecha ? p.fecha === fecha : Number(diaDelPlan(p)) === dia))
     .sort((a, b) => String(a.vehiculoNombre || a.nombre).localeCompare(String(b.vehiculoNombre || b.nombre)));
 }
