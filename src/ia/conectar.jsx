@@ -114,7 +114,7 @@ export default function ConectarIA() {
         <>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>Podrá:</div>
           <ul style={{ listStyle: "none", padding: 0, margin: "0 0 14px", display: "grid", gap: 8 }}>
-            {loQuePodra(nivel).map(t => <li key={t} style={{ display: "flex", gap: 8, fontSize: 14, color: C.text, lineHeight: 1.4 }}><Check size={16} color={C.green} style={{ flexShrink: 0, marginTop: 2 }} /> {t}</li>)}
+            {loQuePodra(nivel, { ubicacion: ajustes?.ubicacion === true, rol: perfil?.rol }).map(t => <li key={t} style={{ display: "flex", gap: 8, fontSize: 14, color: C.text, lineHeight: 1.4 }}><Check size={16} color={C.green} style={{ flexShrink: 0, marginTop: 2 }} /> {t}</li>)}
           </ul>
           <p style={{ margin: "0 0 18px", fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
             Verá solo lo que tú puedes ver en Operanzia. Puedes desconectarla cuando quieras desde el menú de tu foto › «Conectar con IA».

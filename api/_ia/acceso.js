@@ -31,5 +31,5 @@ export async function comprobarAcceso({ sesion, conexionId = null, firebase, f =
   }
   const motivo = motivoSinAcceso(perfil, ajustes);
   if (motivo) throw new AccesoError(motivo);
-  return { fs, uid: tk.uid, org: perfil.org_id, nivel: nivelDe(ajustes), perfil, conexion };
+  return { fs, uid: tk.uid, org: perfil.org_id, nivel: nivelDe(ajustes), ubicacion: ajustes?.ubicacion === true, perfil, conexion };
 }

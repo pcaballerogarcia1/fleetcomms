@@ -26,13 +26,19 @@ function fetchFalso(url, op = {}) {
     const ses = decodeURIComponent(String(op.body).match(/refresh_token=([^&]+)/)[1]);
     return SESIONES[ses] ? ok({ id_token: `id-${SESIONES[ses]}`, user_id: SESIONES[ses], expires_in: "3600" }) : ok({ error: { message: "TOKEN_EXPIRED" } }, 400);
   }
+  if (url.startsWith("https://www.cartociudad.es/")) return ok({ tip_via: "CALLE", address: "MAYOR", portalNumber: 4, muni: "Salamanca" });
   const ruta = url.split("/documents")[1] || "";
-  if (ruta.startsWith(":runQuery")) {
+  if (ruta.includes(":runQuery")) {
+    const padre = ruta.split(":runQuery")[0].replace(/^\//, "");
     const q = JSON.parse(op.body).structuredQuery;
     const ws = q.where ? (q.where.compositeFilter?.filters || [q.where]) : [];
-    const col = q.from[0].collectionId;
-    const fila = Object.entries(docs).filter(([k, d]) => k.startsWith(`${col}/`) && k.split("/").length === 2
-      && ws.every(w => JSON.stringify(aValor(d[w.fieldFilter.field.fieldPath])) === JSON.stringify(w.fieldFilter.value)));
+    const col = `${padre ? `${padre}/` : ""}${q.from[0].collectionId}`;
+    const vale = (d, w) => {
+      const v = JSON.stringify(aValor(d[w.fieldFilter.field.fieldPath]));
+      return w.fieldFilter.op === "IN" ? w.fieldFilter.value.arrayValue.values.some(x => JSON.stringify(x) === v) : v === JSON.stringify(w.fieldFilter.value);
+    };
+    const fila = Object.entries(docs).filter(([k, d]) => k.startsWith(`${col}/`) && k.split("/").length === col.split("/").length + 1 && ws.every(w => vale(d, w)))
+      .slice(0, q.limit || 1e9);
     return ok(fila.map(([k, d]) => ({ document: { name: `p/documents/${k}`, fields: Object.fromEntries(Object.entries(d).map(([c, v]) => [c, aValor(v)])) } })));
   }
   const [camino, qs] = ruta.slice(1).split("?");
@@ -223,5 +229,109 @@ describe("cuentas de las herramientas", () => {
   it("una parada sin entrega (recogida) sale como hecha", () => {
     expect(filaEntrega({}, { realizado: true, pa: "Contenedor" }).estado).toBe("hecha");
     expect(herramientasPara("leer").every(h => !h.actuar)).toBe(true);
+  });
+});
+
+describe("más consultas: personal, ubicación, autobuses, búsqueda libre", () => {
+  const MES = HOY.slice(0, 7), D = String(Number(HOY.slice(8, 10)));
+  beforeEach(() => {
+    const ahora = Date.now();
+    Object.assign(docs, {
+      "usuarios/condA": { rol: "conductor", org_id: "orgA", nombre: "Carlos" },
+      "ubicaciones_activas/condA": { org_id: "orgA", nombre: "Carlos Conductor", lat: 40.96, lng: -5.66, planId: "r1", activo: true, updatedAt: ahora - 2 * 60000, lastMovedAt: ahora - 25 * 60000 },
+      "ubicaciones_activas/condB": { org_id: "orgA", nombre: "Clara Conductora", lat: 40.1, lng: -5.1, activo: false, updatedAt: ahora - 3 * 3600000, lastMovedAt: ahora - 3 * 3600000 },
+      "ubicaciones_activas/ajeno": { org_id: "orgB", nombre: "Carlos de otra empresa", lat: 1, lng: 1, activo: true, updatedAt: ahora },
+      "ubicaciones_lineas/ana": { org_id: "orgA", nombre: "Ana Bus", bus: "12", linea: "L1", servicioId: "s1", turnoId: "T1", retraso: 7, lat: 40.4, lng: -3.7, activo: true, updatedAt: ahora },
+      [`cuadrantes/orgA_${MES}_condA`]: { org_id: "orgA", mes: MES, uid: "condA", nombre: "Carlos Conductor", dias: { [D]: { c: "M", s: 360, e: 840, v: "Camión 1" } } },
+      [`cuadrantes/orgA_${MES}_condB`]: { org_id: "orgA", mes: MES, uid: "condB", nombre: "Clara Conductora", dias: { [D]: { c: "V" } } },
+      "fichajes/f1": { org_id: "orgA", uid: "condA", nombre: "Carlos Conductor", fecha: HOY, horaEntrada: ahora - 60000, horaSalida: null, matricula: "1234ABC", kmRecorridos: null, estado: "abierto" },
+      "solicitudes_ausencia/s1": { org_id: "orgA", uid: "condB", nombre: "Clara Conductora", tipo: "vacaciones", desde: HOY, hasta: HOY, dias: 1, estado: "pendiente" },
+      "scheduling_workers/w1": { org_id: "orgA", nombre: "Carlos", apellidos: "Conductor", telefono: "600000000", dni: "12345678Z", direccion: "Calle Secreta 1", categoria: "Conductor C" },
+      "pesadas/p1": { org_id: "orgA", mes: MES, fecha: HOY, hora: "10:00", vehiculo: "Camión 1", planta: "Planta A", fraccion: "Resto", kg: 1000 },
+      "pesadas/p2": { org_id: "orgA", mes: MES, fecha: HOY, hora: "12:00", vehiculo: "Camión 2", planta: "Planta A", fraccion: "Envases", kg: 500.5 },
+      "servicio_lineas/s1": { org_id: "orgA", fecha: HOY, proyecto: "Urbano", nombreDia: "Laborable" },
+      "servicio_lineas/s1/turnos/T1": { org_id: "orgA", num: 1, inicio: 360, fin: 840, buses: ["12"], lineas: ["L1"], conductorNombre: "Ana Bus", inicioReal: ahora },
+      "servicio_lineas/s1/turnos/T2": { org_id: "orgA", num: 2, inicio: 840, fin: 1320, buses: ["14"], lineas: ["L2"], conductorNombre: null },
+    });
+  });
+  const usar = async (t, name, args = {}) => (await llamarMcp(t.access_token, { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: args } })).body.result;
+  const nombres = async t => (await llamarMcp(t.access_token, { jsonrpc: "2.0", id: 8, method: "tools/list" })).body.result.tools.map(x => x.name);
+
+  it("dónde está: solo si la empresa lo activa", async () => {
+    const { t } = await conectar();
+    expect(await nombres(t)).not.toContain("donde_esta");
+    expect((await usar(t, "donde_esta", { quien: "carlos" })).content[0].text).toMatch(/no permite preguntar/);
+    docs["ia_ajustes/orgA"].ubicacion = true;
+    expect(await nombres(t)).toContain("donde_esta");
+  });
+  it("dónde está: calle, de cuándo, parado y su ruta; fuera de servicio no se enseña; nunca de otra empresa", async () => {
+    docs["ia_ajustes/orgA"].ubicacion = true;
+    const { t } = await conectar();
+    const r = (await usar(t, "donde_esta", { quien: "carlos" })).structuredContent;
+    expect(r.encontrados).toBe(1);
+    expect(r.posiciones[0]).toMatchObject({ quien: "Carlos Conductor", vehiculo: "Camión 1", en_servicio: true, posicion_hace_min: 2, parado_min: 25, calle: "Calle Mayor 4, Salamanca", ruta: { hechas: 2, paradas: 3, siguiente: { sitio: "Bar Mar", hora_prevista: "08:40" } } });
+    expect(r.posiciones[0].mapa).toContain("40.96,-5.66");
+    const todos = (await usar(t, "donde_esta")).structuredContent.posiciones;
+    expect(todos.map(p => p.quien)).toEqual(["Ana Bus", "Carlos Conductor", "Clara Conductora"]);
+    const clara = todos.find(p => p.quien === "Clara Conductora");
+    expect(clara).not.toHaveProperty("lat");
+    expect(clara.aviso).toMatch(/Fuera de servicio/);
+    expect(todos.find(p => p.quien === "Ana Bus")).toMatchObject({ origen: "app de autobús", retraso_min: 7, linea: "L1" });
+    const parados = (await usar(t, "donde_esta", { parados_mas_de: 20 })).structuredContent.posiciones;
+    expect(parados.map(p => p.quien)).toEqual(["Carlos Conductor"]);
+  });
+  it("un conductor conectado no ve las consultas de la oficina", async () => {
+    docs["ia_ajustes/orgA"].roles = ["admin", "intermedio", "conductor"];
+    docs["ia_ajustes/orgA"].ubicacion = true;
+    const { t } = await conectar("ses-cond");
+    const l = await nombres(t);
+    expect(l).toEqual(expect.arrayContaining(["resumen_del_dia", "entregas", "incidencias", "pesadas", "autobuses_del_dia", "buscar_datos"]));
+    for (const n of ["donde_esta", "personal_del_dia", "fichajes", "trabajadores", "pedidos", "vehiculos"]) expect(l).not.toContain(n);
+    expect((await usar(t, "donde_esta")).content[0].text).toMatch(/solo para la oficina/);
+  });
+  it("quién trabaja hoy y quién ha fichado", async () => {
+    const { t } = await conectar();
+    const r = (await usar(t, "personal_del_dia")).structuredContent;
+    expect(r.por_turno).toEqual({ Mañana: 1, Vacaciones: 1 });
+    expect(r.detalle.find(p => p.nombre === "Carlos Conductor")).toMatchObject({ turno: "Mañana", horario: "06:00-14:00", vehiculo: "Camión 1", fichaje: expect.stringMatching(/^dentro desde/) });
+    expect(r.trabajan_sin_fichar).toEqual([]);
+    expect((await usar(t, "fichajes")).structuredContent).toMatchObject({ fichajes: 1, dentro_ahora: ["Carlos Conductor"] });
+  });
+  it("vacaciones pendientes y plantilla (sin DNI ni domicilio)", async () => {
+    const { t } = await conectar();
+    expect((await usar(t, "ausencias")).structuredContent.solicitudes).toEqual([expect.objectContaining({ nombre: "Clara Conductora", tipo: "vacaciones", estado: "pendiente" })]);
+    const w = (await usar(t, "trabajadores", { buscar: "carlos" })).structuredContent.trabajadores[0];
+    expect(w).toMatchObject({ nombre: "Carlos Conductor", telefono: "600000000", categoria: "Conductor C" });
+    expect(JSON.stringify(w)).not.toMatch(/12345678Z|Secreta/);
+  });
+  it("pesadas y autobuses del día", async () => {
+    const { t } = await conectar();
+    expect((await usar(t, "pesadas")).structuredContent).toMatchObject({ pesadas: 2, kg_total: 1500.5, por_vehiculo: { "Camión 1": 1000, "Camión 2": 500.5 }, por_fraccion: { Resto: 1000, Envases: 500.5 } });
+    const b = (await usar(t, "autobuses_del_dia")).structuredContent;
+    expect(b.detalle[0]).toMatchObject({ proyecto: "Urbano", turnos: 2, sin_conductor: [2], con_retraso: [{ turno: 1, conductor: "Ana Bus", retraso_min: 7 }] });
+  });
+  it("búsqueda libre: con filtros, solo de su empresa, sin lo privado ni lo pesado", async () => {
+    const { t } = await conectar();
+    const p = (await usar(t, "buscar_datos", { coleccion: "pedidos", filtros: [{ campo: "ref", valor: "4472" }] })).structuredContent;
+    expect(p.encontrados).toBe(1);
+    expect(p.documentos[0]).not.toHaveProperty("org_id");
+    const pl = (await usar(t, "buscar_datos", { coleccion: "planes" })).structuredContent.documentos[0];
+    expect(pl).toMatchObject({ paradas: 3, hechas: 2 });
+    expect(pl).not.toHaveProperty("ubicaciones");
+    const w = (await usar(t, "buscar_datos", { coleccion: "scheduling_workers" })).structuredContent.documentos[0];
+    expect(w).not.toHaveProperty("dni");
+    expect((await usar(t, "buscar_datos", { coleccion: "usuarios" })).isError).toBe(true);
+  });
+});
+
+describe("posiciones", () => {
+  it("una app que lleva más de una hora sin mandar posición no cuenta como en servicio ni se enseña", async () => {
+    const { posicionParaIA } = await import("./herramientas-mas.js");
+    const ahora = Date.now();
+    const vieja = posicionParaIA({ nombre: "X", activo: true, lat: 1, lng: 2, hora: ahora - 13 * 24 * 3600000 }, ahora);
+    expect(vieja).toMatchObject({ en_servicio: false, aviso: expect.stringMatching(/Fuera de servicio/) });
+    expect(vieja).not.toHaveProperty("lat");
+    expect(posicionParaIA({ nombre: "Y", activo: false, lat: 1, lng: 2, hora: ahora - 10 * 60000 }, ahora)).toMatchObject({ en_servicio: false, lat: 1 });
+    expect(posicionParaIA({ nombre: "Z", activo: true, lat: 1, lng: 2, hora: ahora - 5 * 60000 }, ahora)).toMatchObject({ en_servicio: true, lat: 1 });
   });
 });

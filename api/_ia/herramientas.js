@@ -6,6 +6,7 @@
 import { estadoEntrega, hhmm, nombreMotivo, queSeEntrega } from "../../src/entregas/datos.js";
 import { masDias, reprogramado, resultadosPorPedido } from "../../src/pedidos/datos.js";
 import { ahoraEnEspana, minutosEnEspana } from "./entorno.js";
+import { BUSCAR_DATOS, HERRAMIENTAS_MAS } from "./herramientas-mas.js";
 
 // (igual que diaDelPlan de src/publicar-rutas.js, que no se puede importar aquí: carga Firebase de la app)
 const diaDelPlan = d => d?.diaNum ?? (Number(String(d?.diaServicio || "").replace(/\D/g, "")) || null);
@@ -113,6 +114,7 @@ export const HERRAMIENTAS = [
   },
   {
     name: "pedidos",
+    oficina: true,
     title: "Pedidos de un día (reparto)",
     description: "La bandeja de pedidos de un día (proyectos de reparto): cliente, dirección, número de pedido, bultos, kilos, franja horaria, si está anulado, en qué ruta va y qué pasó con la entrega. Úsala para «¿cuántos pedidos tenemos mañana?», «¿qué pedidos de hoy faltan por entregar?».",
     inputSchema: { type: "object", properties: { fecha: FECHA }, additionalProperties: false },
@@ -152,6 +154,7 @@ export const HERRAMIENTAS = [
   },
   {
     name: "vehiculos",
+    oficina: true,
     title: "Flota de vehículos",
     description: "Los vehículos de la empresa con su ficha: nombre, matrícula, tipo, combustible, autonomía, carga máxima y fecha de la próxima ITV.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -168,6 +171,7 @@ export const HERRAMIENTAS = [
   },
   {
     name: "pasar_no_entregados",
+    oficina: true,
     title: "Pasar los no entregados a otro día",
     description: "Reparto: los pedidos no entregados de un día se vuelven a apuntar para otra fecha (iguales, marcados «del día X»); el original queda como «pasado al …». Solo los que aún no se han pasado. Cambia datos: confirma con el usuario la fecha de destino antes de usarla.",
     inputSchema: { type: "object", properties: { fecha_origen: { ...FECHA, description: "Día de los no entregados (AAAA-MM-DD)." }, fecha_destino: { ...FECHA, description: "Día al que se pasan (AAAA-MM-DD). Si no se indica, el siguiente." } }, required: ["fecha_origen"], additionalProperties: false },
@@ -191,17 +195,32 @@ export const HERRAMIENTAS = [
     },
   },
 ];
+// las de personal, ubicación, autobuses… (herramientas-mas.js), antes de la acción; y la búsqueda libre al final
+HERRAMIENTAS.splice(HERRAMIENTAS.length - 1, 0, ...HERRAMIENTAS_MAS);
+HERRAMIENTAS.push(BUSCAR_DATOS);
 
-/** Las herramientas que puede usar este usuario según el nivel de su empresa */
-export const herramientasPara = nivel => HERRAMIENTAS.filter(h => !h.actuar || nivel === "actuar");
+const OFICINA = ["admin", "intermedio", "superadmin"];
+/** Por qué este usuario no puede usar esta herramienta (null si puede) */
+function motivoHerramienta(h, { nivel, ubicacion, rol }) {
+  if (h.actuar && nivel !== "actuar") return "Tu empresa solo permite consultar con la IA, no hacer cambios.";
+  if (h.oficina && rol && !OFICINA.includes(rol)) return "Esta consulta es solo para la oficina (administradores y jefes de tráfico).";
+  if (h.ubicacion && !ubicacion) return "Tu empresa no permite preguntar a la IA dónde está cada uno. Un administrador lo puede activar en Operanzia: menú de la foto › «Conectar con IA».";
+  return null;
+}
+/** Las herramientas que puede usar este usuario: según lo que deja su empresa y su rol. Vale pasar solo el nivel. */
+export const herramientasPara = permisos => {
+  const p = typeof permisos === "string" ? { nivel: permisos } : permisos || {};
+  return HERRAMIENTAS.filter(h => !motivoHerramienta(h, p));
+};
 
 /** Ejecuta una herramienta y la deja en el formato de MCP (texto + datos) */
 export async function ejecutarHerramienta(nombre, args, ctx) {
-  const h = herramientasPara(ctx.nivel).find(x => x.name === nombre);
-  if (!h) return { isError: true, content: [{ type: "text", text: HERRAMIENTAS.some(x => x.name === nombre) ? "Tu empresa solo permite consultar con la IA, no hacer cambios." : `No existe la herramienta «${nombre}».` }] };
+  const h = HERRAMIENTAS.find(x => x.name === nombre);
+  const motivo = h ? motivoHerramienta(h, { nivel: ctx.nivel, ubicacion: ctx.ubicacion, rol: ctx.perfil?.rol }) : `No existe la herramienta «${nombre}».`;
+  if (motivo) return { isError: true, content: [{ type: "text", text: motivo }] };
   try {
     const { fecha: hoy, minutos } = ahoraEnEspana(ctx.ahora);
-    const datos = await h.ejecutar(args || {}, { ...ctx, hoy, minutosAhora: minutos });
+    const datos = await h.ejecutar(args || {}, { f: fetch, ...ctx, hoy, minutosAhora: minutos });
     return { content: [{ type: "text", text: JSON.stringify(datos) }], structuredContent: datos, ...(datos?.error ? { isError: true } : {}) };
   } catch (e) {
     return { isError: true, content: [{ type: "text", text: e.delUsuario ? e.message : `No se pudo consultar Operanzia: ${e.message}` }] };

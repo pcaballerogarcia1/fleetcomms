@@ -9,7 +9,7 @@ import { firebaseDelEntorno, origenDe } from "./_ia/entorno.js";
 import { ejecutarHerramienta, herramientasPara } from "./_ia/herramientas.js";
 
 export const VERSIONES = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const INSTRUCCIONES = "Operanzia es el programa de rutas, turnos y reparto de esta empresa. Con estas herramientas consultas cómo van las rutas del día, las entregas y no entregas, los pedidos, las incidencias y la flota. Las fechas van en AAAA-MM-DD y las horas en hora de España. Antes de usar una herramienta que cambia datos, confirma con el usuario.";
+const INSTRUCCIONES = "Operanzia es el programa de rutas, turnos y reparto de esta empresa. Con estas herramientas consultas cómo van las rutas del día, las entregas y no entregas, los pedidos, las incidencias, la flota, quién trabaja y quién ha fichado, vacaciones, la plantilla, pesadas, autobuses, proyectos y concursos, y (si la empresa lo permite) dónde está cada uno; para lo demás, buscar_datos. Las fechas van en AAAA-MM-DD y las horas en hora de España. Antes de usar una herramienta que cambia datos, confirma con el usuario.";
 
 export function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -32,7 +32,7 @@ const fallo = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: {
 const sinPermisoDeEmpresa = e => { if (e instanceof AccesoError && !e.reconectar) return null; throw e; };
 
 /** Las herramientas tal y como las ve la IA (sin el código) */
-export const listaHerramientas = nivel => herramientasPara(nivel).map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
+export const listaHerramientas = permisos => herramientasPara(permisos).map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations }));
 
 /**
  * Atiende un mensaje JSON-RPC. `acceso()` comprueba el permiso (solo cuando
@@ -55,7 +55,7 @@ export async function atender(msg, acceso, ahora = new Date()) {
     case "ping": return respuesta(id, {});
     case "tools/list": {
       const a = await acceso().catch(sinPermisoDeEmpresa);
-      return respuesta(id, { tools: listaHerramientas(a?.nivel || "leer") });
+      return respuesta(id, { tools: listaHerramientas(a ? { nivel: a.nivel, ubicacion: a.ubicacion, rol: a.perfil?.rol } : { nivel: "leer" }) });
     }
     case "tools/call": {
       if (typeof params?.name !== "string") return fallo(id, -32602, "Falta el nombre de la herramienta");

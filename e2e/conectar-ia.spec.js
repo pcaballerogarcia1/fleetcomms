@@ -28,10 +28,11 @@ test("el admin activa «Conectar con IA» y ve la dirección; un jefe lo conecta
   await expect(ventana.getByText("Tu empresa no tiene activado")).toBeVisible();
   await ventana.getByLabel("Permitir conectar la IA con Operanzia").check();
   await ventana.getByLabel(/Consultar y hacer cambios/).check();
+  await ventana.getByLabel(/Permitir preguntar dónde está/).check();
   await ventana.getByRole("button", { name: "Guardar" }).click();
   await expect(ventana.getByText(/Guardado/)).toBeVisible();
   await expect(ventana.getByLabel("Dirección MCP de Operanzia")).toHaveValue(/\/mcp$/);
-  expect(await leer(`ia_ajustes/${ORG}`)).toMatchObject({ org_id: ORG, activa: true, nivel: "actuar", roles: ["admin", "intermedio"] });
+  expect(await leer(`ia_ajustes/${ORG}`)).toMatchObject({ org_id: ORG, activa: true, nivel: "actuar", roles: ["admin", "intermedio"], ubicacion: true });
   await ventana.getByRole("button", { name: "Cerrar" }).click();
   await expect(ventana).toBeHidden();
 
@@ -48,6 +49,7 @@ test("el admin activa «Conectar con IA» y ve la dirección; un jefe lo conecta
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText("ChatGPT quiere conectarse a Operanzia")).toBeVisible();
   await expect(page.getByText("Pasar los pedidos no entregados a otro día")).toBeVisible();
+  await expect(page.getByText("Ver dónde está cada conductor y vehículo en jornada")).toBeVisible();
   await page.getByRole("button", { name: "Permitir" }).click();
   await expect(page.getByRole("heading", { name: "De vuelta en la IA" })).toBeVisible();
   expect(page.url()).toBe(`${VUELTA}?code=abc&state=xyz`);

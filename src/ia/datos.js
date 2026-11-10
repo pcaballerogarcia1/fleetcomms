@@ -23,14 +23,19 @@ export function motivoSinAcceso(perfil, ajustes) {
   return null;
 }
 
-/** Lo que podrá hacer la IA, en palabras (para la página de permiso) */
-export function loQuePodra(nivel) {
+const OFICINA = ["admin", "intermedio", "superadmin"];
+
+/** Lo que podrá hacer la IA, en palabras (para la página de permiso); depende de lo que deja la empresa y del rol */
+export function loQuePodra(nivel, { ubicacion = false, rol = null } = {}) {
+  const oficina = !rol || OFICINA.includes(rol);
   const l = [
     "Ver cómo van las rutas de cada día (hechas, pendientes, retrasos)",
     "Ver las entregas y no entregas, con su motivo",
-    "Ver los pedidos, las incidencias y la flota",
+    oficina ? "Ver los pedidos, las incidencias, la flota, las pesadas y los autobuses" : "Ver las incidencias, las pesadas y los autobuses",
   ];
-  if (nivel === "actuar") l.push("Pasar los pedidos no entregados a otro día (te pedirá confirmación)");
+  if (oficina) l.push("Ver quién trabaja, los fichajes, las vacaciones, la plantilla, los proyectos y los concursos");
+  if (oficina && ubicacion) l.push("Ver dónde está cada conductor y vehículo en jornada");
+  if (nivel === "actuar" && oficina) l.push("Pasar los pedidos no entregados a otro día (te pedirá confirmación)");
   return l;
 }
 

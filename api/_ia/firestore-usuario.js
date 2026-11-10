@@ -42,11 +42,15 @@ export function firestoreUsuario(idToken, projectId, f = fetch) {
       const j = await r.json();
       return { _id: j.name.split("/").pop(), ...desdeCampos(j.fields) };
     },
-    /** documentos de una colección con filtros [[campo, op, valor], …] (todos a la vez) */
-    async consultar(coleccion, filtros = [], limite = 500) {
+    /**
+     * documentos de una colección con filtros [[campo, op, valor], …] (todos a la vez).
+     * padre: la ruta del documento si es una subcolección; campos: solo esos campos (documentos pesados)
+     */
+    async consultar(coleccion, filtros = [], limite = 500, { padre = null, campos = null } = {}) {
       const ws = filtros.map(([campo, op, valor]) => ({ fieldFilter: { field: { fieldPath: campo }, op: OPS[op] || op, value: aValor(valor) } }));
       const where = ws.length === 0 ? undefined : ws.length === 1 ? ws[0] : { compositeFilter: { op: "AND", filters: ws } };
-      const r = await f(`${base}:runQuery`, { method: "POST", headers: cab, body: JSON.stringify({ structuredQuery: { from: [{ collectionId: coleccion }], ...(where ? { where } : {}), limit: limite } }) });
+      const select = campos ? { select: { fields: campos.map(c => ({ fieldPath: c })) } } : {};
+      const r = await f(`${base}${padre ? `/${padre}` : ""}:runQuery`, { method: "POST", headers: cab, body: JSON.stringify({ structuredQuery: { ...select, from: [{ collectionId: coleccion }], ...(where ? { where } : {}), limit: limite } }) });
       if (!r.ok) throw await fallo(r, coleccion);
       const j = await r.json();
       return j.filter(x => x.document).map(x => ({ _id: x.document.name.split("/").pop(), ...desdeCampos(x.document.fields) }));

@@ -36,7 +36,7 @@ function useConexiones(sesion) {
 }
 
 function Ajustes({ sesion, ajustes }) {
-  const [f, setF] = useState(() => ({ activa: !!ajustes?.activa, nivel: nivelDe(ajustes), roles: ajustes?.roles || ROLES_POR_DEFECTO }));
+  const [f, setF] = useState(() => ({ activa: !!ajustes?.activa, nivel: nivelDe(ajustes), roles: ajustes?.roles || ROLES_POR_DEFECTO, ubicacion: ajustes?.ubicacion === true }));
   const [estado, setEstado] = useState(null);
   const cambiar = x => { setF(v => ({ ...v, ...x })); setEstado(null); };
   async function guardar() {
@@ -58,6 +58,13 @@ function Ajustes({ sesion, ajustes }) {
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Qué puede hacer la IA</div>
           <label style={opcion}><input type="radio" name="ia-nivel" checked={f.nivel === "leer"} onChange={() => cambiar({ nivel: "leer" })} /> Solo consultar</label>
           <label style={{ ...opcion, marginTop: 4 }}><input type="radio" name="ia-nivel" checked={f.nivel === "actuar"} onChange={() => cambiar({ nivel: "actuar" })} /> Consultar y hacer cambios (pasar los no entregados a otro día)</label>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Ubicación</div>
+          <label style={opcion}>
+            <input type="checkbox" checked={f.ubicacion} onChange={e => cambiar({ ubicacion: e.target.checked })} />
+            <span>Permitir preguntar dónde está cada conductor y vehículo<br /><span style={{ fontSize: 12, color: C.muted }}>Solo la oficina y solo en jornada. Avisa a la plantilla de que su ubicación en jornada se puede consultar así.</span></span>
+          </label>
         </div>
         <div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Quién puede conectarla</div>
