@@ -14,6 +14,7 @@ import { motivoClave } from "./cuenta/clave.js";
 import { BorrarEmpresa, ModulosEmpresa, UsoEmpresa } from "./superadmin/paneles.jsx";
 import { haceCuanto, ultimaActividad } from "./superadmin/uso.js";
 import { TODAS, moduloActivo } from "./modulos.js";
+import { LogoEmpresaEditor } from "./superadmin/logo.jsx";
 
 
 const font = "var(--font)";
@@ -314,6 +315,7 @@ function OrgDetail({ org, onBack, onUpdate, sesion }) {
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
             </div>
+            <LogoEmpresaEditor org={org} onUpdate={onUpdate} />
             <div style={{ ...S.card, background: C.surface2 }}>
               <div style={S.label}>Identificador de org (inmutable)</div>
               <div style={{ fontFamily: mono, fontSize: 13, color: C.blueText }}>{org.org_id}</div>

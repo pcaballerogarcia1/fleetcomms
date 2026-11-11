@@ -25,6 +25,7 @@ import { AvatarPerfil } from "./foto-perfil.jsx";
 import { fijarEmpresa, useEmpresa } from "./empresa.js";
 import { empresaSuspendida, moduloActivo, moduloDeRuta, primeraRuta } from "./modulos.js";
 import { PantallaSinAcceso } from "./ui/sin-acceso.jsx";
+import { LogoEnBarra } from "./ui/logo-empresa.jsx";
 import { RUTAS_CONCURSO } from "./concursos/store.js";
 import { C, font } from "./raiz-estilo.js";
 import { alfa } from "./tema.js";
@@ -135,6 +136,8 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
         </>}
       </div>
       <div className="op-cabecera-derecha" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        {/* el logo de la empresa (panel del superadmin › Configuración) */}
+        {empresa?.logo && <LogoEnBarra logo={empresa.logo} nombre={empresa.nombre} fondo={empresa.logoFondo !== false} />}
         {/* Quién más está conectado (su organización; el superadmin, todas) */}
         <OnlineUsers sesion={sesion} />
         {/* Historial de cambios de la organización */}

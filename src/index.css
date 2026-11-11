@@ -175,6 +175,7 @@ html .planning-map .leaflet-control-zoom a { background: var(--card) !important;
   .op-cabecera-derecha { order: 1; margin-left: auto; gap: 8px !important; }
   .op-cabecera-migas { order: 2; flex: 1 1 100% !important; padding-bottom: 2px; }
   .op-cabecera-quien { display: none; }
+  .op-cabecera-logo { display: none !important; }
 }
 
 /* sombras más suaves en el aspecto claro */

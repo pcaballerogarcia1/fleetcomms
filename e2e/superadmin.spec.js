@@ -140,3 +140,25 @@ test("horas de uso: la oficina suma su tiempo y el superadmin lo ve por persona"
   await expect(page.getByRole("row", { name: /Ana Admin/ })).toContainText(/min/);
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/sa-4-horas.png`, fullPage: true });
 });
+
+test("logo: el superadmin lo sube y sale arriba a la derecha en la oficina de la empresa", async ({ page, browser }) => {
+  await sembrar();
+  await crearSuperadmin();
+  // un logo de ejemplo en SVG (se guarda reducido como PNG)
+  const svg = globalThis.Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100"><rect x="0" y="10" width="80" height="80" rx="16" fill="#c8102e"/><text x="100" y="68" font-family="Arial" font-size="52" font-weight="700" fill="#1a1a1a">DEMO S.A.</text></svg>');
+  await entrarSuper(page);
+  await abrirEmpresa(page, "Demo");
+  await expect(page.getByText("Sin logo")).toBeVisible();
+  await page.getByLabel("Archivo del logo").setInputFiles({ name: "logo.svg", mimeType: "image/svg+xml", buffer: svg });
+  await expect(page.getByRole("img", { name: "Logo de Demo" })).toBeVisible();
+  await expect.poll(async () => (await leer(`orgs/${ORG}`)).logo || "").toMatch(/^data:image\/png;base64,/);
+  if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/sa-5-logo.png` });
+  const oficina = await browser.newPage({ baseURL: "http://127.0.0.1:4317" });
+  await entrarOficina(oficina);
+  await expect(oficina.getByRole("img", { name: "Logo de Demo" })).toBeVisible();
+  if (globalThis.process.env.CAPTURAS) { await oficina.getByText("Abrir proyecto").first().click(); await oficina.waitForURL(/planning/); await oficina.screenshot({ path: `${globalThis.process.env.CAPTURAS}/sa-6-logo-oficina.png`, clip: { x: 0, y: 0, width: 1280, height: 120 } }); }
+  // quitarlo
+  await page.getByRole("button", { name: "Quitar" }).click();
+  await expect(page.getByText("Sin logo")).toBeVisible();
+  await expect(oficina.getByRole("img", { name: "Logo de Demo" })).toHaveCount(0);
+});

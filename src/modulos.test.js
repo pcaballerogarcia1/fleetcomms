@@ -68,3 +68,13 @@ describe("tiempo de uso", async () => {
     expect(horas(120)).toBe("2 h");
   });
 });
+
+describe("logo de la empresa", async () => {
+  const { medidaLogo } = await import("./logo-empresa.js");
+  it("se reduce sin deformarse y sin agrandarse", () => {
+    expect(medidaLogo(2000, 500)).toEqual({ ancho: 480, alto: 120 });
+    expect(medidaLogo(600, 600)).toEqual({ ancho: 120, alto: 120 });
+    expect(medidaLogo(200, 50)).toEqual({ ancho: 200, alto: 50 });
+    expect(() => medidaLogo(0, 10)).toThrow();
+  });
+});
