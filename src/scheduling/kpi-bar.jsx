@@ -60,7 +60,7 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [], fa
         <div key={it.l} title={[it.ayuda, typeof it.sub === "string" ? it.sub : null].filter(Boolean).join("\n")} style={{ padding: "10px 14px", borderRight: `1px solid ${C.border}`, minWidth: 150, flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, textAlign: "center", cursor: "help", overflow: "hidden" }}>
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, whiteSpace: "nowrap" }}>{it.l}</div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 30, maxWidth: "100%" }}>
-            <span style={{ fontSize: 22, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{it.v}</span>
+            <span style={{ fontSize: 22, fontWeight: 650, color: it.colorFijo || (alerta(it.color) ? it.color : C.text), letterSpacing: "-0.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{it.v}</span>
             {it.d}
           </div>
           <div style={{ fontSize: 12, color: it.subColor || C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{it.sub}</div>
@@ -127,7 +127,8 @@ function margenItem(f, coste, { pct, eur }) {
   const m = margen(f.total, coste);
   const faltan = f.sinPrecio ? ` · ${f.sinPrecio} sin precio` : "";
   if (m == null) return { l, v: eur(f.total), sub: `facturación · configura costes${faltan}` };
-  return { l, v: pct(m), color: m < 0 ? C.red : m < 0.1 ? C.amber : undefined, sub: `${eur(f.total)} − ${eur(coste)} coste${faltan}` };
+  // verde si se gana dinero, rojo si se pierde
+  return { l, v: pct(m), colorFijo: m > 0 ? C.green : m < 0 ? C.red : undefined, sub: `${eur(f.total)} − ${eur(coste)} coste${faltan}` };
 }
 
 export function ClockBadge({ size = 11 }) {
