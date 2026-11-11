@@ -34,13 +34,13 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
   const items = [
     { l: "Vehículos", v: num(k.vehiculos), d: delta(k.vehiculos, base?.vehicleCount, "down", num), sub: `PVR ${k.pvr} (a la vez en punta)` },
     { l: "Turnos", v: num(k.turnos), d: delta(k.turnos, base?.turnos, "down", num), sub: "conductor × día" },
-    { l: "Eficiencia vehículo", v: pct(k.eficVehiculo), d: delta(k.eficVehiculo, base?.eficVehiculo, "up", pp), sub: `km en ruta / km totales · ${num(k.km - k.kmVacio)} / ${num(k.km)}` },
-    { l: "Eficiencia personal", v: pct(k.eficPersonal), d: delta(k.eficPersonal, base?.eficPersonal, "up", pp), sub: `tiempo productivo / pagado · ${h(k.conduccion + k.trabajo)} / ${h(k.pagado)}` },
+    { l: "Eficiencia vehículo", v: pct(k.eficVehiculo), d: delta(k.eficVehiculo, base?.eficVehiculo, "up", pp), sub: `${num(k.km - k.kmVacio)} de ${num(k.km)} km con servicio` },
+    { l: "Eficiencia personal", v: pct(k.eficPersonal), d: delta(k.eficPersonal, base?.eficPersonal, "up", pp), sub: `${h(k.conduccion + k.trabajo)} productivas de ${h(k.pagado)}` },
     { l: "Km", v: num(k.km), d: delta(k.km, base?.totalKm, "down", num), sub: `${num(k.kmVacio)} en vacío (cochera)` },
     { l: "Paradas", v: num(k.paradas), d: delta(k.paradas, base?.totalStops, "up", num), sub: k.sinAsignar ? `${num(k.sinAsignar)} sin asignar` : "todas asignadas", subColor: k.sinAsignar ? C.red : C.green },
     k.coste != null
       ? { l: "Coste estimado", v: eur(k.coste), d: delta(k.coste, base?.coste, "down", eur), sub: "personal + km (Restricciones)" }
-      : { l: "Coste estimado", v: <button onClick={onConfigCostes} className="op-btn">Configurar €/h y €/km</button>, sub: "en Restricciones" },
+      : { l: "Coste estimado", v: <button onClick={onConfigCostes} className="op-btn" style={{ height: 28, padding: "0 10px", fontSize: 12 }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
     { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
   ];
   const todos = items
@@ -54,21 +54,21 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
     <div style={{ flexShrink: 0, background: C.bg, borderBottom: `1px solid ${C.border}` }}>
     <div style={{ display: "flex", overflowX: "auto" }}>
       {vistos.map(it => (
-        <div key={it.l} title={it.ayuda} style={{ padding: "12px 20px", borderRight: `1px solid ${C.border}`, minWidth: 160, flex: "1 1 0", textAlign: "center", cursor: "help" }}>
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>{it.l}</div>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", marginTop: 3 }}>
-            <span style={{ fontSize: 20, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{it.v}</span>
+        <div key={it.l} title={[it.ayuda, typeof it.sub === "string" ? it.sub : null].filter(Boolean).join("\n")} style={{ padding: "10px 14px", borderRight: `1px solid ${C.border}`, minWidth: 150, flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, textAlign: "center", cursor: "help", overflow: "hidden" }}>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, whiteSpace: "nowrap" }}>{it.l}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 30, maxWidth: "100%" }}>
+            <span style={{ fontSize: 22, fontWeight: 650, color: alerta(it.color) ? it.color : C.text, letterSpacing: "-0.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{it.v}</span>
             {it.d}
           </div>
-          <div style={{ fontSize: 12, color: it.subColor || C.dim, marginTop: 2, whiteSpace: "nowrap" }}>{it.sub}</div>
+          <div style={{ fontSize: 12, color: it.subColor || C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{it.sub}</div>
         </div>
       ))}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px", flexShrink: 0 }}>
-        {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 16px", flexShrink: 0 }}>
         <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`}>
           Todos los indicadores {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 12, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
         </button>
+        {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
       </div>
     </div>
     {abierto && (
