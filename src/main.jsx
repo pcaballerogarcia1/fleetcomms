@@ -6,6 +6,7 @@ import { vigilarFallosDeCarga } from "./recuperar-version.js";
 import { App, SuperAdminApp, ErrorBoundary, RootFallback, UpdatePrompt } from "./raiz.jsx";
 import { WorkspaceRouter } from "./workspace.jsx";
 import { ConectarIA } from "./ia/entrada.js";
+import { PaginaClave } from "./cuenta/entrada.js";
 
 // Errores de cualquier pantalla (oficina y Rutas) → errores/{id} para el superadmin
 initErrorReporting();
@@ -19,13 +20,15 @@ const isFleetApp    = initPath.startsWith("/incidencias") ||
 const isSuperAdmin  = initPath.startsWith("/superadmin");
 // La página de permiso que abre ChatGPT, Claude… al conectar Operanzia (src/ia)
 const isConectarIA  = initPath.startsWith("/conectar-ia");
+// La página del enlace de los correos de la cuenta: contraseña nueva, confirmar correo (src/cuenta)
+const isCuenta      = initPath.startsWith("/cuenta/");
 
 createRoot(document.getElementById("root")).render(
   <>
     <UpdatePrompt />
     <ErrorBoundary>
       <Suspense fallback={<RootFallback />}>
-        {isConectarIA ? <ConectarIA /> : isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />}
+        {isCuenta ? <PaginaClave /> : isConectarIA ? <ConectarIA /> : isSuperAdmin ? <SuperAdminApp /> : isFleetApp ? <App /> : <WorkspaceRouter />}
       </Suspense>
     </ErrorBoundary>
   </>

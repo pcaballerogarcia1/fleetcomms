@@ -10,6 +10,7 @@ import { PanelSalud } from "./superadmin-salud.jsx";
 import { C, alfa } from "./tema.js";
 import { tono } from "./tema.js";
 import { Building2 } from "lucide-react";
+import { motivoClave } from "./cuenta/clave.js";
 
 
 const font = "var(--font)";
@@ -172,7 +173,8 @@ function OrgDetail({ org, onBack, onUpdate }) {
   async function crearUsuario() {
     const { nombre, apellidos, email, password, rol } = addForm;
     if (!nombre.trim() || !email.trim() || !password) { setAddErr("Rellena todos los campos obligatorios."); return; }
-    if (password.length < 6) { setAddErr("La contraseña debe tener al menos 6 caracteres."); return; }
+    const malaClave = motivoClave(password, { email, nombre, apellidos });
+    if (malaClave) { setAddErr(malaClave); return; }
     if (activos >= org.max_usuarios) { setAddErr(`Límite alcanzado (${org.max_usuarios} usuarios activos).`); return; }
     const emailNorm = email.trim().toLowerCase();
     if (usuarios.some(u => u.email === emailNorm)) { setAddErr("Ya existe un usuario con ese email en esta organización."); return; }

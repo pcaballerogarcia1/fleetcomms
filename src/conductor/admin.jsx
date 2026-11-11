@@ -7,6 +7,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { roleLabel, rolesAsignablesPor } from "../roles.js";
 import { C, S, TIPOS_TRABAJO, avatarOf, fmtMes, font, timeAgo } from "./comun.js";
 import { tono } from "../tema.js";
+import { motivoClave } from "../cuenta/clave.js";
 
 // ── PANEL ADMIN ───────────────────────────────────────────────────
 export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
@@ -21,7 +22,8 @@ export function PanelAdmin({usuarios,orgId,onClose,rolesCreables}){
 
   async function crear(){
     if(!form.nombre||!form.email||!form.password){setErr("Nombre, email y contraseña son obligatorios");return;}
-    if(form.password.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
+    const malaClave=motivoClave(form.password,{email:form.email,nombre:form.nombre,apellidos:form.apellidos});
+    if(malaClave){setErr(malaClave);return;}
     setSaving(true);setErr("");
     try{
       // Verificar cuota de usuarios de la org

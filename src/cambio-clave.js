@@ -14,8 +14,12 @@ export async function enviarCambioClave(texto) {
   if (!email) throw new Error("Escribe tu correo arriba y vuelve a pulsar.");
   if (!esCorreoReal(email)) throw new Error("Con un usuario sin correo no se puede: pide a tu empresa que te ponga tu correo.");
   auth.languageCode = "es";
-  try { await sendPasswordResetEmail(auth, email); }
-  catch (e) {
+  try {
+    // al terminar, vuelve a la pantalla desde la que lo pidió (si esta dirección no está autorizada en Firebase, sin vuelta)
+    const vuelta = typeof window !== "undefined" ? { url: `${window.location.origin}${window.location.pathname.startsWith("/rutas") ? "/rutas" : "/login"}` } : undefined;
+    try { await sendPasswordResetEmail(auth, email, vuelta); }
+    catch (e) { if (vuelta && /continue-uri|unauthorized-domain/.test(e?.code || "")) await sendPasswordResetEmail(auth, email); else throw e; }
+  } catch (e) {
     if (e?.code === "auth/user-not-found") return email; // no se dice si existe o no
     if (e?.code === "auth/invalid-email") throw new Error("Ese correo no es válido: revisa que esté bien escrito.", { cause: e });
     if (e?.code === "auth/too-many-requests") throw new Error("Demasiados intentos seguidos. Espera unos minutos.", { cause: e });

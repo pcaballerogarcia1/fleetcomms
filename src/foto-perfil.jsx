@@ -1,11 +1,11 @@
 // El círculo del usuario en la cabecera: su foto o, si no tiene, sus
 // iniciales. Al tocarlo: poner o cambiar la foto (galería o cámara), quitarla
-// cambiar la contraseña (le llega un correo) y cerrar sesión.
+// cambiar la contraseña (la actual y la nueva; o un enlace al correo) y cerrar sesión.
 import { Camera, KeyRound, LogOut, Moon, Sun, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { C, CLARO, MARCA, cambiarTema } from "./tema.js";
 import { guardarFoto, reducirFoto } from "./foto-perfil.js";
-import { esCorreoReal, enviarCambioClave } from "./cambio-clave.js";
+import { CambiarClave } from "./cuenta/cambiar-clave.jsx";
 import { usuarioDeCorreo } from "./acceso-app.js";
 import { alfa } from "./tema.js";
 
@@ -31,7 +31,7 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion, extra = null, 
   const [abierto, setAbierto] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState(null);
-  const [aviso, setAviso] = useState(null);
+  const [verClave, setVerClave] = useState(false);
   const caja = useRef(), archivo = useRef();
   useEffect(() => {
     if (!abierto) return;
@@ -48,13 +48,6 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion, extra = null, 
       setFoto(nueva);
       setAbierto(false);
     } catch (e) { setError(e.message || String(e)); }
-    setOcupado(false);
-  }
-
-  async function cambiarClave() {
-    setError(null); setAviso(null); setOcupado(true);
-    try { const email = await enviarCambioClave(sesion.email); setAviso(`Te hemos enviado un correo a ${email} con un enlace para poner una contraseña nueva.`); }
-    catch (e) { setError(e.message || String(e)); }
     setOcupado(false);
   }
 
@@ -78,13 +71,13 @@ export function AvatarPerfil({ sesion, size = 32, onCerrarSesion, extra = null, 
           {extra && extra(() => setAbierto(false))}
           <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => archivo.current?.click()}><Camera size={16} color={C.blue} /> {ocupado ? "Guardando…" : foto ? "Cambiar foto" : "Poner foto"}</button>
           {foto && <button role="menuitem" style={opcion} disabled={ocupado} onClick={() => poner(null)}><Trash2 size={16} color={C.muted} /> Quitar foto</button>}
-          {esCorreoReal(sesion?.email) && <button role="menuitem" style={opcion} disabled={ocupado} onClick={cambiarClave}><KeyRound size={16} color={C.blue} /> Cambiar mi contraseña</button>}
-          {aviso && <div role="status" style={{ padding: "6px 14px 10px", fontSize: 12, color: C.green, lineHeight: 1.45, maxWidth: 260 }}>{aviso}</div>}
+          <button role="menuitem" style={opcion} onClick={() => { setAbierto(false); setVerClave(true); }}><KeyRound size={16} color={C.blue} /> Cambiar mi contraseña</button>
           {error && <div style={{ padding: "6px 14px", fontSize: 12, color: C.red }}>{error}</div>}
           <button role="menuitem" style={opcion} onClick={() => cambiarTema(CLARO ? "oscuro" : "claro")}>{CLARO ? <Moon size={16} color={C.muted} /> : <Sun size={16} color={C.muted} />} {CLARO ? "Aspecto oscuro" : "Aspecto claro"}</button>
           {onCerrarSesion && <button role="menuitem" style={{ ...opcion, borderTop: `1px solid ${C.border}` }} onClick={onCerrarSesion}><LogOut size={16} color={C.red} /> Cerrar sesión</button>}
         </div>
       )}
+      {verClave && <CambiarClave sesion={sesion} onCerrar={() => setVerClave(false)} />}
     </div>
   );
 }

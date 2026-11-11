@@ -13,6 +13,7 @@ import { esCorreoReal, enviarCambioClave } from "../cambio-clave.js";
 import { correoDeUsuario, generarClave, mensajeAlta, rolAppDe, sugerirUsuario, usuarioDeCorreo, usuarioValido } from "../acceso-app.js";
 import { roleLabel } from "../roles.js";
 import { C, font, mono } from "./estilo.js";
+import { motivoClave } from "../cuenta/clave.js";
 
 export function AccesoApp({ worker, orgId, selStyle }) {
   const [perfil, setPerfil] = useState(null); // usuarios/{uid} del trabajador (o null)
@@ -52,7 +53,8 @@ export function AccesoApp({ worker, orgId, selStyle }) {
   async function crear() {
     const u = usuario.trim().toLowerCase();
     if (!usuarioValido(u)) { setEstado({ ok: false, texto: "Ese usuario no vale: de 3 a 40 letras, números o puntos, sin espacios ni tildes (o un correo)." }); return; }
-    if (clave.length < 6) { setEstado({ ok: false, texto: "La contraseña tiene que tener al menos 6 caracteres." }); return; }
+    const malaClave = motivoClave(clave, { email: u, nombre: worker.nombre, apellidos: worker.apellidos });
+    if (malaClave) { setEstado({ ok: false, texto: malaClave }); return; }
     if (!orgId) { setEstado({ ok: false, texto: "Falta la empresa: abre un proyecto de una empresa." }); return; }
     setTrabajando(true); setEstado(null);
     try {

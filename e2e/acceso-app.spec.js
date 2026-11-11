@@ -75,6 +75,7 @@ test("cada uno puede pedir un correo para cambiar su contraseña", async ({ page
   await entrarCampo(page, "cond1@demo.test");
   await page.getByRole("button", { name: "Tu perfil" }).click();
   await page.getByRole("menuitem", { name: "Cambiar mi contraseña" }).click();
+  await page.getByRole("button", { name: /No recuerdas la actual/ }).click();
   await expect(page.getByText("Te hemos enviado un correo a cond1@demo.test")).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/a3-menu-cambiar.png` });
   expect(errores).toEqual([]);
