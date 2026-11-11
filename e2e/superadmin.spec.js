@@ -162,3 +162,17 @@ test("logo: el superadmin lo sube y sale arriba a la derecha en la oficina de la
   await expect(page.getByText("Sin logo")).toBeVisible();
   await expect(oficina.getByRole("img", { name: "Logo de Demo" })).toHaveCount(0);
 });
+
+test("con la oficina abierta, abrir el panel de superadmin en otra pestaña no echa a nadie", async ({ page }) => {
+  await sembrar();
+  await crearSuperadmin();
+  await entrarOficina(page); // admin de la empresa
+  const otra = await page.context().newPage(); // otra pestaña del mismo navegador (misma sesión)
+  await otra.goto("/superadmin");
+  await expect(otra.getByText("Esta cuenta no es de superadmin")).toBeVisible();
+  await expect(otra.getByText("admin@demo.test")).toBeVisible();
+  await page.waitForTimeout(3000);
+  await page.reload();
+  await page.waitForURL(/\/projects/); // sigue dentro
+  await expect(page.getByRole("button", { name: "Tu perfil" })).toBeVisible();
+});

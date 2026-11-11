@@ -689,6 +689,10 @@ function SuperAdminPanel({ sesion }) {
 // ── ENTRY POINT ───────────────────────────────────────────────────
 export default function SuperAdminApp() {
   const [sesion, setSesion] = useState(undefined);
+  // otra cuenta (no superadmin) con la sesión abierta en este navegador: no se
+  // cierra sola, porque la sesión es la misma en todas las pestañas y echaría
+  // a esa persona también de la oficina o de la app
+  const [otraCuenta, setOtraCuenta] = useState(null);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async user => {
@@ -696,13 +700,13 @@ export default function SuperAdminApp() {
         try {
           const snap = await getUserProfileSafe(user.uid);
           if (snap.exists() && snap.data().rol === "superadmin") {
-            setSesion({ uid: user.uid, ...snap.data() });
+            setOtraCuenta(null); setSesion({ uid: user.uid, ...snap.data() });
           } else {
-            await signOut(auth); setSesion(null);
+            setOtraCuenta(user.email || "otra cuenta"); setSesion(null);
           }
         } catch { setSesion(null); }
       } else {
-        setSesion(null);
+        setOtraCuenta(null); setSesion(null);
       }
     });
   }, []);
@@ -713,6 +717,18 @@ export default function SuperAdminApp() {
     </div>
   );
 
+  if (!sesion && otraCuenta) return (
+    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font, padding: 16 }}>
+      <div role="alert" style={{ ...S.card, maxWidth: 440, padding: 24 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 10 }}>Esta cuenta no es de superadmin</div>
+        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.55, margin: "0 0 16px" }}>
+          En este navegador está abierta la sesión de <b style={{ color: C.text }}>{otraCuenta}</b>. Para entrar aquí como superadmin hay que cerrarla, y eso la cierra también en las otras pestañas (oficina o app).
+          Para usar las dos a la vez, abre una de ellas en una <b style={{ color: C.text }}>ventana de incógnito</b>.
+        </p>
+        <button onClick={() => signOut(auth)} style={{ ...S.btn, width: "100%" }}>Cerrar esa sesión y entrar como superadmin</button>
+      </div>
+    </div>
+  );
   if (!sesion) return <LoginSA onLogin={setSesion} />;
   return <SuperAdminPanel sesion={sesion} />;
 }
