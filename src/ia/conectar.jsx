@@ -60,6 +60,7 @@ export default function ConectarIA() {
   const [usuario, setUsuario] = useState(undefined); // undefined: mirando; null: sin entrar
   const [perfil, setPerfil] = useState(null);
   const [ajustes, setAjustes] = useState(null);
+  const [empresa, setEmpresa] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -78,8 +79,9 @@ export default function ConectarIA() {
     try {
       const s = await getUserProfileSafe(u.uid);
       const p = s.exists() ? { uid: u.uid, ...s.data() } : null;
-      const a = p?.org_id ? await getDoc(doc(db, "ia_ajustes", p.org_id)).then(d => (d.exists() ? d.data() : null)) : null;
-      setPerfil(p); setAjustes(a);
+      const leer = col => (p?.org_id ? getDoc(doc(db, col, p.org_id)).then(d => (d.exists() ? d.data() : null), () => null) : null);
+      const [a, e] = await Promise.all([leer("ia_ajustes"), leer("orgs")]);
+      setPerfil(p); setAjustes(a); setEmpresa(e);
     } catch (e) { setErr(`No se pudo leer tu perfil: ${e.message}`); }
     setUsuario(u);
   }), []);
@@ -97,7 +99,7 @@ export default function ConectarIA() {
     } catch (e) { setErr(e.message); setEnviando(false); }
   }
 
-  const motivo = usuario ? motivoSinAcceso(perfil, ajustes) : null;
+  const motivo = usuario ? motivoSinAcceso(perfil, ajustes, empresa) : null;
   const nivel = nivelDe(ajustes);
   const nombre = [perfil?.nombre, perfil?.apellidos].filter(Boolean).join(" ") || usuarioDeCorreo(usuario?.email || "");
 

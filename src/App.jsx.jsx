@@ -25,6 +25,9 @@ import { ModuloInventario } from "./conductor/inventario.jsx";
 import { ListaPlanes } from "./conductor/rutas.jsx";
 import { alfa } from "./tema.js";
 import { tono } from "./tema.js";
+import { fijarEmpresa, useEmpresa } from "./empresa.js";
+import { empresaSuspendida, moduloActivo } from "./modulos.js";
+import { PantallaSinAcceso } from "./ui/sin-acceso.jsx";
 
 function Login({aviso=""}){
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
@@ -72,6 +75,9 @@ export default function App(){
   const [tab,setTab]=useState("rutas");
   // Documentos y avisos al móvil: en el menú de la foto; se abren encima de la pestaña
   const misDocs = useMisDocumentos(sesion);
+  // su empresa: si está suspendida o no tiene la app del conductor (panel del superadmin)
+  useEffect(()=>{ fijarEmpresa(sesion&&sesion.rol!=="superadmin"?sesion.org_id:null); },[sesion]);
+  const { datos: empresa } = useEmpresa();
   const [verDocs,setVerDocs] = useState(false);
   const [verAvisos,setVerAvisos] = useState(false);
 
@@ -198,6 +204,8 @@ export default function App(){
   );
 
   if(!sesion) return <Login key={bloqueado?"b":"n"} aviso={bloqueado?"Tu acceso a la app está bloqueado. Habla con tu empresa.":""}/>;
+  if(empresaSuspendida(empresa)) return <PantallaSinAcceso onSalir={()=>signOut(auth)}/>;
+  if(sesion.rol==="conductor"&&!moduloActivo(empresa,"app_conductor")) return <PantallaSinAcceso titulo="App no disponible" texto="Tu empresa no tiene activada la app del conductor. Habla con el responsable de tu empresa." onSalir={()=>signOut(auth)}/>;
 
   const esIntermedio = sesion.rol==="intermedio";
   const esAdmin = puedeGestionarRutasRol(sesion.rol); // admin/intermedio/superadmin
@@ -229,7 +237,7 @@ export default function App(){
             <div style={{fontSize:11,color:C.dim}}>{roleLabel(sesion.rol)}</div>
           </div>
           <AvatarPerfil sesion={sesion} size={34} onCerrarSesion={()=>signOut(auth)} marca={(misDocs||[]).filter(d=>!d.leido).length}
-            extra={cerrar=><OpcionesPerfilApp docs={misDocs} onDocumentos={()=>{cerrar();setVerAvisos(false);setVerDocs(true);}} onAvisos={()=>{cerrar();setVerDocs(false);setVerAvisos(true);}}/>}/>
+            extra={cerrar=><OpcionesPerfilApp docs={moduloActivo(empresa,"documentos")?misDocs:[]} onDocumentos={()=>{cerrar();setVerAvisos(false);setVerDocs(true);}} onAvisos={()=>{cerrar();setVerDocs(false);setVerAvisos(true);}}/>}/>
         </div>
       </div>
 

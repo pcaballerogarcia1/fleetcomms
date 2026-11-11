@@ -14,7 +14,10 @@ import { DetallePlan } from "./ruta-detalle.jsx";
 import { Btn } from "./ui.jsx";
 import { comprobarLugarFichaje, escucharDepotsFichaje, RADIO_FICHAJE_M } from "../fichaje-depots.js";
 import { tono } from "../tema.js";
-import { MisAusencias } from "../vacaciones/app-trabajador.jsx";
+import { MisAusencias as MisAusenciasTodas } from "../vacaciones/app-trabajador.jsx";
+import { useModulo } from "../empresa.js";
+// las vacaciones, solo si la empresa tiene esa función (panel del superadmin › Módulos)
+function MisAusencias(props){ return useModulo("vacaciones") ? <MisAusenciasTodas {...props}/> : null; }
 
 // Correctivo: tarjeta de tarea manual (sin KML)
 function TarjetaCorrectivo({tarea,sesion,onUpdate,onDelete,usuarios}){

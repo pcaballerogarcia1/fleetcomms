@@ -335,3 +335,16 @@ describe("posiciones", () => {
     expect(posicionParaIA({ nombre: "Z", activo: true, lat: 1, lng: 2, hora: ahora - 5 * 60000 }, ahora)).toMatchObject({ en_servicio: true, lat: 1 });
   });
 });
+
+describe("la empresa en el panel del superadmin", () => {
+  it("suspendida o sin «Conectar con IA»: la IA no consulta y se le explica", async () => {
+    const { t } = await conectar();
+    const usar = () => llamarMcp(t.access_token, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "incidencias", arguments: {} } });
+    docs["orgs/orgA"] = { nombre: "A", modulos: { ia: false } };
+    expect((await usar()).body.result.content[0].text).toMatch(/no tiene «Conectar con IA» en su plan/);
+    docs["orgs/orgA"] = { nombre: "A", activo: false };
+    expect((await usar()).body.result.content[0].text).toMatch(/suspendido/);
+    docs["orgs/orgA"] = { nombre: "A", activo: true, modulos: { ia: true } };
+    expect((await usar()).body.result.isError).toBeFalsy();
+  });
+});

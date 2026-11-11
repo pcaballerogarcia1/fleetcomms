@@ -9,8 +9,10 @@ import { ModeTabs } from "./vehiculos.jsx";
 import { tono } from "../tema.js";
 
 import { BotonCerrar } from "../ui/cerrar.jsx";
+import { useModulo } from "../empresa.js";
 
 export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, coveredCount, daysInMonth, libreShifts, mode, month, nextMonth, optimizar, prevMonth, schedRoster, setMode, setShowRules, setShowVersiones, setShowSolicitudes, solicitudesPendientes = 0, workers, year }) {
+  const conVacaciones = useModulo("vacaciones"); // panel del superadmin › Módulos
   return (
     <>
       {/* ── HEADER ──────────────────────────────────────────────── */}
@@ -53,7 +55,7 @@ export function CabeceraCuadrante({ avisoServicio, calsLineas, conSalida, covere
             className="op-btn"><Scale size={14} />
             Reglas
           </button>
-          {setShowSolicitudes && (
+          {setShowSolicitudes && conVacaciones && (
             <button onClick={() => setShowSolicitudes(true)} title="Vacaciones y permisos que piden los trabajadores desde la app" className={`op-btn${solicitudesPendientes ? " op-activo" : ""}`}>
               <CalendarClock size={14} />Solicitudes{solicitudesPendientes ? <span style={{ background: C.amber, color: "#111", borderRadius: 999, padding: "0 6px", fontSize: 11, fontWeight: 700 }}>{solicitudesPendientes}</span> : null}
             </button>

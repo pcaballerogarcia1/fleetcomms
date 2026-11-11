@@ -17,9 +17,11 @@ import { MapaPlanning } from "./planning/mapa.jsx";
 import { Sidebar } from "./planning/sidebar.jsx";
 import { useUltimo } from "./use-ultimo.js";
 import { BotonCerrar } from "./ui/cerrar.jsx";
+import { useModulo } from "./empresa.js";
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────
 export function PlanningPage({ sesion, onLogout, projectId, embedded = false, activeProject = null, onProjectUpdate = null, vehicles = [], workers = [], loadingV = false, loadingW = false, orgRecursos = null }) {
+  const conReparto = useModulo("reparto"); // la bandeja de pedidos, si la empresa tiene reparto
   const orgId = sesion?.org_id ?? null;
   const orgIdRef = useUltimo(orgId); // la de ahora, dentro de las escuchas por proyecto
 
@@ -559,7 +561,7 @@ export function PlanningPage({ sesion, onLogout, projectId, embedded = false, ac
         {[
           { key: "mapa",      label: "Mapa" },
           // reparto: la bandeja de pedidos de cada día
-          ...(sectorDelProyecto(activeProject).ver.entrega ? [{ key: "pedidos", label: "Pedidos" }] : []),
+          ...(sectorDelProyecto(activeProject).ver.entrega && conReparto ? [{ key: "pedidos", label: "Pedidos" }] : []),
           { key: "trabajos",  label: "Trabajos" },
           { key: "timetable", label: "Horarios" },
           { key: "recursos",  label: "Recursos" },

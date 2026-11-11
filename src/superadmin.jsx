@@ -11,6 +11,9 @@ import { C, alfa } from "./tema.js";
 import { tono } from "./tema.js";
 import { Building2 } from "lucide-react";
 import { motivoClave } from "./cuenta/clave.js";
+import { BorrarEmpresa, ModulosEmpresa, UsoEmpresa } from "./superadmin/paneles.jsx";
+import { haceCuanto, ultimaActividad } from "./superadmin/uso.js";
+import { TODAS, moduloActivo } from "./modulos.js";
 
 
 const font = "var(--font)";
@@ -122,7 +125,7 @@ function LoginSA({ onLogin }) {
 }
 
 // ── DETALLE ORG ───────────────────────────────────────────────────
-function OrgDetail({ org, onBack, onUpdate }) {
+function OrgDetail({ org, onBack, onUpdate, sesion }) {
   const [tab, setTab] = useState("info");
   const [usuarios, setUsuarios] = useState([]);
   const [form, setForm] = useState({
@@ -253,7 +256,7 @@ function OrgDetail({ org, onBack, onUpdate }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, padding: "0 24px", background: C.card }}>
-        {[["info", "Configuración"], ["usuarios", `Usuarios (${usuarios.length})`]].map(([k, l]) => (
+        {[["info", "Configuración"], ["usuarios", `Usuarios (${usuarios.length})`], ["uso", "Uso"], ["modulos", "Módulos"], ["eliminar", "Eliminar"]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             background: "none", border: "none", cursor: "pointer", fontFamily: font, fontSize: 13,
             color: tab === k ? C.blueText : C.muted, fontWeight: tab === k ? 600 : 400,
@@ -262,7 +265,10 @@ function OrgDetail({ org, onBack, onUpdate }) {
         ))}
       </div>
 
-      <div style={{ padding: 24, maxWidth: 640 }}>
+      <div style={{ padding: 24, maxWidth: tab === "uso" ? 900 : 640 }}>
+        {tab === "uso" && <UsoEmpresa org={org} usuarios={usuarios} />}
+        {tab === "modulos" && <ModulosEmpresa org={org} onUpdate={onUpdate} />}
+        {tab === "eliminar" && <BorrarEmpresa org={org} sesion={sesion} onBorrada={onBack} />}
         {tab === "info" && (
           <>
             <div style={S.card}>
@@ -363,9 +369,9 @@ function OrgDetail({ org, onBack, onUpdate }) {
                     <div>
                       <label style={S.label}>Rol</label>
                       <select value={addForm.rol} onChange={e => setAddForm({ ...addForm, rol: e.target.value })} style={S.input}>
-                        <option value="admin">Admin</option>
-                        <option value="user">Usuario</option>
-                        <option value="driver">Conductor</option>
+                        <option value="admin">Administrador</option>
+                        <option value="intermedio">Jefe de tráfico</option>
+                        <option value="conductor">Conductor</option>
                       </select>
                     </div>
                   </div>
@@ -461,6 +467,15 @@ function SuperAdminPanel({ sesion }) {
     return () => unsubs.forEach(u => u());
   }, [idsOrgs]);
 
+  // última actividad de cada empresa (1 lectura por empresa, al cargar la lista)
+  const [actividad, setActividad] = useState(new Map());
+  useEffect(() => {
+    if (!idsOrgs) return;
+    let vivo = true;
+    ultimaActividad(idsOrgs.split(",").filter(Boolean)).then(m => vivo && setActividad(m));
+    return () => { vivo = false; };
+  }, [idsOrgs]);
+
   async function crearOrg() {
     if (!form.nombre.trim()) { setErr("El nombre es obligatorio"); return; }
     const slug = slugify(form.nombre);
@@ -496,6 +511,7 @@ function SuperAdminPanel({ sesion }) {
         org={orgActiva}
         onBack={() => setOrgActiva(null)}
         onUpdate={updated => setOrgActiva(updated)}
+        sesion={sesion}
       />
     );
   }
@@ -642,8 +658,10 @@ function SuperAdminPanel({ sesion }) {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: C.dim, fontFamily: mono, marginBottom: 10 }}>
-                      {org.org_id}
+                    <div style={{ fontSize: 11, color: C.dim, marginBottom: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: mono }}>{org.org_id}</span>
+                      <span>· Última actividad: {haceCuanto(actividad.get(org.org_id))}</span>
+                      {TODAS.some(m => !moduloActivo(org, m.clave)) && <span title="Módulos y funciones apagados">· Sin: {TODAS.filter(m => !moduloActivo(org, m.clave)).map(m => m.nombre).join(", ")}</span>}
                     </div>
                     {/* Barra de uso */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

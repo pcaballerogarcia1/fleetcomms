@@ -23,13 +23,13 @@ export async function comprobarAcceso({ sesion, conexionId = null, firebase, f =
   catch (e) { if (e.sesionCaducada) throw new AccesoError(e.message, true); throw e; }
   const fs = firestoreUsuario(tk.idToken, firebase.projectId, f);
   const perfil = await fs.leer(`usuarios/${tk.uid}`);
-  const ajustes = perfil?.org_id ? await fs.leer(`ia_ajustes/${perfil.org_id}`) : null;
+  const [ajustes, empresa] = perfil?.org_id ? await Promise.all([fs.leer(`ia_ajustes/${perfil.org_id}`), fs.leer(`orgs/${perfil.org_id}`)]) : [null, null];
   let conexion = null;
   if (conexionId) {
     conexion = await fs.leer(`ia_conexiones/${conexionId}`);
     if (!conexion || conexion.uid !== tk.uid || conexion.activa !== true) throw new AccesoError("Esta conexión con la IA se ha desconectado en Operanzia. Vuelve a conectarla.", true);
   }
-  const motivo = motivoSinAcceso(perfil, ajustes);
+  const motivo = motivoSinAcceso(perfil, ajustes, empresa);
   if (motivo) throw new AccesoError(motivo);
   return { fs, uid: tk.uid, org: perfil.org_id, nivel: nivelDe(ajustes), ubicacion: ajustes?.ubicacion === true, perfil, conexion };
 }

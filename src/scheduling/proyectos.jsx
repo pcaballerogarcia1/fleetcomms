@@ -10,6 +10,7 @@ import { SECTORES, sectorDe } from "../sector.js";
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
 import { BotonCerrar } from "../ui/cerrar.jsx";
+import { useModulo } from "../empresa.js";
 
 // ── TAB PROYECTOS ─────────────────────────────────────────────────
 const PROJECT_STATUS = {
@@ -31,6 +32,8 @@ const TIPOS_PROYECTO = [
 const PROJECT_COLORS = [C.blue,C.green,C.orange,C.red,C.violet,C.amber,"#f472b6","#22d3ee"];
 
 export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin }) {
+  // lo que la empresa no tiene no se ofrece al crear un proyecto (panel del superadmin › Módulos)
+  const conLineas = useModulo("lineas"), conReparto = useModulo("reparto");
   const [projects,    setProjects]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [newModal,    setNewModal]    = useState(null);
@@ -356,7 +359,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 6 }}>Tipo de operación</label>
               <div style={{ display: "flex", gap: 8 }}>
-                {TIPOS_PROYECTO.map(t => {
+                {TIPOS_PROYECTO.filter(t => t.id !== "lineas" || conLineas).map(t => {
                   const on = (newModal.tipo || "puntos") === t.id;
                   return (
                     <button key={t.id} type="button" onClick={() => setNewModal(p => ({ ...p, tipo: t.id }))} style={{
@@ -374,7 +377,7 @@ export function TabProyectos({ activeProject, onOpenProject, orgId, isSuperAdmin
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Sector</label>
                 <select value={sectorDe(newModal.sector).id} onChange={e => setNewModal(p => ({ ...p, sector: e.target.value }))} style={{ ...inpStyle, marginBottom: 0, cursor: "pointer", colorScheme: tono("dark", "light") }}>
-                  {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre} — {s.detalle}</option>)}
+                  {SECTORES.filter(s => s.id !== "distribucion" || conReparto).map(s => <option key={s.id} value={s.id}>{s.nombre} — {s.detalle}</option>)}
                 </select>
               </div>
             )}

@@ -8,11 +8,13 @@ import { C, DAY_NAMES, MONTH_NAMES, VEHICLE_STATUSES, VEHICLE_STATUS_META, font,
 import { alfa } from "../tema.js";
 import { tono } from "../tema.js";
 import { Truck } from "lucide-react";
+import { useModulo } from "../empresa.js";
 
 // Selector "Trabajadores / Vehículos" — compartido entre las dos vistas
 // del módulo Rostering.
 export function ModeTabs({ mode, setMode, conSalida = false }) {
-  const pestanas = [["workers", "Trabajadores"], ["vehicles", "Vehículos"], ...(conSalida ? [["salida", "Salida del día"]] : []), ["documentos", "Documentos"]];
+  const conDocumentos = useModulo("documentos");
+  const pestanas = [["workers", "Trabajadores"], ["vehicles", "Vehículos"], ...(conSalida ? [["salida", "Salida del día"]] : []), ...(conDocumentos ? [["documentos", "Documentos"]] : [])];
   return (
     <div style={{ display: "flex", gap: 2, background: C.surface2, borderRadius: 8, padding: 2 }}>
       {pestanas.map(([m, label]) => (

@@ -11,6 +11,7 @@ import { useConexionGps, useFlota, usePosicionesGps } from "../gps/usar-gps.js";
 import { emparejarGps, proveedorGps } from "../gps/proveedores.js";
 import { VentanaGps } from "../gps/ventana.jsx";
 import { capaFondo, opcionesMapa, sinPrefijo } from "../mapa-fondo.js";
+import { useModulo } from "../empresa.js";
 
 const GPS_VIEJO_MS = 15 * 60_000; // posición del GPS de más de 15 min: en gris
 
@@ -165,7 +166,8 @@ export function MapaFlota({ orgId, isSuperAdmin, planes, sesion = null }) {
   const markersRef  = useRef(new Map()); // uid -> Leaflet marker
   const gpsMarkersRef = useRef(new Map()); // id del GPS -> Leaflet marker
   // GPS de la empresa (si está conectado): sus vehículos, cada minuto
-  const conexionGps = useConexionGps(orgId);
+  const conGps = useModulo("gps"); // panel del superadmin › Módulos
+  const conexionGps = useConexionGps(conGps ? orgId : null);
   const flota = useFlota(orgId);
   const gps = usePosicionesGps(conexionGps);
   const paresGps = useMemo(() => emparejarGps(gps.vehiculos, flota, conexionGps?.enlaces || {}), [gps.vehiculos, flota, conexionGps]);
@@ -329,7 +331,7 @@ export function MapaFlota({ orgId, isSuperAdmin, planes, sesion = null }) {
             {gps.error ? `GPS: ${gps.error}` : <><span style={{ color: C.blue, fontWeight: 700, fontFamily: mono }}>{gps.vehiculos.length}</span> vehículos de {proveedorGps(conexionGps.proveedor)?.nombre || "GPS"}</>}
           </span>
         )}
-        {conexionGps !== undefined && (puedeEditarGps || conexionGps?.activa) && (
+        {conGps && conexionGps !== undefined && (puedeEditarGps || conexionGps?.activa) && (
           <button className="op-btn" onClick={() => setVerGps(true)}><Satellite size={14} />{conexionGps?.activa ? "GPS de la flota" : "Conectar GPS de la flota"}</button>
         )}
       </div>

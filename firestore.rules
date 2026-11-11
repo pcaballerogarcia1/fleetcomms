@@ -174,7 +174,9 @@ service cloud.firestore {
     //    las ve él o un admin; se desconectan (él o un admin) pero no se reactivan ni se borran.
     match /ia_ajustes/{orgId} {
       allow read: if isSignedIn() && orgId == myOrgId();
+      // solo si la empresa tiene «Conectar con IA» (panel del superadmin › Módulos)
       allow create, update: if isSignedIn() && orgId == myOrgId() && myProfile().rol == 'admin'
+        && (!exists(/databases/$(database)/documents/orgs/$(orgId)) || get(/databases/$(database)/documents/orgs/$(orgId)).data.get('modulos', {}).get('ia', true) != false)
         && request.resource.data.org_id == orgId
         && request.resource.data.activa is bool
         && request.resource.data.nivel in ['leer', 'actuar']

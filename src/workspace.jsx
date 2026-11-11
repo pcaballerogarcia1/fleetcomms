@@ -21,6 +21,9 @@ import { setErrorUser } from "./error-report.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { sincronizarDepotsFichaje } from "./fichaje-depots.js";
 import { AvatarPerfil } from "./foto-perfil.jsx";
+import { fijarEmpresa, useEmpresa } from "./empresa.js";
+import { empresaSuspendida, moduloActivo, moduloDeRuta, primeraRuta } from "./modulos.js";
+import { PantallaSinAcceso } from "./ui/sin-acceso.jsx";
 import { RUTAS_CONCURSO } from "./concursos/store.js";
 import { C, font } from "./raiz-estilo.js";
 import { alfa } from "./tema.js";
@@ -78,7 +81,9 @@ function go(path) {
 function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenProject, onProjectUpdate }) {
   const lang = useLang();
   const [verIA, setVerIA] = useState(false); // ventana «Conectar con IA» (menú de la foto)
-  const crumb = (label, href, active) => (
+  const { datos: empresa } = useEmpresa();
+  // los módulos que la empresa no tiene no aparecen (panel del superadmin › Módulos)
+  const crumb = (label, href, active) => !moduloActivo(empresa, moduloDeRuta(href)) ? null : (
     <button onClick={() => go(href)} style={{
       background: active ? alfa(0.07) : "none",
       border: "1px solid transparent",
@@ -165,7 +170,7 @@ function TopBar({ sesion, activeProject, path, onLogout, onFullscreen, onOpenPro
           </button>
         )}
         <AvatarPerfil sesion={sesion} size={30} onCerrarSesion={onLogout}
-          extra={cerrar => <button role="menuitem" onClick={() => { cerrar(); setVerIA(true); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 15, cursor: "pointer", textAlign: "left" }}><Sparkles size={16} color={C.blue} /> Conectar con IA</button>} />
+          extra={!moduloActivo(empresa, "ia") ? null : cerrar => <button role="menuitem" onClick={() => { cerrar(); setVerIA(true); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "none", border: "none", color: C.text, fontSize: 15, cursor: "pointer", textAlign: "left" }}><Sparkles size={16} color={C.blue} /> Conectar con IA</button>} />
         {verIA && <Suspense fallback={null}><PanelConectarIALazy sesion={sesion} onCerrar={() => setVerIA(false)} /></Suspense>}
       </div>
     </div>
@@ -244,6 +249,10 @@ export function WorkspaceRouter() {
     });
   }, []);
 
+  // La ficha de su empresa: módulos que tiene y si está suspendida (el superadmin, sin límites)
+  useEffect(() => { fijarEmpresa(sesion && sesion.rol !== "superadmin" ? sesion.org_id : null); }, [sesion]);
+  const { datos: empresa } = useEmpresa();
+
   // Historial de cambios: quién registra (esta sesión) y en qué proyecto
   useEffect(() => { setAuditUser(sesion); setErrorUser(sesion); }, [sesion]);
   // Planes antiguos sin conductorUid: los arregla quien gestiona rutas al entrar
@@ -297,7 +306,9 @@ export function WorkspaceRouter() {
     // la Salida del día vive ahora dentro del Cuadrante (enlaces antiguos)
     else if (sesion && activeProject && path === "/departure") go("/rostering?vista=salida");
     if (sesion && activeProject && !activeProject.concurso && RUTAS_CONCURSO.some(r => r[0] === path)) go("/planning");
-  }, [sesion, activeProject, path]);
+    // un módulo que la empresa no tiene (panel del superadmin › Módulos)
+    if (sesion && !moduloActivo(empresa, moduloDeRuta(path))) go(path === "/concursos" ? "/projects" : primeraRuta(empresa));
+  }, [sesion, activeProject, path, empresa]);
 
   // Superadmin may not have org_id — fall back to project's org, then project's _id.
   // Dentro de un concurso, su espacio aislado: los módulos leen y escriben ahí
@@ -340,7 +351,7 @@ export function WorkspaceRouter() {
   }
   function openProject(p) {
     // un concurso empieza por sus documentos (el pliego)
-    setActiveProject(p); writeLS("fc_active_project", p); go(p?.concurso ? "/documentos" : "/planning");
+    setActiveProject(p); writeLS("fc_active_project", p); go(p?.concurso ? "/documentos" : primeraRuta(empresa));
   }
   async function updateProject(updates) {
     if (!activeProject) return;
@@ -364,6 +375,7 @@ export function WorkspaceRouter() {
   );
 
   if (path === "/login" || !sesion) return <LoginScheduling onLogin={login} />;
+  if (empresaSuspendida(empresa)) return <PantallaSinAcceso onSalir={logout} />;
 
   // Single shell — all pages coexist so PlanningPage stays mounted (preserves
   // uploaded layers state across navigation within the same project)

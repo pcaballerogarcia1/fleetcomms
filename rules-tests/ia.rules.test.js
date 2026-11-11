@@ -41,6 +41,12 @@ describe("ia_ajustes", () => {
     await assertFails(setDoc(doc(como("adminA"), "ia_ajustes/orgA"), ajustes({ nivel: "todo" })));
     await assertFails(deleteDoc(doc(como("adminA"), "ia_ajustes/orgA")));
   });
+  it("si la empresa no tiene «Conectar con IA» (panel del superadmin), su admin no lo puede activar", async () => {
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), "orgs/orgA"), { nombre: "A", modulos: { ia: false } }));
+    await assertFails(setDoc(doc(como("adminA"), "ia_ajustes/orgA"), ajustes({ activa: true })));
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), "orgs/orgA"), { nombre: "A", modulos: { ia: true } }));
+    await assertSucceeds(setDoc(doc(como("adminA"), "ia_ajustes/orgA"), ajustes({ activa: true })));
+  });
 });
 
 describe("ia_conexiones", () => {

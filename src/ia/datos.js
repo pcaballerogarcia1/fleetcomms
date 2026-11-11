@@ -12,11 +12,16 @@ export const ROLES = [
 /** El nivel que deja la empresa: "actuar" (consultar y hacer cambios) o "leer" (solo consultar) */
 export const nivelDe = ajustes => (ajustes?.nivel === "actuar" ? "actuar" : "leer");
 
-/** ¿Deja la empresa usar la IA a este perfil? El motivo si no; null si sí */
-export function motivoSinAcceso(perfil, ajustes) {
+/**
+ * ¿Deja la empresa usar la IA a este perfil? El motivo si no; null si sí.
+ * empresa: su ficha (orgs/{org}), si se tiene: suspendida o sin «Conectar con IA» en su plan
+ */
+export function motivoSinAcceso(perfil, ajustes, empresa = null) {
   if (!perfil) return "Tu usuario no tiene perfil en Operanzia.";
   if (perfil.activo === false) return "Tu usuario está desactivado en Operanzia.";
   if (!perfil.org_id) return "Tu usuario no pertenece a ninguna empresa.";
+  if (empresa?.activo === false) return "El acceso de tu empresa a Operanzia está suspendido.";
+  if (empresa?.modulos?.ia === false) return "Tu empresa no tiene «Conectar con IA» en su plan de Operanzia.";
   if (!ajustes?.activa) return "Tu empresa no tiene activado «Conectar con IA». Pídeselo a un administrador.";
   const roles = Array.isArray(ajustes.roles) ? ajustes.roles : ROLES_POR_DEFECTO;
   if (perfil.rol !== "superadmin" && !roles.includes(perfil.rol)) return "Tu empresa no permite conectar la IA a tu tipo de usuario.";
