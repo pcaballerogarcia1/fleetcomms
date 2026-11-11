@@ -10,6 +10,8 @@ import {
   vehicleCodeOnDay, workerCodeOnDay,
 } from "../rostering/datos.js";
 import { scenarioKpis, sinDuplicados } from "../scenario-metrics.js";
+import { listenPrices } from "../price-store.js";
+import { facturacionEscenario, precioUnicoDeTrabajo } from "./facturacion.js";
 import { loadScenarioCloud, nombreDeVersion, watchScenarioMeta } from "../scenario-store.js";
 import { ComparadorEscenarios } from "./comparar.jsx";
 import { renombrarEnEscenario } from "./nombres.js";
@@ -339,6 +341,17 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
     maxShiftMin: constraints.maxShiftMin, reglas: reglasGantt,
     costeHora: +constraints.costeHora || 0, costeKm: +constraints.costeKm || 0,
   }) : null, [schedules, unassigneds, activeDays, constraints.maxShiftMin, reglasGantt, constraints.costeHora, constraints.costeKm]);
+
+  // Indicador «Margen»: la facturación máxima de lo asignado (precios de
+  // Planificación, solo administradores) frente al coste estimado
+  const vePrecios = sesion?.rol === "admin" || sesion?.rol === "superadmin";
+  const [precios, setPrecios] = useState(null);
+  useEffect(() => (vePrecios && idProyecto ? listenPrices(idProyecto, setPrecios) : undefined), [vePrecios, idProyecto]);
+  const facturacion = useMemo(() => {
+    if (!vePrecios) return { sinPermiso: true };
+    if (!precios?.ready || !schedules.vehicles?.length) return null;
+    return facturacionEscenario(schedules.vehicles, precios, precioUnicoDeTrabajo(activeProject?.trabajos, precios));
+  }, [vePrecios, precios, schedules, activeProject?.trabajos]);
 
   // Cambiar el nombre de un vehículo o conductor del cálculo (los de la
   // organización no): en el escenario y, para la próxima vez que se genere,
@@ -787,7 +800,7 @@ export function TabPlanificacion({ vehicles, workers, activeProject, onProjectUp
 
       {/* Indicadores del escenario (con cambio respecto a la generación anterior) */}
       {schedule?.length > 0 && !focusMode && kpis && (
-        <KpiBar k={kpis} base={scenarioHistory[1] || null} onConfigCostes={() => setShowC(true)} />
+        <KpiBar k={kpis} base={scenarioHistory[1] || null} onConfigCostes={() => setShowC(true)} facturacion={facturacion} />
       )}
 
       {/* ── MAIN CONTENT ──────────────────────────────────────────── */}

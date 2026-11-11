@@ -48,6 +48,7 @@ export const KPI_AYUDA = {
   "Vehículos": "Vehículos con alguna ruta en el escenario. PVR: los que están en ruta a la vez en el momento de más actividad — los que necesitas de verdad.",
   "Turnos": "Jornadas de trabajo: cada conductor (o vehículo, si no hay conductores) en cada día con ruta.",
   "Eficiencia vehículo": "Km en ruta / km totales. Lo que falta hasta el 100 % son los km en vacío de salida y vuelta a cochera.",
+  "Margen": "Lo que se facturaría si se hacen todas las paradas asignadas (precios por punto de Planificación), menos el coste estimado, sobre esa facturación. Solo lo ven los administradores.",
   "Eficiencia personal": "Tiempo productivo (conducción + trabajo en paradas) / tiempo pagado (de inicio a fin de jornada). Lo que falta son pausas y esperas.",
   "Km": "Kilómetros totales del escenario; debajo, los recorridos en vacío (salida y vuelta a cochera).",
   "Paradas": "Paradas asignadas a alguna ruta; debajo, las que el algoritmo no pudo encajar (panel \"Sin asignar\").",

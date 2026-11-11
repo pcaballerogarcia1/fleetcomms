@@ -14,6 +14,7 @@ test("planificar y publicar un día de pedidos", async ({ page }) => {
   const fecha = ymd(d), mes = fecha.slice(0, 7), dia = d.getDate(), otroDia = dia === 1 ? 2 : 1;
   const p = await leer("scheduling_projects/p-puntos");
   await escribir("scheduling_projects/p-puntos", { ...p, sector: "distribucion" });
+  await escribir("precios/p-puntos", { org_id: ORG, projectId: "p-puntos", defaultPrecio: 25 }); // 25 € por entrega, para el indicador «Margen»
   const cliente = (n, lat, lng) => ({ nombre: n, direccion: `${n}, Salamanca`, lat, lng, telefono: "", contacto: "" });
   const pedido = (id, c, extra = {}) => escribir(`pedidos/${id}`, { org_id: ORG, projectId: "p-puntos", fecha, cliente: c, ref: id.toUpperCase(), bultos: 2, kg: 20, desde: "", hasta: "", duracion: 5, notas: "", estado: "pendiente", origen: "manual", creadoEn: Date.now(), ...extra });
   await pedido("pe1", cliente("Bar El Puente", 40.9636, -5.6649), { desde: "09:00", hasta: "11:00" });
@@ -34,6 +35,9 @@ test("planificar y publicar un día de pedidos", async ({ page }) => {
   await expect(page.getByRole("button", { name: /3 pedidos/ })).toBeVisible(); // sin el anulado
   await page.getByRole("button", { name: /Generar escenario/ }).first().click();
   await expect(page.getByRole("button", { name: /Excel/ })).toBeVisible({ timeout: 90_000 });
+  // «Margen»: 3 entregas × 25 € de facturación máxima (sin costes configurados, solo la facturación)
+  await expect(page.getByText("Margen", { exact: true })).toBeVisible();
+  await expect(page.getByText("75 €")).toBeVisible();
   if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/dia1-rutas.png` });
 
   await page.getByRole("button", { name: "Enviar a conductores" }).first().click();

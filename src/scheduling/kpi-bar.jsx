@@ -6,17 +6,19 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { C, mono } from "./estilo.js";
 import { KPI_AYUDA } from "./gantt-comun.js";
+import { margen } from "./facturacion.js";
 
 // Barra de indicadores del escenario, con el cambio respecto a la generación anterior.
 // `cambios` adapta indicadores sin tocar los de aquí (lo usa el Scheduling de
 // líneas regulares): { "Paradas": { l: "Viajes", sub, ayuda }, "Eficiencia vehículo": { ocultar: true } }
 // Arriba solo los principales (como Optibus); «Todos los indicadores» despliega
 // el resto y los de `detalle` ([{ l, v, sub, ayuda }] o gráficas [{ l, barras: [{ n, v }] }]).
-const PRINCIPALES = ["Turnos", "Vehículos", "Eficiencia vehículo", "Eficiencia personal", "Coste estimado"];
+const PRINCIPALES = ["Turnos", "Vehículos", "Eficiencia vehículo", "Eficiencia personal", "Coste estimado", "Margen"];
 // solo los indicadores en alerta van en color; el resto, en el color del texto
 const alerta = c => c === C.red || c === C.amber || c === C.orange;
 
-export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) {
+// facturacion: { total, conPrecio, sinPrecio } de lo asignado, { sinPermiso } o null (cargando); sin ella no hay «Margen» (p. ej. líneas)
+export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [], facturacion }) {
   const [abierto, setAbierto] = useState(false);
   const pct = v => v == null ? "—" : `${(v * 100).toFixed(1).replace(".", ",")} %`;
   const num = v => v == null ? "—" : Math.round(v).toLocaleString("es-ES");
@@ -41,6 +43,7 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
     k.coste != null
       ? { l: "Coste estimado", v: eur(k.coste), d: delta(k.coste, base?.coste, "down", eur), sub: "personal + km (Restricciones)" }
       : { l: "Coste estimado", v: <button onClick={onConfigCostes} className="op-btn" style={{ height: 28, padding: "0 10px", fontSize: 12 }}>Configurar €/h y €/km</button>, sub: "en Restricciones" },
+    ...(facturacion === undefined ? [] : [margenItem(facturacion, k.coste, { pct, eur })]),
     { l: "Avisos", v: num(k.filasConAviso), d: delta(k.filasConAviso, base?.avisos, "down", num), sub: k.avisos ? `${k.avisos} incumplimientos de reglas` : "sin incumplimientos", color: k.filasConAviso ? C.red : C.green },
   ];
   const todos = items
@@ -64,11 +67,11 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
         </div>
       ))}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 16px", flexShrink: 0 }}>
-        <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`}>
-          Todos los indicadores {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <button onClick={() => setAbierto(a => !a)} className={`op-btn${abierto ? " op-activo" : ""}`} title="Todos los indicadores" aria-label={`Todos los indicadores${avisos > 0 ? ` (${avisos} avisos)` : ""}`} style={{ height: 30, padding: "0 10px", fontSize: 12 }}>
+          Todos {abierto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           {avisos > 0 && <span style={{ background: "rgba(242,109,109,0.18)", color: C.red, borderRadius: 12, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{num(avisos)} aviso{avisos === 1 ? "" : "s"}</span>}
         </button>
-        {base && <span style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ respecto a la generación anterior</span>}
+        {base && <span title="Las flechas comparan con la generación anterior" style={{ fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>▲▼ vs. anterior</span>}
       </div>
     </div>
     {abierto && (
@@ -115,6 +118,18 @@ export function KpiBar({ k, base, onConfigCostes, cambios = {}, detalle = [] }) 
 // miles de paradas (aquí solo el 1-2% suele tener franja) era casi
 // imposible verlo a simple vista. Un reloj en la esquina destaca mucho
 // más aunque el bloque sea diminuto.
+// «Margen»: facturación máxima de lo asignado frente al coste estimado
+function margenItem(f, coste, { pct, eur }) {
+  const l = "Margen";
+  if (f?.sinPermiso) return { l, v: "—", sub: "solo administradores" };
+  if (!f) return { l, v: "…", sub: "calculando" };
+  if (!f.conPrecio) return { l, v: "—", sub: "sin precios (Planificación)" };
+  const m = margen(f.total, coste);
+  const faltan = f.sinPrecio ? ` · ${f.sinPrecio} sin precio` : "";
+  if (m == null) return { l, v: eur(f.total), sub: `facturación · configura costes${faltan}` };
+  return { l, v: pct(m), color: m < 0 ? C.red : m < 0.1 ? C.amber : undefined, sub: `${eur(f.total)} − ${eur(coste)} coste${faltan}` };
+}
+
 export function ClockBadge({ size = 11 }) {
   return (
     <div title="Tiene franja horaria / hora fija" style={{
