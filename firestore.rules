@@ -194,6 +194,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activa', 'ultimoUso', 'desconectadaEn', 'desconectadaPor'])
         && (request.resource.data.activa == false || resource.data.activa == true);
     }
+    // Tiempo de uso de cada persona, por mes (src/uso-tiempo.js): lo suma
+    // cada uno a su propia ficha; lo ven el admin de su empresa y el superadmin.
+    match /uso_mes/{id} {
+      allow read: if sameOrg(resource.data.org_id) && myProfile().rol == 'admin';
+      allow create, update: if isSignedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.org_id == myOrgId()
+        && id == request.resource.data.org_id + '_' + request.auth.uid + '_' + request.resource.data.mes
+        && (resource == null || (resource.data.uid == request.auth.uid && resource.data.org_id == request.resource.data.org_id));
+    }
     // Prueba de entrega (reparto): las fotos y la firma de cada parada
     // (src/entregas). Las sube el conductor (a su nombre); las ve su empresa.
     // Se pueden reenviar (mismo id) si se cortó la conexión; solo las borra la oficina.

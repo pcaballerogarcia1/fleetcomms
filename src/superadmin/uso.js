@@ -38,6 +38,35 @@ export async function usoDeEmpresa(org, ahora = new Date()) {
   };
 }
 
+/**
+ * Las horas de uso de cada persona: hoy, últimos 7 días y este mes (de uso_mes).
+ * → [{ uid, nombre, rol, hoy, semana, mes, oficina, app, ultimo }] en minutos, de más a menos
+ */
+export async function horasPorPersona(org, ahora = new Date()) {
+  const mes = mesDe(ahora);
+  const antes = new Date(ahora.getFullYear(), ahora.getMonth(), 0); // último día del mes anterior
+  const mesAntes = mesDe(antes);
+  const docs = (await getDocs(query(collection(db, "uso_mes"), where("org_id", "==", org), where("mes", "in", [mes, mesAntes])))).docs.map(d => d.data());
+  // los 7 días, con su mes
+  const semana = Array.from({ length: 7 }, (_, i) => { const d = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - i); return [mesDe(d), String(d.getDate())]; });
+  const porPersona = new Map();
+  for (const u of docs) {
+    const p = porPersona.get(u.uid) || { uid: u.uid, nombre: u.nombre || "—", rol: u.rol || "", hoy: 0, semana: 0, mes: 0, oficina: 0, app: 0, ultimo: null };
+    p.nombre = u.nombre || p.nombre; p.rol = u.rol || p.rol;
+    for (const [m, d] of semana) if (m === u.mes) p.semana += +(u.dias?.[d] || 0);
+    if (u.mes === mes) {
+      p.mes += +(u.minutos || 0); p.oficina += +(u.oficina || 0); p.app += +(u.app || 0);
+      p.hoy += +(u.dias?.[String(ahora.getDate())] || 0);
+    }
+    p.ultimo = Math.max(p.ultimo || 0, ms(u.ultimo) || 0) || null;
+    porPersona.set(u.uid, p);
+  }
+  return [...porPersona.values()].sort((a, b) => b.mes - a.mes || b.semana - a.semana);
+}
+
+/** 135 → «2 h 15 min» */
+export const horas = min => (!min ? "—" : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}`);
+
 /** Última actividad de cada empresa (para la lista): Map<org, ms|null> — 1 lectura por empresa */
 export async function ultimaActividad(orgs) {
   const pares = await Promise.all(orgs.map(async org => {

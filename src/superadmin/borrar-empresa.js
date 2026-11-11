@@ -15,7 +15,7 @@ export const POR_EMPRESA = [
   ["ia_conexiones"], ["entregas_pruebas"], ["pesadas"], ["scheduling_vehicles"], ["scheduling_workers"], ["scheduling_constraint_templates"],
   ["documentos", ["trozos"]], ["documentos_lecturas"], ["solicitudes_ausencia"], ["cuadrantes"], ["rostering", ["trabajadores", "versiones"]],
   ["rostering_vehicles"], ["auditoria"], ["presencia"], ["ubicaciones_activas"], ["servicio_lineas", ["turnos"]], ["ubicaciones_lineas"],
-  ["fichajes"], ["errores"], ["concursos", ["requisitos", ["documentos", ["texto", "pdf"]]]],
+  ["fichajes"], ["errores"], ["uso_mes"], ["concursos", ["requisitos", ["documentos", ["texto", "pdf"]]]],
 ];
 // colecciones de un proyecto: por su campo projectId, o con el id del proyecto como id del documento
 export const POR_PROYECTO_CAMPO = [["planning_layers", ["trozos"]]];

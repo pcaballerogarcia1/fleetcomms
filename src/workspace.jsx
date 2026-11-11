@@ -16,6 +16,7 @@ import { HelpButton } from "./help-panel.jsx";
 import { ProjectMenu } from "./project-menu.jsx";
 import { fijarSector } from "./sector.js";
 import { startPresence, markOffline, updatePresencePage } from "./presence.js";
+import { contarUso } from "./uso-tiempo.js";
 import { setAuditUser, setAuditProject, flushAllAudit } from "./audit.js";
 import { setErrorUser } from "./error-report.js";
 import { repararPlanesSinConductor } from "./reparar-planes.js";
@@ -277,6 +278,8 @@ export function WorkspaceRouter() {
     if (!enPresencia) return;
     return startPresence(sesion, "oficina");
   }, [sesion, enPresencia]);
+  // el tiempo de uso de cada persona (panel del superadmin › Uso)
+  useEffect(() => (enPresencia ? contarUso(sesion, "oficina") : undefined), [sesion, enPresencia]);
   useEffect(() => {
     if (enPresencia) updatePresencePage(sesion.uid, path);
   // eslint-disable-next-line react-hooks/exhaustive-deps

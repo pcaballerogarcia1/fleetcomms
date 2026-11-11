@@ -43,3 +43,28 @@ describe("copia antes de borrar una empresa", () => {
     expect(haceCuanto(ahora - 26 * 3600000, ahora)).toBe("ayer");
   });
 });
+
+describe("tiempo de uso", async () => {
+  const { cuentaMinuto, sumaDeUso, INACTIVO_MS } = await import("./uso-tiempo.js");
+  const { horas } = await import("./superadmin/uso.js");
+  it("cuenta solo con la pantalla a la vista; en la oficina, además, con uso reciente", () => {
+    const ahora = 1_000_000_000;
+    expect(cuentaMinuto({ visible: false, app: "app", ahora, ultimaActividad: ahora })).toBe(false);
+    expect(cuentaMinuto({ visible: true, app: "app", ahora, ultimaActividad: 0 })).toBe(true);
+    expect(cuentaMinuto({ visible: true, app: "oficina", ahora, ultimaActividad: ahora - 60_000 })).toBe(true);
+    expect(cuentaMinuto({ visible: true, app: "oficina", ahora, ultimaActividad: ahora - INACTIVO_MS - 1 })).toBe(false);
+  });
+  it("una ficha por persona y mes, con el día y dónde", () => {
+    const { id, datos } = sumaDeUso({ uid: "u1", org_id: "o1", nombre: "Ana", apellidos: "Gil", rol: "admin" }, "oficina", 5, new Date(2026, 10, 11, 10));
+    expect(id).toBe("o1_u1_2026-11");
+    expect(datos).toMatchObject({ org_id: "o1", uid: "u1", mes: "2026-11", nombre: "Ana Gil", rol: "admin" });
+    expect(Object.keys(datos.dias)).toEqual(["11"]);
+    expect(datos).toHaveProperty("oficina");
+  });
+  it("horas en palabras", () => {
+    expect(horas(0)).toBe("—");
+    expect(horas(45)).toBe("45 min");
+    expect(horas(135)).toBe("2 h 15 min");
+    expect(horas(120)).toBe("2 h");
+  });
+});

@@ -28,6 +28,7 @@ import { tono } from "./tema.js";
 import { fijarEmpresa, useEmpresa } from "./empresa.js";
 import { empresaSuspendida, moduloActivo } from "./modulos.js";
 import { PantallaSinAcceso } from "./ui/sin-acceso.jsx";
+import { contarUso } from "./uso-tiempo.js";
 
 function Login({aviso=""}){
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
@@ -78,6 +79,8 @@ export default function App(){
   // su empresa: si está suspendida o no tiene la app del conductor (panel del superadmin)
   useEffect(()=>{ fijarEmpresa(sesion&&sesion.rol!=="superadmin"?sesion.org_id:null); },[sesion]);
   const { datos: empresa } = useEmpresa();
+  // el tiempo de uso de la app (panel del superadmin › Uso)
+  useEffect(()=>contarUso(sesion,"app"),[sesion]);
   const [verDocs,setVerDocs] = useState(false);
   const [verAvisos,setVerAvisos] = useState(false);
 

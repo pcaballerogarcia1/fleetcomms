@@ -115,3 +115,28 @@ test("eliminar una empresa: primero suspendida, copia y confirmación; se borra 
   expect(await leer("incidencias/demo1")).not.toBeNull(); // lo de otras empresas, intacto
   expect((await listar("usuarios")).some(u => u.org_id === ORG)).toBe(true);
 });
+
+test("horas de uso: la oficina suma su tiempo y el superadmin lo ve por persona", async ({ page, browser }) => {
+  const { uids } = await sembrar();
+  await crearSuperadmin();
+  // la oficina, con el reloj adelantado: 6 minutos usándola (ratón cada minuto)
+  const oficina = await browser.newPage({ baseURL: "http://127.0.0.1:4317" }); // la de e2e/playwright.config.js
+  await oficina.clock.install();
+  await entrarOficina(oficina);
+  for (let i = 0; i < 6; i++) { await oficina.mouse.move(100 + i * 10, 200); await oficina.clock.runFor(60_000); }
+  const mes = new Date().toISOString().slice(0, 7);
+  const id = `${ORG}_${uids.admin}_${mes}`;
+  await expect.poll(async () => (await leer(`uso_mes/${id}`))?.minutos ?? 0, { timeout: 15000 }).toBeGreaterThanOrEqual(5);
+  expect((await leer(`uso_mes/${id}`)).oficina).toBeGreaterThanOrEqual(5);
+  await oficina.close();
+  // un conductor con horas de este mes, para ver la tabla
+  await escribir(`uso_mes/${ORG}_${uids.cond1}_${mes}`, { org_id: ORG, uid: uids.cond1, mes, nombre: "Carlos Conductor", rol: "conductor", minutos: 135, app: 135, oficina: 0, dias: { [String(new Date().getDate())]: 135 } });
+  await entrarSuper(page);
+  await abrirEmpresa(page, "Demo");
+  await pestana(page, "Uso");
+  await expect(page.getByText("Horas de uso por persona")).toBeVisible();
+  const fila = page.getByRole("row", { name: /Carlos Conductor/ });
+  await expect(fila).toContainText("2 h 15 min");
+  await expect(page.getByRole("row", { name: /Ana Admin/ })).toContainText(/min/);
+  if (globalThis.process.env.CAPTURAS) await page.screenshot({ path: `${globalThis.process.env.CAPTURAS}/sa-4-horas.png`, fullPage: true });
+});

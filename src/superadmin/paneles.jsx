@@ -5,7 +5,7 @@ import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { C, alfa } from "../tema.js";
 import { FUNCIONES, MODULOS, moduloActivo, modulosParaGuardar } from "../modulos.js";
-import { haceCuanto, usoDeEmpresa } from "./uso.js";
+import { haceCuanto, horas, horasPorPersona, usoDeEmpresa } from "./uso.js";
 import { LIMITE_DIARIO, borrarRecorrido, copiaDeEmpresa, recorrerEmpresa } from "./borrar-empresa.js";
 
 const tarjeta = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 12 };
@@ -17,11 +17,21 @@ export function UsoEmpresa({ org, usuarios }) {
   const [uso, setUso] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [vuelta, setVuelta] = useState(0);
+  const [tiempo, setTiempo] = useState(null); // horas de uso por persona
   useEffect(() => {
     let vivo = true;
     usoDeEmpresa(org.org_id).then(u => vivo && setUso(u)).catch(() => vivo && setUso(null)).finally(() => vivo && setCargando(false));
+    horasPorPersona(org.org_id).then(t => vivo && setTiempo(t)).catch(() => vivo && setTiempo([]));
     return () => { vivo = false; };
   }, [org.org_id, vuelta]);
+  // todas las personas de la empresa, también las que aún no han usado nada
+  const filasTiempo = (() => {
+    if (!tiempo) return null;
+    const porUid = new Map(tiempo.map(t => [t.uid, t]));
+    const resto = usuarios.filter(u => u.activo !== false && !porUid.has(u._id)).map(u => ({ uid: u._id, nombre: [u.nombre, u.apellidos].filter(Boolean).join(" ") || u.email, rol: u.rol, hoy: 0, semana: 0, mes: 0, oficina: 0, app: 0, ultimo: null }));
+    return [...tiempo, ...resto];
+  })();
+  const ROL = { admin: "Administrador", intermedio: "Jefe de tráfico", conductor: "Conductor", superadmin: "Superadmin" };
   const activos = usuarios.filter(u => u.activo !== false);
   const oficina = activos.filter(u => ["admin", "intermedio", "superadmin"].includes(u.rol)).length;
   const cifras = uso ? [
@@ -55,6 +65,40 @@ export function UsoEmpresa({ org, usuarios }) {
                 {d && <div style={{ fontSize: 11, color: C.dim, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={d}>{d}</div>}
               </div>
             ))}
+          </div>
+          <div style={tarjeta}>
+            <div style={titulo}>Horas de uso por persona</div>
+            <div style={{ fontSize: 12, color: C.dim, margin: "-4px 0 10px", lineHeight: 1.45 }}>Solo el tiempo con Operanzia a la vista y en uso (en la oficina, con ratón o teclado en los últimos 5 minutos). Se cuenta desde que se activó esta medición.</div>
+            {!filasTiempo ? <Loader2 size={16} className="op-girando" color={C.muted} /> : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ color: C.muted, textAlign: "left" }}>
+                      {["Persona", "Hoy", "Últimos 7 días", "Este mes", "Oficina / app (mes)", "Última vez"].map(h => <th key={h} style={{ fontWeight: 500, fontSize: 11, padding: "6px 8px", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasTiempo.map(f => (
+                      <tr key={f.uid}>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.text }}>{f.nombre}<div style={{ fontSize: 11, color: C.dim }}>{ROL[f.rol] || f.rol}</div></td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.text, whiteSpace: "nowrap" }}>{horas(f.hoy)}</td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.text, whiteSpace: "nowrap" }}>{horas(f.semana)}</td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.text, fontWeight: 650, whiteSpace: "nowrap" }}>{horas(f.mes)}</td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.muted, whiteSpace: "nowrap" }}>{f.mes ? `${horas(f.oficina)} / ${horas(f.app)}` : "—"}</td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.border}`, color: C.muted, whiteSpace: "nowrap" }}>{haceCuanto(f.ultimo)}</td>
+                      </tr>
+                    ))}
+                    {filasTiempo.length > 1 && (
+                      <tr style={{ fontWeight: 650 }}>
+                        <td style={{ padding: "7px 8px", color: C.text }}>Total</td>
+                        {["hoy", "semana", "mes"].map(k => <td key={k} style={{ padding: "7px 8px", color: C.text, whiteSpace: "nowrap" }}>{horas(filasTiempo.reduce((a, f) => a + f[k], 0))}</td>)}
+                        <td colSpan={2} />
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
           <div style={tarjeta}>
             <div style={titulo}>Lo último que han hecho</div>
