@@ -1,0 +1,9 @@
+{
+ "lineas": 93,
+ "viajes": 7375,
+ "autobuses": 465,
+ "turnos": 994,
+ "segVehiculos": 0.2,
+ "segTurnos": 2.1,
+ "zipMB": 20.8
+}

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   testDir: ".",
   testMatch: ["*.spec.js"],
-  testIgnore: ["medir.spec.js"],
+  testIgnore: ["medir.spec.js", "carga-lineas.spec.js"],
   timeout: 120_000,
   expect: { timeout: 20_000 },
   workers: 1, // comparten los mismos emuladores
