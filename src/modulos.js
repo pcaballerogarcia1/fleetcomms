@@ -31,6 +31,9 @@ export const moduloActivo = (empresa, clave) => empresa?.modulos?.[clave] !== fa
 /** ¿Está suspendida la empresa? (solo si se marcó así) */
 export const empresaSuspendida = empresa => empresa?.activo === false;
 
+/** La empresa de un org_id (el espacio de un concurso, «{org}--c-{id}», es de su empresa) */
+export const empresaDe = orgId => (orgId ? String(orgId).split("--c-")[0] : null);
+
 /** El módulo de una pantalla de la oficina (null si no es de ninguno: Proyectos, etc.) */
 export const moduloDeRuta = ruta => MODULOS.find(m => m.ruta === ruta)?.clave || null;
 

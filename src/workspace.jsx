@@ -23,7 +23,7 @@ import { repararPlanesSinConductor } from "./reparar-planes.js";
 import { sincronizarDepotsFichaje } from "./fichaje-depots.js";
 import { AvatarPerfil } from "./foto-perfil.jsx";
 import { fijarEmpresa, useEmpresa } from "./empresa.js";
-import { empresaSuspendida, moduloActivo, moduloDeRuta, primeraRuta } from "./modulos.js";
+import { empresaDe, empresaSuspendida, moduloActivo, moduloDeRuta, primeraRuta } from "./modulos.js";
 import { PantallaSinAcceso } from "./ui/sin-acceso.jsx";
 import { LogoEnBarra } from "./ui/logo-empresa.jsx";
 import { RUTAS_CONCURSO } from "./concursos/store.js";
@@ -254,7 +254,10 @@ export function WorkspaceRouter() {
   }, []);
 
   // La ficha de su empresa: módulos que tiene y si está suspendida (el superadmin, sin límites)
-  useEffect(() => { fijarEmpresa(sesion && sesion.rol !== "superadmin" ? sesion.org_id : null); }, [sesion]);
+  // El superadmin ve lo mismo que la empresa con la que trabaja: la del proyecto abierto (la de un concurso, su empresa)
+  // o, sin proyecto, la suya; así comprueba al momento lo que enciende o apaga en su panel
+  const orgDeTrabajo = sesion?.rol === "superadmin" ? empresaDe(activeProject?.org_id) || sesion?.org_id : sesion?.org_id;
+  useEffect(() => { fijarEmpresa(sesion ? orgDeTrabajo : null); }, [sesion, orgDeTrabajo]);
   const { datos: empresa } = useEmpresa();
 
   // Historial de cambios: quién registra (esta sesión) y en qué proyecto
@@ -381,7 +384,7 @@ export function WorkspaceRouter() {
   );
 
   if (path === "/login" || !sesion) return <LoginScheduling onLogin={login} />;
-  if (empresaSuspendida(empresa)) return <PantallaSinAcceso onSalir={logout} />;
+  if (empresaSuspendida(empresa) && sesion.rol !== "superadmin") return <PantallaSinAcceso onSalir={logout} />;
 
   // Single shell — all pages coexist so PlanningPage stays mounted (preserves
   // uploaded layers state across navigation within the same project)

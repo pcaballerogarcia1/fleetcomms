@@ -78,3 +78,12 @@ describe("logo de la empresa", async () => {
     expect(() => medidaLogo(0, 10)).toThrow();
   });
 });
+
+describe("la empresa de un org_id", async () => {
+  const { empresaDe } = await import("./modulos.js");
+  it("el espacio de un concurso es de su empresa", () => {
+    expect(empresaDe("demo--c-abc123")).toBe("demo");
+    expect(empresaDe("demo")).toBe("demo");
+    expect(empresaDe(null)).toBeNull();
+  });
+});

@@ -176,3 +176,19 @@ test("con la oficina abierta, abrir el panel de superadmin en otra pestaña no e
   await page.waitForURL(/\/projects/); // sigue dentro
   await expect(page.getByRole("button", { name: "Tu perfil" })).toBeVisible();
 });
+
+test("el superadmin ve en la oficina lo mismo que la empresa con la que trabaja", async ({ page }) => {
+  await sembrar();
+  await crearSuperadmin();
+  await escribir(`orgs/${ORG}`, { nombre: "Demo", org_id: ORG, activo: true, max_usuarios: 50, plan: "pro", modulos: { concursos: false, control: false } });
+  await page.goto("/login");
+  await page.fill('input[autocomplete="username"]', "super@demo.test");
+  await page.fill('input[type="password"]', CLAVE);
+  await page.getByRole("button", { name: "Acceder" }).click();
+  await page.waitForURL(/\/projects/);
+  await page.getByText("Abrir proyecto").first().click(); // un proyecto de Demo
+  await page.waitForURL(/\/planning/);
+  await expect(page.getByRole("button", { name: "Rutas", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Concursos", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Control", exact: true })).toHaveCount(0);
+});
