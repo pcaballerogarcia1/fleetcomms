@@ -41,7 +41,8 @@ export function pedidosParaViajes(pedidos, unidad = "bultos", lunes = null) {
 export function camionesDe(vehicles) {
   const activos = (vehicles || []).filter(v => v.activo !== false);
   return {
-    camiones: activos.filter(v => +v.cargaMax > 0).map(v => ({ id: v._id || v.id, nombre: v.nombre || v.matricula || "Camión", palets: +v.cargaMax })),
+    camiones: activos.filter(v => +v.cargaMax > 0).map(v => ({ id: v._id || v.id, nombre: v.nombre || v.matricula || "Camión", palets: +v.cargaMax }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true })),
     sinCapacidad: activos.filter(v => !(+v.cargaMax > 0)).map(v => v.nombre || v.matricula || "Camión"),
   };
 }
