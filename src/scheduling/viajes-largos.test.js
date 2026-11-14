@@ -91,6 +91,8 @@ describe("la semana de una distribuidora (14 camiones de 3 a 32 palés)", () => 
       expect(v.palets).toBeLessThanOrEqual(v.capacidad);
       expect(v.fin).toBeLessThanOrEqual(PARAMS.finSemana);
       cumple561(v.bloques);
+      // nadie arranca de madrugada: los descansos acaban entre las 05:00 y las 22:00
+      for (const b of v.bloques.filter(x => x.tipo === "descanso")) { const h = b.fin % 1440; expect(h >= 5 * 60 && h < 22 * 60).toBe(true); }
     }
   });
   it("cada pedido va en un único viaje (o su puerto) y un camión no hace dos viajes a la vez", () => {

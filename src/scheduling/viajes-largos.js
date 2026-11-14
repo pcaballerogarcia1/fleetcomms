@@ -23,7 +23,7 @@ export const NORMA = {
 };
 
 export const PARAMS = {
-  base: { lat: 37.9922, lng: -1.1307, nombre: "Base (Murcia)" },
+  base: { lat: 37.9922, lng: -1.1307, nombre: "Murcia" },
   horaSalida: 6 * 60,          // los camiones salen de la base a esta hora
   diasSemana: 5,               // lunes a viernes
   finSemana: 4 * 1440 + 22 * 60, // el viernes a las 22:00 todos en la base
@@ -123,8 +123,13 @@ export function simularViaje(paradas, salida, p = PARAMS) {
   let aqui = { lat: p.base.lat, lng: p.base.lng };
   const push = b => { if (b.fin > b.inicio) bloques.push(b); };
   const dormir = (lat, lng) => {
-    push({ tipo: "descanso", inicio: t, fin: t + NORMA.descansoDiario, lat, lng });
-    t += NORMA.descansoDiario; dia = 0; seguido = 0; jornada = t; noches++;
+    // 11 h como mínimo; si acabaría de madrugada (22:00–05:00), hasta las 05:00: no se arranca de noche
+    let fin = t + NORMA.descansoDiario;
+    const h = fin - Math.floor(fin / 1440) * 1440;
+    if (h >= (p.sinSalirDesde ?? 22 * 60)) fin = Math.floor(fin / 1440) * 1440 + 1440 + (p.sinSalirHasta ?? 5 * 60);
+    else if (h < (p.sinSalirHasta ?? 5 * 60)) fin = Math.floor(fin / 1440) * 1440 + (p.sinSalirHasta ?? 5 * 60);
+    push({ tipo: "descanso", inicio: t, fin, lat, lng });
+    t = fin; dia = 0; seguido = 0; jornada = t; noches++;
   };
   // conduce de `aqui` a `b` respetando pausas, conducción diaria y amplitud; duerme por el camino si hace falta
   const conducir = b => {

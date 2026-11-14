@@ -5,7 +5,7 @@
 
 
 
-import { Check, ChevronDown, Download, Info, FileDown, FileSpreadsheet, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Truck, Undo2, Users, X } from "lucide-react";
+import { CalendarRange, Check, ChevronDown, Download, Info, FileDown, FileSpreadsheet, FileUp, FlaskConical, History, Loader2, Maximize2, Redo2, Send, SlidersHorizontal, Pencil, Sparkles, TriangleAlert, Truck, Undo2, Users, X } from "lucide-react";
 import { useState } from "react";
 import { nombreDeVersion, renombrarEscenario, renombrarPunto } from "../scenario-store.js";
 import { textoPuesto } from "./simulador.js";
@@ -20,10 +20,12 @@ import { alfa } from "../tema.js";
 
 
 import { BotonCerrar } from "../ui/cerrar.jsx";
+import { SemanaViajes } from "./semana-viajes.jsx";
 
-export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importarPedidos, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
+export function BarraHerramientas({ vehicles, orgId, activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importarPedidos, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
   const [menuExcel, setMenuExcel] = useState(false);
+  const [verSemana, setVerSemana] = useState(false); // reparto por toda España: viajes de varios días
   // reparto: el día cuyos pedidos se planifican (por defecto, el que ya se trajo, o mañana)
   const conPedidos = sectorDe(activeProject).ver.entrega && importarPedidos;
   const [fechaPedidos, setFechaPedidos] = useState(() => constraints?.diaUnico || masDias(ymd(), 1));
@@ -64,6 +66,10 @@ export function BarraHerramientas({ activeProject, cloudMeta, canGenerate, canRe
               : constraints?.diaUnico === fechaPedidos && tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} pedidos</>
               : <><Download size={14} /> Traer los pedidos del día</>}
           </button>
+          <button onClick={() => setVerSemana(true)} className="op-btn" title="Planificar la semana con viajes de varios días (durmiendo fuera), por toda España">
+            <CalendarRange size={14} /> Semana (viajes largos)
+          </button>
+          {verSemana && <SemanaViajes activeProject={activeProject} orgId={orgId} vehicles={vehicles} onCerrar={() => setVerSemana(false)} />}
         </> : (
         /* Paradas importadas de Planning */
         <button onClick={importFromPlanning} disabled={importing} className={`op-btn${tasks.length ? " op-ok" : ""}`} title="Volver a importar las paradas de Planificación">
