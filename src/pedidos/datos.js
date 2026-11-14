@@ -93,13 +93,15 @@ export function buscarClientes(clientes, texto, max = 8) {
 export const clientePorNombre = (clientes, nombre) => clientes.find(c => norm(c.nombre) === norm(nombre)) || null;
 
 /** Un pedido nuevo (lo que se guarda, sin los datos de quién y cuándo) */
-export function nuevoPedido({ orgId, projectId, fecha, cliente, ref, bultos, kg, desde, hasta, duracion, notas, origen = "manual", fijoId = null }) {
+export function nuevoPedido({ orgId, projectId, fecha, cliente, ref, bultos, kg, desde, hasta, duracion, notas, origen = "manual", fijoId = null, fechaFija = false }) {
   return {
     org_id: orgId, projectId, fecha,
     cliente: { clave: cliente.clave || null, nombre: cliente.nombre || "", direccion: cliente.direccion || "", lat: +cliente.lat, lng: +cliente.lng, telefono: cliente.telefono || "", contacto: cliente.contacto || "" },
     ref: String(ref || "").trim(), bultos: numero(bultos), kg: numero(kg),
     desde: hora(desde), hasta: hora(hasta) || hora(desde), duracion: numero(duracion), notas: String(notas || "").trim(),
     estado: "pendiente", origen, fijoId,
+    // en el reparto por semanas: por defecto se puede entregar a partir de su fecha; con fecha fija, solo ese día
+    fechaFija: !!fechaFija,
   };
 }
 

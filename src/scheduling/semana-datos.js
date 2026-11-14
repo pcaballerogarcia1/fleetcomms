@@ -17,14 +17,21 @@ export const diasDeSemana = (lunes, n = 5) => Array.from({ length: n }, (_, i) =
 /** «09:30» → 570; "" → null */
 const aMin = h => { const m = String(h || "").match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1] * 60 + +m[2] : null; };
 
-/** Los pedidos de la semana en el formato del motor (sin anulados ni pasados a otra fecha); `unidad`: "bultos" (palés, cajas…) o "kg" */
-export function pedidosParaViajes(pedidos, unidad = "bultos") {
+/** Días entre dos fechas «AAAA-MM-DD» */
+const diasEntre = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => +x - (i === 1 ? 1 : 0))) - Date.UTC(...a.split("-").map((x, i) => +x - (i === 1 ? 1 : 0)))) / 864e5);
+
+/**
+ * Los pedidos de la semana en el formato del motor (sin anulados ni pasados a otra fecha); `unidad`: "bultos"
+ * (palés, cajas…) o "kg". Con `lunes`, el día de cada uno (0 = lunes) y si es fecha fija.
+ */
+export function pedidosParaViajes(pedidos, unidad = "bultos", lunes = null) {
   return (pedidos || []).filter(p => p.estado !== "anulado" && !p.reprogramadoA).map(p => {
     const desde = aMin(p.desde), hasta = aMin(p.hasta);
     return {
       id: p.id || p._id, cliente: p.cliente?.nombre || p.ref || "Cliente", ref: p.ref || null,
       lat: +p.cliente?.lat, lng: +p.cliente?.lng,
       palets: +(unidad === "kg" ? p.kg : p.bultos) || 0,
+      ...(lunes && p.fecha ? { dia: Math.max(0, diasEntre(lunes, p.fecha)), fechaFija: !!p.fechaFija } : {}),
       ...(desde != null ? { ventana: { desde, hasta: hasta != null && hasta > desde ? hasta : desde + 60 } } : {}),
     };
   });
@@ -107,4 +114,95 @@ export function planesDeViaje(viaje, { lunes, orgId, projectId, sector, base, pe
       ubicaciones, fechaSubida: Date.now(),
     };
   });
+}
+
+/** Minuto de la semana (desde el lunes a las 00:00) de un momento; antes de la semana, 0 */
+export function minutoDeSemana(lunes, ahora = new Date()) {
+  const [a, m, d] = lunes.split("-").map(Number);
+  return Math.max(0, Math.floor((ahora - new Date(a, m - 1, d)) / 60000));
+}
+
+/**
+ * Para replanificar a mitad de semana: los viajes ya enviados que han salido (no se tocan) y lo demás.
+ * → { enMarcha: [viaje], ocupados: [{ camionId, hasta, conduccion }], pedidosFuera: Set }
+ */
+export function separarEnMarcha(plan, desde) {
+  const enviados = new Set(plan?.enviados || []);
+  const enMarcha = (plan?.viajes || []).filter(v => enviados.has(v.id) && v.inicio <= desde);
+  return {
+    enMarcha,
+    ocupados: enMarcha.map(v => ({ camionId: v.camionId, hasta: v.fin, conduccion: v.conduccion })),
+    pedidosFuera: new Set(enMarcha.flatMap(v => v.paradas.flatMap(s => s.pedidos))),
+  };
+}
+
+/** Junta los viajes en marcha con los recién planificados (estos, con nombres nuevos) y rehace el resumen */
+export function unirPlanes(enMarcha, res, camiones, paletsTotal) {
+  let n = Math.max(0, ...enMarcha.map(v => +String(v.id).replace(/\D/g, "") || 0));
+  const nuevos = res.viajes.map(v => ({ ...v, id: `V${++n}` }));
+  const viajes = [...enMarcha.map(v => ({ ...v, enMarcha: true })), ...nuevos]
+    .sort((a, b) => String(a.camion).localeCompare(String(b.camion)) || a.inicio - b.inicio);
+  const sinAsignar = res.sinAsignar;
+  const paletsServidos = viajes.reduce((s, v) => s + v.palets, 0);
+  return {
+    viajes, sinAsignar,
+    resumen: {
+      viajes: viajes.length, rutasDeUnDia: viajes.filter(v => v.noches === 0).length,
+      camionesUsados: new Set(viajes.map(v => v.camionId)).size, camiones: camiones.length,
+      km: viajes.reduce((s, v) => s + v.km, 0), noches: viajes.reduce((s, v) => s + v.noches, 0),
+      coste: viajes.reduce((s, v) => s + v.coste, 0), paletsServidos, paletsTotal: paletsTotal ?? paletsServidos,
+      ocupacionMedia: viajes.length ? viajes.reduce((s, v) => s + v.ocupacion, 0) / viajes.length : 0,
+      pedidosSinAsignar: new Set(sinAsignar.map(x => x.pedidoId)).size,
+    },
+  };
+}
+
+/** Para guardarlo (máx. 1 MB por ficha): horas en minutos enteros y coordenadas con 4 decimales */
+export function planParaGuardar(plan) {
+  const r4 = x => Math.round(x * 1e4) / 1e4;
+  return JSON.stringify({
+    ...plan,
+    viajes: plan.viajes.map(v => ({ ...v, bloques: v.bloques.map(b => ({ ...b, inicio: Math.round(b.inicio), fin: Math.round(b.fin), lat: r4(b.lat), lng: r4(b.lng), ...(b.km != null ? { km: Math.round(b.km * 10) / 10 } : {}) })) })),
+  });
+}
+
+/**
+ * Lo que hace cada camión un día (0 = lunes): ruta del día (sale y vuelve), de viaje (qué día de cuántos),
+ * entregas de ese día con su hora, dónde duerme esa noche; los que no salen, «en la base».
+ * → [{ camion, viaje|null, tipo: "ruta"|"viaje"|"libre", diaDelViaje, totalDias, entregas: [{ t, nombre, palets, puerto }],
+ *      bloques (los de ese día), duerme: texto|null, vuelve: t|null, sale: t|null, km }]
+ */
+export function vistaDelDia(plan, camiones, d, base) {
+  const ini = d * 1440, fin = ini + 1440;
+  return camiones.map(c => {
+    const viaje = (plan?.viajes || []).find(v => v.camionId === c.id && v.inicio < fin && v.fin > ini) || null;
+    if (!viaje) return { camion: c, viaje: null, tipo: "libre", entregas: [], bloques: [] };
+    const bloques = viaje.bloques.filter(b => b.fin > ini && b.inicio < fin);
+    const entregas = bloques.filter(b => b.tipo === "entrega" && b.inicio >= ini).map(b => {
+      const s = viaje.paradas.find(x => x.id === b.paradaId);
+      return { t: b.inicio, nombre: s?.nombre || "Cliente", palets: s?.palets ?? 0, puerto: !!s?.puerto };
+    });
+    const noche = viaje.bloques.find(b => b.tipo === "descanso" && b.inicio >= ini && b.inicio < fin);
+    return {
+      camion: c, viaje, tipo: viaje.noches === 0 ? "ruta" : "viaje",
+      diaDelViaje: d - Math.floor(viaje.inicio / 1440) + 1, totalDias: viaje.dias,
+      entregas, bloques,
+      sale: viaje.inicio >= ini ? viaje.inicio : null,
+      vuelve: viaje.fin < fin ? viaje.fin : null,
+      duerme: noche ? lugarDe(noche, viaje, base) : null,
+      km: Math.round(bloques.filter(b => b.tipo === "conduccion").reduce((s, b) => s + (b.km || 0) * Math.max(0, Math.min(b.fin, fin) - Math.max(b.inicio, ini)) / Math.max(1e-9, b.fin - b.inicio), 0)),
+    };
+  });
+}
+
+/** El resumen de un día para la tarjeta de la semana */
+export function resumenDelDia(plan, camiones, d) {
+  const dia = vistaDelDia(plan, camiones, d, null);
+  return {
+    rutas: dia.filter(x => x.tipo === "ruta").length,
+    deViaje: dia.filter(x => x.tipo === "viaje").length,
+    libres: dia.filter(x => x.tipo === "libre").length,
+    entregas: dia.reduce((s, x) => s + x.entregas.length, 0),
+    palets: dia.reduce((s, x) => s + x.entregas.reduce((a, e) => a + e.palets, 0), 0),
+  };
 }

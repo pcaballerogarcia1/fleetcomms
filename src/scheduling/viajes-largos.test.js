@@ -117,3 +117,51 @@ describe("la semana de una distribuidora (14 camiones de 3 a 32 palés)", () => 
     expect(poca.sinAsignar[0].motivo).toMatch(/camión/);
   });
 });
+
+describe("la semana entera: rutas de un día y viajes largos, con el día de cada pedido", () => {
+  // cerca de la base (rutas de ida y vuelta en el día) y lejos (viajes con noches)
+  const CERCA = [["Murcia centro", 37.9838, -1.1280], ["Molina", 38.0546, -1.2075], ["Cartagena", 37.6257, -0.9966], ["Lorca", 37.6771, -1.7006], ["Alcantarilla", 37.9692, -1.2170], ["Orihuela", 38.0848, -0.9440]];
+  const LEJOS = [["A Coruña", 43.3623, -8.4115], ["Bilbao", 43.263, -2.935], ["Sevilla", 37.3891, -5.9845], ["Barcelona", 41.3874, 2.1686]];
+  const pedidos = [
+    ...CERCA.flatMap(([c, lat, lng], i) => [0, 2, 4].map(dia => ({ id: `c${i}-${dia}`, cliente: c, lat, lng, palets: 2, dia, fechaFija: true }))),
+    ...LEJOS.map(([c, lat, lng], i) => ({ id: `l${i}`, cliente: c, lat, lng, palets: 8, dia: i % 2 })),
+  ];
+  const flota = [20, 16, 12, 8, 8].map((palets, i) => ({ id: `t${i + 1}`, nombre: `Camión ${i + 1}`, palets }));
+  const r = planificarSemana(pedidos, flota, { segundosMejora: 0.5 });
+  const entregaDe = id => { for (const v of r.viajes) { const s = v.paradas.find(x => x.pedidos.includes(id)); if (s) return { v, dia: Math.floor(s.llegada / 1440) }; } return null; };
+
+  it("lo cercano va en rutas de un día y lo lejano en viajes con noches, en el mismo plan", () => {
+    expect(r.sinAsignar).toEqual([]);
+    expect(entregaDe("c0-0").v.local).toBe(true);
+    expect(entregaDe("l0").v.noches).toBeGreaterThan(0);
+    expect(r.resumen.rutasDeUnDia).toBeGreaterThan(0);
+  });
+  it("respeta la fecha: fija, ese día; si no, a partir de ese día", () => {
+    for (const o of pedidos) {
+      const e = entregaDe(o.id);
+      if (o.fechaFija) expect(e.dia).toBe(o.dia);
+      else expect(e.dia).toBeGreaterThanOrEqual(o.dia);
+    }
+  });
+  it("cada camión está en un solo sitio cada día", () => {
+    const porCamion = {};
+    for (const v of r.viajes) (porCamion[v.camionId] ||= []).push(v);
+    for (const l of Object.values(porCamion)) {
+      const dias = l.flatMap(v => Array.from({ length: v.dias }, (_, i) => Math.floor(v.inicio / 1440) + i));
+      expect(new Set(dias).size).toBe(dias.length);
+    }
+  });
+  it("a mitad de semana: lo nuevo sale desde ahora y los camiones en viaje siguen ocupados", () => {
+    const largo = entregaDe("l0").v;
+    const miercoles = 2 * 1440 + 9 * 60;
+    const resto = pedidos.filter(o => !largo.paradas.some(s => s.pedidos.includes(o.id)) && (o.fechaFija ? o.dia >= 2 : true));
+    const r2 = planificarSemana(resto, flota, { segundosMejora: 0.3, desde: miercoles, ocupados: [{ camionId: largo.camionId, hasta: largo.fin, conduccion: largo.conduccion }] });
+    for (const v of r2.viajes) {
+      expect(v.inicio).toBeGreaterThanOrEqual(miercoles);
+      if (v.camionId === largo.camionId) expect(v.inicio).toBeGreaterThan(largo.fin);
+    }
+    // el fijo del lunes ya pasó: lo dice
+    const pasado = planificarSemana([{ id: "x", lat: 37.98, lng: -1.13, palets: 1, dia: 0, fechaFija: true }], flota, { desde: miercoles });
+    expect(pasado.sinAsignar[0].motivo).toMatch(/ya ha pasado/);
+  });
+});

@@ -158,6 +158,16 @@ service cloud.firestore {
       allow update: if sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id;
       allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
     }
+    // El plan de la semana de reparto (rutas de un día y viajes de varios días): uno por proyecto y semana
+    // ({projectId}_{lunes}); se lee aunque aún no exista (para saber si hay plan).
+    match /semanas_reparto/{id} {
+      allow read: if puedeWorkspace() && (resource == null || sameOrg(resource.data.org_id));
+      allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace()
+        && request.resource.data.projectId is string && sameOrg(projectOrg(request.resource.data.projectId));
+      allow update: if sameOrg(resource.data.org_id) && puedeWorkspace() && request.resource.data.org_id == resource.data.org_id
+        && request.resource.data.projectId == resource.data.projectId;
+      allow delete: if sameOrg(resource.data.org_id) && puedeWorkspace();
+    }
     match /pedidos_fijos/{id} {
       allow read: if sameOrg(resource.data.org_id) && puedeWorkspace();
       allow create: if sameOrg(request.resource.data.org_id) && puedeWorkspace()

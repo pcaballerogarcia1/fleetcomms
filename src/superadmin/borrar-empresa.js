@@ -11,7 +11,7 @@ import { db } from "../firebase.js";
 
 // colecciones con el campo org_id, y sus subcolecciones (nombre o [nombre, sus subcolecciones])
 export const POR_EMPRESA = [
-  ["planes"], ["incidencias"], ["inventario"], ["movimientos"], ["avisos_suscripciones"], ["pedidos"], ["pedidos_fijos"],
+  ["planes"], ["incidencias"], ["inventario"], ["movimientos"], ["avisos_suscripciones"], ["pedidos"], ["pedidos_fijos"], ["semanas_reparto"],
   ["ia_conexiones"], ["entregas_pruebas"], ["pesadas"], ["scheduling_vehicles"], ["scheduling_workers"], ["scheduling_constraint_templates"],
   ["documentos", ["trozos"]], ["documentos_lecturas"], ["solicitudes_ausencia"], ["cuadrantes"], ["rostering", ["trabajadores", "versiones"]],
   ["rostering_vehicles"], ["auditoria"], ["presencia"], ["ubicaciones_activas"], ["servicio_lineas", ["turnos"]], ["ubicaciones_lineas"],

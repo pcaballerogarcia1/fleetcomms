@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agenda, camionesDe, cuando, diasDeSemana, lunesDe, pedidosParaViajes, planesDeViaje } from "./semana-datos.js";
+import { agenda, camionesDe, cuando, diasDeSemana, lunesDe, minutoDeSemana, pedidosParaViajes, planParaGuardar, planesDeViaje, resumenDelDia, separarEnMarcha, unirPlanes, vistaDelDia } from "./semana-datos.js";
 import { planificarSemana } from "./viajes-largos.js";
 
 describe("semana de viajes: datos", () => {
@@ -54,5 +54,53 @@ describe("del viaje al móvil del conductor", () => {
       for (const u of pl.ubicaciones) expect(u.horaPlan).toBeGreaterThanOrEqual(8 * 60);
     }
     expect(ubs.find(u => u.pedidoId === "p1")).toMatchObject({ pedido: "A1", bultos: 12, realizado: false });
+  });
+});
+
+describe("la semana unificada: días, en marcha y replanificar", () => {
+  it("el día de cada pedido respecto al lunes y su fecha fija", () => {
+    const l = pedidosParaViajes([
+      { id: "a", fecha: "2026-11-18", fechaFija: true, cliente: { lat: 40, lng: -3 }, bultos: 2 },
+      { id: "b", fecha: "2026-11-16", cliente: { lat: 40, lng: -3 }, bultos: 2 },
+    ], "bultos", "2026-11-16");
+    expect(l.map(x => [x.dia, x.fechaFija])).toEqual([[2, true], [0, false]]);
+    expect(minutoDeSemana("2026-11-16", new Date(2026, 10, 17, 9, 30))).toBe(1440 + 570);
+    expect(minutoDeSemana("2026-11-16", new Date(2026, 10, 10))).toBe(0);
+  });
+  const camiones = [{ id: "c1", nombre: "Camión 1", palets: 32 }, { id: "c2", nombre: "Camión 2", palets: 12 }, { id: "c3", nombre: "Camión 3", palets: 8 }];
+  const pedidos = [
+    { id: "lejos", fecha: "2026-11-16", cliente: { nombre: "Coruña", lat: 43.3623, lng: -8.4115 }, bultos: 32 },
+    { id: "cerca1", fecha: "2026-11-16", fechaFija: true, cliente: { nombre: "Molina", lat: 38.0546, lng: -1.2075 }, bultos: 4 },
+    { id: "cerca2", fecha: "2026-11-18", fechaFija: true, cliente: { nombre: "Cartagena", lat: 37.6257, lng: -0.9966 }, bultos: 4 },
+  ];
+  const res = planificarSemana(pedidosParaViajes(pedidos, "bultos", "2026-11-16"), camiones, { segundosMejora: 0.2 });
+  it("cada día, qué hace cada camión: ruta del día, de viaje (y dónde duerme) o en la base", () => {
+    const lunes = vistaDelDia(res, camiones, 0, { nombre: "Murcia", lat: 37.99, lng: -1.13 });
+    const viaje = lunes.find(x => x.tipo === "viaje");
+    expect(viaje.duerme).toBeTruthy();
+    expect(viaje.diaDelViaje).toBe(1);
+    const ruta = lunes.find(x => x.tipo === "ruta");
+    expect(ruta.entregas.map(e => e.nombre)).toEqual(["Molina"]);
+    expect(ruta.vuelve).toBeGreaterThan(ruta.sale);
+    expect(lunes.some(x => x.tipo === "libre")).toBe(true);
+    const martes = vistaDelDia(res, camiones, 1, null).find(x => x.viaje?.id === viaje.viaje.id);
+    expect(martes).toMatchObject({ tipo: "viaje", diaDelViaje: 2 });
+    expect(resumenDelDia(res, camiones, 2)).toMatchObject({ rutas: 1, entregas: 1, palets: 4 });
+  });
+  it("a mitad de semana: lo enviado que ya salió se queda; lo demás se replanifica con nombres nuevos", () => {
+    const plan = { ...res, enviados: res.viajes.map(v => v.id) };
+    const largo = res.viajes.find(v => v.noches > 0);
+    const desde = 1440 + 10 * 60; // martes 10:00
+    const { enMarcha, ocupados, pedidosFuera } = separarEnMarcha(plan, desde);
+    expect(enMarcha.map(v => v.id)).toContain(largo.id);
+    expect(pedidosFuera.has("lejos")).toBe(true);
+    const resto = pedidosParaViajes(pedidos.filter(p => !pedidosFuera.has(p.id)), "bultos", "2026-11-16");
+    const nuevo = planificarSemana(resto, camiones, { segundosMejora: 0.2, desde, ocupados });
+    const u = unirPlanes(enMarcha, nuevo, camiones, 40);
+    expect(u.viajes.filter(v => v.enMarcha).map(v => v.id)).toEqual(enMarcha.map(v => v.id));
+    expect(new Set(u.viajes.map(v => v.id)).size).toBe(u.viajes.length);
+    expect(u.viajes.find(v => v.paradas.some(s => s.pedidos.includes("cerca2")))).toBeTruthy();
+    expect(u.sinAsignar).toEqual([]); // el del lunes va en la ruta del lunes, que ya salió
+    expect(JSON.parse(planParaGuardar(u)).viajes.length).toBe(u.viajes.length);
   });
 });

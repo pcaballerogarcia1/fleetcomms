@@ -25,7 +25,11 @@ import { SemanaViajes } from "./semana-viajes.jsx";
 export function BarraHerramientas({ vehicles, orgId, activeProject, cloudMeta, canGenerate, canRedoMove, canUndoMove, constraints, setConstraints, downloadCrewXLSX, downloadVehicleXLSX, focusMode, generating, handleUploadXLSX, historyIndex, importFromPlanning, importarPedidos, importing, lang, mode, moveHistory, osrmRunning, redoMove, runGenerate, schedule, schedules, setFocusMode, setMode, setPublishModal, setShowC, setShowHistorial, setShowSimulador, setSimError, setSimResult, showC, tasks, undoMove, xlsxUploadRef }) {
   const girando = <Loader2 size={13} className="op-girando" />;
   const [menuExcel, setMenuExcel] = useState(false);
-  const [verSemana, setVerSemana] = useState(false); // reparto por toda España: viajes de varios días
+  // reparto y distribución: Rutas es la semana (rutas de un día y viajes de varios días, en un solo plan)
+  const esDistribucion = activeProject?.sector === "distribucion";
+  const [verSemana, setVerSemana] = useState(false);
+  const [semanaAbiertaEn, setSemanaAbiertaEn] = useState(null); // se abre sola una vez por proyecto
+  if (esDistribucion && semanaAbiertaEn !== activeProject?._id) { setSemanaAbiertaEn(activeProject?._id); setVerSemana(true); }
   // reparto: el día cuyos pedidos se planifican (por defecto, el que ya se trajo, o mañana)
   const conPedidos = sectorDe(activeProject).ver.entrega && importarPedidos;
   const [fechaPedidos, setFechaPedidos] = useState(() => constraints?.diaUnico || masDias(ymd(), 1));
@@ -66,8 +70,8 @@ export function BarraHerramientas({ vehicles, orgId, activeProject, cloudMeta, c
               : constraints?.diaUnico === fechaPedidos && tasks.length ? <><Check size={14} /> {tasks.length.toLocaleString()} pedidos</>
               : <><Download size={14} /> Traer los pedidos del día</>}
           </button>
-          <button onClick={() => setVerSemana(true)} className="op-btn" title="Planificar la semana con viajes de varios días (durmiendo fuera), por toda España">
-            <CalendarRange size={14} /> Semana (viajes largos)
+          <button onClick={() => setVerSemana(true)} className="op-btn" title="Planificar la semana: rutas de un día y viajes de varios días (durmiendo fuera), en un solo plan">
+            <CalendarRange size={14} /> Semana de reparto
           </button>
           {verSemana && <SemanaViajes activeProject={activeProject} orgId={orgId} vehicles={vehicles} onCerrar={() => setVerSemana(false)} />}
         </> : (

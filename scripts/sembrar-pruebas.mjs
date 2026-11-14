@@ -14,11 +14,11 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { valor } from "../e2e/semilla.mjs";
 
-const PROYECTO = "operanzia-pruebas";            // fijo: este script no puede tocar producción
-const CLAVE_WEB = "AIzaSyDfsCXOt8HZGZjdgEKl7b8oh_1frAwyFnk"; // pública (app web de pruebas)
-const ORG = "pruebas";
+export const PROYECTO = "operanzia-pruebas";            // fijo: este script no puede tocar producción
+export const CLAVE_WEB = "AIzaSyDfsCXOt8HZGZjdgEKl7b8oh_1frAwyFnk"; // pública (app web de pruebas)
+export const ORG = "pruebas";
 export const CLAVE_USUARIOS = "Pruebas-2026";
-const DOMINIO = "operanzia-pruebas.test";
+export const DOMINIO = "operanzia-pruebas.test";
 const USUARIOS = {
   superadmin: { nombre: "Super", apellidos: "Admin", rol: "superadmin" },
   admin: { nombre: "Ana", apellidos: "Administradora", rol: "admin" },
@@ -29,9 +29,9 @@ const USUARIOS = {
 
 const RAIZ = fileURLToPath(new URL("..", import.meta.url));
 const FS = `https://firestore.googleapis.com/v1/projects/${PROYECTO}/databases/(default)/documents`;
-const ID = "https://identitytoolkit.googleapis.com/v1";
+export const ID = "https://identitytoolkit.googleapis.com/v1";
 
-async function cuenta(email, password) {
+export async function cuenta(email, password) {
   const pedir = accion => fetch(`${ID}/accounts:${accion}?key=${CLAVE_WEB}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, returnSecureToken: true }),
@@ -42,11 +42,11 @@ async function cuenta(email, password) {
   return j;
 }
 
-function firebase(args) {
+export function firebase(args) {
   execSync(`npx firebase ${args} --project ${PROYECTO} --non-interactive`, { cwd: RAIZ, stdio: "inherit" });
 }
 
-async function escribirLote(token, docs) {
+export async function escribirLote(token, docs) {
   for (let i = 0; i < docs.length; i += 400) {
     const writes = docs.slice(i, i + 400).map(([ruta, datos]) => ({
       update: { name: `projects/${PROYECTO}/databases/(default)/documents/${ruta}`, fields: valor(datos).mapValue.fields },
@@ -116,4 +116,5 @@ async function main() {
   for (const [k, u] of Object.entries(USUARIOS)) console.log(`  ${k}@${DOMINIO}  (${u.rol})`);
 }
 
-main().catch(e => { console.error(e.message || e); process.exitCode = 1; });
+// solo al ejecutarlo (otros guiones de siembra usan sus funciones)
+if (process.argv[1] && fileURLToPath(import.meta.url) === (await import("node:path")).resolve(process.argv[1])) main().catch(e => { console.error(e.message || e); process.exitCode = 1; });

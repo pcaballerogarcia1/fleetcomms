@@ -2,13 +2,13 @@
 // Se apuntan en segundos (el cliente se busca por su nombre en la lista
 // importada; uno nuevo, por su dirección), se pegan desde Excel, y los fijos
 // («cada lunes, 2 cajas al Bar Pepe») salen solos los días que tocan.
-import { CalendarClock, ChevronLeft, ChevronRight, ClipboardPaste, PackageCheck, PackageX, Plus, Repeat, RotateCcw, Trash2, Truck, XCircle } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, ClipboardPaste, PackageCheck, PackageX, Pin, Plus, Repeat, RotateCcw, Trash2, Truck, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, font } from "../tema.js";
 import { BotonCerrar } from "../ui/cerrar.jsx";
 import { geocodificar } from "../concursos/geocodificar.js";
 import { DIAS, buscarClientes, clientesDe, fechaLarga, leerPegado, masDias, nuevoFijo, nuevoPedido, reprogramado, resultadosPorPedido, resumenDia, resumenEntregas, ymd } from "./datos.js";
-import { anadirClienteNuevo, anularPedido, borrarFijo, borrarPedido, crearPedido, crearPedidos, crearPedidosDeFijos, escucharFijos, escucharPedidos, escucharRutasDelDia, guardarFijo, reprogramarPedidos } from "./store.js";
+import { anadirClienteNuevo, anularPedido, borrarFijo, borrarPedido, cambiarPedido, crearPedido, crearPedidos, crearPedidosDeFijos, escucharFijos, escucharPedidos, escucharRutasDelDia, guardarFijo, reprogramarPedidos } from "./store.js";
 import { nombreMotivo } from "../entregas/datos.js";
 import { VentanaEntrega } from "../entregas/oficina.jsx";
 
@@ -80,7 +80,7 @@ async function situar(texto) {
   return r.porDireccion.get(texto) || null;
 }
 
-const VACIO = { cliente: { texto: "", cliente: null }, direccion: "", ref: "", bultos: "", kg: "", desde: "", hasta: "", notas: "", guardarCliente: true };
+const VACIO = { cliente: { texto: "", cliente: null }, direccion: "", ref: "", bultos: "", kg: "", desde: "", hasta: "", notas: "", fechaFija: false, guardarCliente: true };
 
 /** El formulario para apuntar un pedido */
 function FormPedido({ clientes, onAnadir }) {
@@ -104,7 +104,7 @@ function FormPedido({ clientes, onAnadir }) {
         cliente = { nombre: f.cliente.texto.trim(), direccion: f.direccion.trim(), lat: r.lat, lng: r.lng };
         esNuevo = true;
       }
-      await onAnadir({ cliente, esNuevo: esNuevo && f.guardarCliente, ref: f.ref, bultos: f.bultos, kg: f.kg, desde: f.desde, hasta: f.hasta, notas: f.notas });
+      await onAnadir({ cliente, esNuevo: esNuevo && f.guardarCliente, ref: f.ref, bultos: f.bultos, kg: f.kg, desde: f.desde, hasta: f.hasta, notas: f.notas, fechaFija: f.fechaFija });
       setF(VACIO);
       primero.current?.querySelector("input")?.focus();
     } catch (err) { setAviso(`No se pudo guardar: ${err.message || err}`); }
@@ -122,6 +122,9 @@ function FormPedido({ clientes, onAnadir }) {
         <input {...entrada(70)} aria-label="Desde" placeholder="Desde" value={f.desde} onChange={e => poner({ desde: e.target.value })} />
         <input {...entrada(70)} aria-label="Hasta" placeholder="Hasta" value={f.hasta} onChange={e => poner({ hasta: e.target.value })} />
         <input {...entrada(180)} aria-label="Notas" placeholder="Notas para el conductor" value={f.notas} onChange={e => poner({ notas: e.target.value })} />
+        <label title="Por defecto, el pedido se puede entregar a partir de este día (dentro de la semana). Márcalo si tiene que ser justo este día." style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 5, height: 32 }}>
+          <input type="checkbox" checked={f.fechaFija} onChange={e => poner({ fechaFija: e.target.checked })} /> Solo este día
+        </label>
         <button type="submit" className="op-btn op-primario" disabled={ocupado} style={{ height: 32 }}><Plus size={14} />{ocupado ? "Guardando…" : "Añadir"}</button>
       </div>
       {nuevo && (
@@ -362,7 +365,11 @@ export function TabPedidos({ layers, activeProject, orgId, sesion }) {
                   <td style={td}>{p.origen === "fijo" && <span style={{ fontSize: 10, color: C.violet, border: `1px solid ${C.violet}55`, borderRadius: 8, padding: "1px 6px" }}>fijo</span>}
                     {p.origen === "excel" && <span style={{ fontSize: 10, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "1px 6px" }}>Excel</span>}
                     {p.origen === "reprogramado" && <span title={p.desdeFecha ? `No se entregó el ${corta(p.desdeFecha)}` : ""} style={{ fontSize: 10, color: C.amber, border: `1px solid ${C.amber}55`, borderRadius: 8, padding: "1px 6px" }}>del {p.desdeFecha ? corta(p.desdeFecha) : "otro día"}</span>}
-                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}</td>
+                    {anulado && <span style={{ fontSize: 10, color: C.red, marginLeft: 4 }}>anulado</span>}
+                    {!anulado && <button type="button" aria-pressed={!!p.fechaFija} aria-label={`Solo este día: ${p.cliente?.nombre}`} title={p.fechaFija ? "Se entrega justo este día. Pulsa para que se pueda entregar a partir de este día." : "Se puede entregar a partir de este día, dentro de la semana. Pulsa para fijarlo a este día."}
+                      onClick={() => cambiarPedido(p.id, { fechaFija: !p.fechaFija })}
+                      style={{ marginLeft: 4, border: `1px solid ${p.fechaFija ? C.blue : C.border}`, color: p.fechaFija ? C.blue : C.dim, background: "none", borderRadius: 8, padding: "0 6px", fontSize: 10, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <Pin size={10} />{p.fechaFija ? "solo este día" : ""}</button>}</td>
                   <td style={td}>{!anulado && <CeldaEntrega p={p} r={resultados.get(p.id)}
                     onVer={() => { const x = resultados.get(p.id); setVerEntrega({ ev: { ...x.ub, planId: x.plan.id, planNombre: x.plan.nombre }, conductor: x.plan.conductorNombre || x.plan.vehiculoNombre }); }}
                     onPasar={nueva => pasar([p], nueva)} />}</td>

@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { describe, it, beforeAll, afterAll, beforeEach } from "vitest";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
-import { doc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, collection, query, where } from "firebase/firestore";
 
 let env;
 beforeAll(async () => {
@@ -45,5 +45,15 @@ describe("pedidos", () => {
     await assertSucceeds(setDoc(doc(como("jefeA"), "pedidos_fijos/f1"), f));
     await assertFails(setDoc(doc(como("condA"), "pedidos_fijos/f2"), f));
     await assertFails(setDoc(doc(como("jefeB"), "pedidos_fijos/f3"), { ...f, org_id: "orgB" }));
+  });
+  it("el plan de la semana: la oficina de la empresa, en sus proyectos", async () => {
+    const sem = { org_id: "orgA", projectId: "pA", lunes: "2026-11-16", plan: "{}" };
+    await assertSucceeds(getDoc(doc(como("jefeA"), "semanas_reparto/pA_2026-11-16"))); // aún no existe
+    await assertSucceeds(setDoc(doc(como("jefeA"), "semanas_reparto/pA_2026-11-16"), sem));
+    await assertSucceeds(updateDoc(doc(como("jefeA"), "semanas_reparto/pA_2026-11-16"), { plan: "{\"a\":1}" }));
+    await assertFails(updateDoc(doc(como("jefeA"), "semanas_reparto/pA_2026-11-16"), { projectId: "pB" }));
+    await assertFails(getDoc(doc(como("jefeB"), "semanas_reparto/pA_2026-11-16")));
+    await assertFails(setDoc(doc(como("condA"), "semanas_reparto/pA_2026-11-23"), sem));
+    await assertFails(setDoc(doc(como("jefeA"), "semanas_reparto/pB_2026-11-16"), { ...sem, projectId: "pB" }));
   });
 });
